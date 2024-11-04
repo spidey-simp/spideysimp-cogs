@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spideysimp"
+    ],
+    "min_bot_version": "3.4.0",
+    "description": "Responds to people saying 'I'm [bot name]' with an admonishment for identity theft",
+    "hidden": false,
+    "install_msg": "Thank you for installing IdentityTheft! Get started with '[p]load identitytheft', then '[p]help IdentityTheft'",
+    "short": "Identity Theft bot",
+    "end_user_data_statement": "This cog does not store any End User Data",
+    "tags": [
+        "spideysimp",
+        "joke",
+        "comedy"
+    ]
+
+
+}
