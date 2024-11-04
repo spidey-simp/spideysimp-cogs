@@ -80,7 +80,7 @@ class IdentityTheft(Cog):
             return
 
 
-        if content_split[0].lower() == "i'm {guild.me.display_name}" or "i am {guild.me.display_name}":
+        if content_split[0].lower() == "i'm {guild.me.display_name}":
             try:
                 await message.channel.send(
                     f"Identity theft is not a joke {message.author.mention}! Millions of families suffer every year!",
@@ -92,3 +92,5 @@ class IdentityTheft(Cog):
             self.cooldown[guild.id] = datetime.now() + timedelta(
                 seconds=(await guild_config.cooldown())
             )
+        else:
+            return
