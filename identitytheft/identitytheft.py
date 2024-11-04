@@ -80,7 +80,7 @@ class IdentityTheft(Cog):
             return
 
 
-        if content_split[0].lower() == "i'm {guild.me.display_name}":
+        if f"i'm {guild.me.display_name}" in cleaned_content:
             try:
                 await message.channel.send(
                     f"Identity theft is not a joke {message.author.mention}! Millions of families suffer every year!",
