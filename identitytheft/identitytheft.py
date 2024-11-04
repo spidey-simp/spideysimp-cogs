@@ -22,7 +22,7 @@ class IdentityTheft(Cog):
     def __init__(self, bot: Red):
         super().__init__()
         self.bot = bot
-        self.config = Config.get_conf(self, identifier=6897100, force_registration=True)
+        self.config = Config.get_conf(self, identifier=684457913250480143, force_registration=True)
 
         default_guild = {"enabled": False, "cooldown": 0}
 
