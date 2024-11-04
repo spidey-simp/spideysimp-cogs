@@ -24,7 +24,7 @@ class IdentityTheft(Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=6897100, force_registration=True)
 
-        default_guild = {"enabled": True, "cooldown": 0}
+        default_guild = {"enabled": False, "cooldown": 0}
 
         self.config.register_guild(**default_guild)
 
@@ -37,7 +37,7 @@ class IdentityTheft(Cog):
     @commands.group()
     @checks.admin()
     async def identitytheft(self, ctx: commands.Context):
-        """Identity Theft is a cog designed to respond to users when they say I'm [bot name]"""
+        """Identity Theft is a cog designed to respond to users when they say I'm [bot name]!  It is default turned off. Use `[p]identitytheft enable` to turn it on!"""
         pass
     
     @identitytheft.command(name="enable")
@@ -45,7 +45,7 @@ class IdentityTheft(Cog):
         """Toggles if you want the automatic bot responses on"""
         is_on = await self.config.guild(ctx.guild).enabled()
         await self.config.guild(ctx.guild).enabled.set(not is_on)
-        await ctx.send("Automatic responses to messages saying 'I'm [botname]' are now set to {}".format(not enabled))
+        await ctx.send("Automatic responses to messages saying 'I'm [botname]' are now set to {}".format(not is_on))
 
     @identitytheft.command(name="cooldown")
     async def identitytheft_cooldown(self, ctx: commands.Context, cooldown: int):
