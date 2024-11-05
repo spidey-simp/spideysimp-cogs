@@ -1,9 +1,15 @@
 from __future__ import annotations
 import discord
+import asyncio
 import logging
-from typing import Literal
-from redbot.core import Config, commands
+from dataclasses import make_dataclass
+from typing import Dict, List, Literal, Optional, Tuple, Type, Union
+from abc import ABC, ABCMeta, abstractmethod
+from discord import Member
+from typing import Any, NoReturn
+from redbot.core import Config, checks, commands
 from redbot.core.bot import Red
+from redbot.core.commands import BadArgument, Cog, CogMeta, Context, Converter
 from redbot.core.config import Config
 
 
@@ -95,7 +101,7 @@ class SwgohTools(commands.Cog):
         await ctx.send(f"You are now spending {energyamt} campaign energy on kyros per day.")
     
     @swgohtools.command(name="abcompletion", aliases=["abc"])
-    async def swgohtools_getspending(self, ctx: commands.Context, abamt: int = 0):
+    async def swgohtools_abcompletion(self, ctx: commands.Context, abamt: int = 0):
         """Sets how many of the Challenge Tier 1s you have completed for assault battles."""
         await self.config.user(ctx.author).abcompletion.set(abamt)
         await ctx.send(f"You have the setting of {abamt} assault battles completed.")
