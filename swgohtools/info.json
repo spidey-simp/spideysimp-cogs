@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spideysimp"
+    ],
+    "min_bot_version": "3.4.0",
+    "description": "Has various features for swgoh farming. Will be updated so join spideysimp's discord if you want notifs to when that will be.",
+    "hidden": false,
+    "install_msg": "Thank you for installing SwgohTools! Get started with '[p]load swgohtools', then '[p]help SwgohTools'",
+    "short": "Swgoh Tools bot",
+    "end_user_data_statement": "This cog stores only data parameters",
+    "tags": [
+        "spideysimp",
+        "tools",
+        "swgoh"
+    ]
+
+
+}
