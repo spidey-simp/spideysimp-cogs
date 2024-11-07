@@ -1,0 +1,19 @@
+{
+    "author": [
+        "spideysimp"
+    ],
+    "min_bot_version": "3.4.0",
+    "description": "Returns a random Civ VI leader. Eventually, filters will be added, but for now, it's just all of them.",
+    "hidden": false,
+    "install_msg": "Thank you for installing SwgohTools! Get started with '[p]load civvirandom', then '[p]help CivVIrandom'",
+    "short": "Civ VI Random",
+    "end_user_data_statement": "This cog stores no data",
+    "tags": [
+        "spideysimp",
+        "tools",
+        "civ6",
+        "random"
+    ]
+
+
+}
