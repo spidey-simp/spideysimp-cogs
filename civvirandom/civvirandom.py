@@ -7,7 +7,6 @@ import aiohttp
 from typing import Dict, List, Literal, Optional, Any, NoReturn
 from abc import ABC
 from discord import Member
-from bs4 import BeautifulSoup
 
 from redbot.core import Config, checks, commands
 from redbot.core.bot import Red
@@ -39,7 +38,7 @@ class CivVIrandom(Cog):
         """Nothing to delete"""
         return
     
-    @commands.group(aliases=["cvir"])
+    @commands.group(aliases=["civr"])
     async def civvirandom(self, ctx: commands.Context):
         """Civ VI random generates a random leader based on the filter you apply."""
         pass
@@ -47,7 +46,8 @@ class CivVIrandom(Cog):
     @civvirandom.command(name="index", aliases=["i"])
     async def civvirandom_index(self, ctx: commands.Context):
         """See the full list of leaders selectable."""
-        await ctx.send(list(LEADERLIST.items()))
+        indexseparator = "\n- "
+        await ctx.send(f"```The full Civ VI Leader list is:\n- {indexseparator.join(LEADERLIST.keys())}```")
 
     @civvirandom.command(name="fulllist", aliases=["fl"])
     async def civvirandom_fulllist(self, ctx: commands.Context):
