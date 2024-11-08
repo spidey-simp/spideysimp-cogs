@@ -14,9 +14,9 @@ from redbot.core.config import Config
 from redbot.core.commands import Cog
 from redbot.core.i18n import Translator
 
-from .civleaderlist import LEADERLIST
+from .civleaderlist import LEADERLIST, CHALLENGELIST
 
-log = logging.getLogger("red.spideysimp-cogs.SwgohTools")
+log = logging.getLogger("red.spideysimp-cogs.CivVIRandom")
 
 
 
@@ -65,4 +65,14 @@ class CivVIrandom(Cog):
             title=civtitle, description=civresult, color=discord.Color.red(), url=civimage
         )
         em.set_image(url=civimage)
+        await ctx.send(embed=em)
+
+    @civvirandom.command(name="challenge", aliases=["c"])
+    async def civvirandom_challenge(self, ctx: commands.Context):
+        """Get a random challenge to try in the game!"""
+        civtitle, civresult = random.choice(list(CHALLENGELIST.items()))
+
+        em = discord.Embed(
+            title=civtitle, description=civresult, color=discord.Color.red()
+        )
         await ctx.send(embed=em)
