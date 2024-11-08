@@ -1,0 +1,19 @@
+{
+    "author": [
+        "spideysimp"
+    ],
+    "min_bot_version": "3.4.0",
+    "description": "Returns a random HOI 4 leader. Eventually, filters will be added, but for now, it's just all of them.",
+    "hidden": false,
+    "install_msg": "Thank you for installing HOI 4 Random! Get started with '[p]load hoi4random', then '[p]help Hoi4Random'",
+    "short": "Hoi 4 Random",
+    "end_user_data_statement": "This cog stores no data",
+    "tags": [
+        "spideysimp",
+        "tools",
+        "hoi4",
+        "random"
+    ]
+
+
+}
