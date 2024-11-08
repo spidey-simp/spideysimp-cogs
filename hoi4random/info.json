@@ -3,7 +3,7 @@
         "spideysimp"
     ],
     "min_bot_version": "3.4.0",
-    "description": "Returns a random HOI 4 leader. Eventually, filters will be added, but for now, it's just all of them.",
+    "description": "Returns a random HOI 4 leader. Eventually, filters will be added, but for now, it's just all of them. Part of this cog's functionality is that it shows a picture of the leader of the country it generates. That includes one man who is.... His initials are A.H. Don't use if that distresses you!",
     "hidden": false,
     "install_msg": "Thank you for installing HOI 4 Random! Get started with '[p]load hoi4random', then '[p]help Hoi4Random'",
     "short": "Hoi 4 Random",
