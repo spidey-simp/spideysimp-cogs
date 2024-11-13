@@ -217,6 +217,10 @@ class SpideyLifeSim(Cog):
         if itemcount > 10:
             await ctx.send("```That seems like a lot... Maybe buy a little less!```")
             return
+
+        if itemcount <= 0:
+            await ctx.send(f"```I don't think it's possible to buy {itemcount} items.```")
+            return
         
         currency = await bank.get_currency_name(ctx.guild)
         for i in range(itemcount):
