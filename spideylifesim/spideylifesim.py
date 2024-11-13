@@ -368,3 +368,81 @@ class SpideyLifeSim(Cog):
         )
         em.set_image(url=userpic)
         await ctx.send(embed=em)
+    @commands.group(aliases=["slssk"])
+    async def slsskills(self, ctx: commands.Context):
+        """Work on or check your skill levels!"""
+        return
+
+    @slsskills.command(name="skillindex", aliases=["si"])
+    async def slsskills_skillindex(self, ctx: commands.Context):
+        """See all available skills!"""
+        indexseparator = "\n- "
+        await ctx.send(f"```Here are all the available skills:\n- {indexseparator.join(SKILLSLIST)}```")
+    
+    @slsskills.command(name="skillprogress", aliases=["sp"])
+    async def slsskills_skillprogress(self, ctx: commands.Context):
+        """Here is your skill progress!"""
+        async with self.config.member(ctx.author).skillslist() as skillslist:
+            skillresult = "```Here are your skill levels:\n"
+            for key, value in skillslist.items():
+                skillresult += f"- {key} is at Level {value[0]} and {value[1]}% toward {value[0] + 1}.\n"
+            skillresult += "```"
+            await ctx.send(skillresult)
+    
+    @slsskills.command(name="practice", aliases=["p"])
+    @commands.cooldown(1, 1000, commands.BucketType.member)
+    async def slsskills_practice(self, ctx: commands.Context, skillname: str = None) -> None:
+        """Work on a skill of your choice! It is case sensitive! All skills start with capitals!"""
+        skillexist = skillname in SKILLSLIST.keys()
+        userinventory = await self.config.member(ctx.author).userinventory()
+
+        if not skillexist:
+            await ctx.send("```This skill is not one of the accepted skills! Please consult the skill index and try again!```")
+            return
+        
+        listlength = len(SKILLSLIST.get(skillname))
+
+        skillobjectnumber = listlength - 2
+        
+        if skillobjectnumber == 1:
+            skillobjectlist = SKILLSLIST.get(skillname)
+            object1 = skillobjectlist[2]
+            if object1 not in userinventory:
+                await ctx.send(f"```You need a {object1} to practice {skillname}. Buy it from the store!```")
+                return
+        if skillobjectnumber == 2:
+            skillobjectlist = SKILLSLIST.get(skillname)
+            object1 = skillobjectlist[2]
+            object2 = skillobjectlist[3]
+            if object1 not in userinventory and object2 not in userinventory:
+                await ctx.send(f"```You need a {object1} or {object2} to practice {skillname}. Buy either from the store!```")
+                return
+        if skillobjectnumber == 3:
+            skillobjectlist = SKILLSLIST.get(skillname)
+            object1 = skillobjectlist[2]
+            object2 = skillobjectlist[3]
+            object3 = skillobjectlist[4]
+            if object1 not in userinventory and object2 not in userinventory and object3 not in userinventory:
+                await ctx.send(f"```You need a {object1}, {object2}, or {object3} to practice {skillname}. Buy any of them from the store!```")
+                return
+        
+        skillslist = await self.config.member(ctx.author).skillslist()
+        skillvalues = skillslist.get(skillname)
+        skilladdperc = random.randint(5, 33)
+        newskillperc = skillvalues[1] + skilladdperc
+        skilllevel = skillvalues[0]
+        if newskillperc >= 100:
+            newskillperc -= 100
+            skilllevel += 1
+            await ctx.send(f"You just promoted your {skillname} skill to {skilllevel}!")
+        skillslist[skillname] = [skilllevel, newskillperc]
+        await self.config.member(ctx.author).skillslist.set(skillslist)
+        await ctx.send(f"You have improved {skillname} skill by {skilladdperc}% which puts it {newskillperc}% towards promoting to {skilllevel + 1}")
+        
+    
+    @slsskills_practice.error
+    async def slsskills_practice_error(ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(f"You're still tired from practicing your skill last time. Maybe try in {round(error.retry_after, 2)} seconds. :pensive:")
+        
+
