@@ -105,8 +105,8 @@ class SpideyLifeSim(Cog):
             userjob = "Unemployed",
             userpic = "https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png",
             usergender = "Not set",
-            usertraits = []
-            **SKILLSLIST
+            usertraits = [],
+            skillslist = SKILLSLIST
         )
         self.config.register_member(
             userinventory=[],
@@ -115,7 +115,7 @@ class SpideyLifeSim(Cog):
             userpic = "https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png",
             usergender = "Not set",
             usertraits = [],
-            **SKILLSLIST
+            skillslist = SKILLSLIST
         )
 
 
