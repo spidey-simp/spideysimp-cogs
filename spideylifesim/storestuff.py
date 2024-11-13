@@ -91,3 +91,11 @@ LUXURYITEMS = {
     "The Fountain of Youth": 90000000000000000,
     "A diamond encrusted bracelet": 1000
 }
+
+ALLITEMS = {
+    **FOODITEMS,
+    **SKILLITEMS,
+    **VEHICLES,
+    **ENTERTAINMENT,
+    **LUXURYITEMS
+}
