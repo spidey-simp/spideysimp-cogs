@@ -2,7 +2,7 @@ from __future__ import annotations
 import discord
 import logging
 import asyncio
-import datetime
+from datetime import datetime, timedelta
 import random
 from discord.ext import tasks, commands
 from random import choice
@@ -57,12 +57,8 @@ __all__ = (
 
 
 
-times = [
-    datetime.time(hour=0, minute=0),
-    datetime.time(hour=6, minute=0),
-    datetime.time(hour=12, minute=0),
-    datetime.time(hour=18, minute=0)
-]
+skill_cooldowns: Dict[str, Dict[str, datetime]] = {}
+
 store_slots = []
 
 userinventory = []
@@ -71,6 +67,8 @@ userjob = ""
 userpic = ""
 usergender = ""
 usertraits = []
+
+next_refresh_time = None
 
 async def fetch_url(session, url):
     async with session.get(url) as response:
@@ -97,7 +95,7 @@ class SpideyLifeSim(Cog):
         store_slots.insert(3, entertainmentdefault)
         store_slots.insert(4, luxurydefault)
 
-        self.storerefresh.start()
+        self.store_task = asyncio.create_task(self.storerefresh())
 
         self.config.register_user(
             userinventory=[],
@@ -124,19 +122,24 @@ class SpideyLifeSim(Cog):
         self.storerefresh.cancel()
 
     
-    @tasks.loop(time=times)
     async def storerefresh(self):
-        del store_slots[0:4]
-        fooditem = random.choice(list(FOODITEMS.keys()))
-        skillitem = random.choice(list(SKILLITEMS.keys()))
-        vehicleitem = random.choice(list(VEHICLES.keys()))
-        entertainmentitem = random.choice(list(ENTERTAINMENT.keys()))
-        luxuryitem = random.choice(list(LUXURYITEMS.keys()))
-        store_slots.insert(0, fooditem)
-        store_slots.insert(1, skillitem)
-        store_slots.insert(2, vehicleitem)
-        store_slots.insert(3, entertainmentitem)
-        store_slots.insert(4, luxuryitem)
+        global next_refresh_time
+        while True:
+            del store_slots[0:4]
+            fooditem = random.choice(list(FOODITEMS.keys()))
+            skillitem = random.choice(list(SKILLITEMS.keys()))
+            vehicleitem = random.choice(list(VEHICLES.keys()))
+            entertainmentitem = random.choice(list(ENTERTAINMENT.keys()))
+            luxuryitem = random.choice(list(LUXURYITEMS.keys()))
+            store_slots.insert(0, fooditem)
+            store_slots.insert(1, skillitem)
+            store_slots.insert(2, vehicleitem)
+            store_slots.insert(3, entertainmentitem)
+            store_slots.insert(4, luxuryitem)
+            next_refresh_time = datetime.now() + timedelta(hours=6)
+            wait_seconds = (next_refresh_time - datetime.now()).total_seconds()
+        
+            await asyncio.sleep(wait_seconds)
 
 
 
@@ -166,12 +169,21 @@ class SpideyLifeSim(Cog):
         slot4 = ENTERTAINMENT.get(store_slots[3])
         slot5 = LUXURYITEMS.get(store_slots[4])
         storetitle = "Here's what's available in the shop right now:"
+        if next_refresh_time:
+            remaining_time = next_refresh_time - datetime.now()
+            hours, remainder = divmod(remaining_time.total_seconds(), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            cooldown_timer = f"**Next refresh in:** {int(hours)}h {int(minutes)}m {int(seconds)}s"
+        else:
+            cooldown_timer = "Next refresh time is being calculated."
+
         storeitems = (
-            f"Slot 1: {slot1} {currency} for {store_slots[0]}\n"
-            f"Slot 2: {slot2} {currency} for {store_slots[1]}\n"
-            f"Slot 3: {slot3} {currency} for {store_slots[2]}\n"
-            f"Slot 4: {slot4} {currency} for {store_slots[3]}\n"
-            f"Slot 5: {slot5} {currency} for {store_slots[4]}"
+            f"**Slot 1:** {slot1} {currency} for {store_slots[0]}\n"
+            f"**Slot 2:** {slot2} {currency} for {store_slots[1]}\n"
+            f"**Slot 3:** {slot3} {currency} for {store_slots[2]}\n"
+            f"**Slot 4:** {slot4} {currency} for {store_slots[3]}\n"
+            f"**Slot 5:** {slot5} {currency} for {store_slots[4]}\n"
+            f"{cooldown_timer}"
             )
         storeimage = "https://mydigitalwirral.co.uk/wp-content/uploads/2020/02/bigstock-Empty-Store-Front-With-Window-324188686.jpg"
         
@@ -390,7 +402,6 @@ class SpideyLifeSim(Cog):
             await ctx.send(skillresult)
     
     @slsskills.command(name="practice", aliases=["p"])
-    @commands.cooldown(1, 1000, commands.BucketType.member)
     async def slsskills_practice(self, ctx: commands.Context, skillname: str = None) -> None:
         """Work on a skill of your choice! It is case sensitive! All skills start with capitals!"""
         skillexist = skillname in SKILLSLIST.keys()
@@ -399,32 +410,29 @@ class SpideyLifeSim(Cog):
         if not skillexist:
             await ctx.send("```This skill is not one of the accepted skills! Please consult the skill index and try again!```")
             return
+        current_time = datetime.now()
         
-        listlength = len(SKILLSLIST.get(skillname))
 
-        skillobjectnumber = listlength - 2
+        user_cooldowns = skill_cooldowns.get(ctx.author.id, {})
+        if skillname in user_cooldowns:
+            cooldown_time = user_cooldowns[skillname]
+            if current_time < cooldown_time:
+                remaining_time = cooldown_time - current_time
+                remaining_seconds = remaining_time.total_seconds()
+                if remaining_seconds > 60:
+                    remaining_minutes = remaining_seconds // 60
+                    remaining_seconds = remaining_seconds % 60
+                    await ctx.send(f"```You're so tired from practicing {skillname}. Try waiting {int(remaining_minutes)} minutes and {int(remaining_seconds)} seconds to practice again.```")
+                    return
+                else:
+                    await ctx.send(f"```You're so tired from practicing {skillname}. Try waiting {int(remaining_seconds)} seconds to practice again.```")
+                    return
         
-        if skillobjectnumber == 1:
-            skillobjectlist = SKILLSLIST.get(skillname)
-            object1 = skillobjectlist[2]
-            if object1 not in userinventory:
-                await ctx.send(f"```You need a {object1} to practice {skillname}. Buy it from the store!```")
-                return
-        if skillobjectnumber == 2:
-            skillobjectlist = SKILLSLIST.get(skillname)
-            object1 = skillobjectlist[2]
-            object2 = skillobjectlist[3]
-            if object1 not in userinventory and object2 not in userinventory:
-                await ctx.send(f"```You need a {object1} or {object2} to practice {skillname}. Buy either from the store!```")
-                return
-        if skillobjectnumber == 3:
-            skillobjectlist = SKILLSLIST.get(skillname)
-            object1 = skillobjectlist[2]
-            object2 = skillobjectlist[3]
-            object3 = skillobjectlist[4]
-            if object1 not in userinventory and object2 not in userinventory and object3 not in userinventory:
-                await ctx.send(f"```You need a {object1}, {object2}, or {object3} to practice {skillname}. Buy any of them from the store!```")
-                return
+        
+        required_items = SKILLSLIST.get(skillname, [])[2:]
+        if required_items and not any(item in userinventory for item in required_items):
+            await ctx.send(f"```You need one of these items to practice {skillname}: {', '.join(required_items)}. Buy them from the store!```")
+            return
         
         skillslist = await self.config.member(ctx.author).skillslist()
         skillvalues = skillslist.get(skillname)
@@ -434,15 +442,13 @@ class SpideyLifeSim(Cog):
         if newskillperc >= 100:
             newskillperc -= 100
             skilllevel += 1
-            await ctx.send(f"You just promoted your {skillname} skill to {skilllevel}!")
+            await ctx.send(f"You just promoted your {skillname} skill to {skilllevel} level!")
         skillslist[skillname] = [skilllevel, newskillperc]
         await self.config.member(ctx.author).skillslist.set(skillslist)
-        await ctx.send(f"You have improved {skillname} skill by {skilladdperc}% which puts it {newskillperc}% towards promoting to {skilllevel + 1}")
-        
-    
-    @slsskills_practice.error
-    async def slsskills_practice_error(ctx, error):
-        if isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"You're still tired from practicing your skill last time. Maybe try in {round(error.retry_after, 2)} seconds. :pensive:")
-        
+        cooldown_duration = timedelta(hours=1)  # Set cooldown to 1 hour
+        cooldown_time = current_time + cooldown_duration
+        if ctx.author.id not in skill_cooldowns:
+            skill_cooldowns[ctx.author.id] = {}
+        skill_cooldowns[ctx.author.id][skillname] = cooldown_time
 
+        await ctx.send(f"You have improved {skillname} skill by {skilladdperc}% which puts it {newskillperc}% towards promoting to level {skilllevel + 1}!")
