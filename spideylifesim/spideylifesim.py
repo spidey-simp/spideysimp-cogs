@@ -195,19 +195,7 @@ class SpideyLifeSim(Cog):
             await ctx.send("```The store slot provided doesn't exist. Please input one of the store slots from 1-5.```")
             return
         
-        if storepurchase == 0:
-            itemcost = FOODITEMS.get(itemforpurchase)
-        elif storepurchase == 1:
-            itemcost = SKILLITEMS.get(itemforpurchase)
-        elif storepurchase == 2:
-            itemcost = VEHICLES.get(itemforpurchase)
-        elif storepurchase == 3:
-            itemcost = ENTERTAINMENT.get(itemforpurchase)
-        elif storepurchase == 4:
-            itemcost = LUXURYITEMS.get(itemforpurchase)
-        else:
-            await ctx.send("```There was an error calculating the cost. Please report this error.```")
-            return
+        itemcost = ALLITEMS.get(itemforpurchase)
         
         if itemcount > 1:
             spresence = "s"
@@ -240,6 +228,40 @@ class SpideyLifeSim(Cog):
         userbalance = await bank.get_balance(ctx.author)
         await ctx.send(f"```You have successfully purchased {itemcount} {itemforpurchase}{spresence} and your remaining account balance is {userbalance} {currency}.```")
 
+    @slsstore.command(name="sellitem", aliases=["si"])
+    async def slsstore_sellitem(self, ctx: commands.Context,  count: int = 1, *, itemtosell: str = None):
+        """Sell items which returns 80% of their original value. Make sure items use same typecase as is seen in your inventory!"""
+        if itemtosell == None:
+            await ctx.send("```Whoops maybe you forgot to type the item!```")
+            return
+        
+        if count <= 0:
+            await ctx.send("How can you sell items you don't have? :thinking:")
+            return
+        
+        userinventory = await self.config.member(ctx.author).userinventory()
+
+        if itemtosell not in userinventory:
+            await ctx.send(f"How can you sell {itemtosell} if you don't have it? :thinking: Maybe you typed it wrong. :shrug:\nPlease view your inventory to check how to spell and the case.")
+            return
+        
+        originalprice = ALLITEMS.get(itemtosell)
+        sellprice = originalprice * .8
+        finalsell = round(sellprice)
+        currency = await bank.get_currency_name(ctx.guild)
+        if count > 1:
+            spresence = "s"
+        else:
+            spresence = ""
+
+        for i in range(count):
+            await bank.deposit_credits(ctx.author, finalsell)
+            async with self.config.member(ctx.author).userinventory() as lst:
+                lst.remove(itemtosell)
+            
+        userbalance = await bank.get_balance(ctx.author)
+        await ctx.send(f"```You have successfully sold {count} {itemtosell}{spresence} and your new account balance is {userbalance} {currency}.```")
+        
     @commands.group(aliases=["slsp"])
     async def slsprofile(self, ctx: commands.Context):
         """See everything about your profile in these settings!"""
