@@ -214,9 +214,6 @@ class SpideyLifeSim(Cog):
         else:
             spresence = ""
 
-        if itemcount > 10:
-            await ctx.send("```That seems like a lot... Maybe buy a little less!```")
-            return
 
         if itemcount <= 0:
             await ctx.send(f"```I don't think it's possible to buy {itemcount} items.```")
@@ -337,10 +334,12 @@ class SpideyLifeSim(Cog):
     
     @slsprofile.command(name="inventory", aliases=["i"])
     async def slsprofile_inventory(self, ctx: commands.Context):
-        """View the items you have in your inventory!"""
+        """View the items you have in your inventory, with duplicates stacked!"""
         userinventory = await self.config.member(ctx.author).userinventory()
+        item_counts = Counter(userinventory)
+        formatted_items = [f"{count}x - {item}" if count > 1 else item for item, count in item_counts.items()]
         indexseparator = "\n- "
-        await ctx.send(f"```Here are all the items you have:\n- {indexseparator.join(userinventory)}```")
+        await ctx.send(f"```Here are all the items you have:\n- {indexseparator.join(formatted_items)}```")
 
     @slsprofile.command(name="otherprofile", aliases=["op"])
     async def slsprofile_otherprofile(self, ctx: commands.Context, user: discord.Member = None) -> None:
