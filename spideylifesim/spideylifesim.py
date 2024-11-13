@@ -22,6 +22,7 @@ from redbot.core.utils.chat_formatting import humanize_number
 from redbot.core.errors import BankPruneError
 
 from .storestuff import FOODITEMS, SKILLITEMS, VEHICLES, ENTERTAINMENT, LUXURYITEMS
+from .skills import SKILLSLIST
 
 log = logging.getLogger("red.spideysimp-cogs.SpideyLifeSim")
 
@@ -106,6 +107,7 @@ class SpideyLifeSim(Cog):
             usergender = "Not set",
             usertraits = []
         )
+        self.config.register_user(**SKILLSLIST)
         self.config.register_member(
             userinventory=[],
             username = "None",
@@ -114,7 +116,7 @@ class SpideyLifeSim(Cog):
             usergender = "Not set",
             usertraits = []
         )
-        
+        self.config.register_member(**SKILLSLIST)
 
         
     def cog_unload(self):
@@ -288,3 +290,39 @@ class SpideyLifeSim(Cog):
         userinventory = await self.config.member(ctx.author).userinventory()
         indexseparator = "\n- "
         await ctx.send(f"```Here are all the items you have:\n- {indexseparator.join(userinventory)}```")
+
+    @slsprofile.command(name="otherprofile", aliases=["op"])
+    async def slsprofile_otherprofile(self, ctx: commands.Context, user: discord.Member = None) -> None:
+        """See your user profile."""
+        username = await self.config.member(user).username()
+        usergender = await self.config.member(user).usergender()
+        userjob = await self.config.member(user).userjob()
+        usertraits = await self.config.member(user).usertraits()
+        userpic = await self.config.member(user).userpic()
+        if username == "None":
+            profilename = user.display_name
+        else:
+            profilename = username
+        
+        currency = await bank.get_currency_name(ctx.guild)
+        userbalance = await bank.get_balance(user)
+
+        profileheader = "Here is your profile!"
+
+        profiledescription = (
+            f"**Name:** {profilename}\n"
+            f"**Gender:** {usergender}\n"
+            f"**Profession:** {userjob}\n"
+            f"**Traits:** {usertraits}\n"
+            f"**Account Balance:** {userbalance} {currency}\n"
+        )
+
+        async with aiohttp.ClientSession(headers={"Connection": "keep-alive"}) as session:
+            async with session.get(userpic, ssl=False) as response:
+                assert response.status == 200
+        
+        em = discord.Embed(
+            title=profileheader, description=profiledescription, color=discord.Color.red()
+        )
+        em.set_image(url=userpic)
+        await ctx.send(embed=em)
