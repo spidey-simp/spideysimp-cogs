@@ -186,7 +186,7 @@ class SpideyLifeSim(Cog):
         await ctx.send(embed=em)
     
     @slsstore.command(name="purchase", aliases=["p"])
-    async def slsstore_purchase(self, ctx: commands.Context, storeslot: int = 0):
+    async def slsstore_purchase(self, ctx: commands.Context, storeslot: int = 0, itemcount: int = 1):
         """Input the store slot of the item you want to purchase in the command!"""
         storepurchase = storeslot - 1
         itemforpurchase = store_slots[storepurchase]
@@ -209,20 +209,32 @@ class SpideyLifeSim(Cog):
             await ctx.send("```There was an error calculating the cost. Please report this error.```")
             return
         
-        currency = await bank.get_currency_name(ctx.guild)
+        if itemcount > 1:
+            spresence = "s"
+        else:
+            spresence = ""
 
-        bankbool  = await bank.can_spend(ctx.author, itemcost)
-        if not bankbool:
-            await ctx.send(f"```You have an insuffienct balance! Please try again when you have more {currency}.```")
+        if itemcount > 10:
+            await ctx.send("```That seems like a lot... Maybe buy a little less!```")
             return
         
-        await bank.withdraw_credits(ctx.author, itemcost)
+        currency = await bank.get_currency_name(ctx.guild)
+        for i in range(itemcount):
+            bankbool  = await bank.can_spend(ctx.author, itemcost)
+            if not bankbool:
+                await ctx.send(f"```You have an insuffienct balance! Please try again when you have more {currency}.```")
+                if i > 1:
+                    userbalance = await bank.get_balance(ctx.author)
+                    await ctx.send(f"```You have successfully purchased {itemcount} {itemforpurchase}{spresence} and your remaining account balance is {userbalance} {currency}.```")
+                return
+        
+            await bank.withdraw_credits(ctx.author, itemcost)
 
-        async with self.config.member(ctx.author).userinventory() as lst:
+            async with self.config.member(ctx.author).userinventory() as lst:
             lst.append(itemforpurchase)
         
         userbalance = await bank.get_balance(ctx.author)
-        await ctx.send(f"```You have successfully purchased {itemforpurchase} and your remaining account balance is {userbalance} {currency}.```")
+        await ctx.send(f"```You have successfully purchased {itemcount} {itemforpurchase}{spresence} and your remaining account balance is {userbalance} {currency}.```")
 
     @commands.group(aliases=["slsp"])
     async def slsprofile(self, ctx: commands.Context):
