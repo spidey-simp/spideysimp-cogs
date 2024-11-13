@@ -32,6 +32,9 @@ SKILLITEMS = {
     "Science workstation": 1000,
     "Skeleton study tool": 50,
     "Medical textbook": 300,
+    "Gardening tools": 30,
+    "Notebook": 5,
+    "Stove": 500
 }
 
 VEHICLES = {
