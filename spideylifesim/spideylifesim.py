@@ -106,17 +106,18 @@ class SpideyLifeSim(Cog):
             userpic = "https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png",
             usergender = "Not set",
             usertraits = []
+            **SKILLSLIST
         )
-        self.config.register_user(**SKILLSLIST)
         self.config.register_member(
             userinventory=[],
             username = "None",
             userjob = "Unemployed",
             userpic = "https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png",
             usergender = "Not set",
-            usertraits = []
+            usertraits = [],
+            **SKILLSLIST
         )
-        self.config.register_member(**SKILLSLIST)
+
 
         
     def cog_unload(self):
