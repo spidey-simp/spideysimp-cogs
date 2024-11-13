@@ -1,0 +1,20 @@
+SKILLSLIST = {
+    "Piano": [0, 0],
+    "Guitar": [0, 0],
+    "Singing": [0, 0],
+    "Art": [0, 0],
+    "Photography": [0, 0],
+    "Comedy": [0, 0],
+    "Charisma": [0, 0],
+    "Writing": [0, 0],
+    "Handiness": [0, 0],
+    "Woodworking": [0, 0],
+    "Programming": [0, 0],
+    "Science": [0, 0],
+    "Medicine": [0, 0],
+    "Fishing": [0, 0],
+    "Gardening": [0, 0],
+    "Cooking": [0, 0],
+    "Acting": [0, 0],
+    "Baking": [0, 0]
+}
