@@ -10,6 +10,7 @@ import aiohttp
 from typing import Dict, List, Literal, Optional, Any, NoReturn
 from abc import ABC
 from discord import Member, Guild
+from collections import Counter
 
 
 from redbot.core import Config, checks, commands, bank
