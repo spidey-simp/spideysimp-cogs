@@ -231,7 +231,7 @@ class SpideyLifeSim(Cog):
             await bank.withdraw_credits(ctx.author, itemcost)
 
             async with self.config.member(ctx.author).userinventory() as lst:
-            lst.append(itemforpurchase)
+                lst.append(itemforpurchase)
         
         userbalance = await bank.get_balance(ctx.author)
         await ctx.send(f"```You have successfully purchased {itemcount} {itemforpurchase}{spresence} and your remaining account balance is {userbalance} {currency}.```")
