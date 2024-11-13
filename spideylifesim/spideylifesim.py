@@ -21,7 +21,7 @@ from redbot.core.utils import AsyncIter
 from redbot.core.utils.chat_formatting import humanize_number
 from redbot.core.errors import BankPruneError
 
-from .storestuff import FOODITEMS, SKILLITEMS, VEHICLES, ENTERTAINMENT, LUXURYITEMS
+from .storestuff import FOODITEMS, SKILLITEMS, VEHICLES, ENTERTAINMENT, LUXURYITEMS, ALLITEMS
 from .skills import SKILLSLIST
 
 log = logging.getLogger("red.spideysimp-cogs.SpideyLifeSim")
