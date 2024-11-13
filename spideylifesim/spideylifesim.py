@@ -307,6 +307,9 @@ class SpideyLifeSim(Cog):
     @slsprofile.command(name="otherprofile", aliases=["op"])
     async def slsprofile_otherprofile(self, ctx: commands.Context, user: discord.Member = None) -> None:
         """See your user profile."""
+        if user == None:
+            await ctx.send("```I think you forgot to put the other user in the parameters!```")
+            return
         username = await self.config.member(user).username()
         usergender = await self.config.member(user).usergender()
         userjob = await self.config.member(user).userjob()
