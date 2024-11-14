@@ -209,6 +209,10 @@ class SpideyLifeSim(Cog):
             return
         
         itemcost = ALLITEMS.get(itemforpurchase)
+
+        if itemcount > 100:
+            await ctx.send("```That seems like a lot. Maybe try a smaller amount.```")
+            return
         
         if itemcount > 1:
             spresence = "s"
