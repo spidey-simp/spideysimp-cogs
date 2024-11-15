@@ -15,6 +15,13 @@ SKILLSLIST = {
     "Fishing": [0, 0, "Fishing rod"],
     "Gardening": [0, 0, "Gardening tools"],
     "Cooking": [0, 0, "Stove"],
-    "Acting": [0, 0],
-    "Baking": [0, 0, "Stove"]
+    "Acting": [0, 0, "Movie script"],
+    "Baking": [0, 0, "Stove"],
+    "Athletic": [0, 0],
+    "Social Media": [0, 0],
+    "Logic": [0, 0, "Chess board", "Logic puzzles"],
+    "Debate": [0, 0, "Casebook"],
+    "Mischief": [0, 0, "Whoopie cushion"],
+    "Sewing": [0, 0, "Sewing machine"],
+    "Force-wielding": [0, 0, "Lightsaber"]
 }
