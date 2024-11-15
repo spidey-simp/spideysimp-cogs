@@ -24,6 +24,7 @@ from redbot.core.errors import BankPruneError
 
 from .storestuff import FOODITEMS, SKILLITEMS, VEHICLES, ENTERTAINMENT, LUXURYITEMS, ALLITEMS
 from .skills import SKILLSLIST
+from .jobs import ALLJOBS, Culinary, Business, Programming, Medicine, LawEnforcement, Artist, Film, Military, Writing, SocialMedia, Athletic, Legal, Journalism, Engineering, Music, Science, Education, Politics, Criminal, Astronaut, Fashion, Sith, SecretAgent
 
 log = logging.getLogger("red.spideysimp-cogs.SpideyLifeSim")
 
@@ -68,6 +69,10 @@ userjob = ""
 userpic = ""
 usergender = ""
 usertraits = []
+careerlevel = 0
+careerprog = 0
+salary = 0
+work_cooldowns = {}
 
 next_refresh_time = None
 
@@ -102,6 +107,10 @@ class SpideyLifeSim(Cog):
             userinventory=[],
             username = "None",
             userjob = "Unemployed",
+            careerfield = "Unemployed",
+            careerlevel = 0,
+            careerprog = 0,
+            salary = 0,
             userpic = "https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png",
             usergender = "Not set",
             usertraits = [],
@@ -111,6 +120,10 @@ class SpideyLifeSim(Cog):
             userinventory=[],
             username = "None",
             userjob = "Unemployed",
+            careerfield = "Unemployed",
+            careerlevel = 0,
+            careerprog = 0,
+            salary = 0,
             userpic = "https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png",
             usergender = "Not set",
             usertraits = [],
@@ -288,6 +301,7 @@ class SpideyLifeSim(Cog):
         userjob = await self.config.member(ctx.author).userjob()
         usertraits = await self.config.member(ctx.author).usertraits()
         userpic = await self.config.member(ctx.author).userpic()
+        careerfield = await self.config.member(ctx.author).careerfield()
         if username == "None":
             profilename = ctx.author.display_name
         else:
@@ -301,7 +315,7 @@ class SpideyLifeSim(Cog):
         profiledescription = (
             f"**Name:** {profilename}\n"
             f"**Gender:** {usergender}\n"
-            f"**Profession:** {userjob}\n"
+            f"**Profession:** {userjob} in the {careerfield} field\n"
             f"**Traits:** {usertraits}\n"
             f"**Account Balance:** {userbalance} {currency}\n"
         )
@@ -357,6 +371,7 @@ class SpideyLifeSim(Cog):
         userjob = await self.config.member(user).userjob()
         usertraits = await self.config.member(user).usertraits()
         userpic = await self.config.member(user).userpic()
+        careerfield = await self.config.member(user).careerfield()
         if username == "None":
             profilename = user.display_name
         else:
@@ -370,7 +385,7 @@ class SpideyLifeSim(Cog):
         profiledescription = (
             f"**Name:** {profilename}\n"
             f"**Gender:** {usergender}\n"
-            f"**Profession:** {userjob}\n"
+            f"**Profession:** {userjob} in the {careerfield} field\n"
             f"**Traits:** {usertraits}\n"
             f"**Account Balance:** {userbalance} {currency}\n"
         )
@@ -384,6 +399,7 @@ class SpideyLifeSim(Cog):
         )
         em.set_image(url=userpic)
         await ctx.send(embed=em)
+        
     @commands.group(aliases=["slssk"])
     async def slsskills(self, ctx: commands.Context):
         """Work on or check your skill levels!"""
@@ -456,3 +472,248 @@ class SpideyLifeSim(Cog):
         skill_cooldowns[ctx.author.id][skillname] = cooldown_time
 
         await ctx.send(f"You have improved {skillname} skill by {skilladdperc}% which puts it {newskillperc}% towards promoting to level {skilllevel + 1}!")
+
+    @commands.group(aliases=["slsc"])
+    async def slscareers(self, ctx: commands.Context):
+        """Join a career and rise the ranks to the top of your field!"""
+        return
+        
+    @slscareers.command(name="careerindex", aliases=["ci"])
+    async def slscareers_careerindex(self, ctx: commands.Context):
+        """See an index of all available careers!"""
+        indexseparator = "\n- "
+        await ctx.send(f"```Here is a list of all the available careers:\n- {indexseparator.join(ALLJOBS)}```")
+
+    @slscareers.command(name="aboutcareer", aliases=["ac"])
+    async def slscareers_aboutcareer(self, ctx: commands.Context, careername: str = None) -> None:
+        """See more information about a particular career! Make sure the career is spelled and capitalized the same way it is in the index!"""
+
+        if careername == None:
+            await ctx.send("```You might've forgotten to type the career in! I can't get info for a career you didn't input!```")
+            return
+        
+        if careername not in ALLJOBS:
+            await ctx.send("```That career didn't seem to be found in our databases! Maybe try typing it again or checking the spelling!```")
+            return
+        
+        
+        jobinfo = ALLJOBS.get(careername)
+        requiredskills = ALLJOBS.get(careername, [])[4:]
+        careertitle = careername
+        careerdescription = (
+            f"{jobinfo[0]}\n"
+            f"**Boss:** {jobinfo[2]}\n"
+            f"**Required skill(s):** {', '.join(requiredskills)}"
+        )
+        careerpic = jobinfo[1]
+        async with aiohttp.ClientSession(headers={"Connection": "keep-alive"}) as session:
+            async with session.get(careerpic, ssl=False) as response:
+                assert response.status == 200
+        
+        em = discord.Embed(
+            title=careertitle, description=careerdescription, color=discord.Color.red()
+        )
+        em.set_image(url=careerpic)
+        await ctx.send(embed=em)
+    
+    @slscareers.command(name="careerapply", aliases=["ca"])
+    async def slscareers_careerapply(self, ctx: commands.Context, jobname: str = None) -> None:
+        """Apply to a career of your choosing!"""
+
+        if jobname == None:
+            await ctx.send("```Not sure how you're planning to apply to a nameless job! Maybe try putting the name in next time!```")
+            return
+        
+        userjob = await self.config.member(ctx.author).userjob()
+
+        careerfield = self.config.member(ctx.author).careerfield()
+        if careerfield == jobname:
+            await ctx.send("```It looks like you're already in that career!```")
+            return
+        
+        if userjob != "Unemployed":
+            await ctx.send("```You should probably quit your existing job before you apply to new ones!```")
+            return
+        
+        if jobname not in ALLJOBS:
+            await ctx.send("```It doesn't seem like that's an available job right now... Maybe try retyping it!```")
+            return
+        
+        jobdict = globals().get(jobname)
+        if jobdict == None:
+            await ctx.send("```You should not be able to see this error as a user! Please report this error to spideysimp if you see it!```")
+            return
+        maincareerlist = ALLJOBS.get(jobname)
+        requiredskills = ALLJOBS.get(jobname, [])[4:]
+        currency = await bank.get_currency_name(ctx.guild)
+        startercareer = list(jobdict.keys())[0]
+        careerdesc = jobdict.get(startercareer)
+        description = careerdesc[0]
+        salary = careerdesc[1]
+        apptitle = f"{jobname} Application"
+        appdesc = (
+            f"You are currently trying to apply for the **{jobname} Career Path.**\n"
+            f"The first career level is **{startercareer}** with the following job description:\n{description}\n"
+            f"Your daily salary would start at **{salary} {currency}.**\n"
+            f"Your supervisor would be **{maincareerlist[2]}**.\n"
+            f"You'll need to build your **{', '.join(requiredskills)} skill(s)** if you want to get promoted."
+        )
+        careerpic = maincareerlist[1]
+        
+        async with aiohttp.ClientSession(headers={"Connection": "keep-alive"}) as session:
+            async with session.get(careerpic, ssl=False) as response:
+                assert response.status == 200
+
+        em = discord.Embed(
+            title=apptitle, description=appdesc, color=discord.Color.red()
+        )
+        em.set_image(url=careerpic)
+        await ctx.send(embed=em)
+        await ctx.send("Type `Confirm` to secure this job or `Cancel` to cancel the application.")
+
+        def check(message):
+            return message.author == ctx.author and message.content.lower() in ["confirm", "cancel"]
+
+        try:
+            message = await self.bot.wait_for('message', timeout=30.0, check=check)
+
+            if message.content.lower() == "confirm":
+                await ctx.send(f"Congratulations {ctx.author.mention}, you've been hired for the {jobname} job!")
+                await self.config.member(ctx.author).userjob.set(startercareer)
+                await self.config.member(ctx.author).careerfield.set(jobname)
+                await self.config.member(ctx.author).careerlevel.set(1)
+                await self.config.member(ctx.author).salary.set(salary)
+            else:
+                await ctx.send(f"Application for {jobname} has been canceled.")
+        except asyncio.TimeoutError:
+            await ctx.send("You took too long to respond! Application has been canceled.")
+        
+    @slscareers.command(name="quitjob", aliases=["qj"])
+    async def slscareers_quitjob(self, ctx: commands.Context):
+        """Quit your job with this function!"""
+        userjob = await self.config.member(ctx.author).userjob()
+        await ctx.send(f"Are you sure you want to quit your job as a {userjob}? Type `Yes` or `No`.")
+        def check(message):
+            return message.author == ctx.author and message.content.lower() in ["yes", "no"]
+
+        try:
+            message = await self.bot.wait_for('message', timeout=30.0, check=check)
+
+            if message.content.lower() == "yes":
+                await ctx.send("You have quit your job!")
+                await self.config.member(ctx.author).userjob.set("Unemployed")
+                await self.config.member(ctx.author).careerfield.set("Unemployed")
+                await self.config.member(ctx.author).careerprog.set(0)
+                await self.config.member(ctx.author).careerlevel.set(0)
+                await self.config.member(ctx.author).salary.set(0)
+            else:
+                await ctx.send("Your resignation has been canceled.")
+        except asyncio.TimeoutError:
+            await ctx.send("You took too long to respond! If you want to quit, run the command again please!")
+
+    @slscareers.command(name="gotowork", aliases=["gtw"])
+    async def slscareers_gotowork(self, ctx: commands.Context):
+        """Go to work at your job!"""
+        user_id = ctx.author.id
+        userjob = await self.config.member(ctx.author).userjob()
+        careerfield = await self.config.member(ctx.author).careerfield()
+        careerprog = await self.config.member(ctx.author).careerprog()
+        careerlevel = await self.config.member(ctx.author).careerlevel()
+        skillslist = await self.config.member(ctx.author).skillslist()
+        salary = await self.config.member(ctx.author).salary()
+
+        current_time = datetime.now()
+        last_work_time = work_cooldowns.get(user_id)
+
+        if last_work_time:
+            time_since_last_work = current_time - last_work_time
+            if time_since_last_work < timedelta(days=1):
+                remaining_time = timedelta(days=1) - time_since_last_work
+                hours, remainder = divmod(remaining_time.seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
+                await ctx.send(f"```You can only go to work once every day silly. Please try again in {hours} hours and {minutes} minutes.```")
+                return
+
+        if userjob == "Unemployed":
+            await ctx.send("```You seem to be unemployed! You can't work if you have no job!```")
+            return
+        
+       
+        
+        work_cooldowns[user_id] = current_time
+
+        jobskillreq = ALLJOBS.get(careerfield)[4]
+        skillvalue = skillslist.get(jobskillreq)[0]
+        if ALLJOBS.get(careerfield)[5] != None:
+            jobskillreq2 = ALLJOBS.get(careerfield)[5]
+            skillvalue2 = skillslist.get(jobskillreq2)[0]
+        
+        jobaddperc = random.randint(10, 40)
+        newjobperc = careerprog + jobaddperc
+        jobdict = globals().get(careerfield)
+        promotioncareer = list(jobdict.keys())[careerlevel]
+        promotionbasesalary = jobdict.get(promotioncareer)[1]
+        promotionbasebonus = jobdict.get(promotioncareer)[2]
+        promotionsalary = promotionbasesalary * (random.randint(100, 115) / 100)
+        promotionbonus = promotionbasebonus * (random.randint(100, 115) / 100)
+        newsalary = round(promotionsalary)
+        newbonus = round(promotionbonus)
+        promotionlevel = careerlevel + 1
+        currency = await bank.get_currency_name(ctx.guild)
+        if newjobperc >= 100:
+            if  promotionlevel <= skillvalue:
+                if skillvalue2 == None:
+                    newjobperc -= 100
+                    await self.config.member(ctx.author).userjob.set(promotioncareer)
+                    await self.config.member(ctx.author).careerlevel.set(promotionlevel)
+                    await self.config.member(ctx.author).salary.set(newsalary)
+                    await bank.deposit_credits(ctx.author, promotionbonus)
+                    await ctx.send(
+                        f"You have been promoted at your career from {userjob} to {promotioncareer}!\n"
+                        f"You will now be making {newsalary} {currency} per day and have received a promotion bonus of {newbonus} {currency}!")
+                elif promotionlevel <= skillvalue2:
+                    newjobperc -= 100
+                    await self.config.member(ctx.author).userjob.set(promotioncareer)
+                    await self.config.member(ctx.author).careerlevel.set(promotionlevel)
+                    await self.config.member(ctx.author).salary.set(newsalary)
+                    await bank.deposit_credits(ctx.author, newbonus)
+                    await ctx.send(
+                        f"You have been promoted at your career from {userjob} to {promotioncareer}!\n"
+                        f"You will now be making {newsalary} {currency} per day and have received a promotion bonus of {newbonus} {currency}!")
+                elif skillvalue2 < promotionlevel:
+                    newjobperc = 99
+                    await ctx.send(f"Your {jobskillreq2} skill needs to reach level {promotionlevel} before you can be promoted!")
+            elif skillvalue < promotionlevel:
+                newjobperc = 99
+                await ctx.send(f"Your {jobskillreq} skill needs to reach level {promotionlevel} before you can be promoted!")     
+        
+        await bank.deposit_credits(ctx.author, salary)
+        await self.config.member(ctx.author).careerprog.set(newjobperc)
+        await ctx.send(f"You finished your day of work at {careerfield} and have earned {salary} {currency}!")
+
+    @slscareers.command(name="careerreview", aliases=["cr"])
+    async def slscareers_careerreview(self, ctx: commands.Context):
+        userjob = await self.config.member(ctx.author).userjob()
+        careerfield = await self.config.member(ctx.author).careerfield()
+        careerprog = await self.config.member(ctx.author).careerprog()
+        careerlevel = await self.config.member(ctx.author).careerlevel()
+        salary = await self.config.member(ctx.author).salary()
+        username = await self.config.member(ctx.author).username()
+        currency = await bank.get_currency_name(ctx.guild)
+        jobdict = globals().get(careerfield)
+
+        careertitle = f"{username}'s Career Info!"
+        careerdesc = (
+                f"**Position:** {userjob} at {careerfield} level {careerlevel}.\n"
+                f"**Job description:** {jobdict.get(userjob)[0]}\n"
+                f"**Daily salary:** {salary} {currency}.\n"
+                f"**Required Skill(s):** {', '.join(ALLJOBS.get(careerfield)[4:])}\n"
+                f"**Boss:** {ALLJOBS.get(careerfield)[2]}\n"
+                f"**Promotion Progress:** {careerprog}% to {careerlevel + 1}! Make sure your required skills are at least the same as the level you would be promoted to!"
+                )
+        
+        em = discord.Embed(
+            title=careertitle, description=careerdesc, color=discord.Color.red()
+        )
+        em.set_image(url=ALLJOBS.get(careerfield)[1])
+        await ctx.send(embed=em)
