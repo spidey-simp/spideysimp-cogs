@@ -3,7 +3,7 @@
         "spideysimp"
     ],
     "min_bot_version": "3.4.0",
-    "description": "A life sim that at the time of writing this includes a shop that rotates through items and user profiles. It will be updated! Please make sure your bank is set to global or it may cause issues!",
+    "description": "A life sim that at the time of writing this includes a shop that rotates through items, user profiles, skills, and brand new careers! It will be updated! Please make sure your bank is set to global or it may cause issues!",
     "hidden": false,
     "install_msg": "Thank you for installing Spidey Life Sim! Get started with '[p]load spideylifesim', then '[p]help SpideyLifeSim'",
     "short": "Spidey Life Sim",
