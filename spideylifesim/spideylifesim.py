@@ -399,6 +399,55 @@ class SpideyLifeSim(Cog):
         )
         em.set_image(url=userpic)
         await ctx.send(embed=em)
+
+    @slsprofile.command(name="resetprofile", aliases=["rp"])
+    async def slsprofile_resetprofile(self, ctx: commands.Context):
+        """Reset all profile data to their defaults!"""
+        await ctx.send("This will completely reset your profile data completely! Are you sure you want to do this? `Confirm` or `Cancel`")
+        
+        def check(message):
+            return message.author == ctx.author and message.content.lower() in ["confirm", "cancel"]
+
+        try:
+            message = await self.bot.wait_for('message', timeout=30.0, check=check)
+
+            if message.content.lower() == "confirm":
+                await ctx.send("All data has been reset to its default values!")
+                await self.config.member(ctx.author).userinventory.set([])
+                await self.config.member(ctx.author).userjob.set("Unemployed")
+                await self.config.member(ctx.author).careerfield.set("Unemployed")
+                await self.config.member(ctx.author).careerlevel.set(0)
+                await self.config.member(ctx.author).salary.set(0)
+                await self.config.member(ctx.author).username.set("None")
+                await self.config.member(ctx.author).careerprog.set(0)
+                await self.config.member(ctx.author).userpic.set("https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png")
+                await self.config.member(ctx.author).usergender.set("Not set")
+                await self.config.member(ctx.author).usertraits.set([])
+                await self.config.member(ctx.author).skillslist.set(SKILLSLIST)
+            else:
+                await ctx.send("You canceled your attempt to quit! Please try again if that was a mistake.")
+        except asyncio.TimeoutError:
+            await ctx.send("You took too long to respond! Command canceled.")
+        
+    @slsprofile.command(name="emptyaccount", aliases=["ea"])
+    async def slsprofile_emptyaccount(self, ctx: commands.Context):
+        """Your bank account will be reset to 0! If the bank is set to global (most likely your guild owner did set it that way), then it will reset your bank balance to 0 across all programs attached to this bot."""
+
+        await ctx.send("This will empty your bank account attached to the bot! This action cannot be undone! Are you sure you want to proceed? `Confirm` or `Cancel`")
+        balance = await bank.get_balance(ctx.author)
+        def check(message):
+            return message.author == ctx.author and message.content.lower() in ["confirm", "cancel"]
+
+        try:
+            message = await self.bot.wait_for('message', timeout=30.0, check=check)
+
+            if message.content.lower() == "confirm":
+                await ctx.send("Your account balance has been reset to 0!")
+                await bank.withdraw_credits(ctx.author, balance)
+            else:
+                await ctx.send("You canceled your attempt to erase your finances! Please try again if that was a mistake.")
+        except asyncio.TimeoutError:
+            await ctx.send("You took too long to respond! Command canceled.")
         
     @commands.group(aliases=["slssk"])
     async def slsskills(self, ctx: commands.Context):
