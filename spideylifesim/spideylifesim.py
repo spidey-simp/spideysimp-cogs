@@ -630,7 +630,8 @@ class SpideyLifeSim(Cog):
                 await self.config.member(ctx.author).salary.set(0)
                 for i in maincareerlist[3]:
                     async with self.config.member(ctx.author).userinventory() as inventory:
-                        inventory.remove(i)
+                        if i in inventory:
+                            inventory.remove(i)
                 leavemessage = discord.Embed(title=f"Message from {maincareerlist[2]}", description=f"{maincareerlist[7]}")
                 leavemessage.set_thumbnail(url=maincareerlist[5])
                 await ctx.send(embed=leavemessage)
