@@ -29,39 +29,6 @@ from .actions import LightsaberList, CutlassList, BroadswordList, MartialArtsLis
 
 log = logging.getLogger("red.spideysimp-cogs.SpideyLifeSim")
 
-_ = Translator("Bank API", __file__)
-__all__ = (
-    "is_owner_if_bank_global",
-    "Account",
-    "get_balance",
-    "can_spend",
-    "set_balance",
-    "withdraw_credits",
-    "deposit_credits",
-    "transfer_credits",
-    "wipe_bank",
-    "bank_prune",
-    "get_leaderboard",
-    "get_leaderboard_position",
-    "get_account",
-    "is_global",
-    "set_global",
-    "get_bank_name",
-    "set_bank_name",
-    "get_currency_name",
-    "set_currency_name",
-    "get_max_balance",
-    "set_max_balance",
-    "get_default_balance",
-    "set_default_balance",
-    "AbortPurchase",
-    "cost",
-)
-
-
-
-
-
 skill_cooldowns: Dict[str, Dict[str, datetime]] = {}
 
 store_slots = []
