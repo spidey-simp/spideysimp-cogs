@@ -11,7 +11,14 @@ from typing import Dict, List, Literal, Optional, Any, NoReturn
 from abc import ABC
 from discord import Member, Guild
 from collections import Counter
-import humanize
+import subprocess
+import sys
+
+try:
+    import humanize
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "humanize"])
+    import humanize
 
 
 from redbot.core import Config, checks, commands, bank
