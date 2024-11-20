@@ -41,7 +41,10 @@ SKILLITEMS = {
     "Casebook": 300,
     "Whoopie cushion": 15,
     "Sewing machine": 100,
-    "Lightsaber": 10000000000000
+    "Lightsaber": 10000000000000,
+    "Force Tome": 1000000000,
+    "Cutlass": 1000,
+    "Broadsword": 500
 }
 
 VEHICLES = {
@@ -62,7 +65,9 @@ VEHICLES = {
     "Vespa": 500,
     "Ice skates": 30,
     "Sports car": 500000,
-    "Police car": 25000
+    "Police car": 25000,
+    "Dinghy": 2500,
+    "Frigate": 7000000000000, 
 }
 
 ENTERTAINMENT = {
@@ -84,7 +89,7 @@ ENTERTAINMENT = {
     "Fireworks": 50,
     "Remote control airplane": 400,
     "Airpods": 200,
-    "Soldier costume": 30
+    "Soldier garbs": 30
 }
 
 LUXURYITEMS = {
