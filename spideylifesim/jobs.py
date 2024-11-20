@@ -103,7 +103,7 @@ ALLJOBS = {
                 "You're tendering your resignation? I am dismayed by that. However, I understand and wish you the best in future endeavors."],
     "Politics": ["The political career path begins with grassroots efforts and community-level leadership, progressing to roles that shape state and national policy. This journey focuses on representing the public, building influence, and guiding the direction of governance.",
                 "https://assets.website-files.com/6231a3e280c0edda9e1afe34/646f1efd24f29c036760d4be_CampaignSpeeches.jpg",
-                "Gov. Fil A. Buster", ["Casebook"], ["Debate"],
+                "Gov. Fil A. Buster", ["Casebook"], ["Debate", "Charisma"],
                 "https://dm0qx8t0i9gc9.cloudfront.net/thumbnails/video/msqd2XJ/videoblocks-zoom-in-of-friendly-middle-aged-politician-in-suit-gesticulating-and-talking-with-audience-from-podium-against-usa-flag-during-election-debate_hn8bvqybo_thumbnail-1080_01.png",
                 "Is that my coffee? No? Wait you're here about the job? Well why didn't you say that? Here's a law book. Come back when you know a thing or two.",
                 "Huh? What's that? Oh you're quitting? Bye."],
