@@ -680,7 +680,7 @@ class SpideyLifeSim(Cog):
             else:
                 newjobperc = 99
                 missing_skills = [skill for skill, value in zip(jobskillreq, skill_values) if promotionlevel > value]
-                await ctx.send(f"Increase your {','.join(missing_skills)} skill(s) to level {promotionlevel} for promotion!")
+                await ctx.send(f"Increase your {', '.join(missing_skills)} skill(s) to level {promotionlevel} for promotion!")
 
         await bank.deposit_credits(ctx.author, salary)
         await self.config.member(ctx.author).careerprog.set(newjobperc)
