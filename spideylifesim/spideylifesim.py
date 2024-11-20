@@ -189,6 +189,11 @@ class SpideyLifeSim(Cog):
         skilladdperc = random.randint(5, 33)
         newskillperc = skillvalues[1] + skilladdperc
         skilllevel = skillvalues[0]
+        if skilllevel >= 10:
+            skilllevel = 10
+            skillslist[skillname] = [skilllevel, 100]
+            await ctx.send(f"You have maxed {skillname}! You cannot get it any higher!")
+            return
 
         if newskillperc >= 100:
             newskillperc -= 100
