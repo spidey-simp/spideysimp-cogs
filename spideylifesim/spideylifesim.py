@@ -667,8 +667,11 @@ class SpideyLifeSim(Cog):
     
         work_cooldowns[user_id] = current_time
 
-        jobskillreq = ALLJOBS[careerfield][4]
-        skill_values = [skillslist.get(jobskillreq, [0])[0] for skill in jobskillreq]
+        skill_values = []
+        jobskillreq = ALLJOBS.get(careerfield)[4]
+        for skill in jobskillreq:
+            skill_value = skillslist.get(skill, [0])
+            skill_values.append(skill_value[0])
 
         jobaddperc = random.randint(10, 40)
         newjobperc = careerprog + jobaddperc
