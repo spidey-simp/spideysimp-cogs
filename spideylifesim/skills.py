@@ -1,9 +1,10 @@
+
 SKILLSLIST = {
-    "Piano": [0, 0, "Electric Piano", "Grand Piano"],
+    "Piano": [0, 0, "Electric piano", "Grand piano"],
     "Guitar": [0, 0, "Guitar"],
     "Singing": [0, 0],
     "Art": [0, 0, "Easel"],
-    "Photography": [0, 0, "Photo Camera"],
+    "Photography": [0, 0, "Photo camera"],
     "Comedy": [0, 0],
     "Charisma": [0, 0],
     "Writing": [0, 0, "Laptop", "Notebook", "Desktop"],
@@ -11,7 +12,7 @@ SKILLSLIST = {
     "Woodworking": [0, 0, "Toolbox"],
     "Programming": [0, 0, "Laptop", "Desktop"],
     "Science": [0, 0, "Science workstation"],
-    "Medicine": [0, 0, "Skeleton study tool", "Medical Textbook"],
+    "Medicine": [0, 0, "Skeleton study tool", "Medical textbook"],
     "Fishing": [0, 0, "Fishing rod"],
     "Gardening": [0, 0, "Gardening tools"],
     "Cooking": [0, 0, "Stove"],
@@ -23,5 +24,9 @@ SKILLSLIST = {
     "Debate": [0, 0, "Casebook"],
     "Mischief": [0, 0, "Whoopie cushion"],
     "Sewing": [0, 0, "Sewing machine"],
-    "Force-wielding": [0, 0, "Lightsaber"]
+    "Force-wielding": [0, 0, "Force Tome"],
+    "Dueling": [0, 0, "Lightsaber", "Cutlass", "Broadsword"],
+    "Sailing": [0, 0, "Dinghy", "Frigate"],
+    "Martial Arts": [0, 0]
 }
+
