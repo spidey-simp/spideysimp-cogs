@@ -485,6 +485,11 @@ class SpideyLifeSim(Cog):
             return
 
         await self.practice_skill(ctx, skillname)
+        cooldown_duration = timedelta(minutes=60)  # Adjust duration as needed
+        current_time = datetime.now()
+        user_cooldowns = skill_cooldowns.get(ctx.author.id, {})
+        user_cooldowns[skillname] = current_time + cooldown_duration
+        skill_cooldowns[ctx.author.id] = user_cooldowns
 
     async def is_on_cooldown(self, ctx, skillname):
         """Check if the user is on cooldown for a skill."""
