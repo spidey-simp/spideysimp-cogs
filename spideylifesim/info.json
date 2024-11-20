@@ -7,6 +7,7 @@
     "hidden": false,
     "install_msg": "Thank you for installing Spidey Life Sim! Get started with '[p]load spideylifesim', then '[p]help SpideyLifeSim'",
     "short": "Spidey Life Sim",
+    "requirements": ["humanize"],
     "end_user_data_statement": "This cog stores data all of which are user-inputted!",
     "tags": [
         "spideysimp",
