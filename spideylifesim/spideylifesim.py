@@ -526,7 +526,7 @@ class SpideyLifeSim(Cog):
             return
     
         jobinfo = ALLJOBS[careername]
-        requiredskills = jobinfo[4:]
+        requiredskills = jobinfo[4]
         em = discord.Embed(
             title=careername, 
             description=f"{jobinfo[0]}\n**Boss:** {jobinfo[2]}\n**Required skill(s):** {', '.join(requiredskills)}", 
