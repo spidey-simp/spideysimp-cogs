@@ -1,22 +1,29 @@
 FOODITEMS = {
     "Apple": 1,
     "Banana": 1,
-    "Casserole": 8,
+    "Casserole": 15,
     "Steak": 20,
     "Chicken sandwich": 6,
     "Soda": 1,
-    "Bowl of baked beans": 1,
+    "Bowl of baked beans": 3,
     "Lobster thermidor": 40,
     "Strawberries": 4,
     "Box of cereal": 3,
-    "Sparkling cider": 2,
+    "Sparkling cider": 5,
     "Apple juice": 3,
-    "The catch of the day": 10,
-    "A pizza": 10,
-    "Chocolate cake": 20,
+    "The catch of the day": 20,
+    "A pizza": 15,
+    "Chocolate cake": 30,
     "Birthday cake": 25,
     "Donut": 1,
-    "Pretzels": 2
+    "Pretzels": 2,
+    "Cheeseburger": 8,
+    "Cup of Coffee": 3,
+    "Ice Cream Sundae": 5,
+    "Roasted Turkey": 30,
+    "Cup of Ramen": 2,
+    "Taco Trio": 8,
+    "Cheese Platter": 15
 }
 
 SKILLITEMS = {
@@ -25,12 +32,12 @@ SKILLITEMS = {
     "Guitar": 600,
     "Easel": 50,
     "Photo camera": 500,
-    "Fishing rod": 20,
-    "Toolbox": 30,
+    "Fishing rod": 50,
+    "Toolbox": 50,
     "Laptop": 1000,
     "Desktop": 800,
     "Science workstation": 1000,
-    "Skeleton study tool": 50,
+    "Skeleton study tool": 100,
     "Medical textbook": 300,
     "Gardening tools": 30,
     "Notebook": 5,
@@ -39,18 +46,24 @@ SKILLITEMS = {
     "Logic puzzles": 45,
     "Movie script": 15,
     "Casebook": 300,
-    "Whoopie cushion": 15,
-    "Sewing machine": 100,
+    "Whoopie cushion": 5,
+    "Sewing machine": 150,
     "Lightsaber": 10000000000000,
     "Force Tome": 1000000000,
     "Cutlass": 1000,
-    "Broadsword": 500
+    "Broadsword": 500,
+    "Canvas": 15,
+    "Workbench": 215,
+    "Microscope": 305,
+    "Fabric": 30,
+    "Practice Dummy": 115,
+    "Training Mat": 50,
 }
 
 VEHICLES = {
-    "Bicycle": 200,
-    "Jetski": 500,
-    "Hanglider": 200,
+    "Bicycle": 400,
+    "Jetski": 8000,
+    "Hanglider": 3000,
     "New sneakers": 60,
     "Matt from across the block's old car": 1000,
     "Private jet": 50000000,
@@ -66,12 +79,19 @@ VEHICLES = {
     "Ice skates": 30,
     "Sports car": 500000,
     "Police car": 25000,
-    "Dinghy": 2500,
-    "Frigate": 7000000000000, 
+    "Dinghy": 5000,
+    "Frigate": 100000000,
+    "Sailboat": 50000,
+    "Electric Scooter": 300,
+    "Yacht": 1000000,
+    "Unicycle": 100,
+    "Hoverboard": 1200,
+    "Hot Air Balloon": 25000,
+    "Horse and Carriage": 5000
 }
 
 ENTERTAINMENT = {
-    "Small stereo": 20,
+    "Small stereo": 50,
     "Surround sound stereo": 300,
     "Kevin's tv he left on the curb": 50,
     "85 inch 4K tv with all the bells and whistles": 2000,
@@ -87,9 +107,14 @@ ENTERTAINMENT = {
     "Skis": 100,
     "VR headset": 300,
     "Fireworks": 50,
-    "Remote control airplane": 400,
+    "Remote control airplane": 100,
     "Airpods": 200,
-    "Soldier garbs": 30
+    "Soldier garbs": 100,
+    "Pinball Machine": 700,
+    "DJ Equipment": 1500,
+    "Home Karaoke Machine": 150,
+    "Pogo Stick": 30,
+    "Board Game": 40
 }
 
 LUXURYITEMS = {
@@ -101,12 +126,18 @@ LUXURYITEMS = {
     "Front row Taylor Swift tickets": 5000,
     "The crown jewels from england": 4000000000000,
     "A miscellaneous country that not one person has heard of": 1000000000000000,
-    "A gold chain": 40,
+    "A gold chain": 500,
     "A lottery ticket": 10,
     "Spa trip passes": 200,
     "A weird modern art painting that looks like a preschooler painted it": 5000000,
     "The Fountain of Youth": 90000000000000000,
-    "A diamond encrusted bracelet": 1000
+    "A diamond encrusted bracelet": 5000,
+    "Custom-made suit": 3000,
+    "An original Van Gogh": 200000000,
+    "Vintage Rolex": 15000,
+    "Private Island": 50000000,
+    "Throne": 50000,
+    "Life-Sized Golden Statue of Yourself": 6000000
 }
 
 ALLITEMS = {
