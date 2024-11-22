@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime, timedelta
 import random
 from discord.ext import tasks, commands
+from discord.ui import View, Button
 from random import choice
 import aiohttp
 from typing import Dict, List, Literal, Optional, Any, NoReturn
@@ -12,6 +13,8 @@ from abc import ABC
 from discord import Member, Guild
 from collections import Counter
 import humanize
+from functools import partial
+
 
 from redbot.core import Config, checks, commands, bank
 from redbot.core.bot import Red
@@ -26,6 +29,7 @@ from .storestuff import FOODITEMS, SKILLITEMS, VEHICLES, ENTERTAINMENT, LUXURYIT
 from .skills import SKILLSLIST
 from .jobs import ALLJOBS, Culinary, Business, Programming, Medicine, LawEnforcement, Artist, Film, Military, Writing, SocialMedia, Athletic, Legal, Journalism, Engineering, Music, Science, Education, Politics, Criminal, Astronaut, Fashion, Sith, SecretAgent, Sailing, Knighthood
 from .actions import LightsaberList, CutlassList, BroadswordList, MartialArtsList
+from .traits import HINDRANCES, SOCIALTRAITS, VALUETRAITS, NATURETRAITS, INTERESTTRAITS, ALLTRAITS
 
 log = logging.getLogger("red.spideysimp-cogs.SpideyLifeSim")
 
@@ -44,6 +48,9 @@ careerlevel = 0
 careerprog = 0
 salary = 0
 work_cooldowns = {}
+current_traits = []
+consechigheffort = 0
+burnoutapplied = None
 
 next_refresh_time = None
 
@@ -51,6 +58,23 @@ async def fetch_url(session, url):
     async with session.get(url) as response:
         assert response.status == 200
         return await response.json()
+
+def paginate(data, page_size=5):
+    pages = []
+    page = []
+    total_pages = (len(data) // page_size) + (1 if len(data) % page_size != 0 else 0)  # Calculate total pages
+
+    for idx, (trait, body) in enumerate(data.items()):
+        description = body.get("description")
+        page.append(f"**{trait}**: {description}")
+        if len(page) == page_size or idx == len(data) - 1:
+            pages.append("\n".join(page))
+            page = []
+
+    for i in range(len(pages)):
+        pages[i] += f"\n\nPage {i+1}/{total_pages}"
+
+    return pages
 
 
 class SpideyLifeSim(Cog):
@@ -86,7 +110,9 @@ class SpideyLifeSim(Cog):
             userpic = "https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png",
             usergender = "Not set",
             usertraits = [],
-            skillslist = SKILLSLIST
+            skillslist = SKILLSLIST,
+            consechigheffort = 0,
+            burnoutapplied = None
         )
         self.config.register_member(
             userinventory=[],
@@ -99,19 +125,17 @@ class SpideyLifeSim(Cog):
             userpic = "https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png",
             usergender = "Not set",
             usertraits = [],
-            skillslist = SKILLSLIST
+            skillslist = SKILLSLIST,
+            consechigheffort = 0,
+            burnoutapplied = None
         )
 
-
     def cog_load(self):
-        # Create the task when the cog is loaded
         self.storerefresh_task = asyncio.create_task(self.storerefresh())
     
     def cog_unload(self):
         if self.storerefresh_task and not self.storerefresh_task.cancelled():
             self.storerefresh_task.cancel()
-
-    
 
     async def storerefresh(self):
         global next_refresh_time
@@ -134,11 +158,7 @@ class SpideyLifeSim(Cog):
         
             except asyncio.CancelledError:
                 print("storerefresh task was cancelled. Performing cleanup... Probably best to reload the cog if you see this!")
-                # Optional: Reset store_slots or clear any temporary data
                 store_slots.clear()
-
-
-
 
     async def red_delete_data_for_user(self, **kwargs):
         """Nothing to delete"""
@@ -146,22 +166,55 @@ class SpideyLifeSim(Cog):
     
     async def practice_skill(self, ctx, skillname, progress: bool = True, user: discord.Member = None):
         """Handle the skill practice process with a progress bar."""
-        if user == None:
+        if user is None:
             user = ctx.author
         skillslist = await self.config.member(user).skillslist()
         username = await self.config.member(user).username()
         if username == "None":
             username = user.display_name
-        skillvalues = skillslist.get(skillname, [0, 0])
+        
+        usertraits = await self.config.member(user).usertraits()
+        skillvalues = skillslist.get(skillname, [0, 0, [], []])
+        print(f"Debug: skillvalues for {skillname} are {skillvalues}")
+        if len(skillvalues) < 2:
+            await ctx.send(f"Error: Invalid data for {skillname}. If you see this error, please report it.")
+            return
+        
+        skilllevel, skillprogress = skillvalues[:2]
+        forbidden_traits = {
+            "Hydrophobic": ["Swimming", "Sailing"],
+            "Pacifist": ["Dueling", "Martial Arts"],
+            "Humorless": ["Comedy"],
+            "No-nonsense": ["Comedy"],
+            "Pirate": ["Programming", "Social Media"],
+            "Medieval": ["Programming", "Social Media"],
+        }
+        for trait, forbidden_skills in forbidden_traits.items():
+            if trait in usertraits and skillname in forbidden_skills:
+                await ctx.send(
+                    f"```Your {trait} trait prevents you from practicing {skillname}.```"
+                )
+                return
+    
         skilladdperc = random.randint(5, 33)
-        newskillperc = skillvalues[1] + skilladdperc
-        skilllevel = skillvalues[0]
+        boost_traits = SKILLSLIST.get(skillname)[2]
+        for trait in boost_traits:
+            if trait in usertraits:
+                skilladdperc = int(skilladdperc * 1.2)
+        
+        hindrance_traits = ["Absent-Minded", "Lazy"]
+        for trait in hindrance_traits:
+            if trait in usertraits:
+                skilladdperc = int(skilladdperc * 0.8)
+        
+        skilladdperc = max(skilladdperc, 1)
+        newskillperc = skillprogress + skilladdperc
+
         if skilllevel >= 10:
             skilllevel = 10
             skillslist[skillname] = [skilllevel, 100]
             await ctx.send(f"You have maxed {skillname}! You cannot get it any higher!")
             return
-
 
         if newskillperc >= 100:
             newskillperc -= 100
@@ -182,8 +235,7 @@ class SpideyLifeSim(Cog):
             )
         else:
             return
-
-    
+ 
     @commands.group(aliases=["sls"])
     async def spideylifesim(self, ctx: commands.Context):
         """Don't forget to set up your profile first!"""
@@ -300,7 +352,7 @@ class SpideyLifeSim(Cog):
             f"**Name:** {profilename}\n"
             f"**Gender:** {user_data['usergender']}\n"
             f"**Profession:** {user_data['userjob']} in the {user_data['careerfield']} field\n"
-            f"**Traits:** {user_data['usertraits']}\n"
+            f"**Traits:** {', '.join(user_data['usertraits'])}\n"
             f"**Account Balance:** {humanize.intcomma(userbalance)} {currency}\n"
         )
         await self.display_profile(ctx, profileheader, profiledescription, user_data["userpic"])
@@ -345,7 +397,7 @@ class SpideyLifeSim(Cog):
             f"**Name:** {profilename}\n"
             f"**Gender:** {user_data['usergender']}\n"
             f"**Profession:** {user_data['userjob']} in the {user_data['careerfield']} field\n"
-            f"**Traits:** {user_data['usertraits']}\n"
+            f"**Traits:** {', '.join(user_data['usertraits'])}\n"
             f"**Account Balance:** {humanize.intcomma(userbalance)} {currency}\n"
         )
         await self.display_profile(ctx, profileheader, profiledescription, user_data["userpic"])
@@ -370,6 +422,195 @@ class SpideyLifeSim(Cog):
             lambda user: bank.withdraw_credits(user, balance), 
             ctx.author
         )
+    
+    @slsprofile.command(name="traitsview", aliases=["tv"])
+    async def slsprofile_traitview(self, ctx: commands.Context):
+        """View traits and their descriptions via categories."""
+        await ctx.send("Choose a category to see the traits for? `hindrances`, `social`, `values`, `nature`, or `interests`")
+        def check(m):
+            return m.author == ctx.author and m.content.lower() in ["hindrances", "social", "values", "nature", "interests"]
+        try:
+            response = await self.bot.wait_for('message', timeout=30.0, check=check)
+            if response.content.lower() == "hindrances":
+                data = HINDRANCES
+            elif response.content.lower() == "social":
+                data = SOCIALTRAITS
+            elif response.content.lower() == "values":
+                data = VALUETRAITS
+            elif response.content.lower() == "nature":
+                data = NATURETRAITS
+            elif response.content.lower() == "interests":
+                data = INTERESTTRAITS
+            else:
+                await ctx.send("Looks like maybe you typed the category wrong! Try again please!")
+                return
+            pages = paginate(data)
+            current_page = 0
+
+            message = await ctx.send(pages[current_page])
+
+            await message.add_reaction("⬅️") 
+            await message.add_reaction("➡️") 
+
+            def reaction_check(reaction, user):
+                return user == ctx.author and reaction.message.id == message.id
+
+            while True:
+                try:
+                    reaction, _ = await self.bot.wait_for("reaction_add", timeout=60.0, check=reaction_check)
+                    if str(reaction.emoji) == "➡️":
+                        if current_page == len(pages) - 1:
+                            current_page = 0
+                        else:
+                            current_page += 1
+                        await message.edit(content=pages[current_page])
+                        try:
+                            await message.remove_reaction("➡️", ctx.author)
+                        except discord.Forbidden:
+                            pass
+                    elif str(reaction.emoji) == "⬅️":
+                        if current_page == 0:
+                            current_page = len(pages) - 1
+                        else:
+                            current_page -= 1
+                        await message.edit(content=pages[current_page])
+                        try:
+                            await message.remove_reaction("⬅️", ctx.author)
+                        except discord.Forbidden:
+                            pass
+
+                except asyncio.TimeoutError:
+                    await message.remove_reaction("➡️", self.bot.user)
+                    await message.remove_reaction("⬅️", self.bot.user)
+                    pass
+
+        except asyncio.TimeoutError:
+            await ctx.send("You took too long to respond. Command cancelled.")   
+            
+    @slsprofile.command(name="addtraits", aliases=["at"])
+    async def slsprofile_addtraits(self, ctx: commands.Context):
+        """Allows users to add up to 5 traits, ensuring one is a hindrance. Cannot change traits once they're set unless you reset your profile."""
+        user_traits = await self.config.member(ctx.author).usertraits()
+
+        if len(user_traits) >= 5:
+            await ctx.send("You already have the maximum number of traits (5). If you want to change your traits, you'll have to reset your profile or ask an admin to remove the traits.")
+            return
+
+        hindrance_traits = list(HINDRANCES.keys())
+        selected_hindrance = await self.select_trait(ctx, hindrance_traits, "hindrance", 1)
+
+        if not selected_hindrance:
+            await ctx.send("No hindrance was selected. Please try the command again.")
+            return
+
+        user_traits.extend(selected_hindrance)
+
+        all_traits = list({
+            **SOCIALTRAITS,
+            **VALUETRAITS,
+            **NATURETRAITS,
+            **INTERESTTRAITS,
+            **HINDRANCES
+        }.keys())
+
+        
+        selected_additional_traits = await self.select_trait(ctx, all_traits, "all traits", 4, user_traits)
+        if len(selected_additional_traits) != 4:
+            await ctx.send("You didn't select enough traits. Please try the command again.")
+            return
+
+        user_traits.extend(selected_additional_traits)
+        await self.config.member(ctx.author).usertraits.set(user_traits)
+        await ctx.send(f"Profile updated! Your traits are now:\n{', '.join(user_traits)}")
+
+    async def select_trait(self, ctx, traits, category, max_traits, current_traits=[]):
+        """Displays a trait selection page."""
+        traits_per_page = 10
+        total_pages = (len(traits) + traits_per_page - 1) // traits_per_page
+        current_page = 0
+        selected_traits = []
+
+        def build_embed(page):
+            start_idx = page * traits_per_page
+            end_idx = start_idx + traits_per_page
+            page_traits = traits[start_idx:end_idx]
+
+            embed = discord.Embed(
+                title=f"{category.capitalize()} Traits",
+                description="\n".join([f"• **{trait}**" for trait in page_traits]),
+                color=discord.Color.blurple()
+            )
+            embed.set_footer(text=f"Page {page + 1}/{total_pages}")
+            return embed, page_traits
+
+        def create_view(page_traits):
+            view = View(timeout=600.0)
+            for trait in page_traits:
+                is_disabled = trait in current_traits or any(conflict in current_traits for conflict in ALLTRAITS.get(trait, {}).get("conflicts", []))
+                button = Button(label=trait, style=discord.ButtonStyle.primary, disabled=is_disabled)
+
+                async def button_callback(interaction, selected_trait=trait):
+                    if max_traits is None or len(selected_traits) < max_traits:
+                        selected_traits.append(selected_trait)
+                        await interaction.response.send_message(f"Trait **{selected_trait}** added!", ephemeral=True)
+                        if len(selected_traits) == max_traits:
+                            view.stop()
+                    else:
+                        await interaction.response.send_message("You've already selected the maximum number of traits!", ephemeral=True)
+
+                button.callback = button_callback
+                view.add_item(button)
+
+            if current_page > 0:
+                prev_button = Button(label="Previous", style=discord.ButtonStyle.green)
+                prev_button.callback = partial(update_message, view=view, page=current_page - 1)
+                view.add_item(prev_button)
+
+            if current_page < total_pages - 1:
+                next_button = Button(label="Next", style=discord.ButtonStyle.green)
+                next_button.callback = partial(update_message, view=view, page=current_page + 1)
+                view.add_item(next_button)
+            
+            cancel_button = Button(label="Cancel", style=discord.ButtonStyle.danger)
+            cancel_button.callback = lambda interaction: cancel_selection(interaction, view)
+            view.add_item(cancel_button)
+
+            return view
+        
+        async def update_message(interaction, page, view):
+            nonlocal current_page
+            current_page = page
+            embed, page_traits = build_embed(current_page)
+            view = create_view(page_traits)
+            await interaction.response.edit_message(embed=embed, view=view)
+        
+        async def cancel_selection(interaction, view):
+            await interaction.response.send_message("Trait selection cancelled.", ephemeral=True)
+            view.stop()
+
+        embed, page_traits = build_embed(current_page)
+        message = await ctx.send(embed=embed, view=create_view(page_traits))
+
+        try:
+            while len(selected_traits) < max_traits:
+                await asyncio.sleep(0.1)
+            await message.delete()
+            return selected_traits
+        except Exception as e:
+            await ctx.send(f"An error occurred: {e}")
+            return []
+    
+
+    @slsprofile.command(name="removetraits", aliases=["rt"])
+    @commands.is_owner()
+    async def slsprofile_removetraits(self, ctx: commands.Context, user: discord.Member = None) -> None:
+        """Only usable by bot owners. This command is here for legitimate accidental trait additions. The idea is traits should not be changed during the lifetime of a character."""
+        if user == None:
+            await ctx.send("Don't forget to type the user's name!")
+            return
+        await self.config.member(user).usertraits.set([])
+        await ctx.send(f"{user}'s traits have been deleted successfully.")
+
 
     async def update_and_confirm(self, ctx, attribute, value):
         """Helper function to update an attribute and confirm it."""
@@ -479,7 +720,10 @@ class SpideyLifeSim(Cog):
 
     async def has_required_items(self, ctx, skillname):
         """Check if the user has the required items to practice a skill."""
-        required_items = SKILLSLIST.get(skillname, [])[2:]
+        skillsinfo = SKILLSLIST.get(skillname, [])
+        if len(skillsinfo) < 4:
+            return True
+        required_items = skillsinfo[3]
         userinventory = await self.config.member(ctx.author).userinventory()
         if required_items and not any(item in userinventory for item in required_items):
             await ctx.send(f"```You need one of these items to practice {skillname}: {', '.join(required_items)}. Buy them from the store!```")
@@ -633,6 +877,13 @@ class SpideyLifeSim(Cog):
         careerlevel = await self.config.member(ctx.author).careerlevel()
         skillslist = await self.config.member(ctx.author).skillslist()
         salary = await self.config.member(ctx.author).salary()
+        usertraits = await self.config.member(ctx.author).usertraits()
+        username = await self.config.member(ctx.author).username()
+        consechigheffort = await self.config.member(ctx.author).consechigheffort()
+        burnoutapplied = await self.config.member(ctx.author).burnoutapplied()
+        burnoutbool = None
+        if username == "None":
+            username = ctx.author.display_name
 
         current_time = datetime.now()
         last_work_time = work_cooldowns.get(user_id)
@@ -647,7 +898,78 @@ class SpideyLifeSim(Cog):
         if userjob == "Unemployed":
             await ctx.send("```You need a job to go to work!```")
             return
-    
+        
+        if "Burned Out" in usertraits:
+            current_time = datetime.now()
+            if burnoutapplied:
+                burnoutdate = datetime.fromisoformat(burnoutapplied)
+                if current_time - burnoutdate > timedelta(days=7):
+                    usertraits.remove("Burned Out")
+                    await self.config.member(ctx.author).usertraits.set(usertraits)
+                    await self.config.member(ctx.author).burnoutapplied.set(None)
+                    await ctx.send("You've recovered from your burnout and feel refreshed!")
+                else:
+                    await ctx.send(
+                        "You're burned out! Your performance will be signifcantly reduced.\n"
+                        "Try taking it easy for a day to recover."
+                    )
+            else:
+                usertraits.remove("Burned Out")
+                await self.config.member(ctx.author).usertraits.set(usertraits)
+                await ctx.send("There has been an error with your traits. You appear to have burnout but no set burnout date. Burned Out was removed from your traits, but if you ever see this error again, please report it.")
+        
+        await ctx.send("How much effort would you like to put into your work today? `High`, `Normal`, `Low`")
+        def check(message):
+            return message.author == ctx.author and message.content.lower() in ["high", "normal", "low"]
+        
+        goodtraits = ["Driven Achiever", "Disciplined", "Workaholic", "Lucky"]
+        badtraits = ["Lazy", "Reckless", "Pessimist", "Absent-Minded", "Insane", "Defiant Rebel", "Easily Frightened"]
+        notraits = ["Lazy", "Absent-Minded", "Defiant Rebel"]
+        yestraits = ["Driven Achiever", "Disciplined", "Workaholic"]
+        preclusiontraits = []
+        try:
+            message = await self.bot.wait_for('message', timeout=30.0, check=check)
+            effort = message.content.lower()
+            if effort == "high":
+                for trait in notraits:
+                    if trait in usertraits:
+                        preclusiontraits.append(trait)
+                if preclusiontraits:
+                    await ctx.send(f"{username} has the traits {', '.join(preclusiontraits)} and can't work hard because of them.")
+                    return
+                if "Burned Out" in usertraits: 
+                    await ctx.send("You're burned out and can't push yourself any harder.")
+                    return
+                consechigheffort += 1
+                burnoutthreshold = 4 if any(trait in usertraits for trait in yestraits) else 3
+                if consechigheffort > burnoutthreshold:
+                    burnoutbool = True
+                effort_modifier = random.randint(30, 60)
+
+            if effort == "normal":
+                effort_modifier = random.randint(15, 45)
+                if "Burned Out" in usertraits and any(trait in usertraits for trait in yestraits):
+                    burnoutbool = False
+
+            if effort == "low":
+                for trait in yestraits:
+                    if trait in usertraits:
+                        preclusiontraits.append(trait)
+                if preclusiontraits is not None:
+                    await ctx.send(f"Because {username} has the traits {usertraits}, they aren't content with putting in low effort at work.")
+                    return
+                if "Burned Out" in usertraits:
+                    burnoutbool = False
+                effort_modifier = random.randint(-10, 10)
+        except asyncio.TimeoutError:
+            await ctx.send("It appears that you forgot to type how much effort to put into work!")
+            return
+        
+        if effort != "high":
+            consechigheffort = 0
+        
+        await self.config.member(ctx.author).consechigheffort.set(consechigheffort)
+        
         work_cooldowns[user_id] = current_time
 
         skill_values = []
@@ -656,7 +978,16 @@ class SpideyLifeSim(Cog):
             skill_value = skillslist.get(skill, [0])
             skill_values.append(skill_value[0])
 
-        jobaddperc = random.randint(10, 40)
+        jobtraitbenefit = sum(5 for trait in usertraits if trait in goodtraits)
+        jobtraitbenefit -= sum(5 for trait in usertraits if trait in badtraits)
+
+        jobaddperc = effort_modifier + jobtraitbenefit
+
+        if "Burned Out" in usertraits:
+            burnoutpenalty = abs(jobaddperc) * 0.5
+            jobaddperc -= burnoutpenalty
+            await ctx.send("Your performance was reduced by 50% due to burnout.")
+        
         newjobperc = careerprog + jobaddperc
         jobdict = globals().get(careerfield)
         promotioncareer = list(jobdict.keys())[careerlevel]
@@ -682,6 +1013,18 @@ class SpideyLifeSim(Cog):
                 missing_skills = [skill for skill, value in zip(jobskillreq, skill_values) if promotionlevel > value]
                 await ctx.send(f"Increase your {', '.join(missing_skills)} skill(s) to level {promotionlevel} for promotion!")
 
+        if burnoutbool is not None:
+            if burnoutbool == True:
+                usertraits.append("Burned Out")
+                await self.config.member(ctx.author).usertraits.set(usertraits)
+                await self.config.member(ctx.author).burnoutapplied.set(datetime.now().isoformat())
+                await ctx.send("You pushed yourself too hard at work over the past couple days. You're burnt out now. Consider taking it easy.")
+            elif burnoutbool == False:
+                usertraits.remove("Burned Out")
+                await self.config.member(ctx.author).usertraits.set(usertraits)
+                await self.config.member(ctx.author).burnoutapplied.set(None)
+                await ctx.send(f"You've recovered from your burnout by putting in a more manageable effort today!")
+
         await bank.deposit_credits(ctx.author, salary)
         await self.config.member(ctx.author).careerprog.set(newjobperc)
         await ctx.send(f"Worked in the {careerfield} Field, earning {humanize.intcomma(salary)} {currency}.")
@@ -696,7 +1039,12 @@ class SpideyLifeSim(Cog):
         salary = await self.config.member(ctx.author).salary()
         username = await self.config.member(ctx.author).username()
         currency = await bank.get_currency_name(ctx.guild)
-        maxjoblevel = len(globals().get(careerfield))
+        usertraits = await self.config.member(ctx.author).usertraits()
+        burnoutapplied = await self.config.member(ctx.author).burnoutapplied()
+        burnoutdesc = ""
+        if "Burned Out" in usertraits:
+            burnoutdate = datetime.fromisoformat(burnoutapplied)
+            burnoutdesc = f"Currently burned out as of {humanize.naturaltime(burnoutdate)}."
 
         jobinfo = ALLJOBS.get(careerfield)
         if not jobinfo:
@@ -710,8 +1058,8 @@ class SpideyLifeSim(Cog):
 
         em = discord.Embed(
             title=f"{username}'s Career Review",
-            description=f"**Field:** {careerfield}\n**Position:** {userjob}\n**Level:** {careerlevel}/{maxjoblevel}\n"
-                    f"**Salary:** {humanize.intcomma(salary)} {currency}\n**Progress:** {progressionbar}",
+            description=f"**Field:** {careerfield}\n**Position:** {userjob}\n**Level:** {careerlevel}/10\n"
+                    f"**Salary:** {humanize.intcomma(salary)} {currency}\n**Progress:** {progressionbar}\n{burnoutdesc}",
             color=discord.Color.red()
         )
         em.set_image(url=jobinfo[1])
@@ -730,11 +1078,20 @@ class SpideyLifeSim(Cog):
             await ctx.send("You have to pick someone to duel!")
             return
         
+        usertraits = await self.config.member(ctx.author).usertraits()
+        othertraits = await self.config.member(user).usertraits()
         userinventory = await self.config.member(ctx.author).userinventory()
         otherinventory = await self.config.member(user).userinventory()
         othername = await self.config.member(user).username()
         if othername == "None":
             othername = user.display_name
+        
+        if "Pacifist" in usertraits:
+            await ctx.send("You're a pacifist! You can't duel someone!")
+            return
+        if "Pacifist" in othertraits:
+            await ctx.send(f"{othername} is a pacifist and refuses to duel you.")
+            return
 
         await ctx.send("Pick a duel weapon (type it with caps at the start pls): `Lightsaber`, `Cutlass`, `Broadsword`, or `Martial Arts`")
 
@@ -809,7 +1166,6 @@ class SpideyLifeSim(Cog):
             other_skill = otherskillslist.get("Martial Arts", [0])[0]
             skillsupdate = ["Martial Arts"]
 
-        # Calculate probabilities
         skill_difference = user_skill - other_skill
         base_chance = 0.5
         skill_multiplier = 0.05
@@ -817,6 +1173,35 @@ class SpideyLifeSim(Cog):
             user_win_chance = base_chance + abs(skill_difference) * skill_multiplier
         else:
             user_win_chance = base_chance - abs(skill_difference) * skill_multiplier
+
+        userbenefit = {
+            "user": ["Quick footed", "Fierce Competitor", "Lucky"],
+            "opp": ["Clumsy"]
+        }
+        otherbenefit = {
+            "user": ["Clumsy"],
+            "opp": ["Quick-footed", "Fierce Competitor", "Lucky"]
+        }
+
+        trait_multiplier = 0
+        increase_chance = 0.1
+        decrease_chance = 0.1
+
+        for trait in userbenefit["user"]:
+            if trait in usertraits:
+                trait_multiplier += increase_chance
+        for trait in otherbenefit["user"]:
+            if trait in usertraits:
+                trait_multiplier -= decrease_chance
+        for trait in userbenefit["opp"]:
+            if trait in othertraits:
+                trait_multiplier += decrease_chance
+        for trait in otherbenefit["opp"]:
+            if trait in othertraits:
+                trait_multiplier -= increase_chance
+        
+        user_win_chance += trait_multiplier
+        user_win_chance = max(0, min(1, user_win_chance))
 
         username = await self.config.member(ctx.author).username()
         if username == "None":
