@@ -133,6 +133,12 @@ ALLJOBS = {
                 "https://images.wallpapersden.com/image/download/rebecca-ferguson-as-ilsa-faust-in-mission-impossible-fallout_a2hlZWyUmZqaraWkpJRobGtlrWdmZW0.jpg",
                 "You must be the new op. We don't have much time. Here's a notebook. Meet me at the rendezvous point at 0700.",
                 "You're quitting your job as a secret agent? But you never were an agent."],
+    "MurderDrone": ["Begin as a fledgling Murder Drone tasked with basic hunting assignments and rise to becoming a commanding force feared across the galaxy. This career path emphasizes deadly efficiency, resource management, and leadership in a dystopian environment.",
+                "https://wallpapercave.com/wp/wp12024690.png",
+                "J", ["Plasma Wings", "Plasma Blade"], ["Dueling"], 
+                "https://i.pinimg.com/originals/85/f4/17/85f4179eb5445bacf38ea0d1924c14c7.jpg", 
+                "Ugh another new one. Could you just get to work already, so I don't have to deal with you?",
+                "Leaving? Whatever... Clearly this job wasn't for you. Just give me the company issued gear back and you can be on your way."],
     "ForceUser": None,
     "Wizardry": None,
     "Seafaring": None,
@@ -211,13 +217,6 @@ SUBJOBS = {
                     "No man can hinder me. Neither shall you.",
                     "The power of darkness cannot commit to people that do not commit to it. Begone!",
                     "You seem as though you would serve the will of evil well."],
-    "MurderDrone": ["Begin as a fledgling Murder Drone tasked with basic hunting assignments and rise to becoming a commanding force feared across the galaxy. This career path emphasizes deadly efficiency, resource management, and leadership in a dystopian environment.",
-                "https://wallpapercave.com/wp/wp12024690.png",
-                "J", ["Plasma Wings", "Plasma Blade"], ["Dueling"], 
-                "https://i.pinimg.com/originals/85/f4/17/85f4179eb5445bacf38ea0d1924c14c7.jpg", 
-                "Ugh another new one. Could you just get to work already, so I don't have to deal with you?",
-                "Leaving? Whatever... Clearly this job wasn't for you. Just give me the company issued gear back and you can be on your way."]
-
 }
 
 Culinary = {
