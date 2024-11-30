@@ -133,8 +133,6 @@ class SpideyLifeSim(Cog):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
-        self.duel_manager = DuelManager(Config, bot)
-        self.city_map = CityMap()
         self.alignmentmanager = AlignmentManager()
         self.config = Config.get_conf(self, identifier=684457913250480143, force_registration=True)
         fooddefault = random.choice(list(FOODITEMS.keys()))
