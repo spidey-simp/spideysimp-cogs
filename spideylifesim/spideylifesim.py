@@ -29,9 +29,7 @@ from redbot.core.errors import BankPruneError
 from .storestuff import FOODITEMS, SKILLITEMS, VEHICLES, ENTERTAINMENT, LUXURYITEMS, ALLITEMS
 from .skills import SKILLSLIST, MAGICSTANCES, MAGICSKILLS, BROADSWORDSKILLS, LIGHTSABERSKILLS, CUTLASSSKILLS, FORCEPOWERS, FORCESTANCES, SKILLTREES
 from .jobs import ALLJOBS, CAREEROPPOSITE, SUBJOBS, Culinary, Business, Programming, Medicine, LawEnforcement, Artist, Film, Military, Writing, SocialMedia, Athletic, Legal, Journalism, Engineering, Music, Science, Education, Politics, Criminal, Astronaut, Fashion, Sith, SecretAgent, Jedi, Sailor, DarkWarrior, ValiantKnight, Pirate
-from .duels import DuelManager
 from .traits import HINDRANCES, SOCIALTRAITS, VALUETRAITS, NATURETRAITS, INTERESTTRAITS, ALLTRAITS
-from .citymap import CityMap
 from .alignment import AlignmentManager
 
 
