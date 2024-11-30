@@ -5,12 +5,13 @@ import asyncio
 from datetime import datetime, timedelta
 import random
 from discord.ext import tasks, commands
+from discord.ext.commands import BucketType
 from discord.ui import View, Button
 from random import choice
 import aiohttp
 from typing import Dict, List, Literal, Optional, Any, NoReturn
 from abc import ABC
-from discord import Member, Guild
+from discord import Member, Guild, File
 from collections import Counter
 import humanize
 from functools import partial
@@ -26,10 +27,13 @@ from redbot.core.utils.chat_formatting import humanize_number
 from redbot.core.errors import BankPruneError
 
 from .storestuff import FOODITEMS, SKILLITEMS, VEHICLES, ENTERTAINMENT, LUXURYITEMS, ALLITEMS
-from .skills import SKILLSLIST
-from .jobs import ALLJOBS, Culinary, Business, Programming, Medicine, LawEnforcement, Artist, Film, Military, Writing, SocialMedia, Athletic, Legal, Journalism, Engineering, Music, Science, Education, Politics, Criminal, Astronaut, Fashion, Sith, SecretAgent, Sailing, Knighthood
-from .actions import LightsaberList, CutlassList, BroadswordList, MartialArtsList
+from .skills import SKILLSLIST, MAGICSTANCES, MAGICSKILLS, BROADSWORDSKILLS, LIGHTSABERSKILLS, CUTLASSSKILLS, FORCEPOWERS, FORCESTANCES, SKILLTREES
+from .jobs import ALLJOBS, CAREEROPPOSITE, SUBJOBS, Culinary, Business, Programming, Medicine, LawEnforcement, Artist, Film, Military, Writing, SocialMedia, Athletic, Legal, Journalism, Engineering, Music, Science, Education, Politics, Criminal, Astronaut, Fashion, Sith, SecretAgent, Jedi, Sailor, DarkWarrior, ValiantKnight, Pirate
+from .duels import DuelManager
 from .traits import HINDRANCES, SOCIALTRAITS, VALUETRAITS, NATURETRAITS, INTERESTTRAITS, ALLTRAITS
+from .citymap import CityMap
+from .alignment import AlignmentManager
+
 
 log = logging.getLogger("red.spideysimp-cogs.SpideyLifeSim")
 
@@ -51,6 +55,54 @@ work_cooldowns = {}
 current_traits = []
 consechigheffort = 0
 burnoutapplied = None
+grantedtraits = []
+
+LEARNEDSKILLS = {
+    "Spells": [],
+    "Lightsaber Techniques": [],
+    "Broadsword Techniques": [],
+    "Cutlass Techniques": [],
+    "Force Powers": []
+}
+
+STANCES = {
+    "Aggressive": False,
+    "Defensive": False,
+    "Balanced": False,
+    "Chaotic": False,
+    "Tactical": False,
+    "Horseback": False,
+    "Utility": False,
+    "Neutral": True,
+    "Good": False,
+    "Evil": False,
+    "Harry Potter Spells": False
+}
+
+EQUIVALENTSKILLS = {
+    "force": {
+        "skill": "Force-wielding",
+        "dict": FORCEPOWERS,
+    },
+    "magic": {
+        "skill": "Magic",
+        "dict": MAGICSKILLS,
+    },
+    "lightsaber": {
+        "skill": "Dueling",
+        "dict": LIGHTSABERSKILLS,
+    },
+    "cutlass": {
+        "skill": "Dueling",
+        "dict": CUTLASSSKILLS,
+    },
+    "broadsword": {
+        "skill": "Dueling",
+        "dict": BROADSWORDSKILLS
+    },
+}
+
+learnableabilities = []
 
 next_refresh_time = None
 
@@ -83,10 +135,11 @@ class SpideyLifeSim(Cog):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
+        self.duel_manager = DuelManager(Config, bot)
+        self.city_map = CityMap()
+        self.alignmentmanager = AlignmentManager()
         self.config = Config.get_conf(self, identifier=684457913250480143, force_registration=True)
         fooddefault = random.choice(list(FOODITEMS.keys()))
-        self.config.register_member()
-        self.config.register_user()
         skilldefault = random.choice(list(SKILLITEMS.keys()))
         vehicledefault = random.choice(list(VEHICLES.keys()))
         entertainmentdefault = random.choice(list(ENTERTAINMENT.keys()))
@@ -99,21 +152,6 @@ class SpideyLifeSim(Cog):
 
         self.storerefresh_task = None
 
-        self.config.register_user(
-            userinventory=[],
-            username = "None",
-            userjob = "Unemployed",
-            careerfield = "Unemployed",
-            careerlevel = 0,
-            careerprog = 0,
-            salary = 0,
-            userpic = "https://i.pinimg.com/originals/40/a4/59/40a4592d0e7f4dc067ec0cdc24e038b9.png",
-            usergender = "Not set",
-            usertraits = [],
-            skillslist = SKILLSLIST,
-            consechigheffort = 0,
-            burnoutapplied = None
-        )
         self.config.register_member(
             userinventory=[],
             username = "None",
@@ -127,7 +165,13 @@ class SpideyLifeSim(Cog):
             usertraits = [],
             skillslist = SKILLSLIST,
             consechigheffort = 0,
-            burnoutapplied = None
+            burnoutapplied = None,
+            alignment = 0,
+            allymilestone = "Neutral",
+            grantedtraits = [],
+            learnedskills = LEARNEDSKILLS,
+            learnedstances = STANCES,
+            learnableabilities = []
         )
 
     def cog_load(self):
@@ -157,7 +201,6 @@ class SpideyLifeSim(Cog):
                 await asyncio.sleep(wait_seconds)
         
             except asyncio.CancelledError:
-                print("storerefresh task was cancelled. Performing cleanup... Probably best to reload the cog if you see this!")
                 store_slots.clear()
 
     async def red_delete_data_for_user(self, **kwargs):
@@ -346,14 +389,17 @@ class SpideyLifeSim(Cog):
         profilename = user_data["username"] if user_data["username"] != "None" else ctx.author.display_name
         currency = await bank.get_currency_name(ctx.guild)
         userbalance = await bank.get_balance(ctx.author)
-    
+        alignment = user_data["alignment"]
+        alignmentprogress = self.alignmentmanager.generate_alignment_bar(alignment)
         profileheader = "Here is your profile!"
         profiledescription = (
             f"**Name:** {profilename}\n"
             f"**Gender:** {user_data['usergender']}\n"
             f"**Profession:** {user_data['userjob']} in the {user_data['careerfield']} field\n"
             f"**Traits:** {', '.join(user_data['usertraits'])}\n"
+            f"**Granted Traits:**{', '.join(user_data['grantedtraits'])}\n"
             f"**Account Balance:** {humanize.intcomma(userbalance)} {currency}\n"
+            f"**Alignment:**\n{alignmentprogress}\n"
         )
         await self.display_profile(ctx, profileheader, profiledescription, user_data["userpic"])
 
@@ -391,6 +437,8 @@ class SpideyLifeSim(Cog):
         profilename = user_data["username"] if user_data["username"] != "None" else user.display_name
         currency = await bank.get_currency_name(ctx.guild)
         userbalance = await bank.get_balance(user)
+        alignment = user_data["alignment"]
+        alignmentprogress = self.alignmentmanager.generate_alignment_bar(alignment)
     
         profileheader = "Here is the user's profile!"
         profiledescription = (
@@ -398,7 +446,9 @@ class SpideyLifeSim(Cog):
             f"**Gender:** {user_data['usergender']}\n"
             f"**Profession:** {user_data['userjob']} in the {user_data['careerfield']} field\n"
             f"**Traits:** {', '.join(user_data['usertraits'])}\n"
+            f"**Granted Traits:**{', '.join(user_data['grantedtraits'])}\n"
             f"**Account Balance:** {humanize.intcomma(userbalance)} {currency}\n"
+            f"**Alignment:**\n{alignmentprogress}\n"
         )
         await self.display_profile(ctx, profileheader, profiledescription, user_data["userpic"])
 
@@ -422,6 +472,67 @@ class SpideyLifeSim(Cog):
             lambda user: bank.withdraw_credits(user, balance), 
             ctx.author
         )
+    
+    @slsprofile.command(name="setalignment", aliases=["sa"])
+    async def slsprofile_setalignment(self, ctx: commands.Context):
+        """Only works if you're neutral. Otherwise you'll have to influence alignment with actions."""
+        allymilestone = await self.config.member(ctx.author).allymilestone()
+        learnedstances = await self.config.member(ctx.author).learnedstances()
+
+        if allymilestone != "Neutral":
+            await ctx.send("You can't set your alignment if you're already aligned.")
+            return
+        
+        await ctx.send("Are you going to fight for `good` or `evil`?")
+        def check(message): return message.author == ctx.author and message.content.lower() in ["good", "evil"]
+
+        try:
+            message = await self.bot.wait_for('message', timeout=30.0, check=check)
+            if message.content.lower() == "good":
+                await self.config.member(ctx.author).allymilestone.set("Radiant Wanderer")
+                await self.config.member(ctx.author).alignment.set(25)
+                learnedstances["Good"] = True
+                await self.config.member(ctx.author).learnedstances.set(learnedstances)
+                await ctx.send("You have successfully joined the path to good.")
+            elif message.content.lower() == "evil":
+                await self.config.member(ctx.author).allymilestone.set("Veiled Wanderer")
+                await self.config.member(ctx.author).alignment.set(-25)
+                learnedstances["Evil"] = True
+                await self.config.member(ctx.author).learnedstances.set(learnedstances)
+                await ctx.send("You have successfully joined the path to evil.")
+            else:
+                await ctx.send("That doesn't appear to be one of the accepted alignments. Try again.")
+                return
+        except asyncio.TimeoutError:
+            await ctx.send("The prompt timed out. Please try again.")
+            return
+    
+    @slsprofile.command(name="aligndebug", aliases=["ad"])
+    @commands.is_owner()
+    async def slsprofile_aligndebug(self, ctx: commands.Context, side: str = None, amt: int = 0):
+        """Debugging alignment."""
+        if side == None:
+            await ctx.send("You need to enter a side for the command!")
+            return
+        
+        if side not in ["positive", "negative"]:
+            await ctx.send("Please enter either `positive` or `negative`.")
+            return
+        
+        if amt == 0:
+            await ctx.send("The point of this command is to change the alignment not have it with 0 change.")
+            return
+        
+        alignment = await self.config.member(ctx.author).alignment()
+        usertraits = await self.config.member(ctx.author).usertraits()
+        newalignment, newmilestone, newtraits = await self.alignmentmanager.changealignment(ctx, side, amt, alignment, usertraits)
+        await self.config.member(ctx.author).alignment.set(newalignment)
+        await self.config.member(ctx.author).allymilestone.set(newmilestone)
+        if newtraits != None:
+            await self.config.member(ctx.author).usertraits.set(newtraits)
+        await ctx.send(f"Your alignment has been changed by {amt} toward the {side} side.")
+        await ctx.send(f"Your new alignment is {newalignment} and your new milestone is {newmilestone}")
+
     
     @slsprofile.command(name="traitsview", aliases=["tv"])
     async def slsprofile_traitview(self, ctx: commands.Context):
@@ -651,6 +762,11 @@ class SpideyLifeSim(Cog):
         await self.config.member(member).usergender.set("Not set")
         await self.config.member(member).usertraits.set([])
         await self.config.member(member).skillslist.set(SKILLSLIST)
+        await self.config.member(member).alignment.set(0)
+        await self.config.member(member).allymilestone.set("Neutral")
+        await self.config.member(member).grantedtraits.set([])
+        await self.config.member(member).learnedskills.set(LEARNEDSKILLS)
+        await self.config.member(member).learnedstances.set(STANCES)
 
     @commands.group(aliases=["slssk"])
     async def slsskills(self, ctx: commands.Context):
@@ -729,6 +845,169 @@ class SpideyLifeSim(Cog):
             await ctx.send(f"```You need one of these items to practice {skillname}: {', '.join(required_items)}. Buy them from the store!```")
             return False
         return True
+    
+    @slsskills.command(name="study", aliases=["s"])
+    @commands.cooldown(rate=1, per=1800, type=BucketType.user)
+    async def slsskills_study(self, ctx: commands.Context):
+        """Study further into a specific style."""
+        learnedskills = await self.config.member(ctx.author).learnedskills()
+        learnedstances = await self.config.member(ctx.author).learnedstances()
+        skillslist = await self.config.member(ctx.author).skillslist()
+        userinventory = await self.config.member(ctx.author).userinventory()
+        learnableabilities = await self.config.member(ctx.author).learnableabilities()
+        study = None
+        await ctx.send("Would you prefer to study a specific skill or learn general stances? `Skills` or `Stances`")
+        def check(message):
+            return message.author == ctx.author and message.content.lower() in ['skills', 'stances']
+        
+        try:
+            message = await self.bot.wait_for('message', timeout=30.0, check=check)
+            study = message.content.lower()
+        except asyncio.TimeoutError:
+            await ctx.send("Response timed out. Please try again.")
+            self.slsskills_study.reset_cooldown(ctx)
+            return
+        
+        randvalue = random.randint(0, 3)
+        if randvalue == 0:
+            await ctx.send("You tried to study, but you were unable to find anything pertinent.")
+            return
+        
+        studyfield = None
+        stanceavailable = []
+        if study == "skills":
+            await ctx.send("Pick a skill area to study in: `magic`, `force`, `lightsaber`, `cutlass`, or `broadsword`")
+            def check(message):
+                return message.author == ctx.author and message.content.lower() in ['magic', 'force', 'lightsaber', 'cutlass', 'broadsword']
+            
+            try:
+                message = await self.bot.wait_for('message', timeout=30.0, check=check)
+                studyfield = message.content.lower()
+                skillreq = skillslist.get(EQUIVALENTSKILLS.get(studyfield).get("skill"))
+                if not skillreq:
+                    await ctx.send(f"Error: The required skill for {studyfield} could not be found.")
+                    return
+                skillreq = skillreq[0]
+                if skillreq < 1:
+                    await ctx.send("Unfortunately that skill requires at least level 1 in that field.")
+                    self.slsskills_study.reset_cooldown(ctx)
+                    return
+                skilldict = EQUIVALENTSKILLS.get(studyfield).get("dict")
+                for i in skilldict.keys():
+                    if learnedstances.get(i):
+                        stanceavailable.append(i)
+                if not stanceavailable:
+                    await ctx.send("You need to have a learned stance to learn skills in that field.")
+                    self.slsskills_study.reset_cooldown(ctx)
+                    return
+                validability = None
+                attemptlimit = 50
+                attempts = 0
+                while not validability and attempts < attemptlimit:
+                    attempts += 1
+                    stance = random.choice(stanceavailable)
+                    for ability, values in skilldict[stance].items():
+                        requiredskill = values[0]
+                        abilitydesc = values[1]
+                        if skillreq >= requiredskill and ability not in learnedskills:
+                            validability = (stance, ability, abilitydesc)
+                            break
+                if not validability:
+                    await ctx.send("No valid abilities were found that match your skill level! Try learning more stances or practicing your skill more.")
+                    self.slsskills_study.reset_cooldown(ctx)
+                    return
+                stance, ability, abilitydesc = validability
+                await ctx.send(f"You have discovered a new ability in the {stance} stance: **{ability}**!")
+                learnableabilities.append(ability)
+                await self.config.member(ctx.author).learnableabilities.set(learnableabilities)
+                
+                
+            except asyncio.TimeoutError:
+                await ctx.send("Response Timeout!")
+                self.slsskills_study.reset_cooldown(ctx)
+                return
+        elif study == "stances":
+            validstances = [stance for stance in learnedstances if learnedstances[stance] == False]
+            validstances.remove("Good", "Evil")
+            if "Horseback" in validstances and "Horse" not in userinventory:
+                validstances.remove("Horseback")
+
+            if not validstances:
+                await ctx.send("No stances are available for you to learn at this time.")
+                self.slsskills_study.reset_cooldown(ctx)
+                return
+            
+            validstance = random.choice(validstances)
+            await ctx.send(f"You have discovered the stance **{validstance}**! Feel free to use it in duels!")
+            learnedstances[validstance] = True
+            await self.config.member(ctx.author).learnedstances.set(learnedstances)
+            
+    
+    @slsskills.command(name="learn", aliases=["l"])
+    @commands.cooldown(rate=1, per=1800, type=BucketType.user)
+    async def slsskills_learn(self, ctx: commands.Context):
+        learnableabilities = await self.config.member(ctx.author).learnableabilities()
+        learnedskills = await self.config.member(ctx.author).learnedskills()
+        await ctx.send(f"Which skill would you like to learn: {', '.join(learnableabilities)}")
+        def check(message): return message.author == ctx.author and message.content.lower() in map(str.lower, learnableabilities)
+        skill = None
+        try:
+            message = await self.bot.wait_for('message', timeout=30.0, check=check)
+            skillinput = message.content.strip()
+            skill = next(skill for skill in learnableabilities if skill.lower() == skillinput.lower())
+            randvalue = random.randint(0, 3)
+            if randvalue == 0:
+                await ctx.send("You aren't quite certain you've grasped all the functions of this ability. Maybe try practicing some more?")
+                return
+            learnedskills.append(skill)
+            learnableabilities.remove(skill)
+            await ctx.send(f"You have successfully added {skill} to your ability list!")
+            await self.config.member(ctx.author).learnedskills.set(learnedskills)
+            await self.config.member(ctx.author).learnableabilities.set(learnableabilities)
+        except asyncio.TimeoutError:
+            await ctx.send("Response timed out! Please try again!")
+            self.slsskills_learn.reset_cooldown(ctx)
+            return
+        except StopIteration:
+            await ctx.send("An error occurred matching the skill. Please try again.")
+            self.slsskills_learn.reset_cooldown(ctx)
+
+    
+    @slsskills_study.error
+    async def slsskills_study_error(self, ctx, error):
+        """Handle errors for the study command"""
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(f"This command is on cooldown. Try again in {error.retry_after:.2f} seconds.")
+    
+    @slsskills_learn.error
+    async def slsskills_learn_error(self, ctx, error):
+        """Handle errors for the study command"""
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(f"This command is on cooldown. Try again in {error.retry_after:.2f} seconds.")
+    
+    @slsskills.command(name="subskillview", aliases=["ssv"])
+    async def slsskills_subskillview(self, ctx: commands.Context):
+        """View your progress on sub-skills."""
+        learnedskills = await self.config.member(ctx.author).learnedskills()
+        learnedstances = await self.config.member(ctx.author).learnedstances()
+        learnedstances.remove("Good", "Evil", "Neutral")
+        groupedskills = {category: [] for category in SKILLTREES}
+        for category, skillsorstances in SKILLTREES.items():
+            if isinstance(skillsorstances, dict):
+                for subcategory, abilities in skillsorstances.items():
+                    for ability, values in abilities.items():
+                        if ability in learnedskills:
+                            groupedskills[category].append(f"{subcategory} - {ability}")
+        
+        description = f"**Duel Stances**: {', '.join(learnedstances)}\n"
+        for category, skills in groupedskills.items():
+            if skills:
+                description += f"\n**{category}**: {', '.join(skills)}"
+
+        em = discord.Embed(title="Here is your subskill progress", 
+                           description=description)
+        await ctx.send(embed=em)
+
 
     @commands.group(aliases=["slsc"])
     async def slscareers(self, ctx: commands.Context):
@@ -739,7 +1018,7 @@ class SpideyLifeSim(Cog):
     async def slscareers_careerindex(self, ctx: commands.Context):
         """See an index of all available careers!"""
         indexseparator = "\n- "
-        await ctx.send(f"```Here is a list of all the available careers:\n- {indexseparator.join(ALLJOBS)}```")
+        await ctx.send(f"```Here is a list of all the available career paths:\n- {indexseparator.join(ALLJOBS)}```")
 
     @slscareers.command(name="aboutcareer", aliases=["ac"])
     async def slscareers_aboutcareer(self, ctx: commands.Context, careername: str = None):
@@ -751,8 +1030,28 @@ class SpideyLifeSim(Cog):
         if careername not in ALLJOBS:
             await ctx.send("```The specified career wasn't found. Double-check spelling and try again!```")
             return
-    
-        jobinfo = ALLJOBS[careername]
+        
+        jobdict = ALLJOBS
+        if ALLJOBS[careername] == None:
+            jobdict = SUBJOBS
+            jobopts = CAREEROPPOSITE[careername]
+            await ctx.send(f"Would you like to see the career information for `{jobopts[0]}` or `{jobopts[1]}`?")
+            def check(message): return message.author == ctx.author and message.content in jobopts
+
+            try: 
+                message = await self.bot.wait_for('message', timeout=30.0, check=check)
+                if message.content == jobopts[0]:
+                    careername = jobopts[0]
+                elif message.content == jobopts[1]:
+                    careername = jobopts[1]
+                else:
+                    await ctx.send("Please check your spelling and try again.")
+                    return
+            except asyncio.TimeoutError:
+                await ctx.send("Prompt timed out. Please try again.")
+                return
+
+        jobinfo = jobdict[careername]
         requiredskills = jobinfo[4]
         em = discord.Embed(
             title=careername, 
@@ -781,13 +1080,29 @@ class SpideyLifeSim(Cog):
         if jobname not in ALLJOBS:
             await ctx.send("```Job not found. Try retyping it!```")
             return
+        
+        maindict = ALLJOBS
+        if ALLJOBS.get(jobname) == None:
+            maindict = SUBJOBS
+            jobopts = CAREEROPPOSITE.get(jobname)
+            alignment = await self.config.member(ctx.author).alignment()
+            if alignment > 0:
+                await ctx.send("Because you are good, the following career seems ideal for you:")
+                jobname = jobopts[0]
+            elif alignment < 0:
+                await ctx.send("Because you are evil, the following career seems ideal for you:")
+                jobname = jobopts[1]
+            else:
+                await ctx.send("You need to have an alignment for that career path!")
+                return
+            
     
         jobdict = globals().get(jobname)
         if not jobdict:
             await ctx.send("```Internal error! Contact support if this persists.```")
             return
 
-        maincareerlist = ALLJOBS[jobname]
+        maincareerlist = maindict[jobname]
         requiredskills = maincareerlist[4]
         currency = await bank.get_currency_name(ctx.guild)
         startercareer = list(jobdict.keys())[0]
@@ -845,6 +1160,8 @@ class SpideyLifeSim(Cog):
             return message.author == ctx.author and message.content.lower() in ["yes", "no"]
 
         maincareerlist = ALLJOBS[careerfield]
+        if careerfield not in ALLJOBS:
+            maincareerlist = SUBJOBS[careerfield]
 
         try:
             message = await self.bot.wait_for('message', timeout=30.0, check=check)
@@ -881,6 +1198,8 @@ class SpideyLifeSim(Cog):
         username = await self.config.member(ctx.author).username()
         consechigheffort = await self.config.member(ctx.author).consechigheffort()
         burnoutapplied = await self.config.member(ctx.author).burnoutapplied()
+        grantedtraits = await self.config.member(ctx.author).grantedtraits()
+        alignment = await self.config.member(ctx.author).alignment()
         burnoutbool = None
         if username == "None":
             username = ctx.author.display_name
@@ -898,14 +1217,86 @@ class SpideyLifeSim(Cog):
         if userjob == "Unemployed":
             await ctx.send("```You need a job to go to work!```")
             return
-        
-        if "Burned Out" in usertraits:
+        firebool = False
+        oppositecareer = None
+        oppvalue = None
+        for key, value in CAREEROPPOSITE.items():
+            if careerfield in value:
+                oppositecareer = key
+                if careerfield == value[0] and alignment <= -25:
+                    firebool = True
+                    oppvalue = 1
+                elif careerfield == value[1] and alignment >= 25:
+                    firebool = True
+                    oppvalue = 0
+                break
+            
+        if firebool == True:
+            await ctx.send(f"You are becoming too {'evil' if oppvalue == 1 else 'good'} for the {careerfield} field. Your supervisor has words to say:")
+            em = discord.Embed(
+                title=f"Message from {SUBJOBS.get(careerfield)[2]}",
+                description=f"{SUBJOBS.get(careerfield)[8]}"
+            )
+            em.set_thumbnail(url=SUBJOBS.get(careerfield)[5])
+            await ctx.send(embed=em)
+            afterlevel = careerlevel - 2 if careerlevel - 2 > 0 else 1
+            await self.config.member(ctx.author).userjob.set("Unemployed")
+            await self.config.member(ctx.author).careerfield.set("Unemployed")
+            await self.config.member(ctx.author).careerprog.set(0)
+            await self.config.member(ctx.author).careerlevel.set(0)
+            await self.config.member(ctx.author).salary.set(0)
+            for i in SUBJOBS.get(careerfield)[3]:
+                async with self.config.member(ctx.author).userinventory() as inventory:
+                    if i in inventory:
+                        inventory.remove(i)
+                
+            await asyncio.sleep(3)
+            oppcareername = CAREEROPPOSITE.get(oppositecareer)[oppvalue]
+            oppdict = globals().get(oppcareername)
+            opposingcareer = SUBJOBS.get(oppcareername)
+            em2 = discord.Embed(
+                title=f"Message from {opposingcareer[2]}",
+                description = f"{opposingcareer[9]}"
+            )
+            em2.set_thumbnail(url=opposingcareer[5])
+            await ctx.send(embed=em2)
+            currency = await bank.get_currency_name(ctx.guild)
+            nextposition = list(oppdict.keys())[afterlevel - 1]
+            nextsalary = oppdict[nextposition][1]
+            await ctx.send(
+                f"You are being offered the position: {nextposition}, starting at level {afterlevel} "
+                f"with a daily salary of {humanize.intcomma(nextsalary)} {currency}. Do you accept? `yes` or `no`"
+            )
+            def check(message):
+                    return message.author == ctx.author and message.content.lower() in ['yes', 'no']
+
+            try:
+                message = await self.bot.wait_for('message', timeout=30.0, check=check)
+                if message.content.lower() == "yes":
+                    await self.config.member(ctx.author).userjob.set(nextposition)
+                    await self.config.member(ctx.author).careerfield.set(oppcareername)
+                    await self.config.member(ctx.author).salary.set(nextsalary)
+                    await self.config.member(ctx.author).careerlevel.set(afterlevel)
+                    for i in opposingcareer[3]:
+                        async with self.config.member(ctx.author).userinventory() as inventory:
+                            inventory.append(i)
+                    await ctx.send("You have accepted the offer and started your new career!")
+                    return
+                else:
+                    await ctx.send("You declined the offer. You are currently unemployed.")
+                    return
+            except asyncio.TimeoutError:
+                await ctx.send("Your response timed out. Unfortunately, the offer is no longer on the table.")
+                return
+
+
+        if "Burned Out" in grantedtraits:
             current_time = datetime.now()
             if burnoutapplied:
                 burnoutdate = datetime.fromisoformat(burnoutapplied)
                 if current_time - burnoutdate > timedelta(days=7):
-                    usertraits.remove("Burned Out")
-                    await self.config.member(ctx.author).usertraits.set(usertraits)
+                    grantedtraits.remove("Burned Out")
+                    await self.config.member(ctx.author).grantedtraits.set(grantedtraits)
                     await self.config.member(ctx.author).burnoutapplied.set(None)
                     await ctx.send("You've recovered from your burnout and feel refreshed!")
                 else:
@@ -914,8 +1305,8 @@ class SpideyLifeSim(Cog):
                         "Try taking it easy for a day to recover."
                     )
             else:
-                usertraits.remove("Burned Out")
-                await self.config.member(ctx.author).usertraits.set(usertraits)
+                grantedtraits.remove("Burned Out")
+                await self.config.member(ctx.author).grantedtraits.set(grantedtraits)
                 await ctx.send("There has been an error with your traits. You appear to have burnout but no set burnout date. Burned Out was removed from your traits, but if you ever see this error again, please report it.")
         
         await ctx.send("How much effort would you like to put into your work today? `High`, `Normal`, `Low`")
@@ -937,7 +1328,7 @@ class SpideyLifeSim(Cog):
                 if preclusiontraits:
                     await ctx.send(f"{username} has the traits {', '.join(preclusiontraits)} and can't work hard because of them.")
                     return
-                if "Burned Out" in usertraits: 
+                if "Burned Out" in grantedtraits: 
                     await ctx.send("You're burned out and can't push yourself any harder.")
                     return
                 consechigheffort += 1
@@ -948,17 +1339,17 @@ class SpideyLifeSim(Cog):
 
             if effort == "normal":
                 effort_modifier = random.randint(15, 45)
-                if "Burned Out" in usertraits and any(trait in usertraits for trait in yestraits):
+                if "Burned Out" in grantedtraits and any(trait in usertraits for trait in yestraits):
                     burnoutbool = False
 
             if effort == "low":
                 for trait in yestraits:
                     if trait in usertraits:
                         preclusiontraits.append(trait)
-                if preclusiontraits is not None:
+                if preclusiontraits:
                     await ctx.send(f"Because {username} has the traits {usertraits}, they aren't content with putting in low effort at work.")
                     return
-                if "Burned Out" in usertraits:
+                if "Burned Out" in grantedtraits:
                     burnoutbool = False
                 effort_modifier = random.randint(-10, 10)
         except asyncio.TimeoutError:
@@ -973,7 +1364,10 @@ class SpideyLifeSim(Cog):
         work_cooldowns[user_id] = current_time
 
         skill_values = []
-        jobskillreq = ALLJOBS.get(careerfield)[4]
+        careerdict = ALLJOBS
+        if careerfield not in ALLJOBS:
+            careerdict = SUBJOBS
+        jobskillreq = careerdict.get(careerfield)[4]
         for skill in jobskillreq:
             skill_value = skillslist.get(skill, [0])
             skill_values.append(skill_value[0])
@@ -1015,13 +1409,13 @@ class SpideyLifeSim(Cog):
 
         if burnoutbool is not None:
             if burnoutbool == True:
-                usertraits.append("Burned Out")
-                await self.config.member(ctx.author).usertraits.set(usertraits)
+                grantedtraits.append("Burned Out")
+                await self.config.member(ctx.author).grantedtraits.set(grantedtraits)
                 await self.config.member(ctx.author).burnoutapplied.set(datetime.now().isoformat())
                 await ctx.send("You pushed yourself too hard at work over the past couple days. You're burnt out now. Consider taking it easy.")
             elif burnoutbool == False:
-                usertraits.remove("Burned Out")
-                await self.config.member(ctx.author).usertraits.set(usertraits)
+                grantedtraits.remove("Burned Out")
+                await self.config.member(ctx.author).grantedtraits.set(grantedtraits)
                 await self.config.member(ctx.author).burnoutapplied.set(None)
                 await ctx.send(f"You've recovered from your burnout by putting in a more manageable effort today!")
 
@@ -1039,14 +1433,16 @@ class SpideyLifeSim(Cog):
         salary = await self.config.member(ctx.author).salary()
         username = await self.config.member(ctx.author).username()
         currency = await bank.get_currency_name(ctx.guild)
-        usertraits = await self.config.member(ctx.author).usertraits()
         burnoutapplied = await self.config.member(ctx.author).burnoutapplied()
         burnoutdesc = ""
-        if "Burned Out" in usertraits:
+        if "Burned Out" in grantedtraits:
             burnoutdate = datetime.fromisoformat(burnoutapplied)
             burnoutdesc = f"Currently burned out as of {humanize.naturaltime(burnoutdate)}."
-
-        jobinfo = ALLJOBS.get(careerfield)
+        
+        jobdict = ALLJOBS
+        if careerfield not in ALLJOBS:
+            jobdict = SUBJOBS
+        jobinfo = jobdict.get(careerfield)
         if not jobinfo:
             await ctx.send("```Career information not found.```")
             return
@@ -1072,182 +1468,4 @@ class SpideyLifeSim(Cog):
     
     @slsactions.command(name="duel", aliases=["d"])
     async def slsactions_duel(self, ctx: commands.Context, user: discord.Member = None) -> None:
-        """Challenge someone to a duel. Higher dueling or martial arts skill increases chance of success."""
-
-        if user == None:
-            await ctx.send("You have to pick someone to duel!")
-            return
-        
-        usertraits = await self.config.member(ctx.author).usertraits()
-        othertraits = await self.config.member(user).usertraits()
-        userinventory = await self.config.member(ctx.author).userinventory()
-        otherinventory = await self.config.member(user).userinventory()
-        othername = await self.config.member(user).username()
-        if othername == "None":
-            othername = user.display_name
-        
-        if "Pacifist" in usertraits:
-            await ctx.send("You're a pacifist! You can't duel someone!")
-            return
-        if "Pacifist" in othertraits:
-            await ctx.send(f"{othername} is a pacifist and refuses to duel you.")
-            return
-
-        await ctx.send("Pick a duel weapon (type it with caps at the start pls): `Lightsaber`, `Cutlass`, `Broadsword`, or `Martial Arts`")
-
-        weaponlist = ["lightsaber", "cutlass", "broadsword", "martial arts"]
-
-        def check(message):
-            return message.author == ctx.author and message.content.lower() in ["lightsaber", "cutlass", "broadsword", "martial arts"]
-        
-        
-        try:
-            message = await self.bot.wait_for('message', timeout=30.0, check=check)
-            if message.content.lower() in weaponlist:
-                weapon = message.content
-                if weapon in userinventory:
-                    if weapon in otherinventory:
-                        await ctx.send(f"You have selected {weapon} as your choice of weapon.")
-                    else:
-                        await ctx.send(f"It appears {othername} doesn't have that weapon. Ask them what weapons they have!")
-                        return
-                elif weapon == "Martial Arts":
-                    await ctx.send("You have chosen to use martial arts in your duel.")
-                else:
-                    await ctx.send("It looks like maybe you don't have that weapon. Choose one you do have.")
-                    return
-            else:
-                await ctx.send("That doesn't appear to be a real weapon in the weapon list.")
-                return
-        except asyncio.TimeoutError:
-            await ctx.send("Response timeout! Please run the command again if you want to duel.")
-            return
-        
-        await ctx.send(f"{othername} do you accept the duel? (yes/no)")
-
-        def check2(message2):
-            return message2.author == user and message2.content.lower() in ["yes", "no"]
-        
-        try:
-            message2 = await self.bot.wait_for('message', timeout=30.0, check=check2)
-            if message2.content.lower() == "yes":
-                await ctx.send(f"{othername} accepted the duel!")
-            else:
-                await ctx.send(f"{othername} rejected the duel!")
-                return
-        except asyncio.TimeoutError:
-            await ctx.send("Response timeout! Please run the command again if you want to duel.")
-            return
-        
-        skillslist = await self.config.member(ctx.author).skillslist()
-        otherskillslist = await self.config.member(user).skillslist()
-
-        randmessage = []
-        user_skill = 0
-        other_skill = 0
-        if weapon == "Lightsaber":
-            randmessage = LightsaberList
-            user_skill = skillslist.get("Dueling", [0])[0] + skillslist.get("Force-wielding", [0])[0]
-            other_skill = otherskillslist.get("Dueling", [0])[0] + otherskillslist.get("Force-wielding", [0])[0]
-            skillsupdate = ["Dueling", "Force-wielding"]
-        elif weapon == "Cutlass":
-            randmessage = CutlassList
-            user_skill = skillslist.get("Dueling", [0])[0]
-            other_skill = otherskillslist.get("Dueling", [0])[0]
-            skillsupdate = ["Dueling"]
-        elif weapon == "Broadsword":
-            randmessage = BroadswordList
-            user_skill = skillslist.get("Dueling", [0])[0]
-            other_skill = otherskillslist.get("Dueling", [0])[0]
-            skillsupdate = ["Dueling"]
-        elif weapon == "Martial Arts":
-            randmessage = MartialArtsList
-            user_skill = skillslist.get("Martial Arts", [0])[0]
-            other_skill = otherskillslist.get("Martial Arts", [0])[0]
-            skillsupdate = ["Martial Arts"]
-
-        skill_difference = user_skill - other_skill
-        base_chance = 0.5
-        skill_multiplier = 0.05
-        if skill_difference > 0:
-            user_win_chance = base_chance + abs(skill_difference) * skill_multiplier
-        else:
-            user_win_chance = base_chance - abs(skill_difference) * skill_multiplier
-
-        userbenefit = {
-            "user": ["Quick footed", "Fierce Competitor", "Lucky"],
-            "opp": ["Clumsy"]
-        }
-        otherbenefit = {
-            "user": ["Clumsy"],
-            "opp": ["Quick-footed", "Fierce Competitor", "Lucky"]
-        }
-
-        trait_multiplier = 0
-        increase_chance = 0.1
-        decrease_chance = 0.1
-
-        for trait in userbenefit["user"]:
-            if trait in usertraits:
-                trait_multiplier += increase_chance
-        for trait in otherbenefit["user"]:
-            if trait in usertraits:
-                trait_multiplier -= decrease_chance
-        for trait in userbenefit["opp"]:
-            if trait in othertraits:
-                trait_multiplier += decrease_chance
-        for trait in otherbenefit["opp"]:
-            if trait in othertraits:
-                trait_multiplier -= increase_chance
-        
-        user_win_chance += trait_multiplier
-        user_win_chance = max(0, min(1, user_win_chance))
-
-        username = await self.config.member(ctx.author).username()
-        if username == "None":
-            username = ctx.author.display_name
-        
-        user1 = username
-        user2 = othername
-        randmessleng = len(randmessage) - 1
-        await ctx.send("The duel is beginning... May the best party win.")
-        randint = random.randint(3, 5)
-        for _ in range(randint):
-            await asyncio.sleep(2)
-            randuser = random.randint(1, 2)
-            randpick = random.randint(0, randmessleng)
-            if randuser == 1:
-                user1 = username
-                user2 = othername
-            else:
-                user1 = othername
-                user2 = username
-            await ctx.send(randmessage[randpick].format(user1=user1, user2=user2))
-        outcome = random.random()
-        reward = random.randint(100, 400)
-        currency = await bank.get_currency_name(ctx.guild)
-        if outcome < user_win_chance:
-            userbalance = await bank.get_balance(user)
-            for i in range(len(skillsupdate)):
-                await self.practice_skill(ctx, skillsupdate[i], False)
-            if reward >= userbalance:
-                await bank.withdraw_credits(user, userbalance)
-                await bank.deposit_credits(ctx.author, userbalance)
-                await ctx.send(f"Congratulations {username}, you won the duel! For winning the duel, you have stolen {userbalance} {currency} from {othername}!")
-            else:
-                await bank.withdraw_credits(user, reward)
-                await bank.deposit_credits(ctx.author, reward)
-                await ctx.send(f"Congratulations {username}, you won the duel! For winning the duel, you have stolen {userbalance} {currency} from {othername}!")
-        else:
-            userbalance = await bank.get_balance(ctx.author)
-            for i in range(len(skillsupdate)):
-                await self.practice_skill(ctx, skillsupdate[i], False, user)
-            if reward >= userbalance:
-                await bank.withdraw_credits(ctx.author, userbalance)
-                await bank.deposit_credits(user, userbalance)
-                await ctx.send(f"{othername} has defeated you in the duel! They have stolen {userbalance} {currency} from you!")
-            else:
-                await bank.withdraw_credits(ctx.author, reward)
-                await bank.deposit_credits(user, reward)
-                await ctx.send(f"{othername} has defeated you in the duel! They have stolen {userbalance} {currency} from you!")
-            
+        """Duel is temporarily under construction! It is being overhauled. Pardon our dust."""
