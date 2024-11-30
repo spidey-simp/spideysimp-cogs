@@ -1,3 +1,5 @@
+parentclass = bool
+
 ALLJOBS = {
     "Culinary": ["Aspiring chefs work their way up from scrubbing dishes to leading world-class kitchens and shaping food culture. This path is about mastering flavors, creating dining experiences, and making a mark on the culinary world.",
                 "https://i.pinimg.com/originals/22/90/bb/2290bbfb65881852488f5f2218a3d889.jpg",
@@ -103,7 +105,7 @@ ALLJOBS = {
                 "You're tendering your resignation? I am dismayed by that. However, I understand and wish you the best in future endeavors."],
     "Politics": ["The political career path begins with grassroots efforts and community-level leadership, progressing to roles that shape state and national policy. This journey focuses on representing the public, building influence, and guiding the direction of governance.",
                 "https://assets.website-files.com/6231a3e280c0edda9e1afe34/646f1efd24f29c036760d4be_CampaignSpeeches.jpg",
-                "Gov. Fil A. Buster", ["Casebook"], ["Debate", "Charisma"],
+                "Gov. Phil A. Buster", ["Casebook"], ["Debate"],
                 "https://dm0qx8t0i9gc9.cloudfront.net/thumbnails/video/msqd2XJ/videoblocks-zoom-in-of-friendly-middle-aged-politician-in-suit-gesticulating-and-talking-with-audience-from-podium-against-usa-flag-during-election-debate_hn8bvqybo_thumbnail-1080_01.png",
                 "Is that my coffee? No? Wait you're here about the job? Well why didn't you say that? Here's a law book. Come back when you know a thing or two.",
                 "Huh? What's that? Oh you're quitting? Bye."],
@@ -125,32 +127,98 @@ ALLJOBS = {
                 "https://pm1.narvii.com/5773/f34d8a34d267de1662dc317c5f89bc2654238abd_hq.jpg",
                 "Come in come in darling! You must be here about the job opening! Here's a sewing machine for you darling! I know you'll make something magnificent! But NO CAPES!",
                 "You're leaving darling? Alright bye! I will never look into the past."],
-    "Sith": ["Sith begin their journey mastering the dark side of the Force under intense trials and minimal rewards, but rise to power by manipulating, conquering, and dominating all before them. This path focuses on strength, ambition, and ultimate galactic influence.",
-            "https://helios-i.mashable.com/imagery/articles/078ws8Ct0y5kIPQhPZLOoWk/images-1.fill.size_2000x1125.v1718726675.jpg",
-            "Emperor Palpatation", ["Lightsaber", "Force Tome"], ["Force-wielding", "Dueling"],
-            "https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/emperor-palpatine-1555323736.jpg?crop=0.427xw:1.00xh;0.184xw,0&resize=480:*",
-            "The Sith career is a path to abilities some might consider *unnatural*. Here's a lightsaber and force tome. I expect your complete allegiance.",
-            "Are you threatening me? Oh you're just quitting. You will live to regret that."],
     "SecretAgent": ["Starting with basic covert operations, secret agents hone their skills to become legendary operatives shaping international affairs from behind the scenes. This career emphasizes stealth, strategy, and resilience in high-stakes scenarios.",
                 "https://hypescience.com/wp-content/uploads/2015/01/tecnologias-espias.jpg",
                 "Miss Steele Secrets", ["Notebook"], ["Athletic", "Logic"],
                 "https://images.wallpapersden.com/image/download/rebecca-ferguson-as-ilsa-faust-in-mission-impossible-fallout_a2hlZWyUmZqaraWkpJRobGtlrWdmZW0.jpg",
                 "You must be the new op. We don't have much time. Here's a notebook. Meet me at the rendezvous point at 0700.",
                 "You're quitting your job as a secret agent? But you never were an agent."],
-    "Sailing": ["Starting as deckhands and working to commanding whole fleets of vessels. The pay is low, but you may discover treasure along the way.",
-                "https://jooinn.com/images/ship-sailing-16.jpg",
+    "ForceUser": None,
+    "Wizardry": None,
+    "Seafaring": None,
+    "Swordbearers": None
+}
+
+CAREEROPPOSITE = {
+    "ForceUser": ["Jedi", "Sith"],
+    "Wizardry": ["GoodWizard", "BadWizard"],
+    "Seafaring": ["Sailor", "Pirate"],
+    "Swordbearers": ["ValiantKnight", "DarkWarrior"]
+}
+
+SUBJOBS = {
+    "Sith": ["Sith begin their journey mastering the dark side of the Force under intense trials and minimal rewards, but rise to power by manipulating, conquering, and dominating all before them. This path focuses on strength, ambition, and ultimate galactic influence.",
+            "https://helios-i.mashable.com/imagery/articles/078ws8Ct0y5kIPQhPZLOoWk/images-1.fill.size_2000x1125.v1718726675.jpg",
+            "Emperor Palpatine", ["Lightsaber", "Force Tome"], ["Force-wielding", "Dueling"],
+            "https://hips.hearstapps.com/hmg-prod.s3.amazonaws.com/images/emperor-palpatine-1555323736.jpg?crop=0.427xw:1.00xh;0.184xw,0&resize=480:*",
+            "The Sith career is a path to abilities some might consider *unnatural*. Here's a lightsaber and force tome. I expect your complete allegiance.",
+            "Are you threatening me? Oh you're just quitting. You will live to regret that.",
+            "You are no Sith. The dark side of the force is not meant for you.",
+            "You would make an excellent apprentice. Could I entice you to join?"],
+    "Jedi": ["The ways of the jedi are not for the feint of heart. It is one that requires incredible discipline like no other.",
+             "https://images8.alphacoders.com/102/1020916.jpg",
+             "Master Yoda", ["Lightsaber", "Force Tome"], ["Dueling", "Force-wielding"],
+             "https://4.bp.blogspot.com/-wqXJuWSgDSg/TrWGmLDutPI/AAAAAAAAEMg/8djyQy0GyyY/s1600/Yoda_Master_HD_Wallpaper_Vvallpaper.Net.jpg",
+             "Learn much from the force, you will. Dangerous, the path of a jedi is.",
+             "Give up so easily, a jedi does not. A jedi, you are not.",
+             "Much darkness in you, there is. The jedi way, you may not follow.",
+             "A good jedi, you would be. Join, you should."],
+    "ValiantKnight": ["The path to knighthood is one often considered a gallant pursuit. Their path does not provide the most reward, but one's mastery of knighthood will reward one in valiance.",
+                   "https://i.pinimg.com/originals/21/16/1d/21161dec8797819099d1b9d3792d0f2c.jpg",
+                   "King Arthur", ["Broadsword"], ["Dueling"],
+                   "https://images2.fanpop.com/image/photos/10900000/Arthur-merlin-on-bbc-10988161-1600-1200.jpg",
+                   "You must be the new knight. I am of course the noble King Arthur. Here's a broadsword. Get prepared.",
+                   "So you are leaving my service. I cannot say I understand. However, I shall respect your decision.",
+                   "You have gone far away from what I find valiant. I am afraid I will have to discharge you from my service.",
+                   "I see you have left the ways of evil. Perhaps you would consider following the path toward good."],
+    "GoodWizard": ["Every rock, mountain, and even the very clouds will bend to your will. But that power should only be used for good.",
+                   "https://getwallpapers.com/wallpaper/full/2/8/2/85107.jpg",
+                   "Dumbledore", ["Wand"], ["Magic"],
+                   "https://pm1.narvii.com/6934/51dccd2dcb8e60f52489446de42a9531a3d065c3r1-914-1168v2_uhq.jpg",
+                   "I trust you will find magic a tool best meant to serve the light.",
+                   "I regret your departure. If you are going to leave, well then. *Obliviate*",
+                   "I knew another wizard like you once who sought the power of dark magic. I won't let that happen again.",
+                   "Everyone deserves a second chance at hope. Could we expect your commitment?"],
+    "BadWizard": ["How can one control the way the very waters flow and not use that to their advantage?",
+                  "https://cdnb.artstation.com/p/assets/images/images/000/061/929/large/sorcerer_006.jpg?1399768108",
+                  "Saruman", ["Wand"], ["Magic"],
+                  "https://i1.wp.com/www.tor.com/wp-content/uploads/2015/07/LOTR-saruman.jpg?fit=740%2C+9999&crop=0%2C0%2C100%2C385px&ssl=1",
+                  "The path to power is littered with the folly of the weak. I will demonstrate how to overthrow empires of man with mere words.",
+                  "So. You have elected the way of pain.",
+                  "You have chosen your allies poorly. It will cost you dearly.",
+                  "So, have you yet seen the error in your ways? The full power of Orthanc demands your submission."],
+    "Pirate": ["Yo ho oh ho a pirate's life for me. If ye know not of the ways of the pirate, yer not ready fer it.",
+                "https://live.staticflickr.com/3708/9970360424_89ca675eba_b.jpg",
                 "Cap'n Shipton", ["Dinghy", "Cutlass"], ["Dueling", "Sailing"],
                 "https://static1.wikia.nocookie.net/__cb20120920063143/pirates/images/6/69/CottonAndParrot2.jpg",
                 "AVAST! Ye must be the new deckhand! Swab the poop deck right away! Er I'll make ye walk the plank! *Squawk walk the plank squawk*",
-                "If ye can't walk the walk, then ye best walk the plank! *Squak walk the plank squawk*"],
-    "Knighthood": ["The path to knighthood is one often considered a gallant pursuit. Their path does not provide the most reward, but one's mastery of knighthood will reward one in valiance.",
-                   "https://i.pinimg.com/originals/21/16/1d/21161dec8797819099d1b9d3792d0f2c.jpg",
-                   "King MacArthur", ["Broadsword"], ["Dueling"],
-                   "https://images2.fanpop.com/image/photos/10900000/Arthur-merlin-on-bbc-10988161-1600-1200.jpg",
-                   "You must be the new knight. I am of course the noble King MacArthur. Here's a broadsword. Get prepared.",
-                   "So you are leaving my service. I cannot say I understand. However, I shall respect your decision."]
-}
+                "If ye can't walk the walk, then ye best walk the plank! *Squawk walk the plank squawk*",
+                "Not much of a pirate are ye? *Squawk are ye? squawk* Pirates plunder the sea, and ye seem to not.",
+                "A good pirate, ye would be. *Squawk would be squawk* Could we count on ye?"],
+    "Sailor": ["Ride the high seas, fighting for order as you do.",
+               "https://jooinn.com/images/ship-sailing-16.jpg",
+                "Admiral Norrington", ["Dinghy", "Cutlass"], ["Dueling", "Sailing"],
+                "https://images2.fanpop.com/images/photos/5500000/James-Norrington-james-norrington-5566398-797-800.jpg",
+                "So, you have joined us in our quest to rid the world of piracy? May the winds be in our favor.",
+                "A pirate sympathizer, eh? You're certainly not welcome here.",
+                "I worry that your values no longer align with that of his majesty. Your services are no longer required.",
+                "You're not a very good pirate, but perhaps you could fare well under the service of his majesty."],
+    "DarkWarrior": ["Fight for the rise of evil to reign over the realm.",
+                    "https://i.pinimg.com/originals/33/55/69/33556952440962827e460ccb6394ccac.jpg",
+                    "Witch King of Angmar", ["Broadsword"], ["Dueling"],
+                    "https://vignette.wikia.nocookie.net/parody/images/5/56/Witch-king-of-Angmar-in-Lord-of-the-Rings.jpg/revision/latest?cb=20190421173403",
+                    "Bow before the darkness for I am its chosen servant.",
+                    "No man can hinder me. Neither shall you.",
+                    "The power of darkness cannot commit to people that do not commit to it. Begone!",
+                    "You seem as though you would serve the will of evil well."],
+    "MurderDrone": ["Begin as a fledgling Murder Drone tasked with basic hunting assignments and rise to becoming a commanding force feared across the galaxy. This career path emphasizes deadly efficiency, resource management, and leadership in a dystopian environment.",
+                "https://wallpapercave.com/wp/wp12024690.png",
+                "J", ["Plasma Wings", "Plasma Blade"], ["Dueling"], 
+                "https://i.pinimg.com/originals/85/f4/17/85f4179eb5445bacf38ea0d1924c14c7.jpg", 
+                "Ugh another new one. Could you just get to work already, so I don't have to deal with you?",
+                "Leaving? Whatever... Clearly this job wasn't for you. Just give me the company issued gear back and you can be on your way."]
 
+}
 
 Culinary = {
     "Dishwasher": ["The entry-level job for any aspiring culinary master. Scrub dishes, utensils, and make sure the kitchen sparkles.", 50],
@@ -449,8 +517,7 @@ SecretAgent = {
     "Master Spy": ["Attain legendary status as the most trusted and feared operative in the intelligence world, shaping global events from the shadows.", 1500, 7000]
 }
 
-### Add the following
-Sailing = {
+Sailor = {
     "Deckhand": ["The entry-level position, responsible for cleaning, basic repairs, and following orders.", 50],
     "Rigger": ["Skilled at managing sails and ropes, ensuring smooth sailing during turbulent weather.", 70, 150],
     "Boatswain": ["Leads deck operations, overseeing rigging and maintenance while organizing the crew.", 90, 200],
@@ -462,7 +529,7 @@ Sailing = {
     "Commodore": ["Oversees a small fleet of ships, with responsibility for major missions and naval operations.", 400, 1000],
     "Admiral": ["The pinnacle of naval power, commanding vast fleets and shaping maritime destiny.", 600, 1500]
 }
-Knighthood = {
+ValiantKnight = {
     "Page": ["The first step in a knight’s journey, learning the basics of courtly behavior, weapon maintenance, and assisting senior knights.", 40, 80],
     "Squire": ["Trained in the arts of combat and chivalry, serving a knight directly while honing skills in battle and diplomacy.", 70, 150],
     "Knight Errant": ["A newly sworn knight who travels the land seeking quests, justice, and renown.", 100, 250],
@@ -473,4 +540,82 @@ Knighthood = {
     "Paladin": ["Embodies the highest ideals of knighthood, mixing martial prowess with unwavering devotion to a cause or order.", 450, 1200],
     "Knight Marshal": ["Commands multiple knights and regiments, managing key military campaigns and protecting the realm.", 600, 1500],
     "Knight Grandmaster": ["The highest rank of knighthood, overseeing the order of knights and advising rulers on matters of state and battle.", 800, 2000]
+}
+
+Jedi = {
+    "Youngling": ["Learn the basics of the Force and prepare for trials ahead under the guidance of Jedi Masters.", 50],
+    "Padawan": ["Train as an apprentice under a Jedi Knight, honing your skills in the Force and lightsaber combat.", 100, 200],
+    "Jedi Knight": ["Take on missions across the galaxy as a defender of peace and justice.", 180, 400],
+    "Jedi Sentinel": ["Balance combat skills, Force abilities, and technical expertise to protect the Order's interests.", 260, 600],
+    "Jedi Guardian": ["Focus on martial excellence, using lightsaber combat to safeguard the galaxy.", 350, 900],
+    "Jedi Consular": ["Use the Force to mediate conflicts, heal others, and deepen your connection with the light side.", 450, 1200],
+    "Jedi Master": ["Lead and mentor younger Jedi, shaping the next generation of the Order.", 600, 1800],
+    "Jedi General": ["Command troops in galactic conflicts, combining tactical acumen with mastery of the Force.", 800, 2500],
+    "Jedi High Councilor": ["Guide the Jedi Order's direction, making critical decisions for the galaxy's balance.", 1200, 4000],
+    "Grand Master": ["Serve as the ultimate authority in the Jedi Order, embodying wisdom and strength in the Force.", 1800, 7000]
+}
+
+GoodWizard = {
+    "Apprentice": ["Learn the foundations of magic, from casting basic spells to understanding magical lore.", 40],
+    "Journeyman Mage": ["Travel to expand your magical knowledge and skills, taking on minor quests.", 90, 150],
+    "Enchanter": ["Create magical items and assist others with your growing magical expertise.", 130, 250],
+    "Auror": ["Protect the magical and non-magical world from dark forces with bravery and skill.", 200, 400],
+    "Archmage": ["Specialize in advanced spellcasting and lead in magical research and innovation.", 300, 700],
+    "Keeper of the Arcane": ["Guard and maintain the world’s most precious magical relics and knowledge.", 450, 1200],
+    "Master Wizard": ["Guide magical communities and mentor aspiring wizards in their journey.", 600, 2000],
+    "Council Mage": ["Shape magical policies and alliances, balancing the interests of various factions.", 800, 3000],
+    "High Wizard": ["Command respect across magical communities as a leader of immense power and wisdom.", 1200, 5000],
+    "Archon of Light": ["Reach the pinnacle of magical influence, reshaping the magical and mundane worlds alike.", 2000, 7500]
+}
+
+BadWizard = {
+    "Dark Initiate": ["Study forbidden magic and begin your descent into the dark arts.", 30],
+    "Shadow Acolyte": ["Serve a dark master, learning destructive spells and malevolent rituals.", 80, 120],
+    "Necromancer": ["Command the dead, using them as tools for your sinister plans.", 130, 250],
+    "Warlock": ["Spread chaos and fear with powerful curses and dark incantations.", 200, 400],
+    "Dark Enchanter": ["Twist magical items to serve your dark purposes, spreading corruption.", 300, 700],
+    "Shadow Sorcerer": ["Use your mastery of shadow magic to manipulate and dominate others.", 450, 1200],
+    "Dark Wizard": ["Command armies of followers and wield immense destructive power.", 600, 2000],
+    "Dread Overlord": ["Expand your influence, conquering kingdoms and crushing resistance.", 800, 3000],
+    "Dark Archmage": ["Shape the magical landscape to your will, with unmatched command of dark magic.", 1200, 5000],
+    "Lord of Shadows": ["Become a legendary figure of terror, feared by all and challenged by none.", 2000, 7500]
+}
+
+DarkWarrior = {
+    "Acolyte of Shadow": ["As an Acolyte of Shadow, you begin your journey into the dark arts of combat, learning to harness fear and power to overwhelm your enemies.", 50],
+    "Blighted Disciple": ["A Blighted Disciple wields a corrupted blade, serving their dark masters with unquestioning loyalty and growing their strength through brutality.", 100, 200],
+    "Harbinger of Dread": ["As a Harbinger of Dread, your mere presence inspires terror. You learn to dominate the battlefield, leaving chaos in your wake.", 200, 300],
+    "Knight of the Black Flame": ["A Knight of the Black Flame channels destructive energy into their strikes, wielding darkness as a weapon and shielding themselves in shadow.", 300, 400],
+    "Warlord of Ruin": ["As a Warlord of Ruin, you lead raiding parties that scorch the land, leaving behind nothing but despair and ash. Your reputation spreads like wildfire.", 400, 600],
+    "Master of Shadows": ["A Master of Shadows orchestrates chaos from the dark, manipulating events and people to achieve total dominance over their enemies.", 600, 800],
+    "Dread Champion": ["As a Dread Champion, you stand at the forefront of dark armies, inspiring loyalty through fear and crushing all who oppose your reign.", 800, 1000],
+    "Wielder of the Black Blade": ["The Wielder of the Black Blade commands a cursed weapon of immense power, capable of draining life and spreading corruption with every strike.", 1000, 1500],
+    "Dark Lord": ["As a Dark Lord, you rule vast territories and command armies of the wicked, spreading darkness and despair wherever your influence extends.", 1500, 2000],
+    "Dread Emperor": ["The Dread Emperor is the supreme ruler of all that is dark and unholy. You stand beside the very entity of darkness, spreading evil across the realm.", 2000, 3000]
+}
+
+Pirate = {
+    "Deckhand": ["As a Deckhand, you're learning the ropes of pirate life, scrubbing the decks, and getting familiar with the ship. The real adventure lies ahead.", 50, 100],
+    "Swashbuckler": ["As a Swashbuckler, you prove your worth in battle and start to develop your skills in both sword fighting and strategy.", 100, 200],
+    "First Mate": ["The First Mate is the trusted right hand of the Captain, leading the crew, making tactical decisions, and organizing raids.", 200, 300],
+    "Pirate Captain": ["As Pirate Captain, you lead the crew on daring adventures, plundering ships and treasure. Your reputation strikes fear into your enemies.", 300, 500],
+    "Pirate King": ["The Pirate King is the leader of a fleet of pirate ships, commanding great respect and fear on the high seas. Your word is law on the ocean.", 500, 700],
+    "Legendary Pirate": ["A Legendary Pirate is a figure of myth and terror, with a vast empire of stolen treasures and ships under their command.", 700, 1000],
+    "Emperor of the Seas": ["As Emperor of the Seas, your fleet dominates the world's oceans, and you answer to no one. The seas are yours to rule.", 1000, 1500],
+    "Lord of the Deep": ["Lord of the Deep, you are the undisputed ruler of the oceans. Other pirates bow before you, and you strike fear in the hearts of all.", 1500, 2000],
+    "Terror of the Oceans": ["A Terror of the Oceans is a pirate legend. Your name is whispered in every port, and even navies tremble at your approach.", 2000, 2500],
+    "Pirate God": ["The Pirate God is a living legend, with a fleet that could rival entire nations. You are the undisputed ruler of the seas, and your empire spans the oceans.", 2500, 3500]
+}
+
+MurderDrone = {
+    "Scrap Collector": ["Begin by scavenging metal scraps and learning the basics of drone combat.", 50],
+    "Hunter Drone": ["Hunt rogue AI and humans while honing your flight and combat skills.", 100, 200],
+    "Enforcer": ["Take on tougher missions, managing small teams and enforcing directives.", 200, 400],
+    "Squad Leader": ["Lead a squad of drones, strategizing and executing missions effectively.", 350, 700],
+    "Elite Enforcer": ["Specialize in advanced combat techniques, taking on high-priority targets.", 500, 1000],
+    "Command Unit": ["Oversee multiple squads and lead complex, large-scale operations.", 750, 1500],
+    "Executioner": ["Become a feared operative, eliminating threats with unparalleled precision.", 1200, 2500],
+    "Director of Operations": ["Plan galaxy-wide campaigns, ensuring the efficiency and dominance of your drone units.", 1700, 3500],
+    "Overseer": ["Control vast drone fleets, directing them to reshape the galaxy under your influence.", 2500, 6000],
+    "Prime Directive Enforcer": ["Achieve ultimate authority, rewriting the rules of the Murder Drones and commanding unparalleled power.", 4000, 9000]
 }
