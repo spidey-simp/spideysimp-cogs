@@ -134,7 +134,7 @@ ALLJOBS = {
                 "You must be the new op. We don't have much time. Here's a notebook. Meet me at the rendezvous point at 0700.",
                 "You're quitting your job as a secret agent? But you never were an agent."],
     "MurderDrone": ["Begin as a fledgling Murder Drone tasked with basic hunting assignments and rise to becoming a commanding force feared across the galaxy. This career path emphasizes deadly efficiency, resource management, and leadership in a dystopian environment.",
-                "https://wallpapercave.com/wp/wp12024690.png",
+                "https://m.media-amazon.com/images/M/MV5BYTM2ODUyZTQtMjgyMS00ZjM1LWFmMzUtZWQ3YjM1Mzg3NGM0XkEyXkFqcGdeQXVyOTM1MTk2NjQ@._V1_.jpg",
                 "J", ["Plasma Wings", "Blade"], ["Dueling"], 
                 "https://i.pinimg.com/originals/85/f4/17/85f4179eb5445bacf38ea0d1924c14c7.jpg", 
                 "Ugh another new one. Could you just get to work already, so I don't have to deal with you?",
