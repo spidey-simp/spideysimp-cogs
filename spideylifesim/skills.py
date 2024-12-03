@@ -25,7 +25,7 @@ SKILLSLIST = {
     "Mischief": [0, 0, ["Mischief Maker", "Witty Comedian"], ["Whoopie cushion"]],
     "Sewing": [0, 0, ["Fashion Forward", "Perfectionist"], ["Sewing machine", "Fabric"]],
     "Force-wielding": [0, 0, ["Force-sensitive"], ["Force Tome"]],
-    "Dueling": [0, 0, ["Quick footed", "Fierce Competitor"], ["Lightsaber", "Cutlass", "Broadsword", "Practice Dummy", "Plasma Blade"]],
+    "Dueling": [0, 0, ["Quick footed", "Fierce Competitor"], ["Lightsaber", "Cutlass", "Broadsword", "Practice Dummy", "Blade"]],
     "Sailing": [0, 0, ["Sea-born", "Adventurous"], ["Dinghy", "Sailboat", "Frigate"]],
     "Martial Arts": [0, 0, ["Quick footed", "Athletic", "Fierce Competitor"], ["Training Mat"]],
     "Gaming": [0, 0, ["Gamer", "Fierce Competitor"], ["A PS5", "Laptop", "Desktop"]],
