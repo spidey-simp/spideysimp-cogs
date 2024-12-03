@@ -1155,9 +1155,10 @@ class SpideyLifeSim(Cog):
         def check(message):
             return message.author == ctx.author and message.content.lower() in ["yes", "no"]
 
-        maincareerlist = ALLJOBS[careerfield]
-        if careerfield not in ALLJOBS:
+        if careerfield in SUBJOBS.keys():
             maincareerlist = SUBJOBS[careerfield]
+        else:
+            maincareerlist = ALLJOBS[careerfield]
 
         try:
             message = await self.bot.wait_for('message', timeout=30.0, check=check)
