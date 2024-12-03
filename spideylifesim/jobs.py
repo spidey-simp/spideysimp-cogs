@@ -135,7 +135,7 @@ ALLJOBS = {
                 "You're quitting your job as a secret agent? But you never were an agent."],
     "MurderDrone": ["Begin as a fledgling Murder Drone tasked with basic hunting assignments and rise to becoming a commanding force feared across the galaxy. This career path emphasizes deadly efficiency, resource management, and leadership in a dystopian environment.",
                 "https://wallpapercave.com/wp/wp12024690.png",
-                "J", ["Plasma Wings", "Plasma Blade"], ["Dueling"], 
+                "J", ["Plasma Wings", "Blade"], ["Dueling"], 
                 "https://i.pinimg.com/originals/85/f4/17/85f4179eb5445bacf38ea0d1924c14c7.jpg", 
                 "Ugh another new one. Could you just get to work already, so I don't have to deal with you?",
                 "Leaving? Whatever... Clearly this job wasn't for you. Just give me the company issued gear back and you can be on your way."],
