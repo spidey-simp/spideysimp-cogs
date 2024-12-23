@@ -1,10 +1,11 @@
 import asyncio
 import random
 import discord
+import aiohttp
 from typing import List
 from discord import Member
 from discord.ext import commands
-from redbot.core import Config, bank
+from redbot.core import Config, bank, commmand
 
 from .skills import SKILLTREES
 from .locations import STARWARSLOCATIONMODIFIERS
@@ -88,12 +89,15 @@ CHARISMAADDITION = {
     "Energy": 5
 }
 
-class DuelManager:
-    def __init__(self, config: Config, bot):
-        self.config = config
+class DuelManager(Cog):
+    def __init__(self, bot):
+        super().__init__()
         self.bot = bot
+
+    async def red_delete_data_for_user(self,**kwargs):
+        return
     @commands.command(name=duel)
-    async def duelsandbox(self, ctx):
+    async def duelsandbox(self, ctx: commands.Context):
         """Set up a duel sandbox with customizable settings."""
 
         def create_dropdown(options, placeholder, custom_id):
