@@ -92,7 +92,7 @@ class DuelManager:
     def __init__(self, config: Config, bot):
         self.config = config
         self.bot = bot
-
+    @commands.command(name=duel)
     async def duelsandbox(self, ctx):
         """Set up a duel sandbox with customizable settings."""
 
