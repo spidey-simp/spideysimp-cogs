@@ -5,7 +5,7 @@ import aiohttp
 from typing import List
 from discord import Member
 from discord.ext import commands
-from redbot.core import Config, bank, commmand
+from redbot.core import Config, bank, commands
 
 from .skills import SKILLTREES
 from .locations import STARWARSLOCATIONMODIFIERS
