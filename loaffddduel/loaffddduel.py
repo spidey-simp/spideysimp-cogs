@@ -273,7 +273,7 @@ class DuelManager(Cog):
             base_damage *= random.uniform(.9, 1.1)
             
             crit_chance_multiplier = ability_effect.get("Crit Chance", 0)
-                crit_chance = attacker["Crit Chance"] + crit_chance_multiplier
+            crit_chance = attacker["Crit Chance"] + crit_chance_multiplier
             if "Vulnerable" in defender["buffs"]:
                 base_damage *= 1.2
 
