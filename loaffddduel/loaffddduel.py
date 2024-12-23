@@ -225,8 +225,8 @@ class DuelManager(Cog):
         ABILITIES = {
             "Basic Slash": [0, "Deals Base Damage.", {"Effect": {"Damage": 1}, "Cooldown": 0}],
             "Deflect": [0, "Temporarily increases Evasion.", {"Effect": {"Buff": {"Target": "player", "Name": "Fortified"}}, "Cooldown": 2}],
-            "Charge Slash": [0, "Deals high damage but applies vulnerable to the user.", {"Effect": {"Damage": 1.4, "Crit Chance": 200000, "Buff": {"Target": "player", "Name": "Vulnerable"}}, "Cooldown": 3},
-        }]
+            "Charge Slash": [0, "Deals high damage but applies vulnerable to the user.", {"Effect": {"Damage": 1.4, "Crit Chance": 200000, "Buff": {"Target": "player", "Name": "Vulnerable"}}, "Cooldown": 3}],
+        }
 
         actions_log = []
 
