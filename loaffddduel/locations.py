@@ -62,9 +62,6 @@ STARWARSLOCATIONMODIFIERS = {
             "Damage over time": .05,
             "Unless": "Droid"
         },
-    "Kessel" : { 
-         "images": ["https://static.wikia.nocookie.net/starwars/images/e/e5/Kessel-SWCT.png/revision/latest?cb=20181015054435", "https://static1.srcdn.com/wordpress/wp-content/uploads/2020/03/Kessel-in-Solo-A-Star-Wars-Story-and-Clone-Wars-Season-7.jpg","https://i.ytimg.com/vi/YWIOiSmiXg0/sddefault.jpg","https://static.wikia.nocookie.net/theclonewiki/images/3/36/Kessel_mine.jpg/revision/latest?cb=20200731160059"]
-         },
         "Dark Nexus": {
             "Type": {
                 "Faction Modifier": "Sith"
@@ -72,6 +69,9 @@ STARWARSLOCATIONMODIFIERS = {
             "Potency": 10
         }
     },
+    "Kessel" : { 
+         "images": ["https://static.wikia.nocookie.net/starwars/images/e/e5/Kessel-SWCT.png/revision/latest?cb=20181015054435", "https://static1.srcdn.com/wordpress/wp-content/uploads/2020/03/Kessel-in-Solo-A-Star-Wars-Story-and-Clone-Wars-Season-7.jpg","https://i.ytimg.com/vi/YWIOiSmiXg0/sddefault.jpg","https://static.wikia.nocookie.net/theclonewiki/images/3/36/Kessel_mine.jpg/revision/latest?cb=20200731160059"]
+         },
     "Mandalore": {
         "Warrior's Spirit": {
             "Type": {
