@@ -278,6 +278,8 @@ class DuelManager(Cog):
             if random.randint(1, 100) <= attacker["Crit Chance"]:
                 base_damage *= (attacker["Crit Damage"]/100)
                 is_crit = True
+                crit_chance_multiplier = ability_effect.get("Crit Chance", 0)
+                crit_chance = attacker["Crit Chance"] + crit_chance_multiplier
             else:
                 is_crit = False
             
