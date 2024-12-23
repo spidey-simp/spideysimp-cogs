@@ -1,6 +1,6 @@
 from redbot.core.bot import Red
 
-from .Duel import DuelManager
+from .duel import DuelManager
 
 
 async def setup(bot: Red) -> None:
