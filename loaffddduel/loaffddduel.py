@@ -97,7 +97,8 @@ class DuelManager(Cog):
 
     async def red_delete_data_for_user(self,**kwargs):
         return
-    @commands.command(name="duel")
+        
+    @commands.command(name="duelsandbox", aliases=["lds"])
     async def duelsandbox(self, ctx: commands.Context):
         """Set up a duel sandbox with customizable settings."""
 
