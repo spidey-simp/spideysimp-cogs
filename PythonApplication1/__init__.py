@@ -1,9 +1,9 @@
 from redbot.core.bot import Red
 
-from .[your code file] import [the class you have your commands in]
+from .[Duel] import [Duel]
 
 
 async def setup(bot: Red) -> None:
-    cog = [classname](bot)
+    cog = [Duel](bot)
     await bot.add_cog(cog)
 
