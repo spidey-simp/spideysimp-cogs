@@ -6,6 +6,7 @@ from typing import List
 from discord import Member
 from discord.ext import commands
 from redbot.core import Config, bank, commands
+from redbot.core.commands import Cog
 
 from .skills import SKILLTREES
 from .locations import STARWARSLOCATIONMODIFIERS
