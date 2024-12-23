@@ -225,7 +225,7 @@ class DuelManager(Cog):
         ABILITIES = {
             "Basic Slash": [0, "Deals Base Damage.", {"Effect": {"Damage": 1}, "Cooldown": 0}],
             "Deflect": [0, "Temporarily increases Evasion.", {"Effect": {"Buff": {"Target": "player", "Name": "Fortified"}}, "Cooldown": 2}],
-            "Charge Slash": [0, "Deals high damage but applies vulnerable to the user.", {"Effect": {"Damage": 1.4, "Buff": {"Target": "player", "Name": "Vulnerable", "Name": "Advantage"}}, "Cooldown": 3}],
+            "Charge Slash": [0, "Deals high damage but applies vulnerable to the user.", {"Effect": {"Damage": 1.4, "Crit Chance": 100, "Buff": {"Target": "player", "Name": "Vulnerable"}}, "Cooldown": 3}],
         }
 
         actions_log = []
@@ -274,8 +274,7 @@ class DuelManager(Cog):
             
             crit_chance_mult = ability_effect.get("Crit Chance", 1)
             crit_chance = float(attacker["Crit Chance"]) * crit_chance_mult
-            if "Advantage" in defender["buffs"]:
-                crit_chance *= 5.0
+            
             
             if "Vulnerable" in defender["buffs"]:
                 base_damage *= 1.2
