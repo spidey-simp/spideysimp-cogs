@@ -49,29 +49,58 @@ STARWARSLOCATIONMODIFIERS = {
         "images": ["https://static.wikia.nocookie.net/starwars/images/2/26/FortressVaderConceptArt-R1.jpg/revision/latest?cb=20161225102239","https://sm.ign.com/t/ign_za/video/s/star-wars-/star-wars-hunters-official-vaders-castle-map-trailer_uhxc.1280.png", "https://cdna.artstation.com/p/assets/images/images/041/484/314/large/stephen-zavala-sw-vaderimmortal-serviceelevator-01-sz.jpg?1631814756", "https://static1.srcdn.com/wordpress/wp-content/uploads/2016/11/Darth-Vader-In-Rogue-One-A-Star-Wars-Story.jpg"]
     },
     "Scariff" : { 
-         "images": ["https://static.wikia.nocookie.net/starwars/images/6/6d/Scarif_SWCT.png/revision/latest?cb=20181010053537","https://static.wikia.nocookie.net/star-wars-legends/images/1/1f/Citadel_Landing_Zone_SWDL.png/revision/latest?cb=20210831231140","https://static.wikia.nocookie.net/starwars/images/2/20/Acme-ScarifForces.png/revision/latest?cb=20240410001322","https://www.cbr.com/wp-content/uploads/2021/07/scarif-citadel-tower.jpg"]
-         },
-    "Mustafar": {
+        "images": ["https://static.wikia.nocookie.net/starwars/images/6/6d/Scarif_SWCT.png/revision/latest?cb=20181010053537","https://static.wikia.nocookie.net/star-wars-legends/images/1/1f/Citadel_Landing_Zone_SWDL.png/revision/latest?cb=20210831231140","https://static.wikia.nocookie.net/starwars/images/2/20/Acme-ScarifForces.png/revision/latest?cb=20240410001322","https://www.cbr.com/wp-content/uploads/2021/07/scarif-citadel-tower.jpg"],
+        
+        "description": "Scariff is a beautiful ocean planet that held a heavily guarded top secret imperial facility.",
+
+        "Global Modifiers":{
+            "Calm Waters:{
+                "Description": "Whenever a unit takes damage they recover 5% health and proteection"
+        }},
+        "Faction Modifier Imperial": {
+            "Shoretrooper Reinforcment: {
+            "Description": "At the start of the encounter summon a Shoretrooper in an open companion slot. Whenever a non Shoretrooper empire ally is defeated summon a Shoretrooper in its place.",
+        }}
+},
+            
+            
+    
+ 
+    "Mustafar":{
         "images": ["https://static.wikia.nocookie.net/starwars/images/6/61/Mustafar-TROSGG.png/revision/latest?cb=20200722072411", "https://lumiere-a.akamaihd.net/v1/images/5f60bbf3414ddf0001687bf4-image_f155a53d.jpeg?region=336,0,864,864", "https://pbs.twimg.com/media/C5SNxRuWcAEv-wH.jpg", "https://images.squarespace-cdn.com/content/v1/5fbc4a62c2150e62cfcb09aa/1630034720549-L91DS8BWLDHNLLETPZ18/vader-house-mustafar-in-star-wars.jpeg"],
-        "Volcanic Terrain": {
-            "Type": "Global",
-            "Evasion": -10
+
+        "Description": "Mustafar is a volcanic planet that hosts extreme conditions that is inhospitable to life. Will you be able to survive the extreme heat and blazing sky?",
+
+        "Global Modifiers":{
+        "Volcanic Terrain":{
+        "Description": "At the start of each turn all units have a 10% chance to Damage.",
         },
+
         "Searing Heat": {
-            "Type": "Global",
-            "Damage over time": .05,
-            "Unless": "Droid"
-        },
+        "Description": "At the start of battle all units are inflicted for burning for the rest of battle."
+        "Unless": "Droid"
+        }},
+        "Faction Modifier Sith": {
         "Dark Nexus": {
-            "Type": {
-                "Faction Modifier": "Sith"
-            },
-            "Potency": 10
-        }
+        "Description":"At the start of each sith turn, each sith ally gains .5% damage until the end of the battle.",
+        }}
+            
     },
+
     "Kessel" : { 
-         "images": ["https://static.wikia.nocookie.net/starwars/images/e/e5/Kessel-SWCT.png/revision/latest?cb=20181015054435", "https://static1.srcdn.com/wordpress/wp-content/uploads/2020/03/Kessel-in-Solo-A-Star-Wars-Story-and-Clone-Wars-Season-7.jpg","https://i.ytimg.com/vi/YWIOiSmiXg0/sddefault.jpg","https://static.wikia.nocookie.net/theclonewiki/images/3/36/Kessel_mine.jpg/revision/latest?cb=20200731160059"]
-         },
+        "images": ["https://static.wikia.nocookie.net/starwars/images/e/e5/Kessel-SWCT.png/revision/latest?cb=20181015054435", "https://static1.srcdn.com/wordpress/wp-content/uploads/2020/03/Kessel-in-Solo-A-Star-Wars-Story-and-Clone-Wars-Season-7.jpg","https://i.ytimg.com/vi/YWIOiSmiXg0/sddefault.jpg","https://static.wikia.nocookie.net/theclonewiki/images/3/36/Kessel_mine.jpg/revision/latest?cb=20200731160059"],
+        
+        "description": "Kessel is a planet in the outerrim that was devoted to spice mining hosting toxic conditions. Many slaves have died in the mines of Kessel, will you be next?",
+        
+            "Global Modifiers": {
+            "Toxic Fumes": {
+            "Description": "Permanently apply Vulnerable to all players. At the start of each player turn they have a 20% chance to have their cooldowns increased by 1"
+            "Unless":"Droid"
+        }}
+    },
+                
+        
+         
     "Mandalore": {
         "Warrior's Spirit": {
             "Type": {
