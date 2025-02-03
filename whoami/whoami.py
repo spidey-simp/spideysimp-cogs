@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from redbot.core import commands, Config
+import asyncio
 
 class WhoAmI(commands.Cog):
     def __init__(self, bot):
