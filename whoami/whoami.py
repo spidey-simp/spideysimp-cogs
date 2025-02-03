@@ -189,6 +189,7 @@ class WhoAmI(commands.Cog):
 
 
         while attacker_hp > 0 and defender_hp > 0:
+            nsfw_mess = False
             if nsfw:
                 nsfw_chance = random.randint(1,2)
                 nsfw_mess = True if nsfw_chance == 1 else False
