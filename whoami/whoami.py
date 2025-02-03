@@ -73,7 +73,9 @@ class WhoAmI(commands.Cog):
         attacker_stats, defender_stats = (user_stats, opponent_stats) if user_first else (opponent_stats, user_stats)
         attacker_hp, defender_hp = (user_hp, opponent_hp) if user_first else (opponent_hp, user_hp)
         attacker_attack, defender_attack = (user_attack, opponent_attack) if user_first else(opponent_attack, user_attack)
-
+        
+        await interaction.response.defer(thinking=True)
+        await asyncio.sleep(1)
         await interaction.followup.send(f"⚔️ {interaction.user.mention} challenges {opponent.mention} to a duel!")
         await asyncio.sleep(1)
         await interaction.followup.send(f"**{attacker.display_name}** is faster and will go first!")
