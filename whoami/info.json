@@ -1,0 +1,19 @@
+{
+    "author": [
+        "spideysimp"
+    ],
+    "min_bot_version": "3.4.0",
+    "description": "A simple cog that gives you a fortune or randomly generated rpg stats.",
+    "hidden": false,
+    "install_msg": "Thank you for installing Who Am I! Get started with '[p]load whoami', then '[p]help WhoAmI'",
+    "short": "Who Am I",
+    "end_user_data_statement": "This cog stores no data!",
+    "tags": [
+        "spideysimp",
+        "fun",
+        "fortune",
+        "rpg"
+    ]
+
+
+}
