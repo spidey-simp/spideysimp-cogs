@@ -201,16 +201,14 @@ class WhoAmI(commands.Cog):
                 message = random.choice(message_list).format(attacker=attacker.display_name, heal=heal_amount)
             else:
                 apoc_chance = random.randint(1, 100)
-                if apoc_chance > 99:
+                if apoc_chance > (99 - (attacker_stats["Luck"] * 2)):
                     damage = random.randint(100, 10000000)
                     damage_tier = "super"
                 else:
                     base_attack = random.randint(attacker_attack // 2, attacker_attack)
-                    damage = base_attack + random.randint(-10, 10)
+                    damage = min(12, base_attack + random.randint(-10, 5))
 
-                    if damage >= 15:
-                        damage_tier = "super"
-                    elif damage > 7:
+                    if damage > 7:
                         damage_tier = "high"
                     elif damage > 3:
                         damage_tier = "medium"
