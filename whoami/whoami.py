@@ -215,7 +215,8 @@ class WhoAmI(commands.Cog):
                         damage_tier = "medium"
                     elif damage > 0:
                         damage_tier = "low"
-                
+
+                dodge = False
                 dodge_chance = min(50, defender_stats["Dexterity"] * 3 + defender_stats["Intelligence"] * 2 + random.randint(-10, 10))
                 if random.randint(1, 100) <= dodge_chance and damage_tier != "super":
                     dodge = True
