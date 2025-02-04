@@ -6,11 +6,41 @@ from dataclasses import make_dataclass
 from typing import Dict, List, Literal, Optional, Tuple, Type, Union
 from abc import ABC, ABCMeta, abstractmethod
 from discord import Member
+from discord import app_commands
 from typing import Any, NoReturn
 from redbot.core import Config, checks, commands
 from redbot.core.bot import Red
 from redbot.core.commands import BadArgument, Cog, CogMeta, Context, Converter
 from redbot.core.config import Config
+
+
+EMOJIS = {
+    "ccbs": "<:CCB:1336246037140082759>",  
+    "bw": "<:BW:1336246065778786388>",
+    "ct": "<:CT:1336246096405594142>",
+    "grid_sd": "<:FSD:1336246292665466900>",
+    "radar_sd": "<:ISD:1336246308020817932>",
+    "tube_sd": "<:FlSD:1336246318418624512>",
+    "ah": "<:AH:1336246115133165660>",
+    "ec": "<:EC:1336246132681998438>",
+    "z": "<:ZC:1336246154861744182>",
+    "a": "<:A_:1336246216958152766>",
+    "id": "<:ID:1336246197765017610>",
+    "gk": "<:GK:1336246251598909483>",
+    "db": "<:DB:1336246278568280101>"
+}
+
+RELIC_MATERIALS = {
+    1: {"ccbs": 40},
+    2: {"ccbs": 70, "bw": 40, "grid_sd": 15},
+    3: {"ccbs": 100, "bw": 80, "ct": 20, "grid_sd": 35, "radar_sd": 15},
+    4: {"ccbs": 130, "bw": 120, "ct": 60, "grid_sd": 55, "radar_sd": 40},
+    5: {"ccbs": 160, "bw": 160, "ct": 90, "ah": 20, "grid_sd": 75, "radar_sd": 65, "tube_sd": 15},
+    6: {"ccbs": 180, "bw": 190, "ct": 120, "ah": 40, "ec": 20, "grid_sd": 95, "radar_sd": 90, "tube_sd": 40},
+    7: {"ccbs": 200, "bw": 220, "ct": 140, "ah": 60, "ec": 40, "z": 10, "grid_sd": 115, "radar_sd": 115, "tube_sd": 75},
+    8: {"ccbs": 200, "bw": 220, "ct": 160, "ah": 80, "ec": 60, "z": 30, "a": 20, "id": 20, "grid_sd": 135, "radar_sd": 140, "tube_sd": 120},
+    9: {"ccbs": 200, "bw": 220, "ct": 180, "ah": 100, "ec": 80, "z": 50, "a": 40, "id": 40, "gk": 20, "db": 20, "grid_sd": 165, "radar_sd": 170, "tube_sd": 175}
+}
 
 
 
@@ -68,43 +98,43 @@ class SwgohTools(commands.Cog):
     async def swgohtools_tbstarset(self, ctx: commands.Context, star: int = 0):
         """Sets the amount of stars your guild gets in tb. - Only supports rote stars right now."""
         await self.config.user(ctx.author).tbstar.set(star)
-        await ctx.send(f"```Your territory battle stars are now set to {star} stars```")
+        await ctx.send(f"Your territory battle stars are now set to {star} stars")
 
     @swgohtools.command(name="getspending", aliases=["gs"])
     async def swgohtools_getspending(self, ctx: commands.Context, geton: bool = True):
         """Toggles if you are using guild event tokens toward kyro spending. Add either true or false as a parameter."""
         await self.config.user(ctx.author).getcurrency.set(geton)
-        await ctx.send(f"```GET currency spending on kyros is now set to {geton}```")
+        await ctx.send(f"GET currency spending on kyros is now set to {geton}")
 
     @swgohtools.command(name="zeffo", aliases=["z"])
     async def swgohtools_zeffoset(self, ctx: commands.Context, zeffoon: bool = True):
         """Toggles if you have zeffo unlocked."""
         await self.config.user(ctx.author).zeffo.set(zeffoon)
-        await ctx.send(f"```You have set your zeffo completion to: {zeffoon}```")
+        await ctx.send(f"You have set your zeffo completion to: {zeffoon}")
 
     @swgohtools.command(name="mandalore", aliases=["m"])
     async def swgohtools_mandaloreset(self, ctx: commands.Context, mandalorecompletion: bool = True):
         """Toggles if you have mandalore unlocked. Add either true or false as a parameter."""
         await self.config.user(ctx.author).mandalore.set(mandalorecompletion)
-        await ctx.send(f"```You have set your mandalore competion to: {mandalorecompletion}```")
+        await ctx.send(f"You have set your mandalore competion to: {mandalorecompletion}")
     
     @swgohtools.command(name="twgp")
     async def swgohtools_twgpset(self, ctx: commands.Context, twgpnumber: int = 0):
         """Sets the active territory war gp that your guild has. Input just what x would be in the following expression: tw gp = x million"""
         await self.config.user(ctx.author).twgp.set(twgpnumber)
-        await ctx.send(f"```Your active territory war gp is now {twgpnumber} million.```")
+        await ctx.send(f"Your active territory war gp is now {twgpnumber} million.")
 
     @swgohtools.command(name="energyspent", aliases=["es"])
     async def swgohtools_kyroenergy(self, ctx: commands.Context, energyamt: int = 0):
         """Sets how much energy you spend per day on kyros."""
         await self.config.user(ctx.author).energy.set(energyamt)
-        await ctx.send(f"```You are now spending {energyamt} campaign energy on kyros per day.```")
+        await ctx.send(f"You are now spending {energyamt} campaign energy on kyros per day.")
     
     @swgohtools.command(name="abcompletion", aliases=["abc"])
     async def swgohtools_abcompletion(self, ctx: commands.Context, abamt: int = 0):
         """Sets how many of the Challenge Tier 1s you have completed for assault battles."""
         await self.config.user(ctx.author).abcompletion.set(abamt)
-        await ctx.send(f"```You have the setting of {abamt} assault battles completed.```")
+        await ctx.send(f"You have the setting of {abamt} assault battles completed.")
 
     @swgohtools.command(name="kyrocalc", aliases=["kc"])
     async def swgohtools_kyrocalc(self, ctx: commands.Context):
@@ -256,7 +286,7 @@ class SwgohTools(commands.Cog):
             f"\nThe amount of kyros you'll get from mandalore is: {mandalorerewards}"
             f"\nThe amount of kyros you'll get from territory war reward boxes is: {twrewards}"
             f"\nThe amount of kyros you'll get from energy is an average of: {campenergy}"
-            f"\nThe amount of kyros you'll get from assault battles is: {abkyros}```"
+            f"\nThe amount of kyros you'll get from assault battles is: {abkyros} ```"
         )
 
     
@@ -271,11 +301,45 @@ class SwgohTools(commands.Cog):
         energy = await self.config.user(ctx.author).energy()
         abcompletion = await self.config.user(ctx.author).abcompletion()
         await ctx.send(
-            f"```Your current swgoh settings are set to:\nTerritory Battle Star count - {tbstar} stars"
+            f"Your current swgoh settings are set to:\nTerritory Battle Star count - {tbstar} stars"
             f"\nGet spending on Kyros - {getcurrency}"
             f"\nYour guild's zeffo unlock status is - {zeffo}"
             f"\nYour guild's mandalore unlock status is - {mandalore}"
             f"\nYou have the following active Territory War gp - {twgp} million"
             f"\nYou are spending {energy} energy on kyros per day (on average)."
-            f"\nYou have completed the Challenge Tier 1 of {abcompletion} assault battles so far.```"
+            f"\nYou have completed the Challenge Tier 1 of {abcompletion} assault battles so far."
             )
+
+    @app_commands.command(name="reliccalc", description="Calculates how many relic mats you'll need per relic tier.")
+    @app_commands.describe(end_relic_tier="The relic tier you want to get to (1-9).", start_relic_tier="The relic tier you're starting at (0-8).", signal_data="Include signal data? Defaults to True.", relic_mat="Include relic mats? Defaults to True.")
+    async def reliccalc(self, interaction: discord.Interaction, end_relic_tier: app_commands.Range[int, 1, 9], start_relic_tier: app_commands.Range[int, 0, 8] = 0, signal_data: bool=True, relic_mat: bool=True):
+        if start_relic_tier >= end_relic_tier:
+            await interaction.response.send_message("You can't have a starting relic value higher than your ending relic value.", ephemeral=True)
+            return
+        
+        materials_needed = calculate_relic_mats(start_relic_tier, end_relic_tier)
+
+        if not materials_needed:
+            return await interaction.response.send_message("No materials are needed!", ephemeral=True)
+
+        # Format results with emojis
+        material_list = "\n".join(f"{EMOJIS.get(mat, '')}: {amount}" for mat, amount in materials_needed.items())
+
+        # Create embed
+        embed = discord.Embed(
+            title=f"Relic Upgrade: R{start_relic_tier} ➡️ R{end_relic_tier}",
+            description=material_list,
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text="Star Wars: Galaxy of Heroes Relic Calculator")
+
+        # Send embed response
+        await interaction.response.send_message(embed=embed)
+
+# Utility function for material calculation
+def calculate_relic_mats(start: int, end: int):
+    required_mats = {}
+    for tier in range(start + 1, end + 1):  # Sum differences between tiers
+        for mat, amount in RELIC_MATERIALS[tier].items():
+            required_mats[mat] = required_mats.get(mat, 0) + amount
+    return required_mats
