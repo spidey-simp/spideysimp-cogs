@@ -311,8 +311,8 @@ class SwgohTools(commands.Cog):
             )
 
     @app_commands.command(name="reliccalc", description="Calculates how many relic mats you'll need per relic tier.")
-    @app_commands.describe(end_relic_tier="The relic tier you want to get to (1-9).", start_relic_tier="The relic tier you're starting at (0-8).", signal_data="Include signal data? Defaults to True.", relic_mat="Include relic mats? Defaults to True.")
-    async def reliccalc(self, interaction: discord.Interaction, end_relic_tier: app_commands.Range[int, 1, 9], start_relic_tier: app_commands.Range[int, 0, 8] = 0, signal_data: bool=True, relic_mat: bool=True):
+    @app_commands.describe(end_relic_tier="The relic tier you want to get to (1-9).", start_relic_tier="The relic tier you're starting at (0-8).")
+    async def reliccalc(self, interaction: discord.Interaction, end_relic_tier: app_commands.Range[int, 1, 9], start_relic_tier: app_commands.Range[int, 0, 8] = 0):
         if start_relic_tier >= end_relic_tier:
             await interaction.response.send_message("You can't have a starting relic value higher than your ending relic value.", ephemeral=True)
             return
@@ -338,8 +338,7 @@ class SwgohTools(commands.Cog):
 
 # Utility function for material calculation
 def calculate_relic_mats(start: int, end: int):
-    required_mats = {}
-    for tier in range(start + 1, end + 1):  # Sum differences between tiers
-        for mat, amount in RELIC_MATERIALS[tier].items():
-            required_mats[mat] = required_mats.get(mat, 0) + amount
-    return required_mats
+   end_mats = RELIC_MATERIALS.get(end, {})
+   start_mats = RELIC_MATERIALS.get(start, {})
+
+   return {mat: end_mats[mat] - start_mats.get(mat, 0) for mat in end_mats if end_mats[mat] - start_mats.get(mat, 0) > 0}
