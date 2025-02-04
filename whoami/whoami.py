@@ -75,12 +75,12 @@ class WhoAmI(commands.Cog):
         attacker_hp, defender_hp = (user_hp, opponent_hp) if user_first else (opponent_hp, user_hp)
         attacker_attack, defender_attack = (user_attack, opponent_attack) if user_first else(opponent_attack, user_attack)
 
-        embed= discord.Embed(title=f"⚔️ Duel between {interaction.user.mention} and {opponent.mention}!", color=discord.Color.gold())
+        embed= discord.Embed(title=f"⚔️ Duel between {interaction.user.display_name} and {opponent.display_name}!", color=discord.Color.gold())
         embed.add_field(name=f"{interaction.user.display_name}", value=f"❤️ {user_hp} HP", inline=True)
         embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP")
         embed.set_footer(text="Fight to the last breath!")
 
-        message = await interaction.response.send_message(embed=embed)
+        embed_message = await interaction.response.send_message(embed=embed)
 
         attack_messages = {
             "low": [
@@ -240,7 +240,7 @@ class WhoAmI(commands.Cog):
             embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP")
             line_separator = "\n"
             embed.description = f"{line_separator.join(attacks_list)}"
-            await message.edit(embed=embed)
+            await embed_message.edit(embed=embed)
 
             if defender_hp > 0:
                 attacker, defender = defender, attacker
@@ -251,7 +251,4 @@ class WhoAmI(commands.Cog):
 
         embed.title = f"🏆 **{winner} stands victorious over {loser}!**"
         embed.set_footer(text="Duel Over")
-        await message.edit(embed=embed)
-
-
-
+        await embed_message.edit(embed=embed)
