@@ -80,7 +80,8 @@ class WhoAmI(commands.Cog):
         embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP")
         embed.set_footer(text="Fight to the last breath!")
 
-        embed_message = await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed)
+        embed_message = await interaction.original_response()
 
         attack_messages = {
             "low": [
