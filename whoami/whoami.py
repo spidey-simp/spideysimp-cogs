@@ -75,8 +75,6 @@ class WhoAmI(commands.Cog):
         attacker_hp, defender_hp = (user_hp, opponent_hp) if user_first else (opponent_hp, user_hp)
         attacker_attack, defender_attack = (user_attack, opponent_attack) if user_first else(opponent_attack, user_attack)
 
-        await interaction.response.defer(thinking=True)
-        await asyncio.sleep(1)
         embed= discord.Embed(title=f"⚔️ Duel between {interaction.user.mention} and {opponent.mention}!", color=discord.Color.gold())
         embed.add_field(name=f"{interaction.user.display_name}", value=f"❤️ {user_hp} HP", inline=True)
         embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP")
