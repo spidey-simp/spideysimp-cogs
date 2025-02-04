@@ -77,7 +77,7 @@ class WhoAmI(commands.Cog):
 
         embed= discord.Embed(title=f"⚔️ Duel between {interaction.user.display_name} and {opponent.display_name}!", color=discord.Color.gold())
         embed.add_field(name=f"{interaction.user.display_name}", value=f"❤️ {user_hp} HP", inline=True)
-        embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP")
+        embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP", inline=True)
         embed.set_footer(text="Fight to the last breath!")
 
         await interaction.response.send_message(embed=embed)
@@ -235,10 +235,16 @@ class WhoAmI(commands.Cog):
                         message = random.choice(message_list[damage_tier]).format(attacker=attacker.display_name, defender=defender.display_name, damage=damage)
                         defender_hp -= damage
 
+            if attacker == interaction.user:
+                user_hp = attacker_hp
+                opponent_hp = defender_hp
+            else:
+                user_hp = defender_hp
+                opponent_hp = attacker_hp
             attacks_list.append(message)   
             embed.clear_fields()
             embed.add_field(name=f"{interaction.user.display_name}", value=f"❤️ {user_hp} HP", inline=True)
-            embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP")
+            embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP", inline=True)
             line_separator = "\n"
             embed.description = f"{line_separator.join(attacks_list)}"
             await embed_message.edit(embed=embed)
@@ -247,8 +253,8 @@ class WhoAmI(commands.Cog):
                 attacker, defender = defender, attacker
                 attacker_hp, defender_hp = defender_hp, attacker_hp
             
-        winner = attacker.mention if attacker_hp > 0 else defender.mention
-        loser = defender.mention if attacker_hp > 0 else attacker.mention
+        winner = attacker.display_name if attacker_hp > 0 else defender.display_name
+        loser = defender.display_name if attacker_hp > 0 else attacker.display_name
 
         embed.title = f"🏆 **{winner} stands victorious over {loser}!**"
         embed.set_footer(text="Duel Over")
