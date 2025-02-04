@@ -323,14 +323,24 @@ class SwgohTools(commands.Cog):
             return await interaction.response.send_message("No materials are needed!", ephemeral=True)
 
         # Format results with emojis
-        material_list = "\n".join(f"{EMOJIS.get(mat, '')}: {amount}" for mat, amount in materials_needed.items())
+        signal_data = {mat: amount for mat, amount in materials_needed.items() if mat.endswith("sd")}
+        relic_mats = {mat: amount for mat, amount in materials_needed.items() if not mat.endswith("sd")}
 
+        # Format results with emojis
+        signal_data_list = "\n".join(
+            f"{EMOJIS.get(mat, '')}: {amount}" for mat, amount in signal_data.items()
+        ) or "None"
+
+        relic_mats_list = "\n".join(
+            f"{EMOJIS.get(mat, '')}: {amount}" for mat, amount in relic_mats.items()
+        ) or "None"
         # Create embed
         embed = discord.Embed(
             title=f"Relic Upgrade: R{start_relic_tier} ➡️ R{end_relic_tier}",
-            description=material_list,
             color=discord.Color.blue()
         )
+        embed.add_field(name="🔹 **Relic Materials**", value=relic_mats_list, inline=False)
+        embed.add_field(name="🔸 **Signal Data**", value=signal_data_list, inline=False)
         embed.set_footer(text="Star Wars: Galaxy of Heroes Relic Calculator")
 
         # Send embed response
