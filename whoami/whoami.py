@@ -74,13 +74,15 @@ class WhoAmI(commands.Cog):
         attacker_stats, defender_stats = (user_stats, opponent_stats) if user_first else (opponent_stats, user_stats)
         attacker_hp, defender_hp = (user_hp, opponent_hp) if user_first else (opponent_hp, user_hp)
         attacker_attack, defender_attack = (user_attack, opponent_attack) if user_first else(opponent_attack, user_attack)
-        
+
         await interaction.response.defer(thinking=True)
         await asyncio.sleep(1)
-        await interaction.followup.send(f"⚔️ {interaction.user.mention} challenges {opponent.mention} to a duel!")
-        await asyncio.sleep(1)
-        await interaction.followup.send(f"**{attacker.display_name}** is faster and will go first!")
-        await asyncio.sleep(1)
+        embed= discord.Embed(title=f"⚔️ Duel between {interaction.user.mention} and {opponent.mention}!", color=discord.Color.gold())
+        embed.add_field(name=f"{interaction.user.display_name}", value=f"❤️ {user_hp} HP", inline=True)
+        embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP")
+        embed.set_footer(text="Fight to the last breath!")
+
+        message = await interaction.response.send_message(embed=embed)
 
         attack_messages = {
             "low": [
@@ -105,7 +107,6 @@ class WhoAmI(commands.Cog):
             ]
         }
 
-        # NSFW Attack Messages
         nsfw_attack_messages = {
             "low": [
                 "{attacker} flicks {defender} on the nipple. **Weird.** **{damage}** damage.",
@@ -143,7 +144,6 @@ class WhoAmI(commands.Cog):
             "{defender} says ‘Not today, bitch’ and sidesteps flawlessly!"
         ]
 
-        # When an attack completely fails but no self-damage
         nodamagefail_messages = [
             "{attacker} swings... and completely misses. Embarrassing.",
             "{attacker} charges with full force, but {defender} casually sidesteps.",
@@ -158,7 +158,6 @@ class WhoAmI(commands.Cog):
             "{attacker} forgets what they were doing and just moans seductively instead."
         ]
 
-        # When the attacker physically hurts themselves
         selfhurtfail_messages = [
             "{attacker} trips over their own feet and takes **{damage}** damage!",
             "{attacker} swings wildly and accidentally smacks themselves in the face! **Self-damage: {damage} HP!**",
@@ -171,7 +170,6 @@ class WhoAmI(commands.Cog):
             "{attacker} attempts a powerful strike but steps on their own balls. **{damage} HP!**"
         ]
 
-        # Fun healing messages
         heal_messages = [
             "{attacker} takes a moment to breathe and patches up their wounds. **Heals {heal} HP!**",
             "{attacker} drinks a mysterious potion. Somehow, it works! **+{heal} HP!**",
@@ -187,8 +185,9 @@ class WhoAmI(commands.Cog):
             "{attacker} takes a break to edge themselves, which surprisingly heals them. **Heals {heal} HP!**"
         ]
 
-
+        attacks_list = []
         while attacker_hp > 0 and defender_hp > 0:
+            await asyncio.sleep(2)
             nsfw_mess = False
             if nsfw:
                 nsfw_chance = random.randint(1,2)
@@ -214,11 +213,12 @@ class WhoAmI(commands.Cog):
                         damage_tier = "medium"
                     elif damage > 0:
                         damage_tier = "low"
-
+                
                 dodge = False
                 dodge_chance = min(50, defender_stats["Dexterity"] * 3 + defender_stats["Intelligence"] * 2 + random.randint(-10, 10))
                 if random.randint(1, 100) <= dodge_chance and damage_tier != "super":
                     dodge = True
+        
                 
                 if dodge:
                     message_list = nsfw_dodge_messages if nsfw_mess else dodge_messages
@@ -235,10 +235,13 @@ class WhoAmI(commands.Cog):
                         message_list = nsfw_attack_messages if nsfw_mess else attack_messages
                         message = random.choice(message_list[damage_tier]).format(attacker=attacker.display_name, defender=defender.display_name, damage=damage)
                         defender_hp -= damage
-                    
-                
-            await interaction.followup.send(message)
-            await asyncio.sleep(2)
+
+            attacks_list.append(message)   
+            embed.clear_fields()
+            embed.add_field(name=f"{interaction.user.display_name}", value=f"❤️ {user_hp} HP", inline=True)
+            embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP")
+            embed.description = f"{'\n'.join(attacks_list)}"
+            await message.edit(embed=embed)
 
             if defender_hp > 0:
                 attacker, defender = defender, attacker
@@ -247,4 +250,9 @@ class WhoAmI(commands.Cog):
         winner = attacker.mention if attacker_hp > 0 else defender.mention
         loser = defender.mention if attacker_hp > 0 else attacker.mention
 
-        await interaction.followup.send(f"🏆 **{winner} stands victorious over {loser}!**")
+        embed.title = f"🏆 **{winner} stands victorious over {loser}!**"
+        embed.set_footer(text="Duel Over")
+        await message.edit(embed=embed)
+
+
+
