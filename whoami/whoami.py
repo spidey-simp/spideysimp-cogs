@@ -240,7 +240,8 @@ class WhoAmI(commands.Cog):
             embed.clear_fields()
             embed.add_field(name=f"{interaction.user.display_name}", value=f"❤️ {user_hp} HP", inline=True)
             embed.add_field(name=f"{opponent.display_name}", value=f"❤️ {opponent_hp} HP")
-            embed.description = f"{'\n'.join(attacks_list)}"
+            line_separator = "\n"
+            embed.description = f"{line_separator.join(attacks_list)}"
             await message.edit(embed=embed)
 
             if defender_hp > 0:
