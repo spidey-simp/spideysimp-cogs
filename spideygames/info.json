@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spideysimp"
+    ],
+    "min_bot_version": "3.4.0",
+    "description": "A cog that has some very basic games.",
+    "hidden": false,
+    "install_msg": "Thank you for installing Spidey Games! Get started with '[p]load spideygames', then '[p]help SpideyGames'",
+    "short": "Spidey Games",
+    "end_user_data_statement": "This cog stores no data!",
+    "tags": [
+        "spideysimp",
+        "games",
+        "fun"
+    ]
+
+
+}
