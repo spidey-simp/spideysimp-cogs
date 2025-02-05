@@ -5,11 +5,12 @@ from discord.ext import commands
 from redbot.core.bot import Red
 from redbot.core import commands, Config
 import nltk
+import wordfreq
 from nltk.corpus import words
 
 nltk.download("words")
 
-word_list = [word.lower() for word in words.words() if 9 > len(word) > 4]
+word_list = [word.lower() for word in words.words() if wordfreq.word_frequency(word, "en") > .0001 and len(word) > 4]
 active_games = {}
 
 class SpideyGames(commands.Cog):
