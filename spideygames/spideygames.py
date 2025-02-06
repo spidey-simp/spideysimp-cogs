@@ -129,15 +129,22 @@ class SpideyGames(commands.Cog):
         def check(message): return message.channel == ctx.channel and message.content.lower() == base
         try:
             message = await self.bot.wait_for('message', timeout=timeout_duration, check=check)
+            if ctx.channel.id not in self.active_games:
+                await ctx.send(f"The word was {base}!")
+                return
             if message.content.lower() == base:
                 difficulty_field = f"{player_difficulty}_wins"
                 current_wins = await self.config.member(message.author).get_raw(difficulty_field)
                 await self.config.member(message.author).set_raw(difficulty_field, value=current_wins + 1)
                 await ctx.send(f"🎉 {message.author.mention} won! The {'phrase' if phrase_setting else 'word'} was `{base}`!")
         except asyncio.TimeoutError:
-            await ctx.send(f"⏳ Time's up! Nobody guessed the word. The correct {'phrase' if phrase_setting else 'word'} was `{base}`! Try again!")
+            if ctx.channel.id in self.active_games:
+                await ctx.send(f"⏳ Time's up! Nobody guessed the word. The correct {'phrase' if phrase_setting else 'word'} was `{base}`! Try again!")
         
-        del self.active_games[ctx.channel.id]
+        if ctx.channel.id not in self.active_games:
+            return
+        else:
+            del self.active_games[ctx.channel.id]
 
     async def scrambler(self, word: str):
         """Scrambles words."""
@@ -192,7 +199,7 @@ class SpideyGames(commands.Cog):
         channel_id = game_channel.id
         if channel_id not in self.active_games:
             await ctx.send(f"❌ No active game found in {game_channel.mention}.")
-        self.active_games.pop(channel_id, None)
+        del self.active_games[channel_id]
         await ctx.send(f"Game successfully stopped in {game_channel.mention}!")
 
     
