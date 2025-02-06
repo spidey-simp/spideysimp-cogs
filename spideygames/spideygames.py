@@ -126,12 +126,14 @@ class SpideyGames(commands.Cog):
                 await game_message.edit(content=f"🔠 **Unscramble this {'phrase' if phrase_setting else 'word'}:** `{scrambled}`\n⏳ **Time remaining: {remaining} seconds**\n{'💡 Type `[p]anagram hint` for a clue!' if not phrase_setting else ''}")
 
         self.bot.loop.create_task(countdown_timer(timeout_duration))
-        def check(message): return message.channel == ctx.channel and message.content.lower() == base
+        def check(message): 
+            normalized_guess = message.content.lower().replace("’", "'")
+            normalized_answer = base.lower().replace("’", "'")
+            return message.channel == ctx.channel and normalized_guess == normalized_answer
         try:
             while ctx.channel.id in self.active_games:
                 message = await self.bot.wait_for('message', timeout=timeout_duration, check=check)
                 if ctx.channel.id not in self.active_games:
-                    await ctx.send(f"The word was {base}!")
                     return
                 if message.content.lower() == base:
                     difficulty_field = f"{player_difficulty}_wins"
@@ -201,11 +203,12 @@ class SpideyGames(commands.Cog):
         channel_id = game_channel.id
         if channel_id not in self.active_games:
             await ctx.send(f"❌ No active game found in {game_channel.mention}.")
+            return
+        answer = self.active_games[channel_id]["word"]
         del self.active_games[channel_id]
-        channel_same = False
-        if ctx.channel == game_channel:
-            channel_same = True
-        await ctx.send(f"Game successfully stopped{' in' + {game_channel.mention} if channel_same else ''}!")
+        
+        channel_message = f" in {game_channel.mention}" if game_channel != ctx.channel else ""
+        await ctx.send(f"Game successfully stopped{channel_message}! The answer was {answer}!")
 
     
     @anagram.command(name="leaderboard", aliases=["lb"])
