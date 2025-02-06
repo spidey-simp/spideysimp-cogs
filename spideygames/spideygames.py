@@ -128,15 +128,17 @@ class SpideyGames(commands.Cog):
         self.bot.loop.create_task(countdown_timer(timeout_duration))
         def check(message): return message.channel == ctx.channel and message.content.lower() == base
         try:
-            message = await self.bot.wait_for('message', timeout=timeout_duration, check=check)
-            if ctx.channel.id not in self.active_games:
-                await ctx.send(f"The word was {base}!")
-                return
-            if message.content.lower() == base:
-                difficulty_field = f"{player_difficulty}_wins"
-                current_wins = await self.config.member(message.author).get_raw(difficulty_field)
-                await self.config.member(message.author).set_raw(difficulty_field, value=current_wins + 1)
-                await ctx.send(f"🎉 {message.author.mention} won! The {'phrase' if phrase_setting else 'word'} was `{base}`!")
+            while ctx.channel.id in self.active_games:
+                message = await self.bot.wait_for('message', timeout=timeout_duration, check=check)
+                if ctx.channel.id not in self.active_games:
+                    await ctx.send(f"The word was {base}!")
+                    return
+                if message.content.lower() == base:
+                    difficulty_field = f"{player_difficulty}_wins"
+                    current_wins = await self.config.member(message.author).get_raw(difficulty_field)
+                    await self.config.member(message.author).set_raw(difficulty_field, value=current_wins + 1)
+                    await ctx.send(f"🎉 {message.author.mention} won! The {'phrase' if phrase_setting else 'word'} was `{base}`!")
+                    break
         except asyncio.TimeoutError:
             if ctx.channel.id in self.active_games:
                 await ctx.send(f"⏳ Time's up! Nobody guessed the word. The correct {'phrase' if phrase_setting else 'word'} was `{base}`! Try again!")
@@ -200,7 +202,10 @@ class SpideyGames(commands.Cog):
         if channel_id not in self.active_games:
             await ctx.send(f"❌ No active game found in {game_channel.mention}.")
         del self.active_games[channel_id]
-        await ctx.send(f"Game successfully stopped in {game_channel.mention}!")
+        channel_same = False
+        if ctx.channel == game_channel:
+            channel_same = True
+        await ctx.send(f"Game successfully stopped{' in' + {game_channel.mention} if channel_same else ''}!")
 
     
     @anagram.command(name="leaderboard", aliases=["lb"])
