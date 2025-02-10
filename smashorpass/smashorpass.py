@@ -19,14 +19,28 @@ def save_custom_entry(name, image_url, user_id):
     """Saves the entry to custom.json"""
     if os.path.exists(CUSTOM_FILE):
         with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
+            try:
+                data = json.load(file)
+                if not isinstance(data, list):
+                    data = []
+            except json.JSONDecodeError:
+                data = []
     else:
         data = []
-    
+
+    original_name = name
+    counter = 1
+    existing_names = {entry["name"].lower() for entry in data}
+    while name.lower() in existing_names:
+        name = f"{original_name} ({counter})"
+        counter += 1
+        
     data.append({"name": name, "image": image_url, "user_id": user_id})
 
     with open(CUSTOM_FILE, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=4)
+
+    return name
     
 def get_random_custom():
     """Gets a random character from custom.json"""
@@ -290,8 +304,8 @@ class SmashOrPass(commands.Cog):
             await interaction.response.send_message("❌ You must provide either an image attachment or a URL!", ephemeral=True)
             return
         
-        save_custom_entry(name, image_url, interaction.user.id)
-        await interaction.response.send_message(f"✅ **{name}** has been added to the custom category!", ephemeral=False)
+        new_name = save_custom_entry(name, image_url, interaction.user.id)
+        await interaction.response.send_message(f"✅ **{new_name}** has been added to the custom category!", ephemeral=False)
     
     @app_commands.command(name="sopdelete", description="Remove an uploaded character (self or mod)")
     @app_commands.describe(
