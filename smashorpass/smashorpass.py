@@ -30,6 +30,12 @@ def load_json(file_path, default):
             return default
 
 def save_json(file_path, data):
+    if not isinstance(data, list):
+        return
+    
+    if len(data) == 0 and os.path.exists(file_path):
+        return
+    
     with open(file_path, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=4)
 
@@ -286,14 +292,14 @@ class SmashOrPass(commands.Cog):
         with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
             data = json.load(file)
 
-        sorted_data = sorted(data, key=lambda x: x["smashes"], reverse=True)
+        sorted_data = sorted(data, key=lambda x: x.get("smashes", 0), reverse=True)
         if not sorted_data:
             await interaction.response.send_message("❌ No characters have been voted on yet!", ephemeral=True)
             return
         
         view = LeaderboardView(interaction, sorted_data)
-        interaction = await interaction.response.send_message("📊 Loading leaderboard...", ephemeral=False, view=view)
-        await view.update_message(interaction)
+        message = await interaction.response.send_message("📊 Loading leaderboard...", ephemeral=False, view=view)
+        await view.update_message(message)
     
     
     
@@ -433,4 +439,3 @@ class SmashOrPass(commands.Cog):
         await ctx.send("Select your preferred category:", view=view)
     
     
-
