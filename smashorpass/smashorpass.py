@@ -22,7 +22,10 @@ def load_json(file_path, default):
 
     with open(file_path, "r", encoding="utf-8") as file:
         try:
-            return json.load(file)
+            json.load(file)
+            if not isinstance(data, list):
+                return default
+            return data   
         except json.JSONDecodeError:
             return default
 
@@ -33,6 +36,9 @@ def save_json(file_path, data):
 def save_custom_entry(name, image_url, user_id):
     """Saves the entry to custom.json"""
     data = load_json(CUSTOM_FILE, [])
+
+    if not isinstance(data, list):
+        data = []
 
     original_name = name
     counter = 1
