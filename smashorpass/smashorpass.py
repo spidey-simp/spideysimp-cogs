@@ -105,7 +105,10 @@ def update_votes(character_name, vote_type, user_id):
         if entry["name"].lower() == character_name.lower():
             if user_id in entry.get("voters", []):
                 return False
-
+            
+            entry.setdefault("smashes", 0)
+            entry.setdefault("passes", 0)
+            
             entry[vote_type] += 1
             entry.setdefault("voters", []).append(user_id)
 
