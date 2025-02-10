@@ -292,7 +292,7 @@ class SmashOrPass(commands.Cog):
             return
         
         view = LeaderboardView(interaction, sorted_data)
-        await interaction.response.send_message("📊 Loading leaderboard...", ephemeral=False, view=view)
+        interaction = await interaction.response.send_message("📊 Loading leaderboard...", ephemeral=False, view=view)
         await view.update_message(interaction)
     
     
