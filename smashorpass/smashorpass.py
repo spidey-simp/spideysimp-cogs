@@ -162,13 +162,13 @@ class UserUploadsView(discord.ui.View):
         await self.update_message(interaction)
 
 class LeaderboardView(discord.ui.View):
-    def __init__(self, ctx, sorted_data):
+    def __init__(self, interaction, sorted_data):
         super().__init__()
-        self.ctx = ctx
+        self.interaction = interaction
         self.sorted_data = sorted_data
         self.index = 0
     
-    async def update_message(self, interaction):
+    async def update_message(self):
         entry = self.sorted_data[self.index]
         rank = self.index + 1
         uploader = f"<@{entry['user_id']}>" if entry.get("user_id") else "Default Category"
@@ -178,6 +178,8 @@ class LeaderboardView(discord.ui.View):
         embed.add_field(name="Votes", value=f"🔥 {entry['smashes']} | ❌ {entry['passes']}", inline=True)
         embed.add_field(name="Uploader", value=uploader, inline=True)
         embed.set_image(url=entry["image"])
+
+        await self.interaction.edit_original_response(embed=embed, view=self)
     
     @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.gray)
     async def previous(self, interaction:discord.Interaction, button:discord.ui.Button):
@@ -285,6 +287,8 @@ class SmashOrPass(commands.Cog):
     @app_commands.command(name="sopleaderboard", description="View the Smash or Pass leaderboard!")
     async def soplevels(self, interaction: discord.Interaction):
         """Displays the leaderboard with a slideshow format."""
+        await interaction.response.defer()
+        
         if not os.path.exists(CUSTOM_FILE):
             await interaction.response.send_message("❌ No votes recorded yet!", ephemeral=True)
             return
@@ -298,8 +302,8 @@ class SmashOrPass(commands.Cog):
             return
         
         view = LeaderboardView(interaction, sorted_data)
-        message = await interaction.response.send_message("📊 Loading leaderboard...", ephemeral=False, view=view)
-        await view.update_message(message)
+        message = await interaction.followup.send("📊 Loading leaderboard...", ephemeral=False, view=view)
+        await view.update_message()
     
     
     
