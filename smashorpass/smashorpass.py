@@ -394,7 +394,7 @@ class SmashOrPass(commands.Cog):
         embed.set_image(url=image)
         embed.set_footer(text=f"Would you rather smash or pass {name}?")
 
-        view = SmashPassView(ctx)
+        view = SmashPassView(name, ctx)
         await ctx.send(embed=embed, view=view)
     
     @commands.command(name="sopsettings", aliases=["sops"])
