@@ -15,18 +15,24 @@ CUSTOM_FILE = os.path.join(os.path.dirname(__file__), "custom.json")
 BLACKLIST_FILE = os.path.join(os.path.dirname(__file__), "blacklist.json")
 MOD_CHANNEL_ID = 1287700985275355150
 
+
+def load_json(file_path, default):
+    if not os.path.exists(file_path):
+        return default
+
+    with open(file_path, "r", encoding="utf-8) as file:
+        try:
+            return json.load(file)
+        except json.JSONDecodeError:
+            return default
+
+def save_json(file_path, data):
+    with open(file_path, "w", encoding="utf-8") as file:
+        json.dump(data, file, indent=4)
+
 def save_custom_entry(name, image_url, user_id):
     """Saves the entry to custom.json"""
-    if os.path.exists(CUSTOM_FILE):
-        with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
-            try:
-                data = json.load(file)
-                if not isinstance(data, list):
-                    data = []
-            except json.JSONDecodeError:
-                data = []
-    else:
-        data = []
+    data = load_json(CUSTOM_FILE, [])
 
     original_name = name
     counter = 1
@@ -37,8 +43,7 @@ def save_custom_entry(name, image_url, user_id):
         
     data.append({"name": name, "image": image_url, "user_id": user_id})
 
-    with open(CUSTOM_FILE, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4)
+    save_json(CUSTOM_FILE, data)
 
     return name
     
