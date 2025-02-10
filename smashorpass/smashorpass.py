@@ -20,7 +20,7 @@ def load_json(file_path, default):
     if not os.path.exists(file_path):
         return default
 
-    with open(file_path, "r", encoding="utf-8) as file:
+    with open(file_path, "r", encoding="utf-8") as file:
         try:
             return json.load(file)
         except json.JSONDecodeError:
