@@ -22,7 +22,7 @@ def load_json(file_path, default):
 
     with open(file_path, "r", encoding="utf-8") as file:
         try:
-            json.load(file)
+            data = json.load(file)
             if not isinstance(data, list):
                 return default
             return data   
