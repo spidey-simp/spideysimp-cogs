@@ -11,8 +11,8 @@ from discord import app_commands
 API_TOKEN = "7da42651e96d7411de160cc921140e8b"
 API_URL = f"https://superheroapi.com/api/{API_TOKEN}/"
 
-CUSTOM_FILE = "custom.json"
-BLACKLIST_FILE = "blacklist.json"
+CUSTOM_FILE = os.path.join(os.path.dirname(__file__), "custom.json")
+BLACKLIST_FILE = os.path.join(os.path.dirname(__file__), "blacklist.json")
 MOD_CHANNEL_ID = 1287700985275355150
 
 def save_custom_entry(name, image_url, user_id):
