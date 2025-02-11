@@ -262,6 +262,11 @@ class SmashPassView(discord.ui.View):
     async def pass_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         first_vote = update_votes(self.character_name, "passes", interaction.user.id)
         await interaction.response.send_message(f"{interaction.user.mention} chose **Pass** for {self.character_name}! ❌", ephemeral=False)
+    
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        await self.ctx.message.edit(view=self)
 
 class SmashOrPass(commands.Cog):
     def __init__(self, bot):
