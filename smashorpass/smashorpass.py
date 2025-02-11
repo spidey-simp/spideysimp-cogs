@@ -158,7 +158,7 @@ def get_random_superhero():
     else:
         return f"Error: API request failed with status {response.status_code}", None
 
-def update_votes(category, character_name, vote_type, user_id):
+def update_votes(category, character_name, vote_type, user_id, image):
     """Update smash/pass count and prevent duplicate votes."""
     votes = load_votes()
 
@@ -166,13 +166,14 @@ def update_votes(category, character_name, vote_type, user_id):
         votes[category] = {}
     
     if character_name not in votes[category]:
-        votes[category][character_name] = {"smashes": 0, "passes": 0, "voters": []}
+        votes[category][character_name] = {"smashes": 0, "passes": 0, "voters": [], "image": ""}
     
     if user_id in votes[category][character_name]["voters"]:
         return False
     
     votes[category][character_name][vote_type] += 1
     votes[category][character_name]["voters"].append(user_id)
+    votes[category][character_name]["image"] = image
 
     save_votes(votes)
 
@@ -224,6 +225,7 @@ class LeaderboardView(discord.ui.View):
         uploader = f"<@{entry[1]['user_id']}>" if entry[1].get("user_id") else "Default Category"
 
         embed = discord.Embed(title="🏆 Smash or Pass Leaderboard 🏆")
+        embed.add_field(name="Name", value=entry[0])
         embed.add_field(name="Rank", value=f"#{rank}", inline=True)
         embed.add_field(name="Votes", value=f"🔥 {entry[1]['smashes']} | ❌ {entry[1]['passes']}", inline=True)
         if uploader != "Default Category" and self.category != "All":
@@ -510,7 +512,7 @@ class SmashOrPass(commands.Cog):
         embed.set_image(url=image)
         embed.set_footer(text=f"Would you rather smash or pass {name}?")
 
-        view = SmashPassView(name, category, ctx)
+        view = SmashPassView(name, category, image=image, ctx)
         await ctx.send(embed=embed, view=view)
     
     @commands.command(name="sopsettings", aliases=["sops"])
