@@ -350,7 +350,7 @@ class SmashOrPass(commands.Cog):
         """Displays the leaderboard with a slideshow format."""
         votes = load_votes
         
-        await interaction.response.defer(60)
+        await interaction.response.defer(timeout=60)
         
         if category:
             if category not in votes:
