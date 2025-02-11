@@ -420,9 +420,13 @@ class SmashOrPass(commands.Cog):
     
     @app_commands.command(name="sopblacklist", description="Blacklist/unblacklist a user from uploading images")
     @app_commands.describe(user="Select the user to blacklist/unblacklist")
-    @commands.has_permissions(manage_messages=True)
     async def sopblacklist(self, interaction:discord.Interaction, user:discord.User):
         """Toggles a user's blacklist status for uploading images."""
+
+        if not interaction.user.guild_permissions.manage_permissions:
+            await interaction.response.send_message("You don't have permission to blacklist people!", ephemeral=True)
+            return
+
         if os.path.exists(BLACKLIST_FILE):
             with open(BLACKLIST_FILE, "r", encoding="utf-8") as file:
                 blacklist = json.load(file)
