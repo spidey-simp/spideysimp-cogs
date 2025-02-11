@@ -15,6 +15,35 @@ CUSTOM_FILE = os.path.join(os.path.dirname(__file__), "custom.json")
 BLACKLIST_FILE = os.path.join(os.path.dirname(__file__), "blacklist.json")
 MOD_CHANNEL_ID = 1287700985275355150
 
+ACTOR_LIST_URL = "https://api.themoviedb.org/3/person/popular?language=en-Us&page={page_number}"
+
+HEADERS = {
+    "accept": "application/json",
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI3ZWQxN2Y4NzE4Y2NjYmQ2MzgzYWM3ZTFmMjEwNzQ3ZSIsIm5iZiI6MTczOTIyOTM1Ni41NzIsInN1YiI6IjY3YWE4OGFjMDliODU1MWEwNGIwOTA5OSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.1N4OHN0YlUPqvT4w9YnjVP7yfMOl75rJWljb6eQ82BU"
+}
+
+def get_random_actor():
+
+    while True:
+        page_number = random.randint(1, 32)
+        response = requests.get(ACTOR_LIST_URL.format(page_number=page_number), headers=HEADERS)
+
+        if response.status_code != 200:
+            print(f"Error fetching actor list: {response.status_code}")
+            continue
+
+        actors = response.json().get("results", [])
+
+        if not actors:
+            continue
+    
+    
+        actor = random.choice(actors)
+        name = actor.get("name", "Unknown Actor")
+        image = f"https://image.tmdb.org/t/p/original{actor['profile_path']}" if actor.get("profile_path") else "No Image Available"
+
+        return name, image
+
 
 def load_json(file_path, default):
     if not os.path.exists(file_path):
@@ -199,7 +228,8 @@ class CategorySelect(discord.ui.Select):
         options = [
             discord.SelectOption(label="Superheroes", description="Smash or Pass on Superheroes!"),
             discord.SelectOption(label ="Star Wars", description="Smash or Pass on Star Wars characters!"),
-            discord.SelectOption(label="Custom", description="Use community uploaded characters!")
+            discord.SelectOption(label="Custom", description="Use community uploaded characters!"),
+            discord.SelectOption(label="Actors", description="Use actors for the Smash or Pass game!")
         ]
         super().__init__(placeholder="Choose your category. . .", options=options)
     
@@ -422,6 +452,8 @@ class SmashOrPass(commands.Cog):
             name, image = get_random_starwarscharacter()
         elif category == "Custom":
             name, image = get_random_custom()
+        elif category == "Actors":
+            name, image = get_random_actor()
         else:
             name, image = get_random_superhero()
 
