@@ -368,7 +368,7 @@ class SmashOrPass(commands.Cog):
             await interaction.response.send_message("❌ No characters have been voted on yet!", ephemeral=True)
             return
         
-        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("smashes", 0), reverse=True)
+        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("smashes", 0) - x[1].get("passes", 0), reverse=True)
 
         if category:
             view = LeaderboardView(interaction, sorted_data, category)
