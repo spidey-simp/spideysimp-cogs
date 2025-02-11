@@ -382,7 +382,7 @@ class SmashOrPass(commands.Cog):
     
     @app_commands.command(name="soploserboard", description="View the Smash or Pass loserboard!")
     @app_commands.choices(category=[app_commands.Choice(name=cat, value=cat) for cat in CATEGORIES])
-    async def sopleaderboard(self, interaction: discord.Interaction, category: str=None):
+    async def soploserboard(self, interaction: discord.Interaction, category: str=None):
         """Displays the leaderboard with a slideshow format."""
         votes = load_votes()
         
