@@ -232,7 +232,8 @@ class LeaderboardView(discord.ui.View):
             embed.add_field(name="Uploader", value=uploader, inline=True)
         elif self.category == "All":
             embed.add_field(name="Category", value=f"{char_category}")
-        embed.set_image(url=entry[1].get("image", ""))
+        if entry[1].get("image"):
+            embed.set_image(url=entry[1].get("image", ""))
 
         await self.interaction.edit_original_response(embed=embed, view=self)
     
