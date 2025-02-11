@@ -274,20 +274,21 @@ class CategoryView(discord.ui.View):
         self.add_item(CategorySelect(bot, user_id))
 
 class SmashPassView(discord.ui.View):
-    def __init__(self, character_name, category, ctx):
+    def __init__(self, character_name, category, image, ctx):
         super().__init__(timeout=30)
         self.character_name = character_name
         self.ctx = ctx
+        self.image = image
         self.category = category
     
     @discord.ui.button(label="Smash", style=discord.ButtonStyle.green, emoji="🔥")
     async def smash_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        update_votes(self.category, self.character_name, "smashes", interaction.user.id)
+        update_votes(self.category, self.character_name, "smashes", interaction.user.id, self.image)
         await interaction.response.send_message(f"{interaction.user.mention} chose **Smash** for {self.character_name}! 🔥", ephemeral=False)
     
     @discord.ui.button(label="Pass", style=discord.ButtonStyle.red, emoji="❌")
     async def pass_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        update_votes(self.category, self.character_name, "passes", interaction.user.id)
+        update_votes(self.category, self.character_name, "passes", interaction.user.id, self.image)
         await interaction.response.send_message(f"{interaction.user.mention} chose **Pass** for {self.character_name}! ❌", ephemeral=False)
     
     async def on_timeout(self):
