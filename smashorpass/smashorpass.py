@@ -205,12 +205,13 @@ class UserUploadsView(discord.ui.View):
         await self.update_message(interaction)
 
 class LeaderboardView(discord.ui.View):
-    def __init__(self, interaction, sorted_data, category: str = "All"):
+    def __init__(self, type, interaction, sorted_data, category: str = "All"):
         super().__init__(timeout=60)
         self.interaction = interaction
         self.sorted_data = sorted_data
         self.index = 0
         self.category = category
+        self.type = type
     
     async def update_message(self):
         entry = self.sorted_data[self.index]
@@ -224,7 +225,7 @@ class LeaderboardView(discord.ui.View):
                 break
         uploader = f"<@{entry[1]['user_id']}>" if entry[1].get("user_id") else "Default Category"
 
-        embed = discord.Embed(title="🏆 Smash or Pass Leaderboard 🏆")
+        embed = discord.Embed(title=f"🏆 Smash or Pass {self.type}board 🏆")
         embed.add_field(name="Name", value=entry[0])
         embed.add_field(name="Rank", value=f"#{rank}", inline=True)
         embed.add_field(name="Votes", value=f"🔥 {entry[1]['smashes']} | ❌ {entry[1]['passes']}", inline=True)
@@ -371,11 +372,42 @@ class SmashOrPass(commands.Cog):
         sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("smashes", 0) - x[1].get("passes", 0), reverse=True)
 
         if category:
-            view = LeaderboardView(interaction, sorted_data, category)
+            view = LeaderboardView("Leader", interaction, sorted_data, category)
         else:
-            view = LeaderboardView(interaction, sorted_data)
+            view = LeaderboardView("Leader", interaction, sorted_data)
 
         await interaction.followup.send("📊 Loading leaderboard...", view=view)
+
+        await view.update_message()
+    
+    @app_commands.command(name="soploserboard", description="View the Smash or Pass loserboard!")
+    @app_commands.choices(category=[app_commands.Choice(name=cat, value=cat) for cat in CATEGORIES])
+    async def sopleaderboard(self, interaction: discord.Interaction, category: str=None):
+        """Displays the leaderboard with a slideshow format."""
+        votes = load_votes()
+        
+        await interaction.response.defer()
+        
+        if category:
+            if category not in votes:
+                await interaction.response.send_message(f"❌ No votes recorded for **{category}**!", ephemeral=True)
+                return
+            category_data = votes[category]
+        else:
+            category_data = {name: data for cat in votes.values() for name, data in cat.items()}
+        
+        if not category_data:
+            await interaction.response.send_message("❌ No characters have been voted on yet!", ephemeral=True)
+            return
+        
+        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("passes", 0) - x[1].get("smashes", 0), reverse=True)
+
+        if category:
+            view = LeaderboardView("Loser", interaction, sorted_data, category)
+        else:
+            view = LeaderboardView("Loser", interaction, sorted_data)
+
+        await interaction.followup.send("📊 Loading loserboard...", view=view)
 
         await view.update_message()
 
