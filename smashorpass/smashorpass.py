@@ -22,6 +22,25 @@ HEADERS = {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI3ZWQxN2Y4NzE4Y2NjYmQ2MzgzYWM3ZTFmMjEwNzQ3ZSIsIm5iZiI6MTczOTIyOTM1Ni41NzIsInN1YiI6IjY3YWE4OGFjMDliODU1MWEwNGIwOTA5OSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.1N4OHN0YlUPqvT4w9YnjVP7yfMOl75rJWljb6eQ82BU"
 }
 
+CATEGORIES = ["Custom", "Actors", "Star Wars", "Superheroes"]
+
+VOTES_FILE = os.path.join(os.path.dirname(__file__), "votes.json")
+
+def load_votes():
+    if not os.path.exists(VOTES_FILE):
+        with open(VOTES_FILE, "w", encoding="utf-8") as file:
+            json.dump({}, file, indent=4)
+
+    with open(VOTES_FILE, "r", encoding="utf-8") as file:
+        try:
+            return json.load(file)
+        except json.JSONDecodeError:
+            return {}
+
+def save_votes(votes):
+    with open(VOTES_FILE, "w", encoding="utf-8") as file:
+        json.dump(votes, file, indent=4)
+
 def get_random_actor():
 
     while True:
@@ -139,31 +158,25 @@ def get_random_superhero():
     else:
         return f"Error: API request failed with status {response.status_code}", None
 
-def update_votes(character_name, vote_type, user_id):
+def update_votes(category, character_name, vote_type, user_id):
     """Update smash/pass count and prevent duplicate votes."""
-    if not os.path.exists(CUSTOM_FILE):
+    votes = load_votes()
+
+    if category not in votes:
+        votes[category] = {}
+    
+    if character_name not in votes[category]:
+        votes[category][character_name] = {"smashes": 0, "passes": 0, "voters": []}
+    
+    if user_id in votes[category][character_name]["voters"]:
         return False
     
-    with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
-        data = json.load(file)
-    
-    for entry in data:
-        if entry["name"].lower() == character_name.lower():
-            if user_id in entry.get("voters", []):
-                return False
-            
-            entry.setdefault("smashes", 0)
-            entry.setdefault("passes", 0)
-            
-            entry[vote_type] += 1
-            entry.setdefault("voters", []).append(user_id)
+    votes[category][character_name][vote_type] += 1
+    votes[category][character_name]["voters"].append(user_id)
 
-            with open(CUSTOM_FILE, "w", encoding="utf-8") as file:
-                json.dump(data, file, indent=4)
-            
-            return True
-    
-    return False
+    save_votes(votes)
+
+    return True
 
 class UserUploadsView(discord.ui.View):
     def __init__(self, interaction, entries):
@@ -191,22 +204,33 @@ class UserUploadsView(discord.ui.View):
         await self.update_message(interaction)
 
 class LeaderboardView(discord.ui.View):
-    def __init__(self, interaction, sorted_data):
-        super().__init__()
+    def __init__(self, interaction, sorted_data, category: str = "All"):
+        super().__init__(timeout=60)
         self.interaction = interaction
         self.sorted_data = sorted_data
         self.index = 0
+        self.category = category
     
     async def update_message(self):
         entry = self.sorted_data[self.index]
         rank = self.index + 1
+
+        votes = load_votes()
+        char_category = "Unknown"
+        for cat, characters in votes.items():
+            if entry['name'] in characters:
+                char_category = cat
+                break
         uploader = f"<@{entry['user_id']}>" if entry.get("user_id") else "Default Category"
 
         embed = discord.Embed(title="🏆 Smash or Pass Leaderboard 🏆")
         embed.add_field(name="Rank", value=f"#{rank}", inline=True)
         embed.add_field(name="Votes", value=f"🔥 {entry['smashes']} | ❌ {entry['passes']}", inline=True)
-        embed.add_field(name="Uploader", value=uploader, inline=True)
-        embed.set_image(url=entry["image"])
+        if uploader != "Default Category" and self.category != "All":
+            embed.add_field(name="Uploader", value=uploader, inline=True)
+        elif self.category == "All":
+            embed.add_field(name="Category", value=f"{char_category}")
+        embed.set_image(url=entry.get("image", ""))
 
         await self.interaction.edit_original_response(embed=embed, view=self)
     
@@ -248,19 +272,20 @@ class CategoryView(discord.ui.View):
         self.add_item(CategorySelect(bot, user_id))
 
 class SmashPassView(discord.ui.View):
-    def __init__(self, character_name, ctx):
+    def __init__(self, character_name, category, ctx):
         super().__init__(timeout=30)
         self.character_name = character_name
         self.ctx = ctx
+        self.category = category
     
     @discord.ui.button(label="Smash", style=discord.ButtonStyle.green, emoji="🔥")
     async def smash_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        first_vote = update_votes(self.character_name, "smashes", interaction.user.id)
+        update_votes(self.category, self.character_name, "smashes", interaction.user.id)
         await interaction.response.send_message(f"{interaction.user.mention} chose **Smash** for {self.character_name}! 🔥", ephemeral=False)
     
     @discord.ui.button(label="Pass", style=discord.ButtonStyle.red, emoji="❌")
     async def pass_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        first_vote = update_votes(self.character_name, "passes", interaction.user.id)
+        update_votes(self.category, self.character_name, "passes", interaction.user.id)
         await interaction.response.send_message(f"{interaction.user.mention} chose **Pass** for {self.character_name}! ❌", ephemeral=False)
     
     async def on_timeout(self):
@@ -320,25 +345,36 @@ class SmashOrPass(commands.Cog):
         await view.update_message(interaction)
     
     @app_commands.command(name="sopleaderboard", description="View the Smash or Pass leaderboard!")
-    async def soplevels(self, interaction: discord.Interaction):
+    @app_commands.choices(category=[app_commands.Choice(name=cat, value=cat) for cat in CATEGORIES])
+    async def sopleaderboard(self, interaction: discord.Interaction, category: str=None):
         """Displays the leaderboard with a slideshow format."""
-        await interaction.response.defer()
+        votes = load_votes
         
-        if not os.path.exists(CUSTOM_FILE):
-            await interaction.response.send_message("❌ No votes recorded yet!", ephemeral=True)
-            return
+        await interaction.response.defer(60)
         
-        with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
-
-        sorted_data = sorted(data, key=lambda x: x.get("smashes", 0), reverse=True)
-        if not sorted_data:
+        if category:
+            if category not in votes:
+                await interaction.response.send_message(f"❌ No votes recorded for **{category}**!", ephemeral=True)
+                return
+            category_data = votes[category]
+        else:
+            category_data = {name: data for cat in votes.values() for name, data in cat.items()}
+        
+        if not category_data:
             await interaction.response.send_message("❌ No characters have been voted on yet!", ephemeral=True)
             return
         
-        view = LeaderboardView(interaction, sorted_data)
-        message = await interaction.followup.send("📊 Loading leaderboard...", ephemeral=False, view=view)
+        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("smashes", 0), reverse=True)
+
+        if category:
+            view = LeaderboardView(interaction, sorted_data, category)
+        else:
+            view = LeaderboardView(interaction, sorted_data)
+
+        await interaction.response.send_message("📊 Loading leaderboard...", view=view)
+
         await view.update_message()
+
     
     
     
@@ -474,7 +510,7 @@ class SmashOrPass(commands.Cog):
         embed.set_image(url=image)
         embed.set_footer(text=f"Would you rather smash or pass {name}?")
 
-        view = SmashPassView(name, ctx)
+        view = SmashPassView(name, category, ctx)
         await ctx.send(embed=embed, view=view)
     
     @commands.command(name="sopsettings", aliases=["sops"])
