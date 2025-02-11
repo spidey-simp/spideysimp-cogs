@@ -218,19 +218,19 @@ class LeaderboardView(discord.ui.View):
         votes = load_votes()
         char_category = "Unknown"
         for cat, characters in votes.items():
-            if entry['name'] in characters:
+            if entry[0] in characters:
                 char_category = cat
                 break
-        uploader = f"<@{entry['user_id']}>" if entry.get("user_id") else "Default Category"
+        uploader = f"<@{entry[1]['user_id']}>" if entry[1].get("user_id") else "Default Category"
 
         embed = discord.Embed(title="🏆 Smash or Pass Leaderboard 🏆")
         embed.add_field(name="Rank", value=f"#{rank}", inline=True)
-        embed.add_field(name="Votes", value=f"🔥 {entry['smashes']} | ❌ {entry['passes']}", inline=True)
+        embed.add_field(name="Votes", value=f"🔥 {entry[1]['smashes']} | ❌ {entry[1]['passes']}", inline=True)
         if uploader != "Default Category" and self.category != "All":
             embed.add_field(name="Uploader", value=uploader, inline=True)
         elif self.category == "All":
             embed.add_field(name="Category", value=f"{char_category}")
-        embed.set_image(url=entry.get("image", ""))
+        embed.set_image(url=entry[1].get("image", ""))
 
         await self.interaction.edit_original_response(embed=embed, view=self)
     
