@@ -337,7 +337,7 @@ class SmashOrPass(commands.Cog):
         target_user = user or interaction.user
 
         if not os.path.exists(CUSTOM_FILE):
-            await interaction.response.send_message("No custom characters exist!", ephemeral=True)
+            await interaction.followup.send("No custom characters exist!", ephemeral=True)
             return
         
         with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
@@ -346,7 +346,7 @@ class SmashOrPass(commands.Cog):
         user_entries = [entry for entry in data if entry["user_id"] == target_user.id]
 
         if not user_entries:
-            await interaction.response.send_message(f"❌ No uploads found for **{target_user.mention}**!", ephemeral=True)
+            await interaction.followup.send_message(f"❌ No uploads found for **{target_user.mention}**!", ephemeral=True)
             return
         
         view=UserUploadsView(interaction, user_entries)
@@ -363,14 +363,14 @@ class SmashOrPass(commands.Cog):
         
         if category:
             if category not in votes:
-                await interaction.response.send_message(f"❌ No votes recorded for **{category}**!", ephemeral=True)
+                await interaction.followup.send(f"❌ No votes recorded for **{category}**!", ephemeral=True)
                 return
             category_data = votes[category]
         else:
             category_data = {name: data for cat in votes.values() for name, data in cat.items()}
         
         if not category_data:
-            await interaction.response.send_message("❌ No characters have been voted on yet!", ephemeral=True)
+            await interaction.follup.send("❌ No characters have been voted on yet!", ephemeral=True)
             return
         
         sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("smashes", 0) - x[1].get("passes", 0), reverse=True)
