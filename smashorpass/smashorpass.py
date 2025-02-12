@@ -81,7 +81,7 @@ def get_random_singer():
 def get_random_actor():
 
     while True:
-        page_number = random.randint(1, 32)
+        page_number = random.randint(1, 2)
         response = requests.get(ACTOR_LIST_URL.format(page_number=page_number), headers=HEADERS)
 
         if response.status_code != 200:
