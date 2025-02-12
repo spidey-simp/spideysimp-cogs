@@ -181,7 +181,7 @@ def update_votes(category, character_name, vote_type, user_id, image):
 
 class UserUploadsView(discord.ui.View):
     def __init__(self, interaction, entries):
-        super().__init__()
+        super().__init__(timeout=60.0)
         self.entries = entries
         self.index = 0
         self.interaction = interaction
@@ -332,6 +332,8 @@ class SmashOrPass(commands.Cog):
     @app_commands.describe(user="Select a user (leave blank to see your own images)")
     async def soplist(self, interaction: discord.Interaction, user: discord.User = None):
         """Shows all uploaded images by a user."""
+        await interaction.response.defer()
+
         target_user = user or interaction.user
 
         if not os.path.exists(CUSTOM_FILE):
@@ -348,6 +350,7 @@ class SmashOrPass(commands.Cog):
             return
         
         view=UserUploadsView(interaction, user_entries)
+        await interaction.followup.send(f"Loading {target_user.mention}'s list . . . ", ephemeral=False, view=view)
         await view.update_message(interaction)
     
     @app_commands.command(name="sopleaderboard", description="View the Smash or Pass leaderboard!")
