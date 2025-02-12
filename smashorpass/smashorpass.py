@@ -45,6 +45,14 @@ def save_votes(votes):
     with open(VOTES_FILE, "w", encoding="utf-8") as file:
         json.dump(votes, file, indent=4)
 
+def get_wikipedia_image(artist_name):
+    url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{artist_name.replace(' ', '_')}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        return data.get("thumbnail", {}).get("source")
+    return None
+
 def get_random_singer():
     counter = 5
     for attempt in range(counter):
@@ -62,8 +70,7 @@ def get_random_singer():
                 continue
             for _ in range(len(artists)):
                 singer = random.choice(artists)
-                images = singer.get("image", [])
-                image_url = next((img.get("#text") for img in images if img.get("size") == "medium"), None)
+                image_url = get_wikipedia_image(singer)
 
                 if image_url:
                     name = singer.get("name", "Unknown Artist")
