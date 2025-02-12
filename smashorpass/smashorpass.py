@@ -197,12 +197,12 @@ class UserUploadsView(discord.ui.View):
     @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.gray)
     async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index = (self.index - 1) % len(self.entries)
-        await self.update_message(interaction)
+        await self.update_message()
 
     @discord.ui.button(label="➡️ Next", style=discord.ButtonStyle.gray)
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index = (self.index + 1) % len(self.entries)
-        await self.update_message(interaction)
+        await self.update_message()
 
 class LeaderboardView(discord.ui.View):
     def __init__(self, type, interaction, sorted_data, category: str = "All"):
