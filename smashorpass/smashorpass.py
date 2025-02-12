@@ -70,10 +70,10 @@ def get_random_singer():
                 continue
             for _ in range(len(artists)):
                 singer = random.choice(artists)
-                image_url = get_wikipedia_image(singer)
+                name = singer.get("name")
+                image_url = get_wikipedia_image(name)
 
                 if image_url:
-                    name = singer.get("name", "Unknown Artist")
                     return name, image_url
             
             print(f"All artists on page {page_number} lacked a medium-sized image.")
