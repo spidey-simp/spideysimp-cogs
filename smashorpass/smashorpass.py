@@ -254,6 +254,7 @@ class CategorySelect(discord.ui.Select):
         self.user_id = user_id
 
         options = [
+            discord.SelectOption(label="All", description="Get a character from any category."),
             discord.SelectOption(label="Superheroes", description="Smash or Pass on Superheroes!"),
             discord.SelectOption(label ="Star Wars", description="Smash or Pass on Star Wars characters!"),
             discord.SelectOption(label="Custom", description="Use community uploaded characters!"),
@@ -303,7 +304,7 @@ class SmashOrPass(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=9237492836492)
         self.config.register_member(
-            category="Superheroes"
+            category="All"
         )
     
     @app_commands.command(name="sopappeal", description="Appeal a Smash or Pass blacklist")
@@ -528,6 +529,9 @@ class SmashOrPass(commands.Cog):
     async def smashorpass(self, ctx:commands.Context):
         """Generates an image with which a person can react smash or pass."""
         category = await self.config.member(ctx.author).category()
+
+        if category == "All":
+            category = random.choice(CATEGORIES)
 
         if category == "Star Wars":
             name, image = get_random_starwarscharacter()
