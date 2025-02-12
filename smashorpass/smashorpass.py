@@ -22,7 +22,11 @@ HEADERS = {
     "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI3ZWQxN2Y4NzE4Y2NjYmQ2MzgzYWM3ZTFmMjEwNzQ3ZSIsIm5iZiI6MTczOTIyOTM1Ni41NzIsInN1YiI6IjY3YWE4OGFjMDliODU1MWEwNGIwOTA5OSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.1N4OHN0YlUPqvT4w9YnjVP7yfMOl75rJWljb6eQ82BU"
 }
 
-CATEGORIES = ["Custom", "Actors", "Star Wars", "Superheroes"]
+SINGER_LIST_URL = "http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&page={page_number}&api_key=d5738e0d460367ef373d6167c5631fda&format=json"
+
+CATEGORIES = ["Custom", "Actors", "Star Wars", "Superheroes", "Singers"]
+
+REAL_CATEGORIES = ["Actors", "Singers"]
 
 VOTES_FILE = os.path.join(os.path.dirname(__file__), "votes.json")
 
@@ -40,6 +44,40 @@ def load_votes():
 def save_votes(votes):
     with open(VOTES_FILE, "w", encoding="utf-8") as file:
         json.dump(votes, file, indent=4)
+
+def get_random_singer():
+    counter = 0
+    for attempt in range(counter):
+        page_number = random.randint(1, 250)
+        response = requests.get(SINGER_LIST_URL.format(page_number=page_number))
+
+        if response.status_code != 200:
+            print(f"Error fetching singer list: {response.status_code}")
+            continue
+        
+        try:
+            artists = response.json().get("artists", {}).get("artist", [])
+            if not artists:
+                print("No artists found on this page.")
+                continue
+
+            singer = random.choice(artists)
+            image_url = None
+            images = singer.get("image", [])
+            image_url = next((img.get("#text") for img in images if img.get("size") == "medium"), None)
+
+            if image_url:
+                name = singer.get("name", "Unknown Artist")
+                return name, image_url
+            else:
+                print(f"Couldn't find a medium-sized image for {singer.get('name', 'Unknown Artist')}")
+        except (ValueError, KeyError) as e:
+            print(f"Error processing JSON response: {e}")
+    
+    print("Application was unable to find a singer after multiple attempts.")
+    return None, None
+
+
 
 def get_random_actor():
 
@@ -258,7 +296,9 @@ class CategorySelect(discord.ui.Select):
             discord.SelectOption(label="Superheroes", description="Smash or Pass on Superheroes!"),
             discord.SelectOption(label ="Star Wars", description="Smash or Pass on Star Wars characters!"),
             discord.SelectOption(label="Custom", description="Use community uploaded characters!"),
-            discord.SelectOption(label="Actors", description="Use actors for the Smash or Pass game!")
+            discord.SelectOption(label="Actors", description="Use actors for the Smash or Pass game!"),
+            discord.SelectOption(label="Singers", description="Get people from the music field as your category."),
+            discord.SelectOption(label="Real People", description="Only see categories including real people.")
         ]
         super().__init__(placeholder="Choose your category. . .", options=options)
     
@@ -535,6 +575,9 @@ class SmashOrPass(commands.Cog):
 
         if category == "All":
             category = random.choice(CATEGORIES)
+        
+        if category == "Real People":
+            category = random.choice(REAL_CATEGORIES)
 
         if category == "Star Wars":
             name, image = get_random_starwarscharacter()
@@ -542,6 +585,8 @@ class SmashOrPass(commands.Cog):
             name, image = get_random_custom()
         elif category == "Actors":
             name, image = get_random_actor()
+        elif category == "Singers":
+            name, image = get_random_singer()
         else:
             name, image = get_random_superhero()
 
