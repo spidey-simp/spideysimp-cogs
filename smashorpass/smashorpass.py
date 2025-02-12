@@ -46,7 +46,7 @@ def save_votes(votes):
         json.dump(votes, file, indent=4)
 
 def get_random_singer():
-    counter = 0
+    counter = 5
     for attempt in range(counter):
         page_number = random.randint(1, 250)
         response = requests.get(SINGER_LIST_URL.format(page_number=page_number))
@@ -60,17 +60,16 @@ def get_random_singer():
             if not artists:
                 print("No artists found on this page.")
                 continue
+            for _ in range(len(artists)):
+                singer = random.choice(artists)
+                images = singer.get("image", [])
+                image_url = next((img.get("#text") for img in images if img.get("size") == "medium"), None)
 
-            singer = random.choice(artists)
-            image_url = None
-            images = singer.get("image", [])
-            image_url = next((img.get("#text") for img in images if img.get("size") == "medium"), None)
-
-            if image_url:
-                name = singer.get("name", "Unknown Artist")
-                return name, image_url
-            else:
-                print(f"Couldn't find a medium-sized image for {singer.get('name', 'Unknown Artist')}")
+                if image_url:
+                    name = singer.get("name", "Unknown Artist")
+                    return name, image_url
+            
+            print(f"All artists on page {page_number} lacked a medium-sized image.")
         except (ValueError, KeyError) as e:
             print(f"Error processing JSON response: {e}")
     
