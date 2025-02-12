@@ -186,13 +186,13 @@ class UserUploadsView(discord.ui.View):
         self.index = 0
         self.interaction = interaction
     
-    async def update_message(self, interaction):
+    async def update_message(self):
         entry = self.entries[self.index]
-        embed = discord.Embed(title=f"Uploads by {interaction.user.display_name}")
+        embed = discord.Embed(title=f"Uploads by {self.interaction.user.display_name}")
         embed.add_field(name="Name", value=entry["name"], inline=True)
         embed.set_image(url=entry["image"])
         
-        await interaction.response.edit_message(embed=embed, view=self)
+        await self.interaction.edit_original_response(embed=embed, view=self)
     
     @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.gray)
     async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -351,7 +351,7 @@ class SmashOrPass(commands.Cog):
         
         view=UserUploadsView(interaction, user_entries)
         await interaction.followup.send(f"Loading {target_user.mention}'s list . . . ", ephemeral=False, view=view)
-        await view.update_message(interaction)
+        await view.update_message()
     
     @app_commands.command(name="sopleaderboard", description="View the Smash or Pass leaderboard!")
     @app_commands.choices(category=[app_commands.Choice(name=cat, value=cat) for cat in CATEGORIES])
