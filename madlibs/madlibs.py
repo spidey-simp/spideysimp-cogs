@@ -75,5 +75,5 @@ class MadLibs(commands.Cog):
     @madlib.command(name="storyselect", aliases=["ss"])
     async def madlib_storyselect(self, ctx:commands.Context):
         """Pick from a list of stories for madlibs."""
-        view = StoryListView(bot=self.bot, user_id=ctx.author)
+        view = StoryListView(bot=self.bot, user_id=ctx.author.id)
         await ctx.send("Select a story:", view=view)
