@@ -56,7 +56,7 @@ def get_wikipedia_image(artist_name):
 def get_random_singer():
     counter = 5
     for attempt in range(counter):
-        page_number = random.randint(1, 2)
+        page_number = random.randint(1, 6)
         response = requests.get(SINGER_LIST_URL.format(page_number=page_number))
 
         if response.status_code != 200:
