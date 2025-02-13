@@ -47,11 +47,11 @@ class StorySelect(discord.ui.Select):
         self.bot = bot
         self.user_id = user_id
 
-        self.options = get_stories()
+        options = get_stories()
 
-        self.options.append(discord.SelectOption(label="Random"))
+        options.append(discord.SelectOption(label="Random"))
 
-        super().__init__(placeholder="Choose a story. . .", options=self.options)
+        super().__init__(placeholder="Choose a story. . .", options=options)
     
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
@@ -116,5 +116,5 @@ class MadLibs(commands.Cog):
 
         template = get_template(story_title)
 
-        
+
         
