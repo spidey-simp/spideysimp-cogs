@@ -1,7 +1,7 @@
 {
     "templates": [
         {
-            "title": "Mysterious Forest Quest",
+            "title": "A Mysterious Forest",
             "template": "One day, I decided to go for a walk in the **{adjective}** forest near my house. I packed my bag with **{plural noun}**, snacks, and my lucky **{noun}**. As I walked deeper into the woods, I noticed a **{animal}** lurking behind a **{plant}**. I was so startled that I almost tripped over a **{body part}**. I quickly looked around for a **{noun}** to defend myself but only found a **{famous person}** statue nearby. Suddenly, a **{adjective}** voice shouted, '**{exclamation}**!' I turned around to see a **{number}**-foot-tall **{animal}** wearing a crown made of **{plural noun}**! It invited me to join it on a journey to find the legendary **{noun}**, which was said to give anyone who touched it the power to **{verb ending in \"ing\"}** for an entire **{number}** days."
         },
         {
@@ -13,7 +13,7 @@
             "template": "Last summer, my family decided to go on a/an _{adjective}_ adventure. We packed our bags with _{plural noun}_, snacks, and our trusty _{noun}_. We drove for hours to reach our destination, a/an _{adjective}_ _{place}_. The first thing we did was climb up a _{noun}_ and look out over the _{plural noun}_ below. It was so _{adjective}_ that we could barely catch our breath! \n Afterward, we went _{verb ending in \"ing\"}_ in a _{noun}_, which was very _{adjective}_ and full of _{plural noun}_. Then, we went to a local shop and bought _{plural noun}_ and _{adjective}_ souvenirs. My little sister spent hours playing with a _{noun}_ that she found in a box of _{plural noun}_. As the sun began to set, we had a big _{noun}_ picnic with _{plural noun}_ and told _{adjective}_ stories. \n The next day, we decided to go on a _{adjective}_ hike up the nearest _{noun}_, where we saw a _{adjective}_ bird perched on a branch. We were all so _{adjective}_ that we couldn’t wait to _{verb ending in \"ing\"}_ more in the coming days."
         },
         {
-            "title": "The Wild Western Ride",
+            "title": "A Wild Western Ride",
             "template": "Last summer, I went to a _{adjective}_ western town. It was full of _{plural noun}_ and _{famous person}_ wannabes. I spent the day riding a _{adjective}_ horse named _{noun}_. As I galloped across the desert, I noticed a _{animal}_ in the distance. \"Yeehaw!\" I yelled, and my horse immediately started _{verb ending in \"ing\"}_ at top speed. \n We rode through a _{noun}_ canyon and came across a mysterious _{place}_. There, I found a hidden chest full of _{plural noun}_ and a _{adjective}_ map that led to the legendary _{noun}_. I spent the rest of the day trying to figure out how to _{verb}_ it, but the _{animal}_ that guarded it wasn’t too happy about visitors."
         },
         {
@@ -37,7 +37,7 @@
             "template": "The kingdom was in peril, and only the _{adjective}_ wizard could save us. As I stood before the grand castle, I could hear the sounds of _{plural noun}_ marching on the battlements. A _{noun}_ appeared at the castle gates, wielding a powerful _{noun}_ and demanding the surrender of the princess. I summoned my _{adjective}_ wand and prepared a spell, but then I realized I needed to find the _{noun}_ hidden beneath the castle floor. With _{famous person}_ by my side, we ventured down into the dungeon where we encountered a _{adjective}_ dragon. The dragon breathed fire, and I could feel the heat of its flames singeing my _{body part}_. I cast a _{verb ending in \"ing\"}_ spell, and the beast was subdued. As I returned to the castle, the princess thanked me with a _{noun}_ and declared me the kingdom's greatest hero. It was a _{adjective}_ day for magic and honor."
         },
         {
-            "title": "Night at the Mansion",
+            "title": "Night at a Mansion",
             "template": "I arrived at the mansion just as the _{adjective}_ sun set. The old _{adjective}_ house creaked under the weight of its own history. I was here to investigate the mysterious disappearances of several local _{plural noun}_. As I crept inside, I could hear the sound of _{noun}_ echoing through the halls. Suddenly, a _{noun}_ appeared out of nowhere, causing me to trip over a _{noun}_. 'Welcome to my _{adjective}_ domain,' a ghostly voice whispered. It was the spirit of _{famous person}_, who had mysteriously vanished years ago. The ghost told me I had to retrieve the _{noun}_ from the _{place}_ in the _{noun}_. I bravely ventured into the darkened room, and there, I found the _{noun}_! With a _{verb}_, I made my escape just in time to avoid the _{plural noun}_ chasing me. It was a night I would never forget!"
         },
         {
@@ -56,7 +56,7 @@
             "adult": "True"
         },
         {
-            "title": "The Wild Party (18+)",
+            "title": "Wild Party (18+)",
             "template": "I had been at the _{place}_ all night, but things took a turn when they pulled me into the back room. Their hands were all over me as they pushed me onto the _{noun}_, my body aching for them. 'You’ve been teasing me all night,' they muttered as they yanked off my _{noun}_. I gasped as their _{noun}_ slid over mine, and I knew I couldn’t resist them. 'Take it off,' they commanded, and I obeyed, undressing quickly before they shoved me onto the _{noun}_. Their _{noun}_ entered me with a _{adjective}_ force, making me gasp. I wanted to stop, but my body betrayed me as I met their rhythm, moving with them until I couldn’t hold back any longer. 'You’re mine tonight,' they whispered, and I came _{adjective}_, feeling them fill me completely.",
             "adult": "True"
         },
@@ -71,7 +71,7 @@
             "adult": "True"
         },
         {
-            "title": "Lost Treasure of Atlantis",
+            "title": "Treasure of Atlantis",
             "template": "Legend had it that the _{adjective}_ treasure of Atlantis was hidden beneath the ocean’s surface. With my trusty map in hand, I boarded the _{noun}_ and sailed across the vast _{noun}_. After days of searching, we finally spotted the ruins of an ancient city below the _{noun}_. As I dove into the clear blue water, I felt the weight of the _{noun}_ on my back and swam toward the sunken temple. Inside, the walls were adorned with _{adjective}_ carvings of _{animal}s and _{famous person}s. In the heart of the temple, I found the legendary _{noun}_ glowing with an otherworldly light. But just as I reached out to touch it, a giant _{animal}_ appeared, blocking my way. With quick thinking and a _{verb}_, I managed to escape with the treasure, returning to the ship just as the sun set over the _{noun}_."
         },
         {
@@ -91,7 +91,7 @@
             "template": "It was a _{adjective}_ evening in Gotham City. I was on patrol as _{superhero name}_, trying to keep the streets safe. Suddenly, I heard a loud _{noun}_ coming from the alley. As I approached, I saw a shadowy figure lurking in the darkness—none other than _{villain name}_. 'You think you can stop me, _{superhero name}?' they sneered. I lunged forward with my _{noun}_ but missed, and the villain pulled out a _{noun}_ from their pocket. We were locked in a fierce battle, throwing punches and using _{adjective}_ gadgets. Finally, I used my _{noun}_ to incapacitate them, leaving them tied up for the _{adjective}_ police to handle."
         },
         {
-            "title": "Zelda: A Hero's Journey",
+            "title": "Zelda: Hero's Journey",
             "template": "I woke up in a _{adjective}_ village, where the air smelled like _{noun}_ and _{noun}_. I was handed a _{noun}_ by an old man who said, 'You are the chosen one to save the _{adjective}_ kingdom!' Armed with my trusty _{noun}_ and the power of _{noun}_ from the ancient temple, I set off to defeat the evil _{noun}_ who had taken over the land. Along the way, I met a talking _{animal}_ who gave me advice and warned me about the _{adjective}_ challenges ahead. After battling through a _{adjective}_ forest and narrowly escaping a _{noun}_ in the temple, I confronted the evil _{noun}_ in their _{noun}_. With one final blow from my _{noun}_, peace was restored to the kingdom, and I returned to the village a hero."
         },
         {
@@ -99,7 +99,7 @@
             "template": "I found myself in the _{adjective}_ woods, shivering in the cold. My best friend, _{name}_, was beside me, carrying a _{noun}_ that we hoped would help us find our way home. We had heard rumors about the _{adjective}_ creatures lurking in the shadows. As we entered the _{place}_ near the old _{noun}_, a gust of wind blew open a door, revealing the gateway to the Upside Down. We cautiously stepped inside, and immediately, I felt the _{adjective}_ air around me. There was a strange sound, like a distant _{noun}_ calling to us. Out of nowhere, a _{noun}_ lunged at us from the darkness, but we managed to use our _{noun}_ to fend it off. We finally reached _{famous person}_’s lab, where we hoped to find a way back to our world, before it was too late."
         },
         {
-            "title": "Jurassic Park: The Escape",
+            "title": "Jurassic Park: Escape",
             "template": "I was on a tour of the famous Jurassic Park when suddenly the _{adjective}_ alarms went off. 'The dinosaurs have escaped!' the guide yelled, and panic spread through the group. I grabbed a _{noun}_ and ran toward the nearest _{noun},_ hoping to find a safe place. As I turned a corner, I saw a huge _{animal}_ blocking the path. I tried to climb a _{noun}_ to avoid it, but the beast was too fast. 'We have to make it to the _{place}_,' I shouted, but before we could get there, we were ambushed by a _{adjective}_ _{animal}_. With my trusty _{noun}_ in hand, I fought off the creature and made it to safety, but I knew this adventure was far from over."
         },
         {
