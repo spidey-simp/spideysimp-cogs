@@ -10,12 +10,12 @@ import random
 
 TEMPLATES_FILE = os.path.join(os.path.dirname(__file__), "templates.json")
 
-def open_json():
-    if not os.path.exists(TEMPLATES_FILE):
+def open_json(file_path):
+    if not os.path.exists(file_path):
         print("Bad error. Please report it.")
         return {}
     
-    with open(TEMPLATES_FILE, "r", "utf-8") as file:
+    with open(file_path, "r", "utf-8") as file:
         try:
             return json.load(file)
         except json.JSONDecodeError:
