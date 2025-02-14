@@ -28,6 +28,8 @@ def get_stories():
     story_dict = open_json(TEMPLATES_FILE)
     templates = story_dict.get("templates")
     for template in templates:
+        title = template.get("title", "Unknown")
+        print(f"DEBUG: `{title}` ({len(title)} chars)")
         titles.append(discord.SelectOption(label=template.get("title")))
     
     return titles
