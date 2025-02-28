@@ -148,7 +148,7 @@ class IdentityTheft(Cog):
         if self.cooldown[guild.id] > datetime.now():
             return
         
-        cleaned_content = message.clean_content
+        cleaned_content = message.clean_content.strip()
         lower_content = cleaned_content.lower()
 
         index = lower_content.find("i'm")
@@ -163,6 +163,8 @@ class IdentityTheft(Cog):
         
         target_text = re.sub(r"(?i)^\s*(?:i(?:['’]m|m))\s+(.+)", "", candidate).strip()
         
+        def normalize(text: str) -> str:
+            return re.sub(r'[^a-z]', '', text.lower())
 
         target_member = None
         mention_match = re.match(r"<@!?(\d+)>", target_text)
@@ -170,10 +172,14 @@ class IdentityTheft(Cog):
             member_id = int(mention_match.group(1))
             target_member = guild.get_member(member_id)
         else:
-            for member in guild.members:
-                if member.display_name.lower() == target_text.lower():
-                    target_member = member
-                    break
+            normalized_candidate = normalize(target_text)
+            if (normalize(message.author.display_name).startswith(normalized_candidate) or normalize(message.author.name).startswith(normalized_candidate)):
+                target_member = message.author
+            else:
+                for member in guild.members:
+                    if (normalize(member.display_name).startswith(normalized_candidate) or normalize(member.name).startswith(normalized_candidate)):
+                        target_member = member
+                        break
         
         if target_member is None:
             return
