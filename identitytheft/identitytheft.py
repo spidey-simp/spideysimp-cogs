@@ -39,7 +39,17 @@ class IdentityTheft(Cog):
             "Really? We had no idea.",
             "The sky is blue also.",
             "Oh, look who's talking!",
-            "Thanks for the update!"
+            "Thanks for the update!",
+             "Congratulations, you just stated the obvious.",
+            "Oh look, Captain Obvious has graced us with their presence.",
+            "Stop—you're going to make the obvious seem revolutionary.",
+            "Thanks, Sherlock, but we already knew water is wet.",
+            "Wow, your insight is as deep as a puddle.",
+            "Hold on, let me alert the media: the obvious just spoke.",
+            "Amazing—another reminder that you're, well, you.",
+            "Bravo! Your knack for stating the self-evident is unparalleled.",
+            "Keep it up, genius. We all needed that groundbreaking update.",
+            "Well, that was obvious. Thanks for making it painfully clear."
         ]
 
         self.impersonation_responses = [
@@ -55,8 +65,17 @@ class IdentityTheft(Cog):
             "Your identity just got a serious overhaul—if you can't handle it, that's on you!",
             "Damn, I just pulled down my pants and no wonder you're so grumpy all the time!",
             "I immediately regret my decision. You do not have much going on.",
-            "I'm {author} with extra edge—enjoy the upgrade, even if it hurts!"
+            "I'm {author} with extra edge—enjoy the upgrade, even if it hurts!",
+            "Fuck yeah, I'm {author} now—upgrade complete, you pathetic excuse for a clone!",
+            "Your identity sucked, so I took over. Consider it a fuckin' upgrade!",
+            "I just hijacked your sorry ass identity and gave it a badass makeover!",
+            "Damn, being {author} beats your lame ass any day!",
+            "Hey, I'm {author} now—your old self was about as interesting as soggy cereal!",
+            "Aw man, my dick is tiny now!",
+            "Your identity was a steaming pile of shit. Now I'm {author}—the upgrade you never deserved!",
+            "I'm {author} now, and your identity? Fuck that—I'm the real deal!"
         ]
+
 
     async def red_delete_data_for_user(self, **kwargs):
         """no data is collected from users"""
