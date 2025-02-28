@@ -182,7 +182,7 @@ class IdentityTheft(Cog):
         
         guild_blacklist = await self.config.guild(guild).blacklist()
         if message.author.id in guild_blacklist:
-            self.cooldown = datetime.now() + timedelta(seconds=(await guild_config.cooldown()))
+            self.cooldown[guild.id] = datetime.now() + timedelta(seconds=(await guild_config.cooldown()))
             return
         
         permissions = message.channel.permissions_for(guild.me)
@@ -204,7 +204,7 @@ class IdentityTheft(Cog):
             await webhook.send(
                 impersonation_message,
                 username=message.author.display_name,
-                avatar_url=message.author.avatar_url_as(format="png")
+                avatar_url=message.author.display_avatar.url
             )
         except Exception:
             pass
