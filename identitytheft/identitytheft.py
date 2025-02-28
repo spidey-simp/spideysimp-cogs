@@ -149,13 +149,20 @@ class IdentityTheft(Cog):
             return
         
         cleaned_content = message.clean_content
-        
-        pattern = re.compile(r"(?i)^\s*(?:i(?:['’]m|m))\s+(.+)")
-        match = pattern.search(cleaned_content)
-        if not match:
+        lower_content = cleaned_content.lower()
+
+        index = lower_content.find("i'm")
+        if index == -1:
+            index = lower_content.find("i’m")
+        if index == -1:
+            index = lower_content.find(" im ")
+        if index == -1:
             return
         
-        target_text = match.group(1).strip()
+        candidate = cleaned_content[index:]
+        
+        target_text = re.sub(r"(?i)^\s*(?:i(?:['’]m|m))\s+(.+)", "", candidate).strip()
+        
 
         target_member = None
         mention_match = re.match(r"<@!?(\d+)>", target_text)
@@ -211,11 +218,7 @@ class IdentityTheft(Cog):
         
         try:
             webhooks = await message.channel.webhooks()
-            webhook = None
-            for wh in webhooks:
-                if wh.name == "IdentityTheftWebhook":
-                    webhook = wh
-                    break
+            webhook = next((wh for wh in webhooks if wh.name == "IdentityTheftWebhook"), None)
             if webhook is None:
                 webhook = await message.channel.create_webhook(name="IdentityTheftWebhook")
             
