@@ -161,7 +161,12 @@ class IdentityTheft(Cog):
         
         candidate = cleaned_content[index:]
         
-        target_text = re.sub(r"(?i)^\s*(?:i(?:['’]m|m))\s+(.+)", "", candidate).strip()
+        match_candidate = re.match(r"(?i)^\s*(?:i(?:['’]m|m))\s+(.+)", candidate)
+
+        if match_candidate:
+            target_text = match_candidate.group(1).strip()
+        else:
+            return
         
         def normalize(text: str) -> str:
             return re.sub(r'[^a-z]', '', text.lower())
