@@ -194,7 +194,7 @@ class Treasury(commands.Cog):
     async def toggle_autorenew(self, ctx:commands.Context):
         """Toggle auto-renewal for your corporation."""
         user_id = str(ctx.author.id)
-        owned_corps = [corp_name for corp_name, details in self.corporations.items() if details["owner" == user_id]]
+        owned_corps = [corp_name for corp_name, details in self.corporations.items() if details["owner"] == user_id]
         if not owned_corps:
             await ctx.send("You don't own any corporations.")
             return
