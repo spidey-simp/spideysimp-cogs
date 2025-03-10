@@ -99,7 +99,7 @@ class Treasury(commands.Cog):
         with open(self.corporations_file, "w") as file:
             json.dump(self.corporations, file, indent=4)
     
-    async def register_corporation(self, owner: str, company_name: str, ctx: commands.Context):
+    async def register_corporation(self, owner: discord.Member, company_name: str, ctx: commands.Context):
         if company_name in self.corporations:
             return False, "A corporation with this name already exists."
         
@@ -284,7 +284,7 @@ class Treasury(commands.Cog):
     @commands.hybrid_command(name="registercorp", with_app_command=True, description="Register your corporation with a fee and monthly renewal.")
     async def registercorp(self, ctx: commands.Context, company_name: str):
         """Register your corporation. This will cost a registration fee and set a monthly renewal fee to maintain corporate status."""
-        result, message = await self.register_corporation(str(ctx.author.id), company_name, ctx)
+        result, message = await self.register_corporation(ctx.author, company_name, ctx)
         await ctx.send(message)
     
     @commands.command(name="renewcorp")
