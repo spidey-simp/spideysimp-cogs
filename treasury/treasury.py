@@ -118,7 +118,7 @@ class Treasury(commands.Cog):
         await bank.withdraw_credits(owner, registration_fee)
         renewal_data = datetime.now(timezone.utc) + timedelta(days=30)
         self.corporations[company_name] = {
-            "owner": owner,
+            "owner": owner.id,
             "registered_on": datetime.now(timezone.utc).isoformat(),
             "renewal_due": renewal_data.isoformat(),
             "status": "Active",
