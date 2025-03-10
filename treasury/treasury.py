@@ -179,7 +179,7 @@ class Treasury(commands.Cog):
         self.taxes["treasury_balance"] = balance
         self.save_taxes()
     
-    async def process_transaction(self, sender: str, receiver: str, amount: int, transaction_type: str):
+    async def process_transaction(self, sender: discord.Member, receiver: discord.Member, amount: int, transaction_type: str):
         tax_rate = self.taxes.get(f"{transaction_type}_tax", 0)
 
         tax_amount = (amount * tax_rate) // 100
