@@ -191,15 +191,41 @@ class Treasury(commands.Cog):
         return net_amount, tax_amount
     
     @commands.command(name="toggle_autorenew")
-    async def toggle_autorenew(self, ctx:commands.Context, company_name: str):
+    async def toggle_autorenew(self, ctx:commands.Context):
         """Toggle auto-renewal for your corporation."""
         user_id = str(ctx.author.id)
-        if company_name not in self.corporations:
-            await ctx.send("Corporation not found.")
+        owned_corps = [corp_name for corp_name, details in self.corporations.items() if details["owner" == user_id]]
+        if not owned_corps:
+            await ctx.send("You don't own any corporations.")
             return
-        corp = self.corporations[company_name]
-        if corp["owner"] != user_id:
-            await ctx.send("You are not the owner of this corporation.")
+        
+        options = [discord.SelectOption(label=corp, value=corp) for corp in owned_corps]
+
+        class CorpSelect(discord.ui.Select):
+            def __init__(self, options):
+                super().__init__(placeholder="Select your corporation...", min_values=1, max_values=1, options=options)
+            
+            async def callback(self, interaction: discord.Interaction):
+                self.view.selected = self.values[0]
+                await interaction.response.send_message(f"You selected **{self.values[0]}**.", ephemeral=True)
+                self.view.stop()
+        class CorpSelectView(discord.ui.View):
+            def __init__(self, options):
+                super().__init__(timeout=60)
+                self.selected = None
+                self.add_item(CorpSelect(options))
+        
+        view = CorpSelectView(options)
+        await ctx.send("Please select the corporation for which you want to toggle auto-renewal:", view=view)
+        await view.wait()
+        if view.selected is None:
+            await ctx.send("No corporation selected. Operation canceled.")
+            return
+        
+        corp_name = view.selected
+        corp = self.corporations[corp_name]
+        if corp is None:
+            await ctx.send("Corporation not found. Operation canceled.")
             return
         
         current = corp.get("auto_renew", False)
