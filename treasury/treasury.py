@@ -49,7 +49,7 @@ class Treasury(commands.Cog):
             treasury_balance = 0
         )
         self.tax_file = os.path.join(BASE_DIR, "taxes.json")
-        self.corporations_file = os.path.join(BASE_DIR, "taxes.json")
+        self.corporations_file = os.path.join(BASE_DIR, "corporations.json")
         self.load_taxes()
         self.load_corporations()
         self.auto_renew_corporations.start()
@@ -209,8 +209,11 @@ class Treasury(commands.Cog):
         await ctx.send(f"Auto-renewal has been {status} for {company_name}.")
 
     @commands.command(name="transfer")
-    async def transfer(self, ctx, recipient: str, amount: int):
+    async def transfer(self, ctx, recipient: discord.Member, amount: int):
         """Prompts user to select a transaction type and ensures proper taxation."""
+        if ctx.author == recipient:
+            await ctx.send("Why are you trying to send money to yourself silly?")
+            return
         view = TaxTypeSelect(ctx, self, callback=None)
         await ctx.send("Please select a transaction type:", view=view)
         await view.wait()
@@ -245,7 +248,7 @@ class Treasury(commands.Cog):
     
     @commands.command(name="governmentspending", alias=["govsp"])
     @commands.admin_or_permissions(administrator=True)
-    async def governmentspending(self, ctx, recipient: str, amount: int):
+    async def governmentspending(self, ctx, recipient: discord.Member, amount: int):
         """Allows the government to spend from the treasury without taxation."""
         treasury_balance = self.taxes.get("treasury_balance", 0)
         if amount > treasury_balance:
@@ -277,3 +280,20 @@ class Treasury(commands.Cog):
                 f"Current Tax Rates:\nIncome Tax: {income_tax}%\nSales Tax: {sales_tax}%\nGift Tax: {gift_tax}%"
             )
     
+    @commands.hybrid_command(name="registercorp", with_app_command=True, description="Register your corporation with a fee and monthly renewal.")
+    async def registercorp(self, ctx: commands.Context, company_name: str):
+        """Register your corporation. This will cost a registration fee and set a monthly renewal fee to maintain corporate status."""
+        result, message = await self.register_corporation(str(ctx.author.id), company_name, ctx)
+        await ctx.send(message)
+    
+    @commands.command(name="renewcorp")
+    async def renewcorp(self, ctx:commands.Context, company_name: str):
+        """If your company doesn't auto-renew, then you can do it manually using this command."""
+        result, message = await self.renew_corporation(company_name)
+        await ctx.send(message)
+    
+    @commands.command(name="checkexpiredcorps")
+    @commands.admin_or_permissions(administrator=True)
+    async def checkexpiredcorps(self, ctx:commands.Context):
+        """To check monthly what corporations have expired."""
+        await self.check_expired_corporations(ctx)
