@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 from discord.ui import View, Select
 from redbot.core.bot import Red
@@ -8,6 +8,9 @@ import humanize
 import os
 import json
 from datetime import datetime, timedelta, timezone
+
+registration_fee = 5000
+renewal_fee = 2000
 
 CORPORATIONS_FILE = "corporations.json"
 
@@ -46,6 +49,28 @@ class Treasury(commands.Cog):
         self.tax_file = "taxes.json"
         self.load_taxes()
         self.load_corporations()
+        self.auto_renew_corporations.start()
+    
+    def cog_unload(self):
+        self.auto_renew_corporations.stop()
+    
+    @tasks.loop(hours=24)
+    async def auto_renew_corporations(self):
+        now = datetime.now(timezone.utc)
+        for company_name, corp in self.corporations.items():
+            if corp.get("auto_renew", False):
+                renewal_due = datetime.fromisoformat(corp["renewal_due"])
+                if now >= renewal_due:
+                    success, message = await self.renew_corporation(company_name)
+                    owner = corp["owner"]
+                    try:
+                        user = await self.bot.fetch_user(owner)
+                        if success:
+                            await user.send(f"Your corporation '{company_name}' has been auto-renewed. {message}")
+                        else:
+                            await user.send(f"Auto-renewal failed for '{company_name}': {message}")
+                    except Exception:
+                        pass
     
     def load_taxes(self):
         try:
@@ -57,7 +82,7 @@ class Treasury(commands.Cog):
         
     def save_taxes(self):
         with open(self.tax_file, "w") as file:
-            json.dummp(self.taxes, file, indent=4)
+            json.dump(self.taxes, file, indent=4)
     
     def load_corporations(self):
         try:
@@ -71,16 +96,30 @@ class Treasury(commands.Cog):
         with open(CORPORATIONS_FILE, "w") as file:
             json.dump(self.corporations, file, indent=4)
     
-    async def register_corporation(self, owner: str, company_name: str):
+    async def register_corporation(self, owner: str, company_name: str, ctx: commands.Context):
         if company_name in self.corporations:
             return False, "A corporation with this name already exists."
         
+        await ctx.send(f"Registering your corporation will cost {registration_fee} credits, and you'll be charged a monthly renewal fee of {renewal_fee} credits to maintain corporate status.\nWould you like to proceed? (yes/no)")
+
+        try:
+            msg = await self.bot.wait_for("message", check=lambda m: m.author==ctx.author and m.channel==ctx.channel, timeout=30)
+        except Exception:
+            return False, "Registration timed out."
+        if msg.content.lower() not in ["yes", "y"]:
+            return False, "Registration canceled by user."
+        
+        if not await bank.can_spend(owner, registration_fee):
+            return False, "Insufficient funds to pay the registration fee."
+        
+        await bank.withdraw_credits(owner, registration_fee)
         renewal_data = datetime.now(timezone.utc) + timedelta(days=30)
         self.corporations[company_name] = {
             "owner": owner,
             "registered_on": datetime.now(timezone.utc).isoformat(),
             "renewal_due": renewal_data.isoformat(),
-            "status": "Active"
+            "status": "Active",
+            "auto_renew": False
         }
         self.save_corporations()
         return True, f"Corporation '{company_name}' successfully registered! Next renewal due: {renewal_data.strftime('%Y-%m-%d')}"
@@ -90,15 +129,23 @@ class Treasury(commands.Cog):
         if company_name not in self.corporations:
             return False, "Corporation not found."
         
-        owner = self.corporations[company_name]["owner"]
-        renewal_fee = 2000
+        corp = self.corporations[company_name]
+        owner = corp["owner"]
+        renewal_due = datetime.fromisoformat(corp["renewal_due"])
+        now = datetime.now(timezone.utc)
 
-        if not await bank.can_spend(owner, renewal_fee):
+        if now < renewal_due:
+            remaining = (renewal_due - now).total_seconds() /(30 * 24 * 3600)
+            fee = int(renewal_fee * remaining)
+        else:
+            fee = renewal_fee
+
+        if not await bank.can_spend(owner, fee):
             return False, "Insufficient funds for renewal."
         
-        await bank.withdraw_credits(owner, renewal_fee)
+        await bank.withdraw_credits(owner, fee)
         new_renewal_date = datetime.now(timezone.utc) + timedelta(days=30)
-        self.corporations[company_name]["renewal_due"] = new_renewal_date.isoformat()
+        corp["renewal_due"] = new_renewal_date.isoformat()
         self.save_corporations()
         return True, f"{company_name} successfully renewed! Next renewal due: {new_renewal_date.strftime('%Y-%m-%d')}"
 
@@ -139,6 +186,24 @@ class Treasury(commands.Cog):
         await bank.deposit_credits(receiver, net_amount)
         await self.deposit_treasury(tax_amount)
         return net_amount, tax_amount
+    
+    @commands.command(name="toggle_autorenew")
+    async def toggle_autorenew(self, ctx:commands.Context, company_name: str):
+        """Toggle auto-renewal for your corporation."""
+        user_id = str(ctx.author.id)
+        if company_name not in self.corporations:
+            await ctx.send("Corporation not found.")
+            return
+        corp = self.corporations[company_name]
+        if corp["owner"] != user_id:
+            await ctx.send("You are not the owner of this corporation.")
+            return
+        
+        current = corp.get("auto_renew", False)
+        corp["auto_renew"] = not current
+        self.save_corporations()
+        status = "enabled" if corp["auto_renew"] else "disabled"
+        await ctx.send(f"Auto-renewal has been {status} for {company_name}.")
 
     @commands.command(name="transfer")
     async def transfer(self, ctx, recipient: str, amount: int):
