@@ -12,7 +12,9 @@ from datetime import datetime, timedelta, timezone
 registration_fee = 5000
 renewal_fee = 2000
 
-CORPORATIONS_FILE = "corporations.json"
+BASE_DIR = os.path.dirname(os.path.realpath(__file__))
+
+
 
 class TaxTypeSelect(View):
     def __init__(self, ctx, treasury, callback):
@@ -46,7 +48,8 @@ class Treasury(commands.Cog):
             gift_tax = 5,
             treasury_balance = 0
         )
-        self.tax_file = "taxes.json"
+        self.tax_file = os.path.join(BASE_DIR, "taxes.json")
+        self.corporations_file = os.path.join(BASE_DIR, "taxes.json")
         self.load_taxes()
         self.load_corporations()
         self.auto_renew_corporations.start()
@@ -86,14 +89,14 @@ class Treasury(commands.Cog):
     
     def load_corporations(self):
         try:
-            with open(CORPORATIONS_FILE, "r") as file:
+            with open(self.corporations_file, "r") as file:
                 self.corporations = json.load(file)
         except (FileNotFoundError, json.JSONDecodeError):
             self.corporations = {}
             self.save_corporations()
     
     def save_corporations(self):
-        with open(CORPORATIONS_FILE, "w") as file:
+        with open(self.corporations_file, "w") as file:
             json.dump(self.corporations, file, indent=4)
     
     async def register_corporation(self, owner: str, company_name: str, ctx: commands.Context):
