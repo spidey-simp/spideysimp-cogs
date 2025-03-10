@@ -27,9 +27,9 @@ class TaxTypeSelect(View):
     @discord.ui.select(
         placeholder = "Select transaction type. . .",
         options=[
-            discord.SelectOption(label="Income Tax", value="income_tax"),
-            discord.SelectOption(label="Sales Tax", value="sales_tax"),
-            discord.SelectOption(label="Gift Tax", value="gift_tax")
+            discord.SelectOption(label="Income Tax", value="income"),
+            discord.SelectOption(label="Sales Tax", value="sales"),
+            discord.SelectOption(label="Gift Tax", value="gift")
         ]
     )
     async def select_transaction_type(self, interaction, select):
@@ -229,6 +229,7 @@ class Treasury(commands.Cog):
     async def set_tax(self, ctx):
         """Prompts user to select a tax type and set a new rate."""
         async def get_new_rate(tax_type):
+            tax_key = f"{tax_type}_tax"
             await ctx.send("Enter the new tax rate (as a percentage):")
             try:
                 msg = await self.bot.wait_for("message", check=lambda m:m.author == ctx.author, timeout=30)
