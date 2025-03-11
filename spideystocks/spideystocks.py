@@ -223,6 +223,40 @@ class SpideyStocks(commands.Cog):
             message += "No indices available."
         await ctx.send(message)
     
+    @commands.hybrid_command(name="forcesellall", with_app_command=True, description="Force sell all shares from a user's portfolio (admin only).")
+    @commands.admin_or_permissions(administrator=True)
+    async def forcesellall(self, ctx: commands.Context, target: discord.Member):
+        """
+        Force sells all shares from the target user's portfolio.
+        Sold shares are removed from the user's portfolio (and not re-added to available_shares),
+        and credits are deposited based on current share prices.
+        """
+        user_id = str(target.id)
+        if user_id not in self.data["portfolios"] or not self.data["portfolios"][user_id]:
+            await ctx.send(f"{target.mention} does not have any shares to sell.")
+            return
+
+        total_credits = 0
+        details = []
+        # Iterate over each company in the user's portfolio.
+        for symbol, shares in self.data["portfolios"][user_id].items():
+            if symbol not in self.data["companies"]:
+                continue
+            company = self.data["companies"][symbol]
+            sale_value = company["price"] * shares
+            total_credits += sale_value
+            details.append(f"{shares} shares of {company['name']} at ${company['price']:.2f} each for ${sale_value:.2f} credits")
+            # Note: We do not add the shares back to company["available_shares"].
+        
+        # Remove the user's entire portfolio.
+        self.data["portfolios"][user_id] = {}
+        save_data(self.data)
+        await bank.deposit_credits(target, int(total_credits))
+        
+        details_text = "\n".join(details)
+        await ctx.send(f"Force sold all shares from {target.mention}:\n{details_text}\nTotal credits received: ${total_credits:.2f}")
+
+    
     @commands.hybrid_command(name="inject_market", with_app_command=True, description="Inject a boost into the overall market indices (admin only).")
     @commands.admin_or_permissions(administrator=True)
     async def inject_market(self, ctx: commands.Context, injection: float):
@@ -315,3 +349,46 @@ class SpideyStocks(commands.Cog):
         )
         embed.set_image(url="attachment://stockgraph.png")
         await ctx.send(embed=embed, file=file)
+    
+    @commands.hybrid_command(name="indexgraph", with_app_command=True, description="Display a line graph of a market index's history.")
+    async def indexgraph(self, ctx: commands.Context, index_name: str):
+        """
+        Display the history of a market index as a line graph.
+        Example: /indexgraph "Dough Jones Index"
+        """
+        index_name = index_name.strip()
+        indices = self.data.get("indices", {})
+        if index_name not in indices:
+            await ctx.send("That index does not exist. Please check the index name.")
+            return
+
+        index = indices[index_name]
+        history = index.get("history", [])
+        if not history:
+            await ctx.send("No history data available for this index.")
+            return
+
+        # Generate a line graph for the index history.
+        times = list(range(len(history)))
+        plt.figure(figsize=(8, 4))
+        plt.style.use('dark_background')
+        plt.plot(times, history, linestyle='-')
+        plt.title(f"{index_name} History")
+        plt.xlabel("Time")
+        plt.ylabel("Index Value")
+        plt.tight_layout()
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png")
+        plt.close()
+        buf.seek(0)
+        file = discord.File(fp=buf, filename="indexgraph.png")
+
+        embed = discord.Embed(
+            title=f"{index_name} History",
+            description="Index history over the recent period.",
+            color=discord.Color.blue()
+        )
+        embed.set_image(url="attachment://indexgraph.png")
+        await ctx.send(embed=embed, file=file)
+    
