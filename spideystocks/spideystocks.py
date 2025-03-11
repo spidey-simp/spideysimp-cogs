@@ -88,16 +88,17 @@ class SpideyStocks(commands.Cog):
     
     @tasks.loop(minutes=5)
     async def update_stock_prices(self):
-        """Randomly update stock prices every 5 minutes."""
+        """Randomly update stock prices every 5 minutes using float arithmetic."""
         for company in self.data["companies"].values():
             change_percent = random.uniform(-0.05, 0.05)
             old_price = company["price"]
-            new_price = max(1, int(old_price * (1 + change_percent + self.investor_modifier)))
-            company["price"] = new_price
+            new_price = max(1.0, old_price * (1 + change_percent + self.investor_modifier))
+            company["price"] = new_price  # Keep as float internally
             company.setdefault("price_history", []).append(new_price)
             if len(company["price_history"]) > 20:
                 company["price_history"].pop(0)
         save_data(self.data)
+
 
     @tasks.loop(hours=24)
     async def distribute_dividends(self):
@@ -148,16 +149,41 @@ class SpideyStocks(commands.Cog):
     async def stockstatus(self, ctx: commands.Context):
         message = "**Current Stock Prices:**\n"
         for symbol, company in self.data["companies"].items():
-            message +=f"{company['name']} ({symbol}): ${company['price']}\n"
+            price = company['price']
+            # If available, use total_shares to compute market cap; otherwise default to 1.
+            total_shares = company.get("total_shares", 1)
+            market_cap = price * total_shares
+            message += f"{company['name']} ({symbol}): ${price:.2f} | Market Cap: {humanize.intcomma(market_cap)} credits\n"
+        
         user_id = str(ctx.author.id)
         portfolio = self.data["portfolios"].get(user_id, {})
         if portfolio:
             message += "\n**Your Portfolio:**\n"
+            total_portfolio_value = 0
             for symbol, shares in portfolio.items():
-                message += f"{symbol}: {shares} shares\n"
+                if symbol in self.data["companies"]:
+                    company = self.data["companies"][symbol]
+                    price = company["price"]
+                    value = shares * price
+                    total_portfolio_value += value
+                    message += f"{symbol}: {shares} shares @ ${price:.2f} = {value:.2f} credits\n"
+            message += f"\nTotal Portfolio Value: {total_portfolio_value:.2f} credits"
         else:
             message += "\nYou currently do not own any shares."
         await ctx.send(message)
+    
+    @commands.hybrid_command(name="indexstatus", with_app_command=True, description="View current market indices.")
+    async def indexstatus(self, ctx: commands.Context):
+        message = "**Market Indices:**\n"
+        indices = self.data.get("indices", {})
+        if indices:
+            for index_name, index in indices.items():
+                value = index.get("value", 0)
+                message += f"{index_name}: {value}\n"
+        else:
+            message += "No indices available."
+        await ctx.send(message)
+
     
     @commands.hybrid_command(name="stockbuy", with_app_command=True, description="Buy shares in a company.")
     async def stockbuy(self, ctx: commands.Context, symbol: str, shares: int = 1):
