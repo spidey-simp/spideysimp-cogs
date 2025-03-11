@@ -24,39 +24,58 @@ def load_data():
                     "name": "LemonTech Inc.",
                     "dividend_yield": 0.03,
                     "bankruptcy_threshold": 60,
-                    "price_history": [120]
+                    "price_history": [120],
+                    "total_shares": 1000000,
+                    "available_shares": 1000000
                 },
                 "NascarCorp": {
                     "price": 90,
                     "name": "Nascar Corp.",
                     "dividend_yield": 0.02,
                     "bankruptcy_threshold": 45,
-                    "price_history": [90]
+                    "price_history": [90],
+                    "total_shares": 800000,
+                    "available_shares": 800000
                 },
                 "MM500": {
                     "price": 50,
                     "name": "M&M 500 Ltd.",
                     "dividend_yield": 0.04,
                     "bankruptcy_threshold": 25,
-                    "price_history": [50]
+                    "price_history": [50],
+                    "total_shares": 500000,
+                    "available_shares": 500000
                 },
                 "SpideySells": {
                     "price": 110,
                     "name": "SpideySells Inc.",
                     "dividend_yield": 0.015,
                     "bankruptcy_threshold": 55,
-                    "price_history": [110]
+                    "price_history": [110],
+                    "total_shares": 600000,
+                    "available_shares": 600000
                 },
                 "BananaRepublic": {
                     "price": 70,
                     "name": "Banana Republic Co.",
                     "dividend_yield": 0.025,
                     "bankruptcy_threshold": 35,
-                    "price_history": [70]
+                    "price_history": [70],
+                    "total_shares": 700000,
+                    "available_shares": 700000
                 }
             },
             "portfolios": {}
         }
+    # Migration: Ensure each company has "total_shares" and "available_shares"
+    for symbol, company in data.get("companies", {}).items():
+        if "total_shares" not in company:
+            # You can choose a default based on the company type or simply a fixed number.
+            company["total_shares"] = 1000000
+        if "available_shares" not in company:
+            company["available_shares"] = company["total_shares"]
+    
+    # Ensure indices exist.
     if "indices" not in data:
         data["indices"] = {
             "Nascar Index": {"value": 1000, "history": [1000]},
@@ -64,6 +83,7 @@ def load_data():
         }
     save_data(data)
     return data
+
 
 def save_data(data):
     with open(DATA_FILE, "w") as f:
@@ -153,7 +173,7 @@ class SpideyStocks(commands.Cog):
             # If available, use total_shares to compute market cap; otherwise default to 1.
             total_shares = company.get("total_shares", 1)
             market_cap = price * total_shares
-            message += f"{company['name']} ({symbol}): ${price:.2f} | Market Cap: {humanize.intcomma(market_cap)} credits\n"
+            message += f"{company['name']} ({symbol}): ${price:.2f} | Market Cap: {market_cap:.2f} credits\n"
         
         user_id = str(ctx.author.id)
         portfolio = self.data["portfolios"].get(user_id, {})
