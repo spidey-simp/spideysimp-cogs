@@ -213,6 +213,8 @@ class SpideyStocks(commands.Cog):
         if daily_volume is lower than a baseline, price swings are larger.
         """
         baseline_volume = 100000  # Define a baseline volume.
+
+        scaled_modifier = self.investor_modifier * (5/30)
         
         for company in self.data["companies"].values():
             # Get the company's liquidity; default to baseline if not provided.
@@ -225,7 +227,7 @@ class SpideyStocks(commands.Cog):
             
             change_percent = random.uniform(-0.05, 0.05) * volatility_factor
             old_price = company["price"]
-            new_price = max(1.0, old_price * (1 + change_percent + self.investor_modifier))
+            new_price = max(1.0, old_price * (1 + change_percent + scaled_modifier))
             company["price"] = new_price  # Keep as float internally.
             company.setdefault("price_history", []).append(new_price)
             if len(company["price_history"]) > HISTORY_LIMIT:
