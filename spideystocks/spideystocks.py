@@ -136,7 +136,7 @@ class SpideyStocks(commands.Cog):
         await bank.withdraw_credits(ctx.author, total_cost)
         user_id = str(ctx.author.id)
         self.data["portfolios"].setdefault(user_id, {})
-        self.data["portfolios"][user_id][symbol] = self.data[user_id].get(symbol, 0) + shares
+        self.data["portfolios"][user_id][symbol] = self.data["portfolios"][user_id].get(symbol, 0) + shares
         save_data(self.data)
         await ctx.send(f"You bought {shares} shares of {company['name']} at ${company['price']} each for {total_cost} credits.")
 
