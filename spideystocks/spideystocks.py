@@ -8,6 +8,7 @@ from discord.ext import commands, tasks
 from redbot.core import commands, bank
 import matplotlib.pyplot as plt
 import humanize
+import pytz
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "market_data.json")
@@ -97,6 +98,45 @@ def save_data(data):
         json.dump(data, f, indent=4)
 
 
+# Expanded list of whole-market events.
+WHOLE_MARKET_EVENTS = [
+    {"message": "Congress lowers regulations, boosting overall investor sentiment!", "modifier": 0.02},
+    {"message": "Banks raise interest rates, dampening market sentiment.", "modifier": -0.03},
+    {"message": "A national holiday occurs, leading to increased consumer optimism.", "modifier": 0.01},
+    {"message": "Global trade tensions ease, lifting investor confidence.", "modifier": 0.015},
+    {"message": "An economic stimulus package is announced by the government.", "modifier": 0.025},
+    {"message": "Unexpected surge in consumer spending rallies the market!", "modifier": 0.03},
+    {"message": "Major geopolitical conflict intensifies, causing widespread market anxiety.", "modifier": -0.025},
+    {"message": "The central bank announces new monetary policy changes, affecting markets.", "modifier": -0.01},
+    {"message": "Inflation fears subside as prices stabilize, improving market sentiment.", "modifier": 0.02},
+    {"message": "The tech sector shows impressive growth, positively influencing the overall market.", "modifier": 0.03},
+    {"message": "Energy prices drop significantly, benefiting consumer spending and market stability.", "modifier": 0.015},
+    {"message": "Unemployment figures fall, spurring renewed market optimism.", "modifier": 0.02},
+    {"message": "Financial regulators ease restrictions, fueling market enthusiasm.", "modifier": 0.025},
+    {"message": "International trade agreements are signed, lifting global investor confidence.", "modifier": 0.02},
+    {"message": "A major recession scare is averted, causing markets to rally.", "modifier": 0.03}
+]
+
+# Expanded list of individual company events.
+INDIVIDUAL_EVENTS = [
+    {"message": "{affected_company} unveils a groundbreaking new product!", "modifier": 0.05},
+    {"message": "A class action lawsuit is filed against {affected_company}, causing shares to plummet.", "modifier": -0.06},
+    {"message": "{affected_company} reports record profits this quarter, boosting its stock price.", "modifier": 0.04},
+    {"message": "A major scandal hits {affected_company}, leading to a significant drop in share price.", "modifier": -0.07},
+    {"message": "{affected_company} announces a strategic partnership that excites investors.", "modifier": 0.05},
+    {"message": "{affected_company} faces severe supply chain issues, impacting revenue projections.", "modifier": -0.04},
+    {"message": "An innovative R&D breakthrough at {affected_company} lifts market expectations.", "modifier": 0.06},
+    {"message": "{affected_company} misses earnings estimates, sending shares downward.", "modifier": -0.05},
+    {"message": "A positive credit rating upgrade boosts investor confidence in {affected_company}.", "modifier": 0.03},
+    {"message": "{affected_company} launches an aggressive marketing campaign, driving demand.", "modifier": 0.04},
+    {"message": "A significant management shakeup unsettles investors at {affected_company}.", "modifier": -0.03},
+    {"message": "{affected_company} secures a large government contract, sparking enthusiasm.", "modifier": 0.05},
+    {"message": "{affected_company} faces regulatory scrutiny that shakes investor confidence.", "modifier": -0.04},
+    {"message": "A surprise merger announcement sends {affected_company}'s shares soaring.", "modifier": 0.06},
+    {"message": "{affected_company} cuts costs significantly, resulting in improved profitability.", "modifier": 0.03}
+]
+
+
 class SpideyStocks(commands.Cog):
     """A simple stock market simulation cog."""
 
@@ -105,14 +145,65 @@ class SpideyStocks(commands.Cog):
         self.data = load_data()
         self.investor_modifier = 0.0
         self.market_injection = 0.0
+        self.index_modifier = 0.0
+        self.market_closed = False
         self.update_stock_prices.start()
         self.distribute_dividends.start()
         self.update_indices_and_investor_modifier.start()
+        self.stock_updates_loop.start()
+        self.market_check_loop.start()
     
     def cog_unload(self):
         self.update_stock_prices.cancel()
         self.distribute_dividends.cancel()
         self.update_indices_and_investor_modifier.cancel()
+        self.stock_updates_loop.cancel()
+        self.market_check_loop.cancel()
+
+    @tasks.loop(minutes=1)
+    async def market_check_loop(self):
+        tz = pytz.timezone("US/Pacific")
+        now = datetime.now(tz)
+
+        if now.hour < 9 or now.hour >= 17:
+            if not self.market_closed:
+                await self.market_close()
+        else:
+            if self.market_closed:
+                await self.market_open()
+    
+    async def market_close(self, forceful: bool = False, index_drop_amount: int = 0):
+        """Close the market by canceling update tasks and sending a message."""
+        channel_id = self.data.get("update_channel_id")
+        if channel_id:
+            channel = self.bot.get_channel(channel_id)
+        else:
+            channel = None
+
+        display_message = "The market has closed for the day."
+        if forceful:
+            display_message += f" The market dropped by {index_drop_amount} points, so investors closed it early."
+        # Cancel your update tasks.
+        self.update_stock_prices.cancel()
+        self.update_indices_and_investor_modifier.cancel()
+        self.stock_updates_loop.cancel()
+        self.market_closed = True
+        
+        if channel:
+            await channel.send(display_message)
+    
+    async def market_open(self):
+        """Reopen the market by restarting update tasks and notifying the channel."""
+        self.update_stock_prices.start()
+        self.update_indices_and_investor_modifier.start()
+        self.stock_updates_loop.start()
+        channel_id = self.data.get("update_channel_id")
+        if channel_id:
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                await channel.send("The market has reopened for another day of trading!")
+        self.market_closed = False
+
     
     @tasks.loop(minutes=5)
     async def update_stock_prices(self):
@@ -148,12 +239,14 @@ class SpideyStocks(commands.Cog):
         Update indices every 30 minutes with low volatility,
         then calculate an average change to adjust the investor modifier.
         Incorporate any market injection and decay it over time.
+        Also apply an index modifier that can be updated by whole-market events.
         """
-        # Update each index with lower volatility (e.g., ±1%)
+        # Update each index with lower volatility (e.g., ±1%), factoring in the index_modifier.
         for index in self.data["indices"].values():
             old_value = index["value"]
             change = random.uniform(-0.01, 0.01)  # ±1%
-            new_value = round(old_value * (1 + change), 1)
+            # Apply both the random change and the index_modifier.
+            new_value = round(old_value * (1 + change + self.index_modifier), 1)
             index["value"] = new_value
             index.setdefault("history", []).append(new_value)
             if len(index["history"]) > 20:
@@ -172,16 +265,67 @@ class SpideyStocks(commands.Cog):
 
         # Clamp the base modifier to a reasonable range (e.g., ±3%).
         base_modifier = max(-0.03, min(0.03, avg_change))
-        # Combine with market injection.
+        # Combine with market injection for investor modifier.
         self.investor_modifier = base_modifier + self.market_injection
-
-        # Decay the market injection over time (e.g., 5% decay every cycle).
         self.market_injection *= 0.95
-        
         if abs(self.market_injection) < 0.005:
             self.market_injection = 0.0
 
+        # Decay the index modifier as well (e.g., 5% decay per cycle).
+        self.index_modifier *= 0.95
+        if abs(self.index_modifier) < 0.005:
+            self.index_modifier = 0.0
+
         save_data(self.data)
+
+    
+    @tasks.loop(hours=1)
+    async def stock_updates_loop(self):
+        """
+        Every hour, post an update in the designated channel with current index values.
+        With a chance, also include a random news event that affects either the whole market or an individual company.
+        """
+        channel_id = self.data.get("update_channel_id")
+        if not channel_id:
+            return  # No update channel set.
+        channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            return
+        
+        update_message = "**Hourly Market Update:**\n"
+        for index_name, index in self.data.get("indices", {}).items():
+            update_message += f"{index_name}: {index.get('value', 'N/A')}\n"
+        
+        # Determine if a news event occurs (33% chance)
+        if random.randint(0, 100) < 33:
+            whole_market = random.random() < 0.3  # 30% chance for whole-market event.
+            if whole_market:
+                event = random.choice(WHOLE_MARKET_EVENTS)
+                update_message += "\n**Market News:**\n" + event["message"]
+                # Adjust both modifiers:
+                self.market_injection += event["modifier"]
+                self.index_modifier += event["modifier"]  # Affect indices directly.
+            else:
+                # Individual events remain the same.
+                company_symbol = random.choice(list(self.data["companies"].keys()))
+                event = random.choice(INDIVIDUAL_EVENTS)
+                event_message = event["message"].format(affected_company=company_symbol)
+                update_message += "\n**Corporate News:**\n" + event_message
+                company = self.data["companies"][company_symbol]
+                company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
+                company.setdefault("price_history", []).append(company["price"])
+        
+        await channel.send(update_message)
+        save_data(self.data)
+
+
+    @commands.hybrid_command(name="setupdatechannel", with_app_command=True, description="Set the channel for hourly market updates (admin only).")
+    @commands.admin_or_permissions(administrator=True)
+    async def setupdatechannel(self, ctx: commands.Context, channel: discord.TextChannel):
+        self.data["update_channel_id"] = channel.id
+        save_data(self.data)
+        await ctx.send(f"Stock market update channel set to {channel.mention}.")
+
 
     
     @commands.hybrid_command(name="stockstatus", with_app_command=True, description="View current stock prices and your portfolio.")
