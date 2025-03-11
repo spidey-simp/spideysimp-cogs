@@ -98,6 +98,7 @@ class SpideyStocks(commands.Cog):
         self.bot = bot
         self.data = load_data()
         self.investor_modifier = 0.0
+        self.market_injection = 0.0
         self.update_stock_prices.start()
         self.distribute_dividends.start()
         self.update_indices_and_investor_modifier.start()
@@ -140,6 +141,7 @@ class SpideyStocks(commands.Cog):
         """
         Update indices every 30 minutes with low volatility,
         then calculate an average change to adjust the investor modifier.
+        Incorporate any market injection and decay it over time.
         """
         # Update each index with lower volatility (e.g., ±1%)
         for index in self.data["indices"].values():
@@ -151,7 +153,7 @@ class SpideyStocks(commands.Cog):
             if len(index["history"]) > 20:
                 index["history"].pop(0)
         
-        # Calculate the average percentage change from the last two recorded values for each index.
+        # Calculate the average percentage change for each index.
         total_change = 0
         count = 0
         for index in self.data["indices"].values():
@@ -161,10 +163,20 @@ class SpideyStocks(commands.Cog):
                 total_change += change_pct
                 count += 1
         avg_change = total_change / count if count > 0 else 0
+
+        # Clamp the base modifier to a reasonable range (e.g., ±3%).
+        base_modifier = max(-0.03, min(0.03, avg_change))
+        # Combine with market injection.
+        self.investor_modifier = base_modifier + self.market_injection
+
+        # Decay the market injection over time (e.g., 5% decay every cycle).
+        self.market_injection *= 0.95
         
-        # Clamp the investor modifier to a reasonable range, e.g. ±3%
-        self.investor_modifier = max(-0.03, min(0.03, avg_change))
+        if abs(self.market_injection) < 0.005:
+            self.market_injection = 0.0
+
         save_data(self.data)
+
     
     @commands.hybrid_command(name="stockstatus", with_app_command=True, description="View current stock prices and your portfolio.")
     async def stockstatus(self, ctx: commands.Context):
@@ -204,6 +216,18 @@ class SpideyStocks(commands.Cog):
         else:
             message += "No indices available."
         await ctx.send(message)
+    
+    @commands.hybrid_command(name="inject_market", with_app_command=True, description="Inject a boost into the overall market indices (admin only).")
+    @commands.admin_or_permissions(administrator=True)
+    async def inject_market(self, ctx: commands.Context, injection: float):
+        """
+        Inject money into the overall market.
+        The injection is given as a decimal percentage (e.g., 0.01 for a 1% boost).
+        This temporarily increases the investor modifier.
+        """
+        self.market_injection += injection
+        await ctx.send(f"Market injection increased by {injection:.2%}. Current market injection: {self.market_injection:.2%}")
+
 
     
     @commands.hybrid_command(name="stockbuy", with_app_command=True, description="Buy shares in a company.")
