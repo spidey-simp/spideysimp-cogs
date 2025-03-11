@@ -232,7 +232,7 @@ class Treasury(commands.Cog):
         corp["auto_renew"] = not current
         self.save_corporations()
         status = "enabled" if corp["auto_renew"] else "disabled"
-        await ctx.send(f"Auto-renewal has been {status} for {company_name}.")
+        await ctx.send(f"Auto-renewal has been {status} for {corp_name}.")
 
     @commands.command(name="transfer")
     async def transfer(self, ctx, recipient: discord.Member, amount: int):
