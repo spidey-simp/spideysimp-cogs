@@ -15,7 +15,7 @@ DATA_FILE = os.path.join(BASE_DIR, "market_data.json")
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
-            return json.load(f)
+            data = json.load(f)
     else:
         data = {
             "companies": {
@@ -57,8 +57,13 @@ def load_data():
             },
             "portfolios": {}
         }
-        save_data(data)
-        return data
+    if "indices" not in data:
+        data["indices"] = {
+            "Nascar Index": {"value": 1000, "history": [1000]},
+            "M&M Index": {"value": 800, "history": [800]}
+        }
+    save_data(data)
+    return data
 
 def save_data(data):
     with open(DATA_FILE, "w") as f:
@@ -71,12 +76,15 @@ class SpideyStocks(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.data = load_data()
+        self.investor_modifier = 0.0
         self.update_stock_prices.start()
         self.distribute_dividends.start()
+        self.update_indices_and_investor_modifier.start()
     
     def cog_unload(self):
         self.update_stock_prices.cancel()
         self.distribute_dividends.cancel()
+        self.update_indices_and_investor_modifier.cancel()
     
     @tasks.loop(minutes=5)
     async def update_stock_prices(self):
@@ -84,7 +92,7 @@ class SpideyStocks(commands.Cog):
         for company in self.data["companies"].values():
             change_percent = random.uniform(-0.05, 0.05)
             old_price = company["price"]
-            new_price = max(1, int(old_price * (1 + change_percent)))
+            new_price = max(1, int(old_price * (1 + change_percent + self.investor_modifier)))
             company["price"] = new_price
             company.setdefault("price_history", []).append(new_price)
             if len(company["price_history"]) > 20:
@@ -103,6 +111,37 @@ class SpideyStocks(commands.Cog):
                 if shares > 0:
                     total_dividend = dividend_per_share * shares
                     await bank.deposit_credits(user_id, int(total_dividend))
+        save_data(self.data)
+    
+    @tasks.loop(minutes=30)
+    async def update_indices_and_investor_modifier(self):
+        """
+        Update indices every 30 minutes with low volatility,
+        then calculate an average change to adjust the investor modifier.
+        """
+        # Update each index with lower volatility (e.g., ±1%)
+        for index in self.data["indices"].values():
+            old_value = index["value"]
+            change = random.uniform(-0.01, 0.01)  # ±1%
+            new_value = max(1, int(old_value * (1 + change)))
+            index["value"] = new_value
+            index.setdefault("history", []).append(new_value)
+            if len(index["history"]) > 20:
+                index["history"].pop(0)
+        
+        # Calculate the average percentage change from the last two recorded values for each index.
+        total_change = 0
+        count = 0
+        for index in self.data["indices"].values():
+            history = index["history"]
+            if len(history) >= 2:
+                change_pct = (history[-1] - history[-2]) / history[-2]
+                total_change += change_pct
+                count += 1
+        avg_change = total_change / count if count > 0 else 0
+        
+        # Clamp the investor modifier to a reasonable range, e.g. ±3%
+        self.investor_modifier = max(-0.03, min(0.03, avg_change))
         save_data(self.data)
     
     @commands.hybrid_command(name="stockstatus", with_app_command=True, description="View current stock prices and your portfolio.")
@@ -170,7 +209,7 @@ class SpideyStocks(commands.Cog):
         times = list(range(len(price_history)))
 
         plt.figure(figsize=(8,4))
-        plt.plot(times, price_history, marker='o', linestyle='-', color='blue')
+        plt.plot(times, price_history, linestyle='-', color='blue')
         plt.title(f"{company['name']} Price History")
         plt.xlabel("Time")
         plt.ylabel("Price")
