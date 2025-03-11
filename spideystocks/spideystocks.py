@@ -9,7 +9,8 @@ from redbot.core import commands, bank
 import matplotlib.pyplot as plt
 import humanize
 
-DATA_FILE = "market_data.json"
+BASE_DIR = os.path.dirname(os.path.realpath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, "market_data.json")
 
 def load_data():
     if os.path.exists(DATA_FILE):
