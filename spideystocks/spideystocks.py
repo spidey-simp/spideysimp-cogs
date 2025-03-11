@@ -297,8 +297,9 @@ class SpideyStocks(commands.Cog):
     @tasks.loop(hours=1)
     async def stock_updates_loop(self):
         """
-        Every hour, post an update in the designated channel with current index values.
-        With a chance, also include a random news event that affects either the whole market or an individual company.
+        Every hour, post an update in the designated channel with current index values
+        and their percent change since the last update. Also, occasionally include a
+        news event.
         """
         channel_id = self.data.get("update_channel_id")
         if not channel_id:
@@ -306,10 +307,16 @@ class SpideyStocks(commands.Cog):
         channel = self.bot.get_channel(channel_id)
         if channel is None:
             return
-        
+
         update_message = "**Hourly Market Update:**\n"
         for index_name, index in self.data.get("indices", {}).items():
-            update_message += f"{index_name}: {index.get('value', 'N/A')}\n"
+            current_value = index.get("value", 0)
+            history = index.get("history", [])
+            if len(history) >= 2 and history[-2] != 0:
+                percent_change = ((history[-1] - history[-2]) / history[-2]) * 100
+                update_message += f"{index_name}: {current_value:.1f} ({percent_change:+.2f}%)\n"
+            else:
+                update_message += f"{index_name}: {current_value:.1f}\n"
         
         # Determine if a news event occurs (33% chance)
         if random.randint(0, 100) < 33:
@@ -317,11 +324,10 @@ class SpideyStocks(commands.Cog):
             if whole_market:
                 event = random.choice(WHOLE_MARKET_EVENTS)
                 update_message += "\n**Market News:**\n" + event["message"]
-                # Adjust both modifiers:
                 self.market_injection += event["modifier"]
-                self.index_modifier += event["modifier"]  # Affect indices directly.
+                self.index_modifier += event["modifier"]
             else:
-                # Individual events remain the same.
+                # Select a random company.
                 company_symbol = random.choice(list(self.data["companies"].keys()))
                 event = random.choice(INDIVIDUAL_EVENTS)
                 event_message = event["message"].format(affected_company=company_symbol)
@@ -332,6 +338,7 @@ class SpideyStocks(commands.Cog):
         
         await channel.send(update_message)
         save_data(self.data)
+
 
 
     @commands.hybrid_command(name="setupdatechannel", with_app_command=True, description="Set the channel for hourly market updates (admin only).")
