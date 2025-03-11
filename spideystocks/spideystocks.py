@@ -193,7 +193,11 @@ class SpideyStocks(commands.Cog):
             return
         
         company = self.data["companies"][symbol]
+        if shares > company.get("available_shares", 0):
+            await ctx.send("Not enough shares available for purchase.")
+            return
         total_cost = company["price"] * shares
+        total_cost = int(total_cost)
         if not await bank.can_spend(ctx.author, total_cost):
             await ctx.send("You don't have enough credits to buy these shares.")
             return
@@ -202,6 +206,7 @@ class SpideyStocks(commands.Cog):
         user_id = str(ctx.author.id)
         self.data["portfolios"].setdefault(user_id, {})
         self.data["portfolios"][user_id][symbol] = self.data["portfolios"][user_id].get(symbol, 0) + shares
+        company["available_shares"] -= shares
         save_data(self.data)
         await ctx.send(f"You bought {shares} shares of {company['name']} at ${company['price']} each for {total_cost} credits.")
 
@@ -215,9 +220,11 @@ class SpideyStocks(commands.Cog):
         
         company = self.data["companies"][symbol]
         total_value = company["price"] * shares
+        total_value = int(total_value)
         self.data["portfolios"][user_id][symbol] -= shares
         if self.data["portfolios"][user_id][symbol] == 0:
             del self.data["portfolios"][user_id][symbol]
+        company["available_shares"] += shares
         save_data(self.data)
         await bank.deposit_credits(ctx.author, total_value)
         await ctx.send(f"You sold {shares} shares of {company['name']} at ${company['price']} each for {total_value} credits.")
