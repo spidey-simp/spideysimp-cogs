@@ -207,16 +207,31 @@ class SpideyStocks(commands.Cog):
     
     @tasks.loop(minutes=5)
     async def update_stock_prices(self):
-        """Randomly update stock prices every 5 minutes using float arithmetic."""
+        """
+        Randomly update stock prices every 5 minutes.
+        Adjust the price volatility based on liquidity: 
+        if daily_volume is lower than a baseline, price swings are larger.
+        """
+        baseline_volume = 100000  # Define a baseline volume.
+        
         for company in self.data["companies"].values():
-            change_percent = random.uniform(-0.05, 0.05)
+            # Get the company's liquidity; default to baseline if not provided.
+            volume = company.get("daily_volume", baseline_volume)
+            # Compute a volatility factor: if volume is lower than baseline, factor > 1 (more volatility).
+            # For example, factor = baseline_volume / volume.
+            volatility_factor = baseline_volume / volume  
+            # Alternatively, you might clamp this factor between, say, 0.5 and 2.
+            volatility_factor = max(0.5, min(2, volatility_factor))
+            
+            change_percent = random.uniform(-0.05, 0.05) * volatility_factor
             old_price = company["price"]
             new_price = max(1.0, old_price * (1 + change_percent + self.investor_modifier))
-            company["price"] = new_price  # Keep as float internally
+            company["price"] = new_price  # Keep as float internally.
             company.setdefault("price_history", []).append(new_price)
             if len(company["price_history"]) > HISTORY_LIMIT:
                 company["price_history"].pop(0)
         save_data(self.data)
+
 
 
     @tasks.loop(hours=24)
