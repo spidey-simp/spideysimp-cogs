@@ -76,12 +76,18 @@ def load_data():
         if "available_shares" not in company:
             company["available_shares"] = company["total_shares"]
     
-    # Ensure indices exist.
+
+    default_indices = {
+        "Nascar Index": {"value": 1000.0, "history": [1000.0]},
+        "M&M Index": {"value": 800.0, "history": [800.0]},
+        "Dough Jones Index": {"value": 950.0, "history": [950.0]}
+    }
     if "indices" not in data:
-        data["indices"] = {
-            "Nascar Index": {"value": 1000, "history": [1000]},
-            "M&M Index": {"value": 800, "history": [800]}
-        }
+        data["indices"] = default_indices
+    else:
+        for key, default in default_indices.items():
+            if key not in data["indices"]:
+                data["indices"][key] = default
     save_data(data)
     return data
 
@@ -147,7 +153,7 @@ class SpideyStocks(commands.Cog):
         for index in self.data["indices"].values():
             old_value = index["value"]
             change = random.uniform(-0.01, 0.01)  # ±1%
-            new_value = max(1, int(old_value * (1 + change)))
+            new_value = round(old_value * (1 + change), 1)
             index["value"] = new_value
             index.setdefault("history", []).append(new_value)
             if len(index["history"]) > 20:
