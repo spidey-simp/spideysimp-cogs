@@ -173,7 +173,7 @@ class SpideyStocks(commands.Cog):
             # If available, use total_shares to compute market cap; otherwise default to 1.
             total_shares = company.get("total_shares", 1)
             market_cap = price * total_shares
-            message += f"{company['name']} ({symbol}): ${price:.2f} | Market Cap: {market_cap:.2f} credits\n"
+            message += f"{company['name']} ({symbol}): ${price:.2f} | Market Cap: {humanize.intcomma(int(market_cap))} credits\n"
         
         user_id = str(ctx.author.id)
         portfolio = self.data["portfolios"].get(user_id, {})
