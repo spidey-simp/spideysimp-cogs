@@ -235,7 +235,8 @@ class SpideyStocks(commands.Cog):
         times = list(range(len(price_history)))
 
         plt.figure(figsize=(8,4))
-        plt.plot(times, price_history, linestyle='-', color='blue')
+        plt.style.use('dark_background')
+        plt.plot(times, price_history, linestyle='-')
         plt.title(f"{company['name']} Price History")
         plt.xlabel("Time")
         plt.ylabel("Price")
