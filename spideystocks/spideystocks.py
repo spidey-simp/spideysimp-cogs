@@ -228,7 +228,8 @@ class SpideyStocks(commands.Cog):
         self.data["portfolios"][user_id][symbol] = self.data["portfolios"][user_id].get(symbol, 0) + shares
         company["available_shares"] -= shares
         save_data(self.data)
-        await ctx.send(f"You bought {shares} shares of {company['name']} at ${company['price']} each for {total_cost} credits.")
+        price = company['price']
+        await ctx.send(f"You bought {shares} shares of {company['name']} at ${price:.2f} each for {total_cost} credits.")
 
     @commands.hybrid_command(name="stocksell", with_app_command=True, description="Sell shares in a company.")
     async def stocksell(self, ctx: commands.Context, symbol: str, shares: int):
@@ -247,7 +248,8 @@ class SpideyStocks(commands.Cog):
         company["available_shares"] += shares
         save_data(self.data)
         await bank.deposit_credits(ctx.author, total_value)
-        await ctx.send(f"You sold {shares} shares of {company['name']} at ${company['price']} each for {total_value} credits.")
+        price = company['price']
+        await ctx.send(f"You sold {shares} shares of {company['name']} at ${price:.2f} each for {total_value} credits.")
     
     @commands.hybrid_command(name="stockgraph", with_app_command=True, description="Display a line graph of a stock's price history.")
     async def stockgraph(self, ctx: commands.Context, symbol: str):
