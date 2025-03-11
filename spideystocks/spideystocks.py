@@ -11,6 +11,7 @@ import humanize
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "market_data.json")
+HISTORY_LIMIT = 288
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -115,7 +116,7 @@ class SpideyStocks(commands.Cog):
             new_price = max(1.0, old_price * (1 + change_percent + self.investor_modifier))
             company["price"] = new_price  # Keep as float internally
             company.setdefault("price_history", []).append(new_price)
-            if len(company["price_history"]) > 20:
+            if len(company["price_history"]) > HISTORY_LIMIT:
                 company["price_history"].pop(0)
         save_data(self.data)
 
