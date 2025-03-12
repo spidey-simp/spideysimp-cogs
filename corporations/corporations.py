@@ -123,6 +123,23 @@ class Corporations(commands.Cog):
     def cog_unload(self):
         save_corporations(self.data)
     
+    @commands.hybrid_command(name="corpindex", with_app_command=True, description="List all registered corporations.")
+    async def corpindex(self, ctx: commands.Context):
+        if not CORPORATION_DATA:
+            await ctx.send("No corporations are registered yet.")
+            return
+
+        embed = discord.Embed(title="Registered Corporations", color=discord.Color.gold())
+        for user_id, comp in CORPORATION_DATA.items():
+            # Display the company's registered name and basic info.
+            embed.add_field(
+                name=comp["name"],
+                value=f"CEO: <@{comp['CEO']}>\nLand: {comp.get('land', 'None')}\nOffice: {comp.get('office_building', 'Not built')}",
+                inline=False
+            )
+        await ctx.send(embed=embed)
+
+    
     @commands.hybrid_command(name="landoptions", with_app_command=True, description="View available HQ land options for your corporation.")
     async def landoptions(self, ctx: commands.Context):
         embed = discord.Embed(
