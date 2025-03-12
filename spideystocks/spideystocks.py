@@ -69,13 +69,22 @@ def load_data():
             },
             "portfolios": {}
         }
-    # Migration: Ensure each company has "total_shares" and "available_shares"
+    
+    default_fields = {
+        "category": "general",
+        "CEO": "Unknown",
+        "location": "Unknown",
+        "employees": 0,
+        "date_established": "Unknown",
+        "daily_volume": 100000,
+        "total_shares": 1000000,
+        "available_shares": None  # we'll set this to total_shares if missing
+    }
     for symbol, company in data.get("companies", {}).items():
-        if "total_shares" not in company:
-            # You can choose a default based on the company type or simply a fixed number.
-            company["total_shares"] = 1000000
-        if "available_shares" not in company:
-            company["available_shares"] = company["total_shares"]
+        for field, default in default_fields.items():
+            if field not in company:
+                # For available_shares, if missing, set it to total_shares.
+                company[field] = company["total_shares"] if field == "available_shares" else default
     
 
     default_indices = {
@@ -99,6 +108,7 @@ def save_data(data):
 
 
 # Expanded list of whole-market events.
+# Expanded event lists:
 WHOLE_MARKET_EVENTS = [
     {"message": "Congress lowers regulations, boosting overall investor sentiment!", "modifier": 0.02},
     {"message": "Banks raise interest rates, dampening market sentiment.", "modifier": -0.03},
@@ -117,7 +127,13 @@ WHOLE_MARKET_EVENTS = [
     {"message": "A major recession scare is averted, causing markets to rally.", "modifier": 0.03}
 ]
 
-# Expanded list of individual company events.
+SECTOR_EVENTS = [
+    {"message": "A breakthrough in renewable energy policy boosts tech and consumer goods sectors!", "affected_sectors": ["tech", "consumer goods"], "modifier": 0.04},
+    {"message": "New healthcare regulations increase costs for healthcare providers.", "affected_sectors": ["healthcare"], "modifier": -0.05},
+    {"message": "Entertainment tax cuts spur growth in the entertainment industry.", "affected_sectors": ["entertainment"], "modifier": 0.03},
+    {"message": "A surge in travel demand boosts the travel sector.", "affected_sectors": ["travel"], "modifier": 0.05}
+]
+
 INDIVIDUAL_EVENTS = [
     {"message": "{affected_company} unveils a groundbreaking new product!", "modifier": 0.05},
     {"message": "A class action lawsuit is filed against {affected_company}, causing shares to plummet.", "modifier": -0.06},
@@ -137,6 +153,7 @@ INDIVIDUAL_EVENTS = [
 ]
 
 
+
 class SpideyStocks(commands.Cog):
     """A simple stock market simulation cog."""
 
@@ -146,19 +163,26 @@ class SpideyStocks(commands.Cog):
         self.investor_modifier = 0.0
         self.market_injection = 0.0
         self.index_modifier = 0.0
-        self.market_closed = False
-        self.update_stock_prices.start()
-        self.distribute_dividends.start()
-        self.update_indices_and_investor_modifier.start()
-        self.stock_updates_loop.start()
+        tz = pytz.timezone("US/Pacific")
+        now = datetime.now(tz)
+        if now.hour < 9 or now.hour >= 17:
+            self.market_closed = True
+        else:
+            self.market_closed = False
+
+        # Always start the market_check_loop so the market status gets updated.
         self.market_check_loop.start()
+        self.distribute_dividends.start()
+        # Only start update tasks if the market is open.
+        if not self.market_closed:
+            self.bot.loop.create_task(self.market_open())
+
     
     def cog_unload(self):
-        self.update_stock_prices.cancel()
-        self.distribute_dividends.cancel()
-        self.update_indices_and_investor_modifier.cancel()
-        self.stock_updates_loop.cancel()
         self.market_check_loop.cancel()
+        self.distribute_dividends.cancel()
+        if not self.market_closed:
+            self.bot.loop.create_task(self.market_close())
 
     @tasks.loop(minutes=1)
     async def market_check_loop(self):
@@ -299,9 +323,9 @@ class SpideyStocks(commands.Cog):
     @tasks.loop(hours=1)
     async def stock_updates_loop(self):
         """
-        Every hour, post an update in the designated channel with current index values
-        and their percent change since the last update. Also, occasionally include a
-        news event.
+        Every hour, post an update in the designated channel with current index values,
+        along with a chance for a news event.
+        The event can be market-wide, sector-wide, or corporation-specific.
         """
         channel_id = self.data.get("update_channel_id")
         if not channel_id:
@@ -322,14 +346,25 @@ class SpideyStocks(commands.Cog):
         
         # Determine if a news event occurs (33% chance)
         if random.randint(0, 100) < 33:
-            whole_market = random.random() < 0.3  # 30% chance for whole-market event.
-            if whole_market:
+            # Decide which tier: let's use tier probabilities:
+            tier_roll = random.random()  # between 0 and 1.
+            if tier_roll < 0.3:
+                # Market-wide event (30% chance of 33%)
                 event = random.choice(WHOLE_MARKET_EVENTS)
                 update_message += "\n**Market News:**\n" + event["message"]
                 self.market_injection += event["modifier"]
                 self.index_modifier += event["modifier"]
+            elif tier_roll < 0.6:
+                # Sector-wide event (30% chance of 33%)
+                event = random.choice(SECTOR_EVENTS)
+                update_message += "\n**Sector News:**\n" + event["message"]
+                # Apply modifier to companies in the affected sectors.
+                for company in self.data["companies"].values():
+                    if company.get("category") in event["affected_sectors"]:
+                        company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
+                        company.setdefault("price_history", []).append(company["price"])
             else:
-                # Select a random company.
+                # Corporation-specific event (40% chance of 33%)
                 company_symbol = random.choice(list(self.data["companies"].keys()))
                 event = random.choice(INDIVIDUAL_EVENTS)
                 event_message = event["message"].format(affected_company=company_symbol)
@@ -340,6 +375,7 @@ class SpideyStocks(commands.Cog):
         
         await channel.send(update_message)
         save_data(self.data)
+
 
 
 
