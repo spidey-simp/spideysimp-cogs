@@ -184,7 +184,7 @@ class SpideyStocks(commands.Cog):
         if not self.market_closed:
             self.bot.loop.create_task(self.market_close())
 
-    @tasks.loop(minutes=1)
+    @tasks.loop(minutes=5)
     async def market_check_loop(self):
         tz = pytz.timezone("US/Pacific")
         now = datetime.now(tz)
