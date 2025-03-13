@@ -8,6 +8,7 @@ import humanize
 import os
 import json
 from datetime import datetime, timedelta, timezone
+import shutil
 
 registration_fee = 5000
 renewal_fee = 2000
@@ -15,44 +16,18 @@ renewal_fee = 2000
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
-def migrate_corporations(old_path, new_path):
-    """If the old file exists, load its data and write it to the new file location.
-    If the new file already exists, you can choose to merge data or simply overwrite it."""
-    if os.path.exists(old_path):
-        with open(old_path, "r") as f:
-            old_data = json.load(f)
+def migrate_corporations_file(old_file, new_file):
+    if os.path.exists(old_file):
+        print(f"Migrating corporations file from {old_file} to {new_file}...")
+        # This will copy the file and preserve metadata.
+        shutil.copy2(old_file, new_file)
+        print("Migration complete.")
+        return True
     else:
-        old_data = {}
-
-    # If new file exists, load it too (to merge data if needed)
-    if os.path.exists(new_path):
-        with open(new_path, "r") as f:
-            new_data = json.load(f)
-    else:
-        new_data = {}
-
-    # Merge old_data into new_data (here, simply adding missing keys)
-    # You can customize this merge logic as needed.
-    for key, value in old_data.items():
-        if key not in new_data:
-            new_data[key] = value
-    # Save merged data to the new file
-    with open(new_path, "w") as f:
-        json.dump(new_data, f, indent=4)
-    return new_data
-
-# Example usage:
-# Suppose your treasury cog's corporations.json is at:
-old_corp_file = os.path.join("cogs", "treasury", "corporations.json")
-# And you want to centralize it in a "data" folder at the bot's root:
+        print("Old corporations file does not exist; nothing to migrate.")
+        return False
+    
 DATA_DIR = os.path.join(os.getcwd(), "data")
-if not os.path.exists(DATA_DIR):
-    os.makedirs(DATA_DIR)
-new_corp_file = os.path.join(DATA_DIR, "corporations.json")
-
-migrated_data = migrate_corporations(old_corp_file, new_corp_file)
-print("Migration complete.")
-
 
 class TaxTypeSelect(View):
     def __init__(self, ctx, treasury, callback):
@@ -90,8 +65,20 @@ class Treasury(commands.Cog):
         self.corporations_file = os.path.join(BASE_DIR, "corporations.json")
         self.load_taxes()
         self.load_corporations()
+        self.corp_migration()
         self.auto_renew_corporations.start()
     
+
+    def corp_migration(self):
+        if not os.path.exists(DATA_DIR):
+            os.makedirs(DATA_DIR)
+        new_corp_file = os.path.join(DATA_DIR, "corporations.json")
+        migrate_corporations_file(self.corporations_file, new_corp_file)
+        # Update the file path so future loads/saves use the centralized file:
+        self.corporations_file = new_corp_file
+        # Reload corporations from the new file:
+        self.load_corporations()
+        
     def cog_unload(self):
         self.auto_renew_corporations.stop()
     
