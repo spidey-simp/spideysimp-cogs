@@ -8,9 +8,9 @@ import pytz
 from PIL import Image, ImageDraw, ImageFont
 import asyncio
 
-# Path for corporations registry file.
-BASE_DIR = os.path.dirname(os.path.realpath(__file__))
-CORPORATIONS_FILE = os.path.join(BASE_DIR, "corporations.json")
+
+DATA_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data")
+CORPORATIONS_FILE = os.path.join(DATA_DIR, "corporations.json")
 
 def load_corporations():
     timezone = pytz.timezone("US/Pacific")
