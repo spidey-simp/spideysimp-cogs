@@ -129,10 +129,10 @@ class Corporations(commands.Cog):
             return
 
         embed = discord.Embed(title="Registered Corporations", color=discord.Color.gold())
-        for user_id, comp in self.data.items():
+        for corpname, comp in self.data.items():
             embed.add_field(
-                name=comp["name"],
-                value=f"CEO: <@{comp['CEO']}>\nLand: {comp.get('land', 'None')}\nOffice: {comp.get('office', 'Not built')}",
+                name=corpname,
+                value=f"Owner: <@{comp['owner']}>\nLand: {comp.get('land', 'None')}\nOffice: {comp.get('office', 'Not built')}",
                 inline=False
             )
         await ctx.send(embed=embed)
