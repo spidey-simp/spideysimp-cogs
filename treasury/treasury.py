@@ -27,7 +27,7 @@ def migrate_corporations_file(old_file, new_file):
         print("Old corporations file does not exist; nothing to migrate.")
         return False
     
-DATA_DIR = os.path.join(os.getcwd(), "data")
+DATA_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data")
 
 class TaxTypeSelect(View):
     def __init__(self, ctx, treasury, callback):
