@@ -61,11 +61,10 @@ class Treasury(commands.Cog):
             gift_tax = 5,
             treasury_balance = 0
         )
-        self.tax_file = os.path.join(BASE_DIR, "taxes.json")
+        self.tax_file = os.path.join(DATA_DIR, "taxes.json")
         self.corporations_file = os.path.join(DATA_DIR, "corporations.json")
         self.load_taxes()
         self.load_corporations()
-        self.corp_migration()
         self.auto_renew_corporations.start()
     
 
