@@ -308,12 +308,12 @@ class SpideyStocks(commands.Cog):
         base_modifier = max(-0.03, min(0.03, avg_change))
         # Combine with market injection for investor modifier.
         self.investor_modifier = base_modifier + self.market_injection
-        self.market_injection *= 0.95
+        self.market_injection *= 0.90
         if abs(self.market_injection) < 0.005:
             self.market_injection = 0.0
 
-        # Decay the index modifier as well (e.g., 5% decay per cycle).
-        self.index_modifier *= 0.95
+        # Decay the index modifier as well (e.g., 10% decay per cycle).
+        self.index_modifier *= 0.90
         if abs(self.index_modifier) < 0.005:
             self.index_modifier = 0.0
 
@@ -476,6 +476,8 @@ class SpideyStocks(commands.Cog):
     
     @commands.hybrid_command(name="stockbuy", with_app_command=True, description="Buy shares in a company.")
     async def stockbuy(self, ctx: commands.Context, symbol: str, shares: int = 1):
+        if ctx.interaction:
+            await ctx.defer()
         symbol = symbol.strip()
         if symbol not in self.data["companies"]:
             await ctx.send("That company does not exist.")
@@ -502,6 +504,8 @@ class SpideyStocks(commands.Cog):
 
     @commands.hybrid_command(name="stocksell", with_app_command=True, description="Sell shares in a company.")
     async def stocksell(self, ctx: commands.Context, symbol: str, shares: int):
+        if ctx.interaction:
+            await ctx.defer()
         symbol = symbol.strip()
         user_id = str(ctx.author.id)
         if user_id not in self.data["portfolios"] or symbol not in self.data["portfolios"][user_id] or self.data["portfolios"][user_id][symbol] < shares:

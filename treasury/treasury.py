@@ -15,6 +15,44 @@ renewal_fee = 2000
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
+def migrate_corporations(old_path, new_path):
+    """If the old file exists, load its data and write it to the new file location.
+    If the new file already exists, you can choose to merge data or simply overwrite it."""
+    if os.path.exists(old_path):
+        with open(old_path, "r") as f:
+            old_data = json.load(f)
+    else:
+        old_data = {}
+
+    # If new file exists, load it too (to merge data if needed)
+    if os.path.exists(new_path):
+        with open(new_path, "r") as f:
+            new_data = json.load(f)
+    else:
+        new_data = {}
+
+    # Merge old_data into new_data (here, simply adding missing keys)
+    # You can customize this merge logic as needed.
+    for key, value in old_data.items():
+        if key not in new_data:
+            new_data[key] = value
+    # Save merged data to the new file
+    with open(new_path, "w") as f:
+        json.dump(new_data, f, indent=4)
+    return new_data
+
+# Example usage:
+# Suppose your treasury cog's corporations.json is at:
+old_corp_file = os.path.join("cogs", "treasury", "corporations.json")
+# And you want to centralize it in a "data" folder at the bot's root:
+DATA_DIR = os.path.join(os.getcwd(), "data")
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+new_corp_file = os.path.join(DATA_DIR, "corporations.json")
+
+migrated_data = migrate_corporations(old_corp_file, new_corp_file)
+print("Migration complete.")
+
 
 class TaxTypeSelect(View):
     def __init__(self, ctx, treasury, callback):
