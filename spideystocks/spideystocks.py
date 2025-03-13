@@ -320,13 +320,16 @@ class SpideyStocks(commands.Cog):
         save_data(self.data)
 
     
-    @tasks.loop(hours=1)
+    @tasks.loop(minutes=30)
     async def stock_updates_loop(self):
         """
         Every hour, post an update in the designated channel with current index values,
         along with a chance for a news event.
         The event can be market-wide, sector-wide, or corporation-specific.
         """
+        tz = pytz.timezone("US/Pacific")
+        now = datetime.now(tz)
+        formatted_time = now.strftime("%I:%M %p %Z")
         channel_id = self.data.get("update_channel_id")
         if not channel_id:
             return  # No update channel set.
@@ -334,7 +337,7 @@ class SpideyStocks(commands.Cog):
         if channel is None:
             return
 
-        update_message = "**Hourly Market Update:**\n"
+        update_message = f"**Market Update (as of {formatted_time}):**\n"
         for index_name, index in self.data.get("indices", {}).items():
             current_value = index.get("value", 0)
             history = index.get("history", [])
@@ -344,34 +347,46 @@ class SpideyStocks(commands.Cog):
             else:
                 update_message += f"{index_name}: {current_value:.1f}\n"
         
-        # Determine if a news event occurs (33% chance)
-        if random.randint(0, 100) < 33:
-            # Decide which tier: let's use tier probabilities:
-            tier_roll = random.random()  # between 0 and 1.
-            if tier_roll < 0.3:
-                # Market-wide event (30% chance of 33%)
-                event = random.choice(WHOLE_MARKET_EVENTS)
-                update_message += "\n**Market News:**\n" + event["message"]
-                self.market_injection += event["modifier"]
-                self.index_modifier += event["modifier"]
-            elif tier_roll < 0.6:
-                # Sector-wide event (30% chance of 33%)
-                event = random.choice(SECTOR_EVENTS)
-                update_message += "\n**Sector News:**\n" + event["message"]
-                # Apply modifier to companies in the affected sectors.
-                for company in self.data["companies"].values():
-                    if company.get("category") in event["affected_sectors"]:
-                        company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
-                        company.setdefault("price_history", []).append(company["price"])
-            else:
-                # Corporation-specific event (40% chance of 33%)
-                company_symbol = random.choice(list(self.data["companies"].keys()))
-                event = random.choice(INDIVIDUAL_EVENTS)
-                event_message = event["message"].format(affected_company=company_symbol)
-                update_message += "\n**Corporate News:**\n" + event_message
-                company = self.data["companies"][company_symbol]
-                company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
-                company.setdefault("price_history", []).append(company["price"])
+        base_event_probability = 25
+        base_event_count_min = 1
+        base_event_count_max = 2
+
+        if (now.hour == 9 and now.minute == 30) or (now.hour == 16 and now.minute == 30):
+            event_probability = int(base_event_probability * 1.5)
+            event_count = random.randint(base_event_count_min + 1, base_event_count_max + 2)
+        else:
+            event_probability = base_event_probability
+            event_count = random.randint(base_event_count_min, base_event_count_max)
+
+        for _ in range(event_count):
+        
+            if random.randint(0, 100) < event_probability:
+                # Decide which tier: let's use tier probabilities:
+                tier_roll = random.random()  # between 0 and 1.
+                if tier_roll < 0.3:
+                    # Market-wide event (30% chance of 33%)
+                    event = random.choice(WHOLE_MARKET_EVENTS)
+                    update_message += "\n**Market News:**\n" + event["message"]
+                    self.market_injection += event["modifier"]
+                    self.index_modifier += event["modifier"]
+                elif tier_roll < 0.6:
+                    # Sector-wide event (30% chance of 33%)
+                    event = random.choice(SECTOR_EVENTS)
+                    update_message += "\n**Sector News:**\n" + event["message"]
+                    # Apply modifier to companies in the affected sectors.
+                    for company in self.data["companies"].values():
+                        if company.get("category") in event["affected_sectors"]:
+                            company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
+                            company.setdefault("price_history", []).append(company["price"])
+                else:
+                    # Corporation-specific event (40% chance of 33%)
+                    company_symbol = random.choice(list(self.data["companies"].keys()))
+                    event = random.choice(INDIVIDUAL_EVENTS)
+                    event_message = event["message"].format(affected_company=company_symbol)
+                    update_message += "\n**Corporate News:**\n" + event_message
+                    company = self.data["companies"][company_symbol]
+                    company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
+                    company.setdefault("price_history", []).append(company["price"])
         
         await channel.send(update_message)
         save_data(self.data)
