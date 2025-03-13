@@ -62,7 +62,7 @@ class Treasury(commands.Cog):
             treasury_balance = 0
         )
         self.tax_file = os.path.join(BASE_DIR, "taxes.json")
-        self.corporations_file = os.path.join(BASE_DIR, "corporations.json")
+        self.corporations_file = os.path.join(DATA_DIR, "corporations.json")
         self.load_taxes()
         self.load_corporations()
         self.corp_migration()
@@ -72,12 +72,12 @@ class Treasury(commands.Cog):
     def corp_migration(self):
         if not os.path.exists(DATA_DIR):
             os.makedirs(DATA_DIR)
-        new_corp_file = os.path.join(DATA_DIR, "corporations.json")
-        migrate_corporations_file(self.corporations_file, new_corp_file)
+        new_taxes_file = os.path.join(DATA_DIR, "taxes.json")
+        migrate_corporations_file(self.tax_file, new_taxes_file)
         # Update the file path so future loads/saves use the centralized file:
-        self.corporations_file = new_corp_file
+        self.tax_file = new_taxes_file
         # Reload corporations from the new file:
-        self.load_corporations()
+        self.load_taxes()
         
     def cog_unload(self):
         self.auto_renew_corporations.stop()
