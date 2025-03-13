@@ -131,6 +131,7 @@ class Treasury(commands.Cog):
                 self.corporations = json.load(file)
         except (FileNotFoundError, json.JSONDecodeError):
             self.corporations = {}
+            print(f"Loading corporations from: {self.corporations_file}")
             self.save_corporations()
     
     def save_corporations(self):
