@@ -13,6 +13,8 @@ import pytz
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "market_data.json")
 HISTORY_LIMIT = 288
+SPLIT_THRESHOLD = 1000.0
+SPLIT_RATIO = 2
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -173,6 +175,8 @@ class SpideyStocks(commands.Cog):
         # Always start the market_check_loop so the market status gets updated.
         self.market_check_loop.start()
         self.distribute_dividends.start()
+        self.auto_stock_split.start()
+        self.npc_trading.start()
         # Only start update tasks if the market is open.
         if not self.market_closed:
             self.bot.loop.create_task(self.market_open())
@@ -181,8 +185,86 @@ class SpideyStocks(commands.Cog):
     def cog_unload(self):
         self.market_check_loop.cancel()
         self.distribute_dividends.cancel()
+        self.auto_stock_split.cancel()
+        self.npc_trading.cancel()
         if not self.market_closed:
             self.bot.loop.create_task(self.market_close())
+    
+    @tasks.loop(hours=1)
+    async def npc_trading(self):
+        """
+        Simulate NPC trading on the market.
+        
+        For each company:
+        - With some chance, NPCs will buy a small percentage of the available shares.
+        - With some chance, if NPCs already own shares, they may sell a small percentage.
+        """
+        # Set your probabilities (adjust as needed):
+        base_buy_probability = 0.3
+        base_sell_probability = 0.3  # 30% chance each hour to attempt a sell
+        
+        if self.market_closed:
+            # Reduce probabilities for after-hours trading.
+            buy_probability = base_buy_probability * 0.3  # 30% of normal
+            sell_probability = base_sell_probability * 0.3
+        else:
+            buy_probability = base_buy_probability
+            sell_probability = base_sell_probability
+
+        for symbol, company in self.data["companies"].items():
+            # Ensure npc_holdings key exists.
+            if "npc_holdings" not in company:
+                company["npc_holdings"] = 0
+
+            # NPC Buying
+            if random.random() < buy_probability:
+                # Buy between 1% and 5% of available shares
+                buy_pct = random.uniform(0.01, 0.05)
+                shares_to_buy = int(company["available_shares"] * buy_pct)
+                if shares_to_buy > 0:
+                    company["available_shares"] -= shares_to_buy
+                    company["npc_holdings"] += shares_to_buy
+                    print(f"NPCs bought {shares_to_buy} shares of {symbol}.")
+
+            # NPC Selling
+            if random.random() < sell_probability and company["npc_holdings"] > 0:
+                # Sell between 1% and 5% of NPC holdings
+                sell_pct = random.uniform(0.01, 0.05)
+                shares_to_sell = int(company["npc_holdings"] * sell_pct)
+                if shares_to_sell > 0:
+                    company["available_shares"] += shares_to_sell
+                    company["npc_holdings"] -= shares_to_sell
+                    print(f"NPCs sold {shares_to_sell} shares of {symbol}.")
+        save_data(self.data)
+    
+    @tasks.loop(hours=12)
+    async def auto_stock_split(self):
+        """Automatically split stocks for companies whose share price exceeds a threshold."""
+        split_count = 0
+        for symbol, company in self.data["companies"].items():
+            if company["price"] >= SPLIT_THRESHOLD:
+                old_price = company["price"]
+                # Update price by dividing it by the split ratio
+                company["price"] = round(old_price / SPLIT_RATIO, 2)
+                # Multiply total and available shares by the split ratio
+                company["total_shares"] *= SPLIT_RATIO
+                company["available_shares"] *= SPLIT_RATIO
+                # Update NPC holdings if present (if you're tracking them here)
+                if "npc_holdings" in company:
+                    company["npc_holdings"] *= SPLIT_RATIO
+                # Update every user portfolio that holds this stock
+                for user_id, portfolio in self.data["portfolios"].items():
+                    if symbol in portfolio:
+                        portfolio[symbol] *= SPLIT_RATIO
+                split_count += 1
+                # Optionally, announce the split in your update channel:
+                update_channel_id = self.data.get("update_channel_id")
+                if update_channel_id:
+                    channel = self.bot.get_channel(update_channel_id)
+                    if channel:
+                        await channel.send(f"Auto–split executed for {company['name']} ({symbol}). Price: {old_price:.2f} → {company['price']:.2f}.")
+        if split_count:
+            save_data(self.data)
 
     @tasks.loop(minutes=5)
     async def market_check_loop(self):
@@ -435,8 +517,8 @@ class SpideyStocks(commands.Cog):
                     value = shares * price
                     total_portfolio_value += value
                     message += (f"{symbol}: {humanize.intcomma(shares)} shares @ ${price:,.2f} "
-                                f"= ${value:,.2f} credits\n")
-            message += f"\nTotal Portfolio Value: ${total_portfolio_value:,.2f} credits"
+                                f"= {value:,.2f} credits\n")
+            message += f"\nTotal Portfolio Value: {total_portfolio_value:,.2f} credits"
         else:
             message += "\nYou currently do not own any shares."
         await ctx.send(message)
