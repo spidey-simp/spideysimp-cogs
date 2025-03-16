@@ -433,35 +433,89 @@ class SpideyStocks(commands.Cog):
         base_event_count_min = 1
         base_event_count_max = 2
 
-        if (now.hour == 9 and now.minute == 30) or (now.hour == 16 and now.minute == 30):
-            event_probability = int(base_event_probability * 1.5)
-            event_count = random.randint(base_event_count_min + 1, base_event_count_max + 2)
+        if 9 <= now.hour < 10:
+            if not getattr(self, "morning_event_triggered", False):
+                # Increase event probability and count for the morning update
+                event_probability = int(base_event_probability * 1.5)
+                event_count = random.randint(base_event_count_min + 1, base_event_count_max + 2)
+                # Trigger special morning events
+                for _ in range(event_count):
+                    if random.randint(0, 100) < event_probability:
+                        tier_roll = random.random()
+                        if tier_roll < 0.3:
+                            event = random.choice(WHOLE_MARKET_EVENTS)
+                            update_message += "\n**Market News (Morning):**\n" + event["message"]
+                            self.market_injection += event["modifier"]
+                            self.index_modifier += event["modifier"]
+                        elif tier_roll < 0.6:
+                            event = random.choice(SECTOR_EVENTS)
+                            update_message += "\n**Sector News (Morning):**\n" + event["message"]
+                            for company in self.data["companies"].values():
+                                if company.get("category") in event["affected_sectors"]:
+                                    company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
+                                    company.setdefault("price_history", []).append(company["price"])
+                        else:
+                            company_symbol = random.choice(list(self.data["companies"].keys()))
+                            event = random.choice(INDIVIDUAL_EVENTS)
+                            event_message = event["message"].format(affected_company=company_symbol)
+                            update_message += "\n**Corporate News (Morning):**\n" + event_message
+                            company = self.data["companies"][company_symbol]
+                            company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
+                            company.setdefault("price_history", []).append(company["price"])
+                self.morning_event_triggered = True
         else:
-            event_probability = base_event_probability
-            event_count = random.randint(base_event_count_min, base_event_count_max)
+            self.morning_event_triggered = False
 
-        for _ in range(event_count):
-        
-            if random.randint(0, 100) < event_probability:
-                # Decide which tier: let's use tier probabilities:
-                tier_roll = random.random()  # between 0 and 1.
+        # Check if we're in the evening window (16:00-16:10)
+        if 16 <= now.hour < 17:
+            if not getattr(self, "evening_event_triggered", False):
+                event_probability = int(base_event_probability * 1.5)
+                event_count = random.randint(base_event_count_min + 1, base_event_count_max + 2)
+                # Trigger special evening events
+                for _ in range(event_count):
+                    if random.randint(0, 100) < event_probability:
+                        tier_roll = random.random()
+                        if tier_roll < 0.3:
+                            event = random.choice(WHOLE_MARKET_EVENTS)
+                            update_message += "\n**Market News (Evening):**\n" + event["message"]
+                            self.market_injection += event["modifier"]
+                            self.index_modifier += event["modifier"]
+                        elif tier_roll < 0.6:
+                            event = random.choice(SECTOR_EVENTS)
+                            update_message += "\n**Sector News (Evening):**\n" + event["message"]
+                            for company in self.data["companies"].values():
+                                if company.get("category") in event["affected_sectors"]:
+                                    company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
+                                    company.setdefault("price_history", []).append(company["price"])
+                        else:
+                            company_symbol = random.choice(list(self.data["companies"].keys()))
+                            event = random.choice(INDIVIDUAL_EVENTS)
+                            event_message = event["message"].format(affected_company=company_symbol)
+                            update_message += "\n**Corporate News (Evening):**\n" + event_message
+                            company = self.data["companies"][company_symbol]
+                            company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
+                            company.setdefault("price_history", []).append(company["price"])
+                self.evening_event_triggered = True
+        else:
+            self.evening_event_triggered = False
+
+        # Regular events outside special windows:
+        for _ in range(random.randint(base_event_count_min, base_event_count_max)):
+            if random.randint(0, 100) < base_event_probability:
+                tier_roll = random.random()
                 if tier_roll < 0.3:
-                    # Market-wide event (30% chance of 33%)
                     event = random.choice(WHOLE_MARKET_EVENTS)
                     update_message += "\n**Market News:**\n" + event["message"]
                     self.market_injection += event["modifier"]
                     self.index_modifier += event["modifier"]
                 elif tier_roll < 0.6:
-                    # Sector-wide event (30% chance of 33%)
                     event = random.choice(SECTOR_EVENTS)
                     update_message += "\n**Sector News:**\n" + event["message"]
-                    # Apply modifier to companies in the affected sectors.
                     for company in self.data["companies"].values():
                         if company.get("category") in event["affected_sectors"]:
                             company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
                             company.setdefault("price_history", []).append(company["price"])
                 else:
-                    # Corporation-specific event (40% chance of 33%)
                     company_symbol = random.choice(list(self.data["companies"].keys()))
                     event = random.choice(INDIVIDUAL_EVENTS)
                     event_message = event["message"].format(affected_company=company_symbol)
@@ -470,7 +524,11 @@ class SpideyStocks(commands.Cog):
                     company["price"] = max(1.0, company["price"] * (1 + event["modifier"]))
                     company.setdefault("price_history", []).append(company["price"])
         
-        await channel.send(update_message)
+        channel_id = self.data.get("update_channel_id")
+        if channel_id:
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                await channel.send(update_message)
         save_data(self.data)
 
 
