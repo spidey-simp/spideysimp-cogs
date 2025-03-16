@@ -410,8 +410,18 @@ class SpideyStocks(commands.Cog):
             price = company['price']
             # If available, use total_shares to compute market cap; otherwise default to 1.
             total_shares = company.get("total_shares", 1)
+            available_shares = company.get("available_shares", 0)
             market_cap = price * total_shares
-            message += f"{company['name']} ({symbol}): ${price:.2f} | Market Cap: {humanize.intcomma(int(market_cap))} credits\n"
+            history = company.get("price_history", [])
+            if len(history) >= 2 and history[-2] != 0:
+                pct_change = ((history[-1] - history[-2]) / history[-2]) * 100
+                message += (f"{company['name']} ({symbol}): ${price:,.2f} ({pct_change:+.2f}%) | "
+                        f"Market Cap: {humanize.intcomma(int(market_cap))} credits | "
+                        f"Available: {humanize.intcomma(available_shares)}\n")
+            else:
+                message += (f"{company['name']} ({symbol}): ${price:,.2f} | "
+                        f"Market Cap: {humanize.intcomma(int(market_cap))} credits | "
+                        f"Available: {humanize.intcomma(available_shares)}\n")
         
         user_id = str(ctx.author.id)
         portfolio = self.data["portfolios"].get(user_id, {})
@@ -424,20 +434,27 @@ class SpideyStocks(commands.Cog):
                     price = company["price"]
                     value = shares * price
                     total_portfolio_value += value
-                    message += f"{symbol}: {shares} shares @ ${price:.2f} = {value:.2f} credits\n"
-            message += f"\nTotal Portfolio Value: {total_portfolio_value:.2f} credits"
+                    message += (f"{symbol}: {humanize.intcomma(shares)} shares @ ${price:,.2f} "
+                                f"= ${value:,.2f} credits\n")
+            message += f"\nTotal Portfolio Value: ${total_portfolio_value:,.2f} credits"
         else:
             message += "\nYou currently do not own any shares."
         await ctx.send(message)
     
-    @commands.hybrid_command(name="indexstatus", with_app_command=True, description="View current market indices.")
+    @commands.hybrid_command(name="indexstatus", with_app_command=True, 
+                           description="View current market indices with percent changes.")
     async def indexstatus(self, ctx: commands.Context):
         message = "**Market Indices:**\n"
         indices = self.data.get("indices", {})
         if indices:
             for index_name, index in indices.items():
-                value = index.get("value", 0)
-                message += f"{index_name}: {value}\n"
+                current_value = index.get("value", 0)
+                history = index.get("history", [])
+                if len(history) >= 2 and history[-2] != 0:
+                    pct_change = ((history[-1] - history[-2]) / history[-2]) * 100
+                    message += f"{index_name}: {current_value:.1f} ({pct_change:+.2f}%)\n"
+                else:
+                    message += f"{index_name}: {current_value:.1f}\n"
         else:
             message += "No indices available."
         await ctx.send(message)
