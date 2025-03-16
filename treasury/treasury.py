@@ -349,3 +349,60 @@ class Treasury(commands.Cog):
     async def checkexpiredcorps(self, ctx:commands.Context):
         """To check monthly what corporations have expired."""
         await self.check_expired_corporations(ctx)
+    
+    @commands.command(name="convertcredits")
+    @commands.admin_or_permissions(administrator=True)
+    async def convertcredits(self, ctx: commands.Context):
+        """
+        Convert all members' credits to New Republic Credits (NRC) according to the following conversion rates:
+
+        • 0 to 1,000,000 credits → 1:1 conversion (100% retained)
+        • 1,000,001 – 10,000,000 credits → 5:1 conversion (20% retained)
+        • 10,000,001 – 100,000,000 credits → 10:1 conversion (10% retained)
+        • 100,000,001 – 1,000,000,000 credits → 1,000:1 conversion (0.1% retained)
+        • 1,000,000,001 – 1,000,000,000,000 credits → 100,000:1 conversion (0.001% retained)
+        • 1,000,000,000,001+ credits → 1,000,000,000:1 conversion (0.0000001% retained)
+
+        The "lost" credits from conversion will be added to the treasury.
+        """
+        def convert_balance(old_balance: int) -> int:
+            if old_balance <= 1_000_000:
+                return old_balance
+            elif old_balance <= 10_000_000:
+                return old_balance // 5
+            elif old_balance <= 100_000_000:
+                return old_balance // 10
+            elif old_balance <= 1_000_000_000:
+                return old_balance // 1000
+            elif old_balance <= 1_000_000_000_000:
+                return old_balance // 100000
+            else:
+                return old_balance // 1000000000
+
+        if ctx.guild is None:
+            await ctx.send("This command must be run in a guild.")
+            return
+
+        converted_count = 0
+        total_converted_to_treasury = 0
+
+        # Loop over all members in the guild.
+        for member in ctx.guild.members:
+            if member.id == 354443657178382337:
+                continue
+            try:
+                old_balance = await bank.get_balance(member)
+                new_balance = convert_balance(old_balance)
+                # Only process if conversion reduces the balance.
+                if new_balance < old_balance:
+                    diff = old_balance - new_balance
+                    # Withdraw the difference from the member's account.
+                    await bank.withdraw_credits(member, diff)
+                    # Deposit the "lost" credits into the treasury.
+                    await self.deposit_treasury(diff)
+                    converted_count += 1
+                    total_converted_to_treasury += diff
+            except Exception as e:
+                print(f"Error converting balance for {member}: {e}")
+
+        await ctx.send(f"Conversion complete. {converted_count} members had their credits converted.\nA total of {humanize.intcomma(total_converted_to_treasury)} credits were added to the treasury.")

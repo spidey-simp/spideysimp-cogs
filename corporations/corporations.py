@@ -20,6 +20,10 @@ def load_corporations():
     else:
         data = {}  # Start with an empty registry.
         save_corporations(data)
+    
+    for comp_name, comp in data.items():
+        if ("CEO" not in comp or comp["CEO"] is None) and "owner" in comp:
+            comp["CEO"] = comp["owner"]
     # Migration: Ensure each company has the expected fields.
     default_fields = {
         "category": "general",       # e.g., tech, retail, healthcare, etc.
@@ -31,7 +35,7 @@ def load_corporations():
         "land": None,
         "office": None
     }
-    for symbol, comp in data.items():
+    for comp_name, comp in data.items():
         for field, default in default_fields.items():
             if field not in comp:
                 comp[field] = default
@@ -132,7 +136,7 @@ class Corporations(commands.Cog):
         for corpname, comp in self.data.items():
             embed.add_field(
                 name=corpname,
-                value=f"Owner: <@{comp['owner']}>\nLand: {comp.get('land', 'None')}\nOffice: {comp.get('office', 'Not built')}",
+                value=f"CEO: <@{comp['CEO']}>\nLand: {comp.get('land', 'None')}\nOffice: {comp.get('office', 'Not built')}",
                 inline=False
             )
         await ctx.send(embed=embed)
@@ -153,78 +157,75 @@ class Corporations(commands.Cog):
         await ctx.send(embed=embed)
     
     @commands.hybrid_command(name="buyland", with_app_command=True, description="Purchase land for your corporation's HQ.")
-    async def buyland(self, ctx: commands.Context, land_option: str):
+    async def buyland(self, ctx: commands.Context, company: str, land_option: str):
         """
         Purchase land from a predefined list.
         Valid options are the keys of LAND_OPTIONS.
         Once purchased, the corporation record is updated.
         """
+        company = company.strip()
         land_option = land_option.strip()
         if land_option not in LAND_OPTIONS:
             await ctx.send("Invalid land option. Please choose from: " + ", ".join(LAND_OPTIONS.keys()))
             return
-
-        # Check if the user already has a corporation with purchased land.
-        corp = self.data.get(str(ctx.author.id))
-        if corp and corp.get("land"):
-            await ctx.send("Your corporation already owns land.")
+        comp = self.data[company]
+        if comp["CEO"] != str(ctx.author.id) and not ctx.author.guild_permissions.administrator:
+            await ctx.send("You do not own that corporation.")
+            return
+        
+        if comp.get("land"):
+            await ctx.send("This corporation already owns land.")
             return
 
-        # For simplicity, assume the cost is proportional to the developable_land value.
-        cost = LAND_OPTIONS[land_option]["developable_land"] * 1000  # e.g., 1,000 credits per unit of developable land
+
+        cost = LAND_OPTIONS[land_option]["cost"]
         if not await bank.can_spend(ctx.author, cost):
             await ctx.send(f"You don't have enough credits to purchase this land (cost: {cost} credits).")
             return
 
         await bank.withdraw_credits(ctx.author, cost)
-        # Save the purchased land info in the corporation's record.
-        self.data[str(ctx.author.id)] = {
-            "name": f"Unnamed Corporation",  # You might later allow setting this.
-            "category": "general",
-            "land": land_option,
-            "land_details": LAND_OPTIONS[land_option],
-            "hq_built": False,
-            "office": None,
-            "employees": 0,
-            "employee_cap": LAND_OPTIONS[land_option]["base_employee_cap"],
-            "CEO": str(ctx.author.id),
-            "busy_season": 1.0,
-            "date_registered": str(datetime.now(pytz.timezone("US/Pacific")))
-        }
+        comp["land"] = land_option
+        comp["land_details"] = LAND_OPTIONS[land_option]
+        comp["employee_cap"] = LAND_OPTIONS[land_option]["base_employee_cap"]
         save_corporations(self.data)
-        await ctx.send(f"Congratulations! You have purchased **{land_option}** for {cost} credits as your corporation's land.")
+        await ctx.send(f"Congratulations! {company} has purchased **{land_option}** for {cost} credits as its HQ land.")
     
     @commands.hybrid_command(name="buyoffice", with_app_command=True, description="Purchase an office building for your corporation.")
-    async def buyoffice(self, ctx: commands.Context, office_size: str):
+    async def buyoffice(self, ctx: commands.Context, company: str, office_size: str):
         """
         Purchase an office building for your corporation.
         The office_size (e.g., 'small', 'medium', 'large') determines the cost, 
         construction time, and the additional employee cap.
         Note: Your corporation must have purchased land first.
         """
-        # Check if the corporation exists and has land.
-        corp = self.data.get(str(ctx.author.id))
-        if not corp or not corp.get("land"):
+
+        company = company.strip()
+        office_size = office_size.lower().strip()
+        if company not in self.data:
+            await ctx.send("That company is not registered.")
+            return
+        comp = self.data[company]
+        if not comp.get("land"):
             await ctx.send("You must purchase land first using /buyland.")
             return
-        if corp.get("hq_built"):
+        if comp.get("hq_built"):
             await ctx.send("You have already built an office building.")
             return
 
-        # Define office sizes with parameters.
         office_options = {
             "small": {"cost": 20000, "build_time": 10, "additional_employee_cap": 10},
             "medium": {"cost": 50000, "build_time": 20, "additional_employee_cap": 25},
             "large": {"cost": 100000, "build_time": 30, "additional_employee_cap": 50}
         }
-        office_size = office_size.lower().strip()
+
         if office_size not in office_options:
             await ctx.send("Invalid office size. Options: small, medium, large.")
             return
-
+        
         option = office_options[office_size]
+
         # Multiply cost by the development cost multiplier from the land.
-        multiplier = corp["land_details"]["development_cost_multiplier"]
+        multiplier = comp["land_details"]["development_cost_multiplier"]
         total_cost = int(option["cost"] * multiplier)
         if not await bank.can_spend(ctx.author, total_cost):
             await ctx.send(f"You don't have enough credits to purchase a {office_size} office (cost: {total_cost} credits).")
@@ -236,12 +237,32 @@ class Corporations(commands.Cog):
         # Simulate construction time delay.
         await asyncio.sleep(option["build_time"])
         
-        corp["hq_built"] = True
-        # Increase the employee cap by the additional cap from the office building.
-        corp["employee_cap"] += option["additional_employee_cap"]
-        corp["office"] = office_size
+        comp["hq_built"] = True
+        comp["employee_cap"] += option["additional_employee_cap"]
+        comp["office"] = office_size
         save_corporations(self.data)
-        await ctx.send(f"Construction complete! Your office building is now built. Your corporation's employee cap has increased by {option['additional_employee_cap']} to {corp['employee_cap']} employees.")
+        await ctx.send(f"Construction complete! Your office building is now built. Your corporation's employee cap has increased by {option['additional_employee_cap']} to {comp['employee_cap']} employees.")
+    
+    @commands.hybrid_command(name="publiccorpinfo", with_app_command=True, description="View public details of a corporation.")
+    async def publiccorpinfo(self, ctx: commands.Context, company: str):
+        """
+        Show public info for a given corporation.
+        This command displays limited details that are safe for everyone to see.
+        """
+        company = company.strip()
+        if company not in self.data:
+            await ctx.send("That corporation is not registered in the system.")
+            return
+        comp = self.data[company]
+        # Display only public information:
+        msg = f"**Corporation: {company}**\n"
+        msg += f"Category: {comp.get('category', 'N/A')}\n"
+        msg += f"Location: {comp.get('land', 'Not set')}\n"
+        msg += f"Office: {comp.get('office', 'Not built')}\n"
+        msg += f"Employee Cap: {comp.get('employee_cap', 'N/A')}\n"
+        msg += f"Date Registered: {comp.get('date_registered', 'N/A')}\n"
+        await ctx.send(msg)
+
     
     @commands.hybrid_command(name="companyinfo", with_app_command=True, description="View your corporation's details.")
     async def companyinfo(self, ctx: commands.Context, company: str = None):
@@ -250,67 +271,31 @@ class Corporations(commands.Cog):
         If no company is specified, display the corporation for the caller.
         """
         # If no company name is provided, assume the caller's company.
-        if company is None:
-            corp = self.data.get(str(ctx.author.id))
-            if not corp:
-                await ctx.send("You do not have a registered corporation yet.")
-                return
-        else:
+        if company:
             company = company.strip()
             if company not in self.data:
-                await ctx.send("That company is not registered in the system.")
+                await ctx.send("That company is not registered.")
+                return
+
+            comp = self.data[company]
+            if comp["CEO"] != str(ctx.author.id) and not ctx.author.guild_permissions.administrator:
+                await ctx.send("You do not own that corporation. Use the publiccorpinfo command to see info about that company.")
                 return
             corp = self.data[company]
-        msg = f"**Company Information for {corp.get('name', 'Unnamed Corporation')}**\n"
-        msg += f"CEO: <@{corp.get('CEO', 'N/A')}>\n"
-        msg += f"Category: {corp.get('category', 'N/A')}\n"
-        msg += f"Land: {corp.get('land', 'None')}\n"
-        msg += f"Office: {corp.get('office', 'Not built')}\n"
-        msg += f"Employee Cap: {corp.get('employee_cap', 'N/A')}\n"
-        msg += f"Busy Season Modifier: {corp.get('busy_season', 'N/A')}\n"
-        msg += f"Date Registered: {corp.get('date_registered', 'N/A')}\n"
-        await ctx.send(msg)
-    
-    
-    @commands.hybrid_command(name="editcompany", with_app_command=True, description="Edit details for your corporation.")
-    async def editcompany(self, ctx: commands.Context, company: str, field: str, new_value: str):
-        """
-        Edit a company's detail.
-        
-        Editable fields might include: name, category, daily_volume, employees, CEO, location, dividend_yield, busy_season.
-        Note: Some fields (like stock price, price_history, total_shares, etc.) are not editable here.
-        
-        Only the CEO or an admin can edit a company.
-        """
-        company = company.strip()
-        if company not in self.data:
-            await ctx.send("That company is not registered.")
-            return
-        
-        comp = self.data[company]
-        user_is_admin = ctx.author.guild_permissions.administrator
-        if str(ctx.author.id) != str(comp.get("CEO")) and not user_is_admin:
-            await ctx.send("You don't own that company! You can't edit it!")
-            return
-
-        editable_fields = ["name", "category", "daily_volume", "employees", "CEO", "location", "dividend_yield", "busy_season"]
-        if field not in editable_fields:
-            await ctx.send("That field is not editable via this command.")
-            return
-
-        if field in ["daily_volume", "employees"]:
-            try:
-                new_value = int(new_value)
-            except ValueError:
-                await ctx.send("Please provide a valid integer for that field.")
+            msg = f"**Company Information for {corp.get('name', 'Unnamed Corporation')}**\n"
+            msg += f"CEO: <@{corp.get('CEO', 'N/A')}>\n"
+            msg += f"Category: {corp.get('category', 'N/A')}\n"
+            msg += f"Land: {corp.get('land', 'None')}\n"
+            msg += f"Office: {corp.get('office', 'Not built')}\n"
+            msg += f"Employee Cap: {corp.get('employee_cap', 'N/A')}\n"
+            msg += f"Busy Season Modifier: {corp.get('busy_season', 'N/A')}\n"
+            msg += f"Date Registered: {corp.get('date_registered', 'N/A')}\n"
+            await ctx.send(msg)
+        else:
+            owned = [name for name, comp in self.data.items() if comp["CEO"] == str(ctx.author.id)]
+            if not owned:
+                await ctx.send("You do not own any registered corporations.")
                 return
-        elif field in ["dividend_yield", "busy_season"]:
-            try:
-                new_value = float(new_value)
-            except ValueError:
-                await ctx.send("Please provide a valid number for that field.")
-                return
-        
-        comp[field] = new_value
-        save_corporations(self.data)
-        await ctx.send(f"Updated {field} for {comp['name']} to {new_value}.")
+            msg = "**Your Registered Corporations:**\n" + "\n".join(owned)
+            await ctx.send(msg)
+    
