@@ -88,6 +88,20 @@ def load_data():
                 # For available_shares, if missing, set it to total_shares.
                 company[field] = company["total_shares"] if field == "available_shares" else default
     
+    
+    sector_mapping = {
+        "LemonTech": "tech",
+        "NascarCorp": "entertainment",
+        "MM500": "consumer goods",
+        "SpideySells": "tech",
+        "BananaRepublic": "consumer goods"
+    }
+
+    for company_name, company in data["companies"].items():
+        if company.get("category", "general") == "general":
+            # If the company name exists in our mapping, override it.
+            if company_name in sector_mapping:
+                company["category"] = sector_mapping[company_name]
 
     default_indices = {
         "Nascar Index": {"value": 1000.0, "history": [1000.0]},
@@ -542,44 +556,82 @@ class SpideyStocks(commands.Cog):
         await ctx.send(f"Stock market update channel set to {channel.mention}.")
 
 
-    
-    @commands.hybrid_command(name="stockstatus", with_app_command=True, description="View current stock prices and your portfolio.")
+    def abbreviate_number(num):
+        if num >= 1_000_000_000_000:
+            return f"{num/1_000_000_000_000:.1f} T"
+        elif num >= 1_000_000_000:
+            return f"{num/1_000_000_000:.1f} B"
+        elif num >= 1_000_000:
+            return f"{num/1_000_000:.1f} M"
+        elif num >= 1_000:
+            return f"{num/1_000:.1f} K"
+        else:
+            return str(num)
+
+
+
+    @commands.hybrid_command(name="stockstatus", with_app_command=True, description="View current stock prices and your portfolio, grouped by category.")
     async def stockstatus(self, ctx: commands.Context):
-        message = "**Current Stock Prices:**\n"
+        # Group companies by category
+        grouped = {}
         for symbol, company in self.data["companies"].items():
-            price = company['price']
-            # If available, use total_shares to compute market cap; otherwise default to 1.
-            total_shares = company.get("total_shares", 1)
-            available_shares = company.get("available_shares", 0)
-            market_cap = price * total_shares
-            history = company.get("price_history", [])
-            if len(history) >= 2 and history[-2] != 0:
-                pct_change = ((history[-1] - history[-2]) / history[-2]) * 100
-                message += (f"{company['name']} ({symbol}): ${price:,.2f} ({pct_change:+.2f}%) | "
-                        f"Market Cap: {humanize.intcomma(int(market_cap))} credits | "
-                        f"Available: {humanize.intcomma(available_shares)}\n")
-            else:
-                message += (f"{company['name']} ({symbol}): ${price:,.2f} | "
-                        f"Market Cap: {humanize.intcomma(int(market_cap))} credits | "
-                        f"Available: {humanize.intcomma(available_shares)}\n")
+            cat = company.get("category", "general").capitalize()
+            grouped.setdefault(cat, []).append((symbol, company))
         
+        output_lines = []
+        output_lines.append("**Current Stock Prices:**")
+        
+        # Define header for each category table
+        header = f"{'Company':<25}{'Price':>12}{'Chg (%)':>10}{'Market Cap':>20}{'Avail':>12}"
+        
+        for category in sorted(grouped.keys()):
+            output_lines.append(f"\n**Category: {category}**")
+            output_lines.append(f"```")
+            output_lines.append(header)
+            output_lines.append("-" * len(header))
+            for symbol, comp in sorted(grouped[category], key=lambda x: x[1].get("name", "")):
+                price = comp["price"]
+                total_shares = comp.get("total_shares", 1)
+                available = comp.get("available_shares", 0)
+                market_cap = price * total_shares
+                market_cap_str = self.abbreviate_number(int(market_cap))
+                available_str = self.abbreviate_number(available)
+                # Calculate percent change using last two price_history entries if available
+                history = comp.get("price_history", [])
+                if len(history) >= 2 and history[-2] != 0:
+                    pct_change = ((history[-1] - history[-2]) / history[-2]) * 100
+                else:
+                    pct_change = 0
+                line = f"{comp['name'][:24]:<25}{price:>12,.2f}{pct_change:>10.2f}{market_cap_str:>20}{available_str:>12}"
+                output_lines.append(line)
+            output_lines.append("```")
+        
+        # Process portfolio of the caller
         user_id = str(ctx.author.id)
         portfolio = self.data["portfolios"].get(user_id, {})
         if portfolio:
-            message += "\n**Your Portfolio:**\n"
-            total_portfolio_value = 0
+            output_lines.append("\n**Your Portfolio:**")
+            port_header = f"{'Symbol':<10}{'Shares':>12}{'Price':>12}{'Value':>20}"
+            output_lines.append("```")
+            output_lines.append(port_header)
+            output_lines.append("-" * len(port_header))
+            total_value = 0
             for symbol, shares in portfolio.items():
                 if symbol in self.data["companies"]:
-                    company = self.data["companies"][symbol]
-                    price = company["price"]
+                    comp = self.data["companies"][symbol]
+                    price = comp["price"]
                     value = shares * price
-                    total_portfolio_value += value
-                    message += (f"{symbol}: {humanize.intcomma(shares)} shares @ ${price:,.2f} "
-                                f"= {value:,.2f} credits\n")
-            message += f"\nTotal Portfolio Value: {total_portfolio_value:,.2f} credits"
+                    total_value += value
+                    port_line = f"{symbol:<10}{shares:>12,d}{price:>12,.2f}{value:>20,.2f}"
+                    output_lines.append(port_line)
+            output_lines.append("```")
+            output_lines.append(f"\nTotal Portfolio Value: {total_value:,.2f} credits")
         else:
-            message += "\nYou currently do not own any shares."
-        await ctx.send(message)
+            output_lines.append("\nYou currently do not own any shares.")
+        
+        await ctx.send("\n".join(output_lines))
+
+
     
     @commands.hybrid_command(name="indexstatus", with_app_command=True, 
                            description="View current market indices with percent changes.")
