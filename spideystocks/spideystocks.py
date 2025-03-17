@@ -626,7 +626,7 @@ class SpideyStocks(commands.Cog):
         portfolio = self.data["portfolios"].get(user_id, {})
         if portfolio:
             output_lines.append("\n**Your Portfolio:**")
-            port_header = f"{'Tick':<6} {'Shares':>12}{'Price':>10}{'Value':>12}"
+            port_header = f"{'Tick':<6} {'Shares':>10}{'Price':>10}{'Value':>12}"
             output_lines.append("```")
             output_lines.append(port_header)
             output_lines.append("-" * len(port_header))
@@ -637,8 +637,9 @@ class SpideyStocks(commands.Cog):
                     ticker = comp.get("ticker", symbol)
                     price = comp["price"]
                     value = shares * price
+                    abbreviated_value = self.abbreviate_number(int(value))
                     total_value += value
-                    port_line = f"{ticker:<6} {shares:>12,d}{price:>10,.2f}{value:>12,.2f}"
+                    port_line = f"{ticker:<6} {shares:>12,d}{price:>10,.2f}{abbreviated_value}"
                     output_lines.append(port_line)
             output_lines.append("```")
             output_lines.append(f"\nTotal Portfolio Value: {self.abbreviate_number(int(total_value))} credits")
