@@ -80,6 +80,7 @@ def load_data():
         "date_established": "Unknown",
         "daily_volume": 100000,
         "total_shares": 1000000,
+        "ticker": "None",
         "available_shares": None  # we'll set this to total_shares if missing
     }
     for symbol, company in data.get("companies", {}).items():
@@ -90,18 +91,21 @@ def load_data():
     
     
     sector_mapping = {
-        "LemonTech": "tech",
-        "NascarCorp": "entertainment",
-        "MM500": "consumer goods",
-        "SpideySells": "tech",
-        "BananaRepublic": "consumer goods"
+    "LemonTech": {"category": "tech", "ticker": "LMN"},
+    "NascarCorp": {"category": "entertainment", "ticker": "NSC"},
+    "MM500": {"category": "consumer goods", "ticker": "MM5"},
+    "SpideySells": {"category": "tech", "ticker": "SPS"},
+    "BananaRepublic": {"category": "consumer goods", "ticker": "BNR"}
     }
-
+    
     for company_name, company in data["companies"].items():
         if company.get("category", "general") == "general":
             # If the company name exists in our mapping, override it.
             if company_name in sector_mapping:
-                company["category"] = sector_mapping[company_name]
+                company["category"] = sector_mapping[company_name]["category"]
+        if company.get("ticker", "None") == "None":
+            if company_name in sector_mapping:
+                company["ticker"] = sector_mapping[company_name]["ticker"]
 
     default_indices = {
         "Nascar Index": {"value": 1000.0, "history": [1000.0]},
@@ -558,13 +562,13 @@ class SpideyStocks(commands.Cog):
 
     def abbreviate_number(self, num):
         if num >= 1_000_000_000_000:
-            return f"{num/1_000_000_000_000:.1f} T"
+            return f"{num/1_000_000_000_000:.1f}T"
         elif num >= 1_000_000_000:
-            return f"{num/1_000_000_000:.1f} B"
+            return f"{num/1_000_000_000:.1f}B"
         elif num >= 1_000_000:
-            return f"{num/1_000_000:.1f} M"
+            return f"{num/1_000_000:.1f}M"
         elif num >= 1_000:
-            return f"{num/1_000:.1f} K"
+            return f"{num/1_000:.1f}K"
         else:
             return str(num)
 
@@ -582,36 +586,41 @@ class SpideyStocks(commands.Cog):
         output_lines.append("**Current Stock Prices:**")
         
         # Define header for each category table
-        header = f"{'Company':<25}{'Price':>12}{'Chg (%)':>10}{'Market Cap':>20}{'Avail':>12}"
+        header = f"{'Rank':<4}{'Ticker':<8}{'Company':<25}{'Price':>12}{'Chg (%)':>10}{'Market Cap':>15}{'Avail':>12}"
         
         for category in sorted(grouped.keys()):
             output_lines.append(f"\n**Category: {category}**")
-            output_lines.append(f"```")
+            output_lines.append("```")
             output_lines.append(header)
             output_lines.append("-" * len(header))
-            for symbol, comp in sorted(grouped[category], key=lambda x: x[1].get("name", "")):
+            # Sort companies within category by market cap descending (or any other metric)
+            sorted_companies = sorted(grouped[category], key=lambda x: x[1].get("total_shares", 0) * x[1]["price"], reverse=True)
+            rank = 1
+            for symbol, comp in sorted_companies:
+                ticker = comp.get("ticker", symbol)
                 price = comp["price"]
                 total_shares = comp.get("total_shares", 1)
                 available = comp.get("available_shares", 0)
                 market_cap = price * total_shares
                 market_cap_str = self.abbreviate_number(int(market_cap))
-                available_str = self.abbreviate_number(available)
+                avail_str = self.abbreviate_number(available)
                 # Calculate percent change using last two price_history entries if available
                 history = comp.get("price_history", [])
                 if len(history) >= 2 and history[-2] != 0:
                     pct_change = ((history[-1] - history[-2]) / history[-2]) * 100
                 else:
                     pct_change = 0
-                line = f"{comp['name'][:24]:<25}{price:>12,.2f}{pct_change:>10.2f}{market_cap_str:>20}{available_str:>12}"
+                line = f"{rank:<4}{ticker:<8}{comp['name'][:24]:<25}{price:>12,.2f}{pct_change:>10.2f}{market_cap_str:>15}{avail_str:>12}"
                 output_lines.append(line)
+                rank += 1
             output_lines.append("```")
         
-        # Process portfolio of the caller
+        # Process portfolio of the caller (similar idea as before)
         user_id = str(ctx.author.id)
         portfolio = self.data["portfolios"].get(user_id, {})
         if portfolio:
             output_lines.append("\n**Your Portfolio:**")
-            port_header = f"{'Symbol':<10}{'Shares':>12}{'Price':>12}{'Value':>20}"
+            port_header = f"{'Ticker':<8}{'Shares':>12}{'Price':>12}{'Value':>15}"
             output_lines.append("```")
             output_lines.append(port_header)
             output_lines.append("-" * len(port_header))
@@ -619,13 +628,14 @@ class SpideyStocks(commands.Cog):
             for symbol, shares in portfolio.items():
                 if symbol in self.data["companies"]:
                     comp = self.data["companies"][symbol]
+                    ticker = comp.get("ticker", symbol)
                     price = comp["price"]
                     value = shares * price
                     total_value += value
-                    port_line = f"{symbol:<10}{shares:>12,d}{price:>12,.2f}{value:>20,.2f}"
+                    port_line = f"{ticker:<8}{shares:>12,d}{price:>12,.2f}{value:>15,.2f}"
                     output_lines.append(port_line)
             output_lines.append("```")
-            output_lines.append(f"\nTotal Portfolio Value: {total_value:,.2f} credits")
+            output_lines.append(f"\nTotal Portfolio Value: {self.abbreviate_number(int(total_value))} credits")
         else:
             output_lines.append("\nYou currently do not own any shares.")
         
