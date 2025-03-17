@@ -715,16 +715,23 @@ class SpideyStocks(commands.Cog):
 
 
     
-    @commands.hybrid_command(name="stockbuy", with_app_command=True, description="Buy shares in a company.")
-    async def stockbuy(self, ctx: commands.Context, symbol: str, shares: int = 1):
+    def get_company_by_ticker(self, ticker: str):
+        """Return the (symbol, company) tuple matching the given ticker (case-insensitive) or (None, None) if not found."""
+        ticker = ticker.strip().upper()
+        for symbol, company in self.data["companies"].items():
+            if company.get("ticker", "").upper() == ticker:
+                return symbol, company
+        return None, None
+
+    @commands.hybrid_command(name="stockbuy", with_app_command=True, description="Buy shares in a company by ticker.")
+    async def stockbuy(self, ctx: commands.Context, ticker: str, shares: int = 1):
         if ctx.interaction:
             await ctx.defer()
-        symbol = symbol.strip()
-        if symbol not in self.data["companies"]:
-            await ctx.send("That company does not exist.")
+        symbol, company = self.get_company_by_ticker(ticker)
+        if symbol is None or company is None:
+            await ctx.send("That ticker does not exist.")
             return
         
-        company = self.data["companies"][symbol]
         if shares > company.get("available_shares", 0):
             await ctx.send("Not enough shares available for purchase.")
             return
@@ -741,19 +748,22 @@ class SpideyStocks(commands.Cog):
         company["available_shares"] -= shares
         save_data(self.data)
         price = company['price']
-        await ctx.send(f"You bought {shares} shares of {company['name']} at ${price:.2f} each for {total_cost} credits.")
+        await ctx.send(f"You bought {shares} shares of {company['name']} (Ticker: {company.get('ticker')}) at ${price:.2f} each for {total_cost} credits.")
 
-    @commands.hybrid_command(name="stocksell", with_app_command=True, description="Sell shares in a company.")
-    async def stocksell(self, ctx: commands.Context, symbol: str, shares: int):
+    @commands.hybrid_command(name="stocksell", with_app_command=True, description="Sell shares in a company by ticker.")
+    async def stocksell(self, ctx: commands.Context, ticker: str, shares: int):
         if ctx.interaction:
             await ctx.defer()
-        symbol = symbol.strip()
+        symbol, company = self.get_company_by_ticker(ticker)
+        if symbol is None or company is None:
+            await ctx.send("That ticker does not exist.")
+            return
+
         user_id = str(ctx.author.id)
         if user_id not in self.data["portfolios"] or symbol not in self.data["portfolios"][user_id] or self.data["portfolios"][user_id][symbol] < shares:
             await ctx.send("You don't have enough shares to sell.")
             return
         
-        company = self.data["companies"][symbol]
         total_value = company["price"] * shares
         total_value = int(total_value)
         self.data["portfolios"][user_id][symbol] -= shares
@@ -763,24 +773,23 @@ class SpideyStocks(commands.Cog):
         save_data(self.data)
         await bank.deposit_credits(ctx.author, total_value)
         price = company['price']
-        await ctx.send(f"You sold {shares} shares of {company['name']} at ${price:.2f} each for {total_value} credits.")
-    
-    @commands.hybrid_command(name="stockgraph", with_app_command=True, description="Display a line graph of a stock's price history.")
-    async def stockgraph(self, ctx: commands.Context, symbol: str):
-        symbol = symbol.strip()
-        if symbol not in self.data["companies"]:
-            await ctx.send("That company does not exist.")
+        await ctx.send(f"You sold {shares} shares of {company['name']} (Ticker: {company.get('ticker')}) at ${price:.2f} each for {total_value} credits.")
+
+    @commands.hybrid_command(name="stockgraph", with_app_command=True, description="Display a line graph of a stock's price history by ticker.")
+    async def stockgraph(self, ctx: commands.Context, ticker: str):
+        ticker = ticker.strip()
+        symbol, company = self.get_company_by_ticker(ticker)
+        if symbol is None or company is None:
+            await ctx.send("That ticker does not exist.")
             return
         
-        company = self.data["companies"][symbol]
         price_history = company.get("price_history", [company["price"]])
-
         times = list(range(len(price_history)))
 
         plt.figure(figsize=(8,4))
         plt.style.use('dark_background')
         plt.plot(times, price_history, linestyle='-')
-        plt.title(f"{company['name']} Price History")
+        plt.title(f"{company['name']} Price History (Ticker: {company.get('ticker')})")
         plt.xlabel("Time")
         plt.ylabel("Price")
         plt.tight_layout()
@@ -798,6 +807,7 @@ class SpideyStocks(commands.Cog):
         )
         embed.set_image(url="attachment://stockgraph.png")
         await ctx.send(embed=embed, file=file)
+
     
     @commands.hybrid_command(name="indexgraph", with_app_command=True, description="Display a line graph of a market index's history.")
     async def indexgraph(self, ctx: commands.Context, index_name: str):
