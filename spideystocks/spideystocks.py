@@ -556,7 +556,7 @@ class SpideyStocks(commands.Cog):
         await ctx.send(f"Stock market update channel set to {channel.mention}.")
 
 
-    def abbreviate_number(num):
+    def abbreviate_number(self, num):
         if num >= 1_000_000_000_000:
             return f"{num/1_000_000_000_000:.1f} T"
         elif num >= 1_000_000_000:
