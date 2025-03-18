@@ -459,7 +459,7 @@ class Corporations(commands.Cog):
         message = ""
         for parent, details in CORPORATE_CATEGORIES.items():
             message += f"**{parent}:** {details['description']}\n"
-            for sub, sub_desc in details["subcategories"]:
+            for sub, sub_desc in details["subcategories"].items():
                 message += f" - **{sub}**: {sub_desc}\n"
             message += "\n"
         
