@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 import json
 import os
 from datetime import datetime
@@ -7,6 +8,7 @@ from redbot.core import commands, bank
 import pytz
 from PIL import Image, ImageDraw, ImageFont
 import asyncio
+import humanize
 
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data")
@@ -33,7 +35,8 @@ def load_corporations():
         "busy_season": 1.0,          # Multiplier for seasonal performance; default is neutral.
         "date_registered": str(datetime.now(timezone)),
         "land": None,
-        "office": None
+        "office": None,
+        "balance": 0,
     }
     for comp_name, comp in data.items():
         for field, default in default_fields.items():
@@ -45,6 +48,106 @@ def load_corporations():
 def save_corporations(data):
     with open(CORPORATIONS_FILE, "w") as f:
         json.dump(data, f, indent=4)
+
+STATE_OPTIONS = {
+    "Auroria": {
+        "description": "A vibrant coastal state with a high cost of living and a booming tech sector.",
+        "allowed_land_options": [
+            "Your Parents' Garage",
+            "Undeveloped Marsh Land",
+            "Coastal Capital",
+            "Suburban Sprawl",
+            "Downtown Core"
+        ],
+        "land_cost_modifier": 1.5,
+        "property_tax": 2.0,
+        "minimum_wage": 15,
+        "population": 10000000,
+        "population_density": 1200,
+        "infrastructure_spending": "High",
+        "coastal": True,
+        "median_salary": 70000,
+        "natural_disaster_chance": 0.1
+    },
+    "Deltora": {
+        "description": "A rural, landlocked state known for its expansive farmlands and affordable land prices.",
+        "allowed_land_options": [
+            "Your Parents' Garage",
+            "Undeveloped Marsh Land",
+            "Industrial Valley",
+            "Suburban Sprawl",
+            "Rural Retreat",
+            "Mountain Foothills"
+        ],
+        "land_cost_modifier": 0.8,
+        "property_tax": 1.2,
+        "minimum_wage": 10,
+        "population": 5000000,
+        "population_density": 50,
+        "infrastructure_spending": "Low",
+        "coastal": False,
+        "median_salary": 40000,
+        "natural_disaster_chance": 0.2
+    },
+    "Neonix": {
+        "description": "A modern, urbanized coastal state with high property taxes and a booming tech sector.",
+        "allowed_land_options": [
+            "Your Parents' Garage",
+            "Downtown Core",
+            "Suburban Sprawl",
+            "Coastal Capital"
+        ],
+        "land_cost_modifier": 2.0,
+        "property_tax": 3.0,
+        "minimum_wage": 20,
+        "population": 15000000,
+        "population_density": 5000,
+        "infrastructure_spending": "Very High",
+        "coastal": True,
+        "median_salary": 90000,
+        "natural_disaster_chance": 0.05
+    },
+    "Veridia": {
+        "description": "A green, sustainability-focused state with moderate costs and a mix of urban and rural areas.",
+        "allowed_land_options": [
+            "Your Parents' Garage",
+            "Undeveloped Marsh Land",
+            "Idealistic Island",  # Only available in states that allow coastal or island options.
+            "Industrial Valley",
+            "Rural Retreat",
+            "Mountain Foothills"
+        ],
+        "land_cost_modifier": 1.0,
+        "property_tax": 1.5,
+        "minimum_wage": 12,
+        "population": 8000000,
+        "population_density": 200,
+        "infrastructure_spending": "Medium",
+        "coastal": False,
+        "median_salary": 60000,
+        "natural_disaster_chance": 0.15
+    },
+    "Caldora": {
+        "description": "A highly industrialized, densely populated coastal state with premium land prices and robust infrastructure.",
+        "allowed_land_options": [
+            "Your Parents' Garage",
+            "Coastal Capital",
+            "Downtown Core",
+            "Suburban Sprawl",
+            "Industrial Valley"
+        ],
+        "land_cost_modifier": 2.5,
+        "property_tax": 3.5,
+        "minimum_wage": 22,
+        "population": 20000000,
+        "population_density": 6000,
+        "infrastructure_spending": "Very High",
+        "coastal": True,
+        "median_salary": 100000,
+        "natural_disaster_chance": 0.08
+    }
+}
+
 
 LAND_OPTIONS = {
     "Your Parents' Garage": {
@@ -112,6 +215,139 @@ LAND_OPTIONS = {
     }
 }
 
+office_options = {
+    "hole-in-the-wall": {
+        "cost": 100000,
+        "build_time": 10,
+        "additional_employee_cap": 50,
+        "land_usage": 0,
+        "description": "A modest, cramped space in an existing facility, with minimal new construction."
+    },
+    "office suite": {
+        "cost": 250000,
+        "build_time": 20,
+        "additional_employee_cap": 100,
+        "land_usage": 10,
+        "description": "Shared office space with modern amenities, ideal for small teams."
+    },
+    "small office building": {
+        "cost": 500000,
+        "build_time": 30,
+        "additional_employee_cap": 200,
+        "land_usage": 50,
+        "description": "A dedicated small office building for growing companies."
+    },
+    "warehouse": {
+        "cost": 750000,
+        "build_time": 45,
+        "additional_employee_cap": 150,
+        "land_usage": 40,
+        "description": "A large warehouse suited for companies with significant logistics needs."
+    },
+    "wide campus": {
+        "cost": 2000000,
+        "build_time": 60,
+        "additional_employee_cap": 500,
+        "land_usage": 200,
+        "description": "A sprawling campus with multiple buildings, ideal for corporate giants."
+    },
+    "skyscraper": {
+        "cost": 3000000,
+        "build_time": 90,
+        "additional_employee_cap": 1000,
+        "land_usage": 150,
+        "description": "A towering skyscraper that maximizes vertical space, requiring less land area but high construction complexity."
+    }
+}
+
+CORPORATE_CATEGORIES = {
+    "Consumer Goods": {
+        "description": "Companies that manufacture products used by everyday consumers.",
+        "subcategories": {
+            "Food & Beverage": "Producers of food, drinks, and related consumables.",
+            "Apparel": "Companies in clothing, footwear, and accessories.",
+            "Household Products": "Manufacturers of appliances and home care products.",
+            "Recreation": "Any product designed to be used in a recreational setting."
+        }
+    },
+    "Technology": {
+        "description": "Firms operating in the tech sector, from hardware to software.",
+        "subcategories": {
+            "Software": "Developers of applications, operating systems, and cloud services.",
+            "Hardware": "Producers of computers, smartphones, and peripherals.",
+            "Semiconductors": "Companies involved in chip manufacturing and related technology."
+        }
+    },
+    "Entertainment": {
+        "description": "Companies that create or distribute content for entertainment.",
+        "subcategories": {
+            "Film & Television": "Studios and production companies.",
+            "Music": "Record labels, artists, and streaming platforms.",
+            "Gaming": "Video game developers and publishers."
+        }
+    },
+    "Services": {
+        "description": "Firms that offer services rather than physical products.",
+        "subcategories": {
+            "Legal Services": "Law firms, legal advisors, and related consultancies.",
+            "Financial Services": "Banks, insurance companies, investment firms, and fintech.",
+            "Transportation": "Taxi, rideshare, logistics, and courier services.",
+            "Hospitality": "Hotels, restaurants, and event management companies.",
+            "Personal Care": "Salons, spas, fitness centers, and wellness providers."
+        }
+    },
+    "Retail": {
+        "description": "Companies that sell goods directly to consumers.",
+        "subcategories": {
+            "Department Stores": "Large-scale retailers with multiple product lines.",
+            "E-commerce": "Online retail businesses and marketplaces.",
+            "Specialty Retail": "Boutique stores and niche product sellers."
+        }
+    },
+    "Finance": {
+        "description": "Institutions and firms offering financial products and services.",
+        "subcategories": {
+            "Banking": "Traditional banks, credit unions, and commercial lenders.",
+            "Investment": "Investment banks, hedge funds, and private equity firms.",
+            "Insurance": "Companies offering insurance and risk management services."
+        }
+    },
+    "Healthcare": {
+        "description": "Companies in the healthcare and life sciences sectors.",
+        "subcategories": {
+            "Pharmaceuticals": "Drug manufacturers and distributors.",
+            "Biotechnology": "Biotech companies focused on research and development.",
+            "Medical Devices": "Producers of medical equipment and devices.",
+            "Healthcare Services": "Hospitals, clinics, and healthcare providers."
+        }
+    },
+    "Energy": {
+        "description": "Firms involved in the production and distribution of energy.",
+        "subcategories": {
+            "Oil & Gas": "Exploration, production, and refining companies.",
+            "Renewable Energy": "Solar, wind, hydro, and other renewable sources."
+        }
+    },
+    "Industrial": {
+        "description": "Companies involved in manufacturing, logistics, and heavy industry.",
+        "subcategories": {
+            "Manufacturing": "Producers of industrial and consumer products.",
+            "Logistics": "Supply chain management, transportation, and warehousing."
+        }
+    },
+    "Automotive": {
+        "description": "Companies that design, manufacture, and sell vehicles and auto parts.",
+        "subcategories": {
+            "Vehicles": "Manufacturers of cars, trucks, and motorcycles.",
+            "Auto Parts": "Producers of components and accessories.",
+            "Electric Vehicles": "Specialized manufacturers of electric-powered vehicles."
+        }
+    }
+}
+
+
+
+
 class Corporations(commands.Cog):
     """A cog for managing user corporations.
     
@@ -141,107 +377,260 @@ class Corporations(commands.Cog):
             )
         await ctx.send(embed=embed)
     
-    @commands.hybrid_command(name="landoptions", with_app_command=True, description="View available HQ land options for your corporation.")
-    async def landoptions(self, ctx: commands.Context):
-        embed = discord.Embed(
-            title="Available HQ Land Options",
-            description="Each option has its own cost and potential for development. Costs vary depending on location and land quality.",
-            color=discord.Color.blue()
-        )
-        for name, details in LAND_OPTIONS.items():
-            embed.add_field(
-                name=f"{name} - Cost: {details['cost']} credits",
-                value=f"Developable Land: {details['developable_land']} units\nMultiplier: {details['development_cost_multiplier']}\nBase Employee Cap: {details['base_employee_cap']}\nDescription: {details['description']}",
-                inline=False
+    @app_commands.command(
+    name="landoptions",
+    description="View available HQ land options or state info for your corporation."
+    )
+    @app_commands.describe(option="Select whether to view land plot options, office options, or state details")
+    @app_commands.choices(option=[
+        app_commands.Choice(name="Land Plots", value="landplots"),
+        app_commands.Choice(name="Office Options", value="office_options"),
+        app_commands.Choice(name="States", value="states")
+    ])
+    async def landoptions(self, interaction: discord.Interaction, option: app_commands.Choice[str]):
+        if option.value == "states":
+            # Display state information.
+            # Ensure you have a STATE_OPTIONS dictionary defined somewhere in your cog.
+            embed = discord.Embed(
+                title="Available States",
+                description="Each state has its own attributes affecting land costs and policies.",
+                color=discord.Color.green()
             )
-        await ctx.send(embed=embed)
+            for state, details in STATE_OPTIONS.items():
+                embed.add_field(
+                    name=state,
+                    value=(
+                        f"Description: {details['description']}\n"
+                        f"Land Cost Modifier: {details['land_cost_modifier']}\n"
+                        f"Property Tax: {details['property_tax']}%\n"
+                        f"Minimum Wage: ${details['minimum_wage']}\n"
+                        f"Population: {humanize.intcomma(details['population'])}\n"
+                        f"Pop. Density: {details['population_density']} per sq mi\n"
+                        f"Infrastructure: {details['infrastructure_spending']}\n"
+                        f"Median Salary: ${humanize.intcomma(details['median_salary'])}\n"
+                        f"Natural Disaster Chance: {details['natural_disaster_chance']*100:.1f}%\n"
+                        f"Allowed Land Options: {', '.join(details['allowed_land_options'])}"
+                    ),
+                    inline=False
+                )
+            await interaction.response.send_message(embed=embed)
+        elif option.value == "office_options":
+            embed = discord.Embed(
+                title="Available Office Options",
+                description="Options for constructing corporate offices, each with its own cost, build time, land usage, and employee capacity.",
+                color=discord.Color.purple()
+            )
+            for name, details in office_options.items():
+                embed.add_field(
+                    name=f"{name.title()} - Cost: {details['cost']} credits",
+                    value=(
+                        f"Build Time: {details['build_time']} sec\n"
+                        f"Additional Employee Cap: {details['additional_employee_cap']}\n"
+                        f"Land Usage: {details['land_usage']} units\n"
+                        f"Description: {details['description']}"
+                    ),
+                    inline=False
+                )
+            await interaction.response.send_message(embed=embed)
+        else:
+            # Default: show land plot options.
+            embed = discord.Embed(
+                title="Available HQ Land Options",
+                description="Each option has its own cost and potential for development. Costs vary depending on location and land quality.",
+                color=discord.Color.blue()
+            )
+            for name, details in LAND_OPTIONS.items():
+                embed.add_field(
+                    name=f"{name} - Cost: {details['cost']} credits",
+                    value=(
+                        f"Developable Land: {details['developable_land']} units\n"
+                        f"Multiplier: {details['development_cost_multiplier']}\n"
+                        f"Base Employee Cap: {details['base_employee_cap']}\n"
+                        f"Description: {details['description']}"
+                    ),
+                    inline=False
+                )
+            await interaction.response.send_message(embed=embed)
+    
+    @commands.hybrid_command(name="viewcorpcats", with_app_command=True, description="View the available corporation categories and their sub-categories.")
+    async def viewcorpcats(self, ctx:commands.Context):
+        """See a list of the available corporation categories."""
+
+        message = ""
+        for parent, details in CORPORATE_CATEGORIES.items():
+            message += f"**{parent}:** {details['description']}\n"
+            for sub, sub_desc in details["subcategories"]:
+                message += f" - **{sub}**: {sub_desc}\n"
+            message += "\n"
+        
+        await ctx.send(message)
+    
+    @app_commands.command(name="setcorpdetails",
+                           description="Set initial corp details. If the detail you're trying to add already has a value, this command will not work.")
+    @app_commands.describe(option="Select what detail you would like to set.",
+                        company="The name (or identifier) of your corporation",
+                        choice="The value you want to set for this detail")
+    @app_commands.choices(option=[
+        app_commands.Choice(name="Category", value="category"),
+        app_commands.Choice(name="Sub-Category", value="subcategory")
+    ])
+    async def setcorpdetails(self, interaction: discord.Interaction, company: str, 
+                            option: app_commands.Choice[str], choice: str):
+        # Check if the company exists in our data
+        if company not in self.data:
+            await interaction.response.send_message("That company is not registered. Please retry.", ephemeral=True)
+            return
+
+        corp = self.data[company]
+
+        # Check if the detail is already set.
+        if corp.get(option.value):
+            await interaction.response.send_message(
+                "This detail has already been set. This command only supports initial setup.", ephemeral=True)
+            return
+
+        # For both category and subcategory, we need to validate the choice.
+        if option.value == "category":
+            # For category, the choice must be one of the keys in CORPORATE_CATEGORIES.
+            if choice not in CORPORATE_CATEGORIES:
+                await interaction.response.send_message(
+                    "This category does not exist. Please run /viewcorpcats to see available categories.", ephemeral=True)
+                return
+            # Set the category.
+            corp["category"] = choice
+            await interaction.response.send_message(
+                f"The category for {company} has been set to **{choice}** successfully!", ephemeral=True)
+
+        elif option.value == "subcategory":
+            # For subcategory, first ensure that the category is already set.
+            if not corp.get("category"):
+                await interaction.response.send_message(
+                    "Please set your corporation's category before setting a sub-category.", ephemeral=True)
+                return
+            parent_category = corp["category"]
+            # Check that the parent category exists in CORPORATE_CATEGORIES.
+            if parent_category not in CORPORATE_CATEGORIES:
+                await interaction.response.send_message(
+                    "The current category of your corporation is invalid. Please contact an admin.", ephemeral=True)
+                return
+            # Check that the provided subcategory exists under the parent's subcategories.
+            subcategories = CORPORATE_CATEGORIES[parent_category]["subcategories"]
+            if choice not in subcategories:
+                await interaction.response.send_message(
+                    "This sub-category does not exist under your current category.", ephemeral=True)
+                return
+            # Set the subcategory.
+            corp["subcategory"] = choice
+            await interaction.response.send_message(
+                f"The sub-category for {company} has been set to **{choice}** successfully!", ephemeral=True)
+        else:
+            await interaction.response.send_message("Invalid option.", ephemeral=True)
+
+
+
     
     @commands.hybrid_command(name="buyland", with_app_command=True, description="Purchase land for your corporation's HQ.")
-    async def buyland(self, ctx: commands.Context, company: str, land_option: str):
-        """
-        Purchase land from a predefined list.
-        Valid options are the keys of LAND_OPTIONS.
-        Once purchased, the corporation record is updated.
-        """
+    async def buyland(self, ctx: commands.Context, company: str, state: str, land_option: str):
         company = company.strip()
+        state = state.strip()
         land_option = land_option.strip()
-        if land_option not in LAND_OPTIONS:
-            await ctx.send("Invalid land option. Please choose from: " + ", ".join(LAND_OPTIONS.keys()))
-            return
-        comp = self.data[company]
-        if comp["CEO"] != str(ctx.author.id) and not ctx.author.guild_permissions.administrator:
-            await ctx.send("You do not own that corporation.")
+        if company not in self.data:
+            await ctx.send("That company isn't registered. Please register it via the treasury cog.")
             return
         
+        if state not in STATE_OPTIONS:
+            await ctx.send("Invalid state. Please choose from: " + ", ".join(STATE_OPTIONS.keys()))
+            return
+        
+        allowed_options = STATE_OPTIONS[state]["allowed_land_options"]
+        if land_option not in allowed_options:
+            await ctx.send(f"{land_option} is not available in {state}. Available options: " + ", ".join(allowed_options))
+            return
+
+        comp = self.data[company]
+        if comp["CEO"] != str(ctx.author.id) and not ctx.author.guild_permissions.administrator:
+            await ctx.send(f"You are not the CEO of {company}.")
+            return
+
         if comp.get("land"):
-            await ctx.send("This corporation already owns land.")
+            await ctx.send(f"{company} already owns land and this command currently only supports purchasing one plot of land.")
             return
 
-
-        cost = LAND_OPTIONS[land_option]["cost"]
-        if not await bank.can_spend(ctx.author, cost):
-            await ctx.send(f"You don't have enough credits to purchase this land (cost: {cost} credits).")
+        # Adjust cost based on state modifier
+        base_cost = LAND_OPTIONS[land_option]["cost"]
+        state_modifier = STATE_OPTIONS[state]["land_cost_modifier"]
+        cost = int(base_cost * state_modifier)
+        
+        if cost > comp.get("balance", 0):
+            await ctx.send(f"Your corporation, {company}, does not have enough credits to purchase this land (cost: {cost} credits).")
             return
 
-        await bank.withdraw_credits(ctx.author, cost)
+        comp["balance"] = comp.get("balance", 0) - cost
         comp["land"] = land_option
         comp["land_details"] = LAND_OPTIONS[land_option]
         comp["employee_cap"] = LAND_OPTIONS[land_option]["base_employee_cap"]
         save_corporations(self.data)
-        await ctx.send(f"Congratulations! {company} has purchased **{land_option}** for {cost} credits as its HQ land.")
+        await ctx.send(f"Congratulations! {company} has purchased **{land_option}** in {state} for {cost} credits as its HQ land.")
+
     
     @commands.hybrid_command(name="buyoffice", with_app_command=True, description="Purchase an office building for your corporation.")
     async def buyoffice(self, ctx: commands.Context, company: str, office_size: str):
         """
         Purchase an office building for your corporation.
-        The office_size (e.g., 'small', 'medium', 'large') determines the cost, 
-        construction time, and the additional employee cap.
-        Note: Your corporation must have purchased land first.
+        The office_size (e.g., 'hole-in-the-wall', 'office suite', 'small office building', 
+        'warehouse', 'wide campus', or 'skyscraper') determines the cost, build time, land usage, 
+        and the additional employee capacity.
+        Note: Your corporation must have purchased land if the office option requires land.
         """
+        if ctx.interaction:
+            await ctx.defer()
 
         company = company.strip()
         office_size = office_size.lower().strip()
+
         if company not in self.data:
-            await ctx.send("That company is not registered.")
+            await ctx.send("That company is not registered. Please register it using the treasury commands.")
             return
+
         comp = self.data[company]
-        if not comp.get("land"):
-            await ctx.send("You must purchase land first using /buyland.")
-            return
-        if comp.get("hq_built"):
-            await ctx.send("You have already built an office building.")
+
+        # Check if the caller is the CEO (or an admin)
+        if comp["CEO"] != str(ctx.author.id) and not ctx.author.guild_permissions.administrator:
+            await ctx.send(f"You are not the CEO of {company}.")
             return
 
-        office_options = {
-            "small": {"cost": 20000, "build_time": 10, "additional_employee_cap": 10},
-            "medium": {"cost": 50000, "build_time": 20, "additional_employee_cap": 25},
-            "large": {"cost": 100000, "build_time": 30, "additional_employee_cap": 50}
-        }
-
-        if office_size not in office_options:
-            await ctx.send("Invalid office size. Options: small, medium, large.")
-            return
+        # If the office option requires land (land_usage > 0), check that the company has purchased land
+        if office_options[office_size]["land_usage"] > 0:
+            if not comp.get("land"):
+                return await ctx.send(f"{company} does not have any purchased land. To build a {office_size} office, you must first purchase land using /buyland.")
+            available_land = comp["land_details"].get("developable_land", 0)
+            required_land = office_options[office_size]["land_usage"]
+            if available_land < required_land:
+                return await ctx.send(f"{company} doesn't have enough developable land for a {office_size} office (requires {required_land} units, only {available_land} available).")
         
         option = office_options[office_size]
-
-        # Multiply cost by the development cost multiplier from the land.
-        multiplier = comp["land_details"]["development_cost_multiplier"]
-        total_cost = int(option["cost"] * multiplier)
-        if not await bank.can_spend(ctx.author, total_cost):
-            await ctx.send(f"You don't have enough credits to purchase a {office_size} office (cost: {total_cost} credits).")
+        total_cost = int(option["cost"] * comp["land_details"].get("development_cost_multiplier", 1.0))
+        
+        # Check company balance
+        if total_cost > comp.get("balance", 0):
+            await ctx.send(f"{company} doesn't have enough credits to purchase a {office_size} office (cost: {total_cost} credits).")
             return
 
         await bank.withdraw_credits(ctx.author, total_cost)
-        await ctx.send(f"Your {office_size} office building purchase has been initiated. Construction will take {option['build_time']} seconds.")
+        comp["balance"] = comp.get("balance", 0) - total_cost
         
-        # Simulate construction time delay.
+        # If the office requires land, reduce the available developable land accordingly.
+        if option["land_usage"] > 0:
+            comp["land_details"]["developable_land"] = available_land - option["land_usage"]
+
+        await ctx.send(f"{company}'s {office_size} office building purchase has been initiated. Construction will take {option['build_time']} seconds.")
         await asyncio.sleep(option["build_time"])
         
         comp["hq_built"] = True
         comp["employee_cap"] += option["additional_employee_cap"]
         comp["office"] = office_size
         save_corporations(self.data)
-        await ctx.send(f"Construction complete! Your office building is now built. Your corporation's employee cap has increased by {option['additional_employee_cap']} to {comp['employee_cap']} employees.")
+        await ctx.send(f"Construction complete! {company}'s office building is now built. Its employee cap has increased by {option['additional_employee_cap']} to {comp['employee_cap']} employees.")
     
     @commands.hybrid_command(name="publiccorpinfo", with_app_command=True, description="View public details of a corporation.")
     async def publiccorpinfo(self, ctx: commands.Context, company: str):
@@ -262,6 +651,57 @@ class Corporations(commands.Cog):
         msg += f"Employee Cap: {comp.get('employee_cap', 'N/A')}\n"
         msg += f"Date Registered: {comp.get('date_registered', 'N/A')}\n"
         await ctx.send(msg)
+    
+    @commands.hybrid_command(name="invest", with_app_command=True, 
+                           description="Invest money into your corporation's account. "
+                                       "This is recorded as a capital investment, not revenue.")
+    async def invest(self, ctx: commands.Context, company: str, amount: int):
+        company = company.strip()
+        # Check that the specified company exists
+        if company not in self.data:
+            await ctx.send("That corporation is not registered.")
+            return
+
+        corp = self.data[company]
+        # Verify that the user is the CEO (or has admin privileges)
+        if corp.get("CEO") != str(ctx.author.id) and not ctx.author.guild_permissions.administrator:
+            await ctx.send("You do not have permission to invest in that corporation.")
+            return
+
+        # Check that the user has sufficient credits
+        if not await bank.can_spend(ctx.author, amount):
+            await ctx.send("You don't have enough credits to invest that amount.")
+            return
+
+        await bank.withdraw_credits(ctx.author, amount)
+        
+        # Initialize company account balance if not already present
+        if "balance" not in corp:
+            corp["balance"] = 0
+        corp["balance"] += amount
+
+        save_corporations(self.data)
+        await ctx.send(f"Successfully invested {humanize.intword(amount)} credits into "
+                    f"{corp.get('name', company)}'s account. New company balance: {humanize.intword(corp['balance'])} credits.")
+
+        
+    @commands.hybrid_command(name="companybalance", with_app_command=True, 
+                            description="View your corporation's account balance.")
+    async def companybalance(self, ctx: commands.Context, company: str):
+        company = company.strip()
+        if company not in self.data:
+            await ctx.send("That corporation is not registered.")
+            return
+
+        corp = self.data[company]
+        # Verify that the user is the CEO (or admin)
+        if corp.get("CEO") != str(ctx.author.id) and not ctx.author.guild_permissions.administrator:
+            await ctx.send("You do not have permission to view that corporation's balance.")
+            return
+
+        balance = corp.get("balance", 0)
+        await ctx.send(f"The account balance for {corp.get('name', company)} is {humanize.intword(balance)} credits.")
+
 
     
     @commands.hybrid_command(name="companyinfo", with_app_command=True, description="View your corporation's details.")
