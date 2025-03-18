@@ -455,7 +455,8 @@ class Corporations(commands.Cog):
     @commands.hybrid_command(name="viewcorpcats", with_app_command=True, description="View the available corporation categories and their sub-categories.")
     async def viewcorpcats(self, ctx:commands.Context):
         """See a list of the available corporation categories."""
-
+        if ctx.interaction:
+            await ctx.defer()
         message = ""
         for parent, details in CORPORATE_CATEGORIES.items():
             message += f"**{parent}:** {details['description']}\n"
@@ -463,7 +464,23 @@ class Corporations(commands.Cog):
                 message += f" - **{sub}**: {sub_desc}\n"
             message += "\n"
         
-        await ctx.send(message)
+        chunks = self.split_by_line(message)
+        for chunk in chunks:
+            await ctx.send(chunk)
+    
+    def split_by_line(self, content: str, limit: int = 2000):
+        lines = content.splitlines(keepends=True)
+        chunks = []
+        current_chunk = ""
+        for line in lines:
+            if len(current_chunk) + len(line) > limit:
+                chunks.append(current_chunk)
+                current_chunk = ""
+            current_chunk += line
+        if current_chunk:
+            chunks.append(current_chunk)
+        return chunks
+
     
     @app_commands.command(name="setcorpdetails",
                            description="Set initial corp details.")
