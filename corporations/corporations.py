@@ -466,7 +466,7 @@ class Corporations(commands.Cog):
         await ctx.send(message)
     
     @app_commands.command(name="setcorpdetails",
-                           description="Set initial corp details. If the detail you're trying to add already has a value, this command will not work.")
+                           description="Set initial corp details.")
     @app_commands.describe(option="Select what detail you would like to set.",
                         company="The name (or identifier) of your corporation",
                         choice="The value you want to set for this detail")
