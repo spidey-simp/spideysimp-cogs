@@ -468,15 +468,18 @@ class Corporations(commands.Cog):
             }
             corp["active_projects"].append(str(proj_id))
             await self.config.guild(ctx.guild).active_projs.set(guild_proj_progress)
+            pacific_tz = pytz.timezone("US/Pacific")
+            project_finish_pst = project_finish.astimezone(pacific_tz)
+            formatted_finish = project_finish_pst.strftime("%B %d, %Y at %I:%M %p %Z")
             plural = ""
             if workers_assigned != 0:
                 plural = "employees' "
             if time < time_assigned:
-                await ctx.send(f"{company}'s research project (ID: **{proj_id}**) has begun.\nThe project should be finished early because of your {plural}research effectiveness!\nCheck back in at **{project_finish.isoformat()}**! \n Please keep this project id handy until I make a /seeactiveproj command. (It will come eventually!)")
+                await ctx.send(f"{company}'s research project (ID: **{proj_id}**) has begun.\nThe project should be finished early because of your {plural}research effectiveness!\nCheck back in at **{formatted_finish}**! \n Please keep this project id handy until I make a /seeactiveproj command. (It will come eventually!)")
             elif time > time_assigned:
-                await ctx.send(f"{company}'s research project (ID: **{proj_id}**) has begun.\nThe project will be finished late because of your {plural}lack of research effectiveness!\nCheck back in at **{project_finish.isoformat()}**! \n Please keep this project id handy until I make a /seeactiveproj command. (It will come eventually!)")
+                await ctx.send(f"{company}'s research project (ID: **{proj_id}**) has begun.\nThe project will be finished late because of your {plural}lack of research effectiveness!\nCheck back in at **{formatted_finish}**! \n Please keep this project id handy until I make a /seeactiveproj command. (It will come eventually!)")
             else:
-                await ctx.send(f"{company}'s research project (ID: **{proj_id}**) has begun.\nThe project should be finished at **{project_finish.isoformat()}**! \n Please keep this project id handy until I make a /seeactiveproj command. (It will come eventually!)")
+                await ctx.send(f"{company}'s research project (ID: **{proj_id}**) has begun.\nThe project should be finished at **{formatted_finish}**! \n Please keep this project id handy until I make a /seeactiveproj command. (It will come eventually!)")
         except Exception as e:
             if corp["balance"] != start_balance:
                 corp["balance"] = start_balance
