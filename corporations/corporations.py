@@ -45,6 +45,8 @@ def load_corporations():
     }
     for comp_name, comp in data.items():
         for field, default in default_fields.items():
+            if field == "employees":
+                comp[field] = {}
             if field == "name":
                 comp[field] = comp_name
             if field not in comp:
