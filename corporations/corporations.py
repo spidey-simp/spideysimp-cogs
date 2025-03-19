@@ -872,6 +872,9 @@ class Corporations(commands.Cog):
                            description="Invest money into your corporation's account. "
                                        "This is recorded as a capital investment, not revenue.")
     async def invest(self, ctx: commands.Context, company: str, amount: int):
+        if ctx.interaction:
+            await ctx.defer()
+        
         company = company.strip()
         # Check that the specified company exists
         if company not in self.data:
