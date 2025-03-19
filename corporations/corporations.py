@@ -546,9 +546,11 @@ class Corporations(commands.Cog):
     @app_commands.command(name="check_project_progress", description="Check progress of a project your company started.")
     @app_commands.describe(company="Which company to see the projects of!", project="Choose a project to check the progress of!")
     async def check_project_progress(self, interaction: discord.Interaction, company: str, project: str):
+        await interaction.defer()
+        
         active_projs = await self.config.guild(interaction.guild).active_projs()
         if project not in active_projs:
-            await interaction.followup.send("It looks like there was an error storing the project. Please contact an admin to push your project through!", ephemeral=True)
+            await interaction.followup.send(content="It looks like there was an error storing the project. Please contact an admin to push your project through!", ephemeral=True)
         
         now = datetime.now(timezone.utc)
         timefinish = active_projs[company][str(project)]["time"]
@@ -556,10 +558,10 @@ class Corporations(commands.Cog):
         finish_time = datetime.fromisoformat(timefinish)
 
         if now >= finish_time:
-            await interaction.followup.send("Your project is complete!")
+            await interaction.followup.send(content="Your project is complete!")
         else:
             time_remaining = finish_time - now
-            await interaction.followup.send(f"Your project is still in progress. Time remaining: {time_remaining}.")
+            await interaction.followup.send(content=f"Your project is still in progress. Time remaining: {time_remaining}.")
 
 
     @check_project_progress.autocomplete("company")
