@@ -698,7 +698,7 @@ class Corporations(commands.Cog):
         corp = self.data[company]
 
         # Check if the detail is already set.
-        if corp.get(option.value):
+        if corp.get(option.value) != "general" or corp.get(option.value) != None:
             await interaction.response.send_message(
                 "This detail has already been set. This command only supports initial setup.", ephemeral=True)
             return
