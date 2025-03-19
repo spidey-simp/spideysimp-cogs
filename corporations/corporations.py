@@ -566,10 +566,10 @@ class Corporations(commands.Cog):
     async def company_autocomplete(self, interaction: discord.Interaction, current: str):
         choices = []
 
-        for comp_name, details in self.data.items():
-            if details.get("CEO") == str(interaction.user.id):
-                if current.lower() in comp_name.lower():
-                    choices.append(app_commands.Choice(name=comp_name, value=comp_name))
+        for key, details in self.data.items():
+            comp_name = details.get("name", key)
+            if details.get("CEO") == str(interaction.user.id) and current.lower() in comp_name.lower():
+                choices.append(app_commands.Choice(name=comp_name, value=comp_name))
         
         return choices
     
