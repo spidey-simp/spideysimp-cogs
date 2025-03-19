@@ -542,7 +542,49 @@ class Corporations(commands.Cog):
         additional_overhead = raw_overhead * mitigation
 
         return base_time + additional_overhead
+    
+    @app_commands.command(name="check_project_progress", description="Check progress of a project your company started.")
+    @app_commands.describe(company="Which company to see the projects of!", project="Choose a project to check the progress of!")
+    async def check_project_progress(self, ctx: commands.Context, company: str, project: str):
+        active_projs = self.config.guild(ctx.guild).active_projs()
+        if project not in active_projs:
+            await ctx.send("It looks like there was an error storing the project. Please contact an admin to push your project through!")
+        
+        now = datetime.now(timezone.utc)
+        timefinish = active_projs[company][str(project)]["time"]
 
+        finish_time = datetime.fromisoformat(timefinish)
+
+        if now >= finish_time:
+            await ctx.send("Your project is complete!")
+        else:
+            time_remaining = finish_time - now
+            await ctx.send(f"Your project is still in progress. Time remaining: {time_remaining}.")
+
+
+    @check_project_progress.autocomplete("company")
+    async def company_autocomplete(self, interaction: discord.Interaction, current: str):
+        choices = []
+
+        for comp_name, details in self.data.items():
+            if details.get("CEO") == str(interaction.user.id):
+                if current.lower() in comp_name.lower():
+                    choices.append(app_commands.Choice(name=comp_name, value=comp_name))
+        
+        return choices
+    
+    @check_project_progress.autocomplete("project")
+    async def project_autocomplete(self, interaction: discord.Interaction, current: str):
+        company = interaction.namespace.company
+        choices = []
+        
+        if company in self.data:
+            active_projects = self.data[company].get("active_projects", [])
+            for proj in active_projects:
+                if current.lower() in proj.lower():
+                    choices.append(app_commands.Choice(name=proj, value=proj))
+        
+        return choices
 
 
     def get_rnd_message(self, outcome, category=None):
