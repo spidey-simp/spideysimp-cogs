@@ -2,13 +2,14 @@ import discord
 from discord import app_commands
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from discord.ext import commands
-from redbot.core import commands, bank
+from redbot.core import commands, bank, Config
 import pytz
 from PIL import Image, ImageDraw, ImageFont
 import asyncio
 import humanize
+import random, math
 
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data")
@@ -28,6 +29,7 @@ def load_corporations():
             comp["CEO"] = comp["owner"]
     # Migration: Ensure each company has the expected fields.
     default_fields = {
+        "name": None,
         "category": "general",       # e.g., tech, retail, healthcare, etc.
         "office_purchased": False,   # Whether the company has purchased HQ space
         "CEO": None,                 # Owner's Discord user id (as string)
@@ -37,9 +39,14 @@ def load_corporations():
         "land": None,
         "office": None,
         "balance": 0,
+        "randd_skill": 0,
+        "employees": {},
+        "active_projects": []
     }
     for comp_name, comp in data.items():
         for field, default in default_fields.items():
+            if field == "name":
+                comp[field] = comp_name
             if field not in comp:
                 comp[field] = default
     save_corporations(data)
@@ -264,7 +271,9 @@ CORPORATE_CATEGORIES = {
     "Consumer Goods": {
         "description": "Companies that manufacture products used by everyday consumers.",
         "subcategories": {
-            "Food & Beverage": "Producers of food, drinks, and related consumables.",
+            "Food & Beverage": {
+                "description": "Producers of food, drinks, and related consumables."
+            },
             "Apparel": "Companies in clothing, footwear, and accessories.",
             "Household Products": "Manufacturers of appliances and home care products.",
             "Recreation": "Any product designed to be used in a recreational setting."
@@ -345,7 +354,26 @@ CORPORATE_CATEGORIES = {
     }
 }
 
-
+PRODUCT_TEMPLATES = {
+    "Tech": {
+        "Smartphone": {
+            "requires_randd": True,
+            "base_quality": 10,
+            "stats": {
+                "base_performance": 10,
+                "base_battery_life": 10,
+                "base_graphics": 10,
+                "base_design": 10,
+                "base_usability": 10,
+                "base_marketability": 10
+            },
+            "base_production": 100,
+            "base_manufacture_cost": 50,
+            "prod_to_cust_ratio": 1.0,
+            "accessories_included": False
+        }
+    }
+}
 
 
 class Corporations(commands.Cog):
@@ -358,6 +386,10 @@ class Corporations(commands.Cog):
         self.bot = bot
         # Load corporations data into an in-memory dictionary.
         self.data = load_corporations()
+        self.config = Config.get_conf(self, identifier=12038120841)
+        self.config.register_guild(
+            active_projs = {}
+        )
     
     def cog_unload(self):
         save_corporations(self.data)
@@ -377,6 +409,171 @@ class Corporations(commands.Cog):
             )
         await ctx.send(embed=embed)
     
+    @commands.hybrid_command(name="research_new_product", with_app_command=True, description="Start a new research project for your corporation.")
+    async def research_new_product(self, ctx: commands.Context, company: str, budget: int, time_assigned: int, workers_assigned: int = 0):
+        if ctx.interaction:
+            await ctx.defer()
+        
+        if company not in self.data:
+            await ctx.send("It appears that company is not registered yet.")
+            return
+        
+        corp = self.data[company]
+
+        corp["employees"].setdefault("randd", {})
+
+        if ctx.author.id != corp["CEO"]:
+            await ctx.send("It's nice of you to want to contribute to someone else's corporation, but maybe you can do it another way. :)")
+            return
+        
+        if budget <= 0 or  time_assigned <= 0:
+            await ctx.send(f"{company} can't create a new product without investing some money or time into it.")
+            return
+        
+        if budget > corp["balance"]:
+            await ctx.send(f"{company} doesn't have the financial ability to invest that much. Please invest more into the company if you want to budget that much.")
+            return
+        
+        start_balance = corp["balance"]
+
+        if workers_assigned > 0:
+            if not corp["employees"] or not corp["employees"]["randd"]:
+                await ctx.send("You need to assign a **Research and Development** department before you can assign workers!")
+                return
+            if len(corp["employees"]["randd"].keys()) == 0:
+                await ctx.send(f"It looks like {company} hasn't hired any employees for their **Research and Development** department yet!")
+                return
+            available_workers = sum(1 for details in corp["employees"]["randd"].values() if details.get("current_proj") is None)
+            if workers_assigned > available_workers:
+                if available_workers:
+                    await ctx.send(f"{company} currently only has {available_workers} R&D employees not assigned to a research project. Please assign fewer workers.")
+                    return
+                else:
+                    await ctx.send(f"All of {company}'s R&D employees are currently assigned to other projects.")
+                    return
+        if workers_assigned < 0:
+            await ctx.send("You can't assign a negative amount of workers!")
+            return
+        
+        try: 
+            time, proj_id, quality = self.new_product_research(corp, budget, workers_assigned, time_assigned)
+            now = datetime.now(timezone.utc)
+            project_finish = now + timedelta(minutes=time)
+            guild_proj_progress = self.config.guild().active_projs() or {}
+            if company not in guild_proj_progress:
+                guild_proj_progress[company] = {}
+            guild_proj_progress[company][str(proj_id)] ={
+                "time": project_finish.isoformat(),
+                "quality": quality
+            }
+            corp["active_projects"].append(str(proj_id))
+            self.config.guild().active_projs.set(guild_proj_progress)
+            plural = ""
+            if workers_assigned != 0:
+                plural = "employees' "
+            if time < time_assigned:
+                await ctx.send(f"{company}'s research project (ID: **{proj_id}**) has begun.\nThe project should be finished early because of your {plural}research effectiveness!\nCheck back in at **{project_finish.isoformat()}**! \n Please keep this project id handy until I make a /seeactiveproj command. (It will come eventually!)")
+            elif time > time_assigned:
+                await ctx.send(f"{company}'s research project (ID: **{proj_id}**) has begun.\nThe project will be finished late because of your {plural}lack of research effectiveness!\nCheck back in at **{project_finish.isoformat()}**! \n Please keep this project id handy until I make a /seeactiveproj command. (It will come eventually!)")
+            else:
+                await ctx.send(f"{company}'s research project (ID: **{proj_id}**) has begun.\nThe project should be finished at **{project_finish.isoformat()}**! \n Please keep this project id handy until I make a /seeactiveproj command. (It will come eventually!)")
+        except Exception as e:
+            if corp["balance"] != start_balance:
+                corp["balance"] = start_balance
+            await ctx.send(f"There was an error ({e})beginning the project. Any balance that was invested has been refunded to the company.")
+        
+        save_corporations(self.data)
+
+
+    def new_product_research(self, corp: dict, project_budget: int, employees_assigned: int, time_assigned: int, leader_assigned: str = None)-> tuple:
+        employees = max(employees_assigned, 1)
+
+        randd_skill = corp.get("randd_skill", 0)
+        
+        target_budget_per_emp = 1000
+        leadership_skill = 0
+
+        if leader_assigned:
+            leadership_skill =  corp["employees"]["randd"][leader_assigned].get("leadership_skill")
+        
+        target_time_per_emp = self.compute_target_time_per_emp(60.0, employees, leadership_skill)
+
+        per_emp_budget = project_budget / employees
+        per_emp_time = time_assigned / employees
+
+        budget_eff = min(1, per_emp_budget / target_budget_per_emp)
+        time_eff = min(1, per_emp_time / target_time_per_emp)
+
+        per_emp_effectiveness = (budget_eff + time_eff) / 2
+        per_emp_effectiveness *= random.uniform(.95, 1.05)
+
+        overall_effectiveness = per_emp_effectiveness
+        overall_effectiveness += randd_skill * .1
+
+
+        quality_avg = 50 * (1 - math.exp(-overall_effectiveness / 5))
+        quality_avg = max(0, min(100, quality_avg))
+
+        research_time = int(time_assigned * math.exp(-overall_effectiveness / 10))
+        research_time = max(1, research_time)
+
+        
+        corp["balance"] -= project_budget
+
+        project_id = str(random.randint(1, 10**10))
+
+        return research_time, project_id, quality_avg
+    
+    def compute_target_time_per_emp(self, base_time: float, num_employees: int, leader_effectiveness: float = 0) -> float:
+        if num_employees <= 1:
+            return base_time
+        
+        max_overhead = base_time * .5
+
+        saturation_constant = 10
+
+        raw_overhead = max_overhead * (1 - math.exp(-(num_employees - 1) /saturation_constant))
+
+        mitigation = .5 - (leader_effectiveness / 10)
+
+        additional_overhead = raw_overhead * mitigation
+
+        return base_time + additional_overhead
+
+
+
+    def get_rnd_message(self, outcome, category=None):
+        messages = {
+            "in_progress": [
+                "One of our researchers is having major success with their research, but they need a little more time!",
+                "Our R&D team is making progress—stay tuned for a breakthrough!",
+                "Research is underway; we're on the brink of something big, but more time is needed."
+            ],
+            "success_new": [
+                "After extensive research, we've devised the idea for a {category_product}. Do you want to develop this product or get it straight to the market?",
+                "Eureka! A new {category_product} concept has emerged from our labs. How would you like to proceed?",
+                "Breakthrough! The R&D team has conceived a cutting-edge {category_product}."
+            ],
+            "failure": [
+                "Unfortunately, it seems our investments haven't paid off this time. We should try again on a new product.",
+                "Our research did not yield a viable product this round. Time to regroup and strategize.",
+                "The R&D efforts didn't come to fruition—sometimes innovation means learning from failure."
+            ],
+            "improvement": [
+                "Great news! Our research has significantly improved your product's performance.",
+                "The development process was a success, and your product's quality has increased.",
+                "Improvements are in—your product has been enhanced thanks to our dedicated R&D team."
+            ]
+        }
+        
+        if outcome in messages:
+            msg = random.choice(messages[outcome])
+            if "{category_product}" in msg and category:
+                msg = msg.format(category_product=category)
+            return msg
+        else:
+            return "Research update: Status unknown."
+
     @app_commands.command(
     name="landoptions",
     description="View available HQ land options or state info for your corporation."
@@ -542,6 +739,8 @@ class Corporations(commands.Cog):
                 f"The sub-category for {company} has been set to **{choice}** successfully!", ephemeral=True)
         else:
             await interaction.response.send_message("Invalid option.", ephemeral=True)
+        
+        save_corporations(self.data)
 
 
 
