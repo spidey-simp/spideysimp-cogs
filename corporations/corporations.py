@@ -459,7 +459,7 @@ class Corporations(commands.Cog):
             time, proj_id, quality = self.new_product_research(corp, budget, workers_assigned, time_assigned)
             now = datetime.now(timezone.utc)
             project_finish = now + timedelta(minutes=time)
-            guild_proj_progress = self.config.guild(ctx.guild).active_projs() or {}
+            guild_proj_progress = await self.config.guild(ctx.guild).active_projs() or {}
             if company not in guild_proj_progress:
                 guild_proj_progress[company] = {}
             guild_proj_progress[company][str(proj_id)] ={
@@ -467,7 +467,7 @@ class Corporations(commands.Cog):
                 "quality": quality
             }
             corp["active_projects"].append(str(proj_id))
-            self.config.guild(ctx.guild).active_projs.set(guild_proj_progress)
+            await self.config.guild(ctx.guild).active_projs.set(guild_proj_progress)
             plural = ""
             if workers_assigned != 0:
                 plural = "employees' "
