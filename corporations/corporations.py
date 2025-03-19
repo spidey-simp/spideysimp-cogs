@@ -568,7 +568,7 @@ class Corporations(commands.Cog):
 
         for key, details in self.data.items():
             comp_name = details.get("name", key)
-            if details.get("CEO") == str(interaction.user.id) and current.lower() in comp_name.lower():
+            if details.get("CEO") == interaction.user.id and current.lower() in comp_name.lower():
                 choices.append(app_commands.Choice(name=comp_name, value=comp_name))
         
         return choices
