@@ -546,7 +546,7 @@ class Corporations(commands.Cog):
     @app_commands.command(name="check_project_progress", description="Check progress of a project your company started.")
     @app_commands.describe(company="Which company to see the projects of!", project="Choose a project to check the progress of!")
     async def check_project_progress(self, interaction: discord.Interaction, company: str, project: str):
-        active_projs = await self.config.guild(ctx.guild).active_projs()
+        active_projs = await self.config.guild(interaction.guild).active_projs()
         if project not in active_projs:
             await interaction.followup.send("It looks like there was an error storing the project. Please contact an admin to push your project through!", ephemeral=True)
         
