@@ -41,7 +41,9 @@ def load_corporations():
         "balance": 0,
         "randd_skill": 0,
         "employees": {},
-        "active_projects": []
+        "active_projects": [], 
+        "pending_projects": {},
+        "products": {}
     }
     for comp_name, comp in data.items():
         for field, default in default_fields.items():
@@ -355,7 +357,7 @@ CORPORATE_CATEGORIES = {
 }
 
 PRODUCT_TEMPLATES = {
-    "Tech": {
+    "Technology": {
         "Smartphone": {
             "requires_randd": True,
             "base_quality": 10,
@@ -547,11 +549,13 @@ class Corporations(commands.Cog):
     @app_commands.describe(company="Which company to see the projects of!", project="Choose a project to check the progress of!")
     async def check_project_progress(self, interaction: discord.Interaction, company: str, project: str):
         await interaction.response.defer(ephemeral=True)
-        
+
         active_projs = await self.config.guild(interaction.guild).active_projs()
         if company not in active_projs or str(project) not in active_projs[company]:
             await interaction.followup.send("It looks like there was an error storing the project. Please contact an admin to push your project through!", ephemeral=True)
             return
+        
+        corp = self.data[company]
         
         now = datetime.now(timezone.utc)
         timefinish = active_projs[company][str(project)]["time"]
@@ -563,6 +567,7 @@ class Corporations(commands.Cog):
             if outcome == "failed":
                 message = self.get_rnd_message("failure")
                 active_projs[company].pop(str(project), None)
+                corp["active_projects"].remove(str(project))
             elif outcome == "postponed":
                 message = self.get_rnd_message("in_progress")
                 additional_time = random.randint(1, 60)
@@ -570,8 +575,21 @@ class Corporations(commands.Cog):
                 new_finish_time = now + timedelta(minutes=additional_time)
                 active_projs[company][str(project)]["time"] = new_finish_time.isoformat()
             else:
-                message = self.get_rnd_message("success_new")
-                active_projs[company].pop(str(project), None)
+                corp_cat = corp["category"]
+                if corp_cat not in PRODUCT_TEMPLATES:
+                    message = "I am so sorry! At the time of my writing this, products are only supported for tech companies! SORRY!"
+                else:
+                    prod_num = len(PRODUCT_TEMPLATES[corp_cat].keys())
+                    rand_prod = random.randint(1, prod_num)
+                    message = self.get_rnd_message("success_new").format(category_product=rand_prod)
+                    if str(project) not in corp["pending_projects"]:
+                        corp["pending_projects"][str(project)] = {}
+                    for k, v in active_projs[company][str(project)].items():
+                        corp["pending_projects"][str(project)][k] = v
+                    corp["pending_products"][str(project)]["product_type"] = rand_prod
+                    active_projs[company].pop(str(project), None)
+                    if str(project) in corp["active_projects"]:
+                        corp["active_projects"].remove(str(project))
             await interaction.followup.send(message)
         else:
             time_remaining = finish_time - now
