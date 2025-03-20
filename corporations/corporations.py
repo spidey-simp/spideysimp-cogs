@@ -586,7 +586,7 @@ class Corporations(commands.Cog):
                         corp["pending_projects"][str(project)] = {}
                     for k, v in active_projs[company][str(project)].items():
                         corp["pending_projects"][str(project)][k] = v
-                    corp["pending_products"][str(project)]["product_type"] = rand_prod
+                    corp["pending_projects"][str(project)]["product_type"] = rand_prod
                     active_projs[company].pop(str(project), None)
                     if str(project) in corp["active_projects"]:
                         corp["active_projects"].remove(str(project))
