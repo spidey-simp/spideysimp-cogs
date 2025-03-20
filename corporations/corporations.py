@@ -1029,7 +1029,7 @@ class Corporations(commands.Cog):
     
     @app_commands.command(name="companyinfo", description="View your corporation's details.")
     @app_commands.describe(company="The Company you want to see the info for!")
-    async def companyinfo(self, ctx: commands.Context, company: str):
+    async def companyinfo(self, interaction: discord.Interaction, company: str):
         """
         Show detailed info for a given company.
         If no company is specified, display the corporation for the caller.
@@ -1037,7 +1037,7 @@ class Corporations(commands.Cog):
         # If no company name is provided, assume the caller's company.
         company = company.strip()
         if company not in self.data:
-            await ctx.send("That company is not registered.")
+            await interaction.followup.send("That company is not registered.")
             return
 
         comp = self.data[company]
@@ -1053,7 +1053,7 @@ class Corporations(commands.Cog):
         formatted_date = datetime.fromisoformat(register_date)
         final_format = formatted_date.strftime("%m/%d/%Y")
         msg += f"Date Registered: {final_format}\n"
-        await ctx.send(msg)
+        await interaction.followup.send(msg)
 
     
     @companyinfo.autocomplete("company")
