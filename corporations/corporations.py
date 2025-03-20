@@ -412,8 +412,62 @@ class Corporations(commands.Cog):
 
         await interaction.followup.send(f"Your {name} {product_type} has been created with a quality of {product_dict['base_quality']}%! From here you can either refine the product or put it straight onto the market!")
 
+    async def company_autocomplete(self, interaction: discord.Interaction, current: str):
+        # Filter companies whose names contain the current input (case-insensitive)
+        companies = [name for name in self.data.keys() if current.lower() in name.lower()]
+        # Return up to 25 choices
+        return [app_commands.Choice(name=name, value=name) for name in companies[:25]]
+    
+    async def product_autocomplete(self, interaction: discord.Interaction, current: str):
+        # Get the chosen company from the interaction namespace.
+        company = interaction.namespace.company
+        products = []
+        if company in self.data and "products" in self.data[company]:
+            products = list(self.data[company]["products"].keys())
+        filtered = [p for p in products if current.lower() in p.lower()]
+        return [app_commands.Choice(name=p, value=p) for p in filtered[:25]]
+    
 
+    @app_commands.command(name="product_info", description="Show details and stats for a product.")
+    @app_commands.describe(company="The company that owns the product", product="The product to view")
+    @app_commands.autocomplete(company=company_autocomplete, product=product_autocomplete)
+    async def product_info(self, interaction: discord.Interaction, company: str, product: str):
+        # Defer the response since we're doing some lookups.
+        await interaction.response.defer()
 
+        # Validate the company exists.
+        if company not in self.data:
+            await interaction.followup.send(f"Company **{company}** not found.", ephemeral=True)
+            return
+
+        corp = self.data[company]
+
+        # Validate the product exists.
+        if "products" not in corp or product not in corp["products"]:
+            await interaction.followup.send(f"Product **{product}** not found for {company}.", ephemeral=True)
+            return
+
+        prod = corp["products"][product]
+
+        # Build an embed showing product stats.
+        embed = discord.Embed(
+            title=f"{product} for {company}",
+            description="Here are the product stats:",
+            color=discord.Color.green()
+        )
+
+        # Example fields (customize based on your actual product dict structure):
+        embed.add_field(name="Base Quality", value=f"{prod.get('base_quality', 'N/A')}%", inline=True)
+        embed.add_field(name="Base Production", value=f"{humanize.intcomma(prod.get('base_production', 0))}", inline=True)
+        embed.add_field(name="Manufacture Cost", value=f"{humanize.intcomma(prod.get('base_manufacture_cost', 0))}", inline=True)
+
+        # Loop over any stats in the 'stats' sub-dictionary.
+        stats = prod.get("stats", {})
+        if stats:
+            stat_lines = "\n".join(f"**{stat.replace('_',' ').title()}:** {value}" for stat, value in stats.items())
+            embed.add_field(name="Additional Stats", value=stat_lines, inline=False)
+
+        await interaction.followup.send(embed=embed)
 
 
     
