@@ -1034,13 +1034,13 @@ class Corporations(commands.Cog):
         Show detailed info for a given company.
         If no company is specified, display the corporation for the caller.
         """
+        await interaction.response.defer()
+
         # If no company name is provided, assume the caller's company.
         company = company.strip()
         if company not in self.data:
             await interaction.followup.send("That company is not registered.")
             return
-
-        comp = self.data[company]
 
         corp = self.data[company]
         msg = f"**Company Information for {corp.get('name', 'Unnamed Corporation')}**\n"
