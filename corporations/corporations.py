@@ -154,7 +154,7 @@ class Corporations(commands.Cog):
                 guild_proj_progress[company] = {}
             guild_proj_progress[company][str(proj_id)] ={
                 "time": project_finish.isoformat(),
-                "quality": quality
+                "quality": int(quality)
             }
             corp["active_projects"].append(str(proj_id))
             await self.config.guild(ctx.guild).active_projs.set(guild_proj_progress)
@@ -458,7 +458,7 @@ class Corporations(commands.Cog):
 
         # Example fields (customize based on your actual product dict structure):
         embed.add_field(name="Base Quality", value=f"{prod.get('base_quality', 'N/A')}%", inline=True)
-        embed.add_field(name="Base Production", value=f"{humanize.intcomma(prod.get('base_production', 0))}", inline=True)
+        embed.add_field(name="Base Production", value=f"{humanize.intcomma(prod.get('base_production', 0)):2f}", inline=True)
         embed.add_field(name="Manufacture Cost", value=f"{humanize.intcomma(prod.get('base_manufacture_cost', 0))}", inline=True)
 
         # Loop over any stats in the 'stats' sub-dictionary.
