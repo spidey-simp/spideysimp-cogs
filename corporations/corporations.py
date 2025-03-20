@@ -559,11 +559,41 @@ class Corporations(commands.Cog):
         finish_time = datetime.fromisoformat(timefinish)
 
         if now >= finish_time:
-            await interaction.followup.send(content="Your project is complete!")
+            outcome = self.chance_of_failure(self.data[company], active_projs[company][str(project)]["quality"])
+            if outcome == "failed":
+                message = self.get_rnd_message("failure")
+                active_projs[company].pop(str(project), None)
+            elif outcome == "postponed":
+                message = self.get_rnd_message("in_progress")
+                additional_time = random.randint(1, 60)
+                message += f"\nCheck back in {additional_time} minutes!"
+                new_finish_time = now + timedelta(minutes=additional_time)
+                active_projs[company][str(project)]["time"] = new_finish_time.isoformat()
+            else:
+                message = self.get_rnd_message("success_new")
+                active_projs[company].pop(str(project), None)
+            await interaction.followup.send(message)
         else:
             time_remaining = finish_time - now
-            await interaction.followup.send(content=f"Your project is still in progress. Time remaining: {time_remaining}.")
+            await interaction.followup.send(f"Your project is still in progress. Time remaining: {time_remaining}.")
 
+    def chance_of_failure(self, corp: dict, quality: float):
+        randd_skill = corp.get("randd_skill", .5) / 10000
+        quality /= 10000
+
+        chance = random.uniform(0.0, 1.0)
+
+        if chance < (.05 - randd_skill - quality):
+            secondchance = random.uniform(0.0, 1.0)
+            if secondchance <= .7:
+                return "postponed"
+            else:
+                return "failed"
+        
+        return "success"
+
+
+        
 
     @check_project_progress.autocomplete("company")
     async def company_autocomplete(self, interaction: discord.Interaction, current: str):
@@ -746,7 +776,7 @@ class Corporations(commands.Cog):
         corp = self.data[company]
 
         # Check if the detail is already set.
-        if corp.get(option.value) != "general" or corp.get(option.value) != None:
+        if corp.get(option.value) != "general" not in ["general", None]:
             await interaction.response.send_message(
                 "This detail has already been set. This command only supports initial setup.", ephemeral=True)
             return
@@ -789,6 +819,32 @@ class Corporations(commands.Cog):
             await interaction.response.send_message("Invalid option.", ephemeral=True)
         
         save_corporations(self.data)
+    
+    @setcorpdetails.autocomplete("company")
+    async def company_autocomplete(self, interaction: discord.Interaction, current: str):
+        choices = []
+
+        for key, details in self.data.items():
+            comp_name = details.get("name", key)
+            if details.get("CEO") == interaction.user.id and current.lower() in comp_name.lower():
+                choices.append(app_commands.Choice(name=comp_name, value=comp_name))
+        
+        return choices
+    
+    @setcorpdetails.autocomplete("choice")
+    async def choice_autocomplete(self, interaction:discord.Interaction, current: str):
+        choices = []
+        company = interaction.namespace.company
+        option = interaction.namespace.option
+        if option == "category":
+            for category in CORPORATE_CATEGORIES.keys():
+                choices.append(app_commands.Choice(name=category, value=category))
+        else:
+            current_cat = company.get("category")
+            subcategory_dict = CORPORATE_CATEGORIES[current_cat]["subcategories"]
+            for subcategory in subcategory_dict.keys():
+                choices.append(app_commands.Choice(name=subcategory, value=subcategory))
+        return choices
 
 
 
