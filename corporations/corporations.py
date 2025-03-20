@@ -458,7 +458,7 @@ class Corporations(commands.Cog):
 
         # Example fields (customize based on your actual product dict structure):
         embed.add_field(name="Base Quality", value=f"{prod.get('base_quality', 'N/A')}%", inline=True)
-        embed.add_field(name="Base Production", value=f"{humanize.intcomma(prod.get('base_production', 0)):2f}", inline=True)
+        embed.add_field(name="Base Production", value=f"{prod.get('base_production', 0):,.2f}", inline=True)
         embed.add_field(name="Manufacture Cost", value=f"{humanize.intcomma(prod.get('base_manufacture_cost', 0))}", inline=True)
 
         # Loop over any stats in the 'stats' sub-dictionary.
