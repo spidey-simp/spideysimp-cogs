@@ -579,14 +579,13 @@ class Corporations(commands.Cog):
                 if corp_cat not in PRODUCT_TEMPLATES:
                     message = "I am so sorry! At the time of my writing this, products are only supported for tech companies! SORRY!"
                 else:
-                    prod_num = len(PRODUCT_TEMPLATES[corp_cat].keys())
-                    rand_prod = random.randint(1, prod_num)
-                    message = self.get_rnd_message("success_new").format(category_product=rand_prod)
+                    rand_key = random.choice(list(PRODUCT_TEMPLATES[corp_cat].keys()))
+                    message = self.get_rnd_message("success_new").format(category_product=rand_key)
                     if str(project) not in corp["pending_projects"]:
                         corp["pending_projects"][str(project)] = {}
                     for k, v in active_projs[company][str(project)].items():
                         corp["pending_projects"][str(project)][k] = v
-                    corp["pending_projects"][str(project)]["product_type"] = rand_prod
+                    corp["pending_projects"][str(project)]["product_type"] = rand_key
                     active_projs[company].pop(str(project), None)
                     if str(project) in corp["active_projects"]:
                         corp["active_projects"].remove(str(project))
