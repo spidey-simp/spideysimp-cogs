@@ -1027,38 +1027,43 @@ class Corporations(commands.Cog):
 
 
     
-    @commands.hybrid_command(name="companyinfo", with_app_command=True, description="View your corporation's details.")
-    async def companyinfo(self, ctx: commands.Context, company: str = None):
+    @app_commands.command(name="companyinfo", description="View your corporation's details.")
+    @app_commands.describe(company="The Company you want to see the info for!")
+    async def companyinfo(self, ctx: commands.Context, company: str):
         """
         Show detailed info for a given company.
         If no company is specified, display the corporation for the caller.
         """
         # If no company name is provided, assume the caller's company.
-        if company:
-            company = company.strip()
-            if company not in self.data:
-                await ctx.send("That company is not registered.")
-                return
+        company = company.strip()
+        if company not in self.data:
+            await ctx.send("That company is not registered.")
+            return
 
-            comp = self.data[company]
-            if comp["CEO"] != str(ctx.author.id) and not ctx.author.guild_permissions.administrator:
-                await ctx.send("You do not own that corporation. Use the publiccorpinfo command to see info about that company.")
-                return
-            corp = self.data[company]
-            msg = f"**Company Information for {corp.get('name', 'Unnamed Corporation')}**\n"
-            msg += f"CEO: <@{corp.get('CEO', 'N/A')}>\n"
-            msg += f"Category: {corp.get('category', 'N/A')}\n"
-            msg += f"Land: {corp.get('land', 'None')}\n"
-            msg += f"Office: {corp.get('office', 'Not built')}\n"
-            msg += f"Employee Cap: {corp.get('employee_cap', 'N/A')}\n"
-            msg += f"Busy Season Modifier: {corp.get('busy_season', 'N/A')}\n"
-            msg += f"Date Registered: {corp.get('date_registered', 'N/A')}\n"
-            await ctx.send(msg)
-        else:
-            owned = [name for name, comp in self.data.items() if comp["CEO"] == str(ctx.author.id)]
-            if not owned:
-                await ctx.send("You do not own any registered corporations.")
-                return
-            msg = "**Your Registered Corporations:**\n" + "\n".join(owned)
-            await ctx.send(msg)
+        comp = self.data[company]
+
+        corp = self.data[company]
+        msg = f"**Company Information for {corp.get('name', 'Unnamed Corporation')}**\n"
+        msg += f"CEO: <@{corp.get('CEO', 'N/A')}>\n"
+        msg += f"Category: {corp.get('category', 'N/A')}\n"
+        msg += f"Land: {corp.get('land', 'None')}\n"
+        msg += f"Office: {corp.get('office', 'Not built')}\n"
+        msg += f"Employee Cap: {corp.get('employee_cap', 'N/A')}\n"
+        register_date = corp.get('date_registered')
+        formatted_date = datetime.fromisoformat(register_date)
+        final_format = formatted_date.strftime("%m/%d/%Y")
+        msg += f"Date Registered: {final_format}\n"
+        await ctx.send(msg)
+
+    
+    @companyinfo.autocomplete("company")
+    async def company_autocomplete(self, interaction: discord.Interaction, current: str):
+        choices = []
+
+        for key, details in self.data.items():
+            comp_name = details.get("name", key)
+            if details.get("CEO") == interaction.user.id and current.lower() in comp_name.lower():
+                choices.append(app_commands.Choice(name=comp_name, value=comp_name))
+        
+        return choices
     
