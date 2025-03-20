@@ -428,6 +428,10 @@ class Corporations(commands.Cog):
             await ctx.send("It's nice of you to want to contribute to someone else's corporation, but maybe you can do it another way. :)")
             return
         
+        allowed_cats = PRODUCT_TEMPLATES.keys()
+        if corp["category"] not in allowed_cats:
+            await ctx.send(f"This command currently only supports companies in the following categories: {', '.join(allowed_cats)}")
+        
         if budget <= 0 or  time_assigned <= 0:
             await ctx.send(f"{company} can't create a new product without investing some money or time into it.")
             return
@@ -668,6 +672,29 @@ class Corporations(commands.Cog):
             return msg
         else:
             return "Research update: Status unknown."
+    
+    @commands.command(name="fixproj")
+    @commands.admin_or_permissions(administrator=True)
+    async def fixproj(self, ctx, company: str, project: str):
+        """Temporarily fix a pending project's product_type."""
+        # Ensure the company exists in your data
+        if company not in self.data:
+            await ctx.send("That company isn't registered.")
+            return
+
+        corp = self.data[company]
+        pending = corp.get("pending_projects", {})
+        if project not in pending:
+            await ctx.send("Project not found in pending projects.")
+            return
+
+        # Set the product_type to the correct product name.
+        # If currently product_type is '1' but it should be "Smartphone":
+        pending[project]["product_type"] = "Smartphone"
+        # Save your changes:
+        save_corporations(self.data)
+        await ctx.send(f"Project {project} for company {company} has been fixed!")
+
 
     @app_commands.command(
     name="landoptions",
