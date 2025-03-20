@@ -11,6 +11,7 @@ import asyncio
 import humanize
 import random, math
 from .config import STATE_OPTIONS, LAND_OPTIONS, office_options, CORPORATE_CATEGORIES, PRODUCT_TEMPLATES
+import copy
 
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data")
@@ -370,19 +371,48 @@ class Corporations(commands.Cog):
             return
         
         proj_dict = corp["pending_projects"][project]
-        template_dict = PRODUCT_TEMPLATES[corp["category"]][proj_dict["product_type"]]
+        product_type = proj_dict["product_type"]
+        template_dict = copy.deepcopy(PRODUCT_TEMPLATES[corp["category"]][product_type])
+
 
         if not name:
             await interaction.followup.send("Assuming you didn't mean to delete the product, you need to give it a name.")
             return
         
-        if corp["products"][name]:
+        if "products" not in corp:
+            corp["products"] = {}
+        
+        if name in corp["products"]:
             await interaction.followup.send(f"You've already named a product {name} for {company}! Please choose a different name!")
             return
         
-        corp["products"][name] = {}
-
         corp["products"][name] = template_dict
+
+        product_dict = corp["products"][name]
+
+        product_dict["base_quality"] = max(template_dict["base_quality"], proj_dict["quality"])
+
+        for stat, value in product_dict["stats"].items():
+            variation = random.randint(-5, 5)
+            product_dict["stats"][stat] = max(template_dict["stats"][stat], (proj_dict["quality"] + variation))
+        
+        if proj_dict["quality"] >= 50:
+            prod_variation = random.uniform(.9, .99)
+            product_dict["base_production"] = template_dict["base_production"] * prod_variation
+            cost_variation = random.uniform(.9, .99)
+            product_dict["base_manufacture_cost"] = int(template_dict["base_manufacture_cost"] * cost_variation)
+        else:
+            prod_variation = random.uniform(1.01, 1.1)
+            product_dict["base_production"] = template_dict["base_production"] * prod_variation
+            cost_variation = random.uniform(1.01, 1.1)
+            product_dict["base_manufacture_cost"] = int(template_dict["base_manufacture_cost"] * cost_variation)
+        
+        corp["pending_projects"].pop(project, None)
+        save_corporations(self.data)
+
+        await interaction.followup.send(f"Your {name} {product_type} has been created with a quality of {product_dict['base_quality']}%! From here you can either refine the product or put it straight onto the market!")
+
+
 
 
 
