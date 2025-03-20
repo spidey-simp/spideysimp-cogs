@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 import asyncio
 import humanize
 import random, math
+from .config import 
 
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data")
@@ -593,6 +594,8 @@ class Corporations(commands.Cog):
                     active_projs[company].pop(str(project), None)
                     if str(project) in corp["active_projects"]:
                         corp["active_projects"].remove(str(project))
+            corp["randd_skill"] += random.randint(1, 2)
+            save_corporations(self.data)
             await interaction.followup.send(message)
         else:
             time_remaining = finish_time - now
@@ -672,6 +675,60 @@ class Corporations(commands.Cog):
             return msg
         else:
             return "Research update: Status unknown."
+    
+    @app_commands.command(name="create_product", description="Take a pending product and make it so!")
+    @app_commands.describe(company="The name of the company to make the product for!", project="The project id!", name="The name to give your product!", scrapit = "Actually I want to trash it - True = Trash the product.")
+    async def create_product(self, interaction:discord.Interaction, company: str, project: str, name: str=None, scrapit: bool=False):
+        await interaction.response.defer()
+
+        corp = self.data[company]
+        if scrapit:
+            corp["pending_projects"].pop(project, None)
+            await interaction.followup.send(f"The project with ID **{project}** has been scrapped.")
+            return
+        
+        proj_dict = corp["pending_projects"][project]
+        template_dict = PRODUCT_TEMPLATES[corp["category"]][proj_dict["product_type"]]
+
+        if not name:
+            await interaction.followup.send("Assuming you didn't mean to delete the product, you need to give it a name.")
+            return
+        
+        if corp["products"][name]:
+            await interaction.followup.send(f"You've already named a product {name} for {company}! Please choose a different name!")
+            return
+        
+        corp["products"][name] = {}
+
+        corp["products"][name] = template_dict
+
+
+
+    
+    @create_product.autocomplete("company")
+    async def company_autocomplete(self, interaction:discord.Interaction, current: str):
+        choices = []
+        for key, details in self.data.items():
+            comp_name = details.get("name", key)
+            if details.get("CEO") == interaction.user.id and current.lower() in comp_name.lower():
+                choices.append(app_commands.Choice(name=comp_name, value=comp_name))
+        
+        return choices
+    
+    @create_product.autocomplete("project")
+    async def project_autocomplete(self, interaction:discord.Interaction, current: str):
+        company = interaction.namespace.company
+        choices = []
+        
+        if company in self.data:
+            pending_projects = self.data[company].get("pending_projects", [])
+            for proj in pending_projects:
+                if current.lower() in proj.lower():
+                    choices.append(app_commands.Choice(name=proj, value=proj))
+        
+        return choices
+
+
     
     @commands.command(name="fixproj")
     @commands.admin_or_permissions(administrator=True)
