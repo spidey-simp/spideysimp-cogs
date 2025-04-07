@@ -1,5 +1,5 @@
-from .spideyutils import SpideyUtils
+from .spideyutils import SpideyUtils, RequestRoll
 
 async def setup(bot):
-    cog = SpideyUtils(bot)
-    await bot.add_cog(cog)
+    await bot.add_cog(SpideyUtils(bot))
+    await bot.add_cog(RequestRoll(bot))

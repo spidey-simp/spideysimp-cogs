@@ -1,16 +1,88 @@
 import discord
+from discord import app_commands
 from discord.ext import commands
+from discord import Interaction
 from redbot.core import commands
 import json
 import os
 import random
 import asyncio
+import datetime
 
 BASE_DIR = "/mnt/data/rpdata"
+
+class RequestRoll(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @app_commands.command(name="requestroll", description="Submit a roll request to the GM.")
+    async def requestroll(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(RequestRollModal())
+
+class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
+    reason = discord.ui.TextInput(label="Reason for roll", style=discord.TextStyle.paragraph)
+    modifier = discord.ui.TextInput(label="Suggested modifier (e.g., +10 for stability, -5 for morale, etc.)", required=False)
+
+    async def on_submit(self, interaction:discord.Interaction):
+        if os.path.exists("current_turn.json"):
+            with open("current_turn.json", "r") as f:
+                game_state = json.load(f)
+            game_turn = game_state["turn"]
+            game_year = game_state["year"]
+        else:
+            game_turn = 0
+            game_year = "Unknown"
+        
+        request = {
+            "user_id": interaction.user.id,
+            "username": str(interaction.user),
+            "reason": self.reason.value,
+            "modifier": self.modifier.value if self.modifier.value else "No suggestion",
+            "status": "need_gm_evaluation",
+            "channel": interaction.channel.name,
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "game_turn": game_turn,
+            "game_year": game_year
+        }
+
+        filepath = "roll_requests.json"
+        requests = []
+        if os.path.exists(filepath):
+            with open(filepath, "r") as f:
+                requests = json.load(f)
+        requests.append(request)
+        with open(filepath, "w") as f:
+            json.dump(requests, f, indent=2)
+
+        gm_channel_id = 1357944150502412288
+        gm_channel = interaction.client.get_channel(gm_channel_id)
+        if gm_channel:
+            embed = discord.Embed(title="🎲 New Roll Request", color=discord.Color.orange())
+            embed.add_field(name="User", value=interaction.user.mention)
+            embed.add_field(name="Reason", value=self.reason.value, inline=False)
+            embed.add_field(name="Modifier", value=self.modifier.value or "No suggestion")
+            embed.add_field(name="In-Game Time", value=f"Turn {game_turn} ({game_year})")
+            embed.set_footer(text=f"Requested in #{interaction.channel.name} at {request['timestamp']} UTC")
+            await gm_channel.send(embed=embed)
+
+        await interaction.response.send_message("✅ Your roll request has been submitted.", ephemeral=True)
+
+
 
 class SpideyUtils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+    
+    @app_commands.command(name="setturn", description="Set the current in-game turn and year.")
+    async def setturn(self, interaction: discord.Interaction, turn: int, year: str):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+
+        data = {"turn": turn, "year": year}
+        with open("current_turn.json", "w") as f:
+            json.dump(data, f)
+        await interaction.response.send_message(f"🕰️ Turn updated to Turn {turn}, Year {year}.", ephemeral=True)
+
 
     @commands.command()
     @commands.has_permissions(administrator=True)
@@ -59,7 +131,7 @@ class SpideyUtils(commands.Cog):
         if not channel:
             return await ctx.send("⚠️ Couldn't find that channel. Cancelling.")
 
-        embed_obj = discord.Embed(title=title, description=description, color=discord.Color.red())
+        embed_obj = discord.Embed(title=title, description=description, color=discord.Color.dark_gray())
         if thumbnail:
             embed_obj.set_thumbnail(url=thumbnail)
         if image:
@@ -159,6 +231,107 @@ class SpideyUtils(commands.Cog):
 
         # Also post the result in the current (GM) channel
         await ctx.send(f"Roll result for {target.mention}:\n{result_text}")
+    
+    
+    
+    @app_commands.command(name="viewrequests", description="View all roll requests categorized by status.")
+    async def viewrequests(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+
+        filepath = "roll_requests.json"
+        if not os.path.exists(filepath):
+            return await interaction.response.send_message("No requests found.", ephemeral=True)
+
+        with open(filepath, "r") as f:
+            requests = json.load(f)
+
+        pending = [r for r in requests if r["status"] == "need_gm_evaluation"]
+        resolved = [r for r in requests if r["status"] == "need_player_implementation"]
+
+        def build_embed(title, reqs, color):
+            embed = discord.Embed(title=title, color=color)
+            if not reqs:
+                embed.description = "No requests."
+                return embed
+            for r in reqs:
+                embed.add_field(
+                    name=f"{r['username']} ({r['channel']})",
+                    value=(
+                        f"**Reason:** {r['reason']}\n"
+                        f"**Modifier:** {r['modifier']}\n"
+                        f"🕰️ Turn {r['game_turn']} ({r['game_year']})\n"
+                        f"⏱️ {r['timestamp']} UTC"
+                    ),
+                    inline=False
+                )
+            return embed
+
+        await interaction.response.send_message(embeds=[
+            build_embed("🕵️ Requests Needing GM Evaluation", pending, discord.Color.gold()),
+            build_embed("📌 Requests Needing Player Implementation", resolved, discord.Color.green())
+        ], ephemeral=True)
+
+
+    async def get_user_choices(self, interaction: discord.Interaction, current: str):
+        if not os.path.exists("roll_requests.json"):
+            return []
+        with open("roll_requests.json", "r") as f:
+            requests = json.load(f)
+
+        seen = set()
+        return [
+            app_commands.Choice(name=req["username"], value=req["username"])
+            for req in reversed(requests)
+            if req["status"] != "archived" and req["username"] not in seen and not seen.add(req["username"])
+            and current.lower() in req["username"].lower()
+        ][:25]
+
+    @app_commands.command(name="change")
+    async def change_status(self, interaction: discord.Interaction,
+                            username: app_commands.Transform[str, app_commands.Transformer()],
+                            new_status: app_commands.Choice[str]):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+
+        valid_statuses = ["need_gm_evaluation", "need_player_implementation", "archived"]
+        filepath = "roll_requests.json"
+        if not os.path.exists(filepath):
+            return await interaction.response.send_message("⚠️ No requests found.", ephemeral=True)
+
+        with open(filepath, "r") as f:
+            requests = json.load(f)
+
+        matched = None
+        for r in reversed(requests):
+            if username.lower() in r["username"].lower():
+                matched = r
+                break
+
+        if not matched:
+            return await interaction.response.send_message("⚠️ No matching request found.", ephemeral=True)
+
+        matched["status"] = new_status.value
+        with open(filepath, "w") as f:
+            json.dump(requests, f, indent=2)
+
+        await interaction.response.send_message(f"✅ Updated request from **{matched['username']}** to **{new_status.value}**.", ephemeral=True)
+
+    @change_status.autocomplete("username")
+    async def username_autocomplete(self, interaction: discord.Interaction, current: str):
+        return await self.get_user_choices(interaction, current)
+
+    @app_commands.choices(new_status=[
+        app_commands.Choice(name="Needs GM Evaluation", value="need_gm_evaluation"),
+        app_commands.Choice(name="Needs Player Implementation", value="need_player_implementation"),
+        app_commands.Choice(name="Archived", value="archived")
+    ])
+    async def new_status_autocomplete(self, interaction: discord.Interaction, current: str):
+        pass
+
+
+
+
 
     @commands.command()
     @commands.has_permissions(administrator=True)
