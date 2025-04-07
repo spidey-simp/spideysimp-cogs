@@ -21,7 +21,12 @@ class RequestRoll(commands.Cog):
 
 class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
     reason = discord.ui.TextInput(label="Reason for roll", style=discord.TextStyle.paragraph)
-    modifier = discord.ui.TextInput(label="Suggested modifier (e.g., +10 for stability, -5 for morale, etc.)", required=False)
+    modifier = discord.ui.TextInput(
+        label="Suggested modifier",
+        placeholder="examples: +10 for advantage, -5 for disadvantage, etc.",
+        required=False
+    )
+
 
     async def on_submit(self, interaction:discord.Interaction):
         if os.path.exists("current_turn.json"):
