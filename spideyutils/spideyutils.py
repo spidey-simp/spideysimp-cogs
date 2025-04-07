@@ -59,11 +59,14 @@ class SpideyUtils(commands.Cog):
         if not channel:
             return await ctx.send("⚠️ Couldn't find that channel. Cancelling.")
 
-        embed_obj = discord.Embed(title=title, description=description, color=discord.Color.blurple())
+        embed_obj = discord.Embed(title=title, color=discord.Color.red())
         if thumbnail:
             embed_obj.set_thumbnail(url=thumbnail)
         if image:
-            embed_obj.set_image(url=image)
+            embed_obj.description = f"{image}\n\n{description}"
+        else:
+            embed_obj.description = description
+            
         for field in fields:
             embed_obj.add_field(name=field["name"], value=field["value"], inline=field["inline"])
 
