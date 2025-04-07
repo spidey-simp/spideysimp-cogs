@@ -45,7 +45,9 @@ def load_corporations():
         "employees": {},
         "active_projects": [], 
         "pending_projects": {},
-        "products": {}
+        "products": {},
+        "manufacturing_line": {},
+        "manufacturing_locations": {}
     }
     for comp_name, comp in data.items():
         for field, default in default_fields.items():
@@ -493,8 +495,30 @@ class Corporations(commands.Cog):
                     choices.append(app_commands.Choice(name=proj, value=proj))
         
         return choices
+    
 
+    @app_commands.command(name="start_manufacturing", description="Start manufacturing a product for your company.")
+    @app_commands.describe(company="The company to list the product for.", product="The product to begin manufacturing.", manufacture_location="The manufacture location for the product.", quantity="The quantity to manufacture.")
+    @app_commands.autocomplete(company=company_autocomplete, product=product_autocomplete)
+    async def start_manufacturing(self, interaction:discord.Interaction, company:str, product:str, manufacture_location:str, quantity:int=None):
+        """Start manufacturing a product for your company."""
+        await interaction.response.defer()
+        
+        if company not in self.data:
+            await interaction.followup.send("That company seems to not exist. Please try another.", ephemeral=True)
+            return
+        
+        corp = self.data[company]
 
+        if corp["CEO"] != interaction.user.id:
+            await interaction.followup.send("You can't manufacture another company's product without a license, and licenses aren't coming to this anytime soon.")
+            return
+        
+        if product not in corp["products"]:
+            await interaction.followup.send("That product appears to not be registered. If you think that's a mistake, please contact an admin.", ephemeral=True)
+            return
+        
+        product_dict = corp["products"]
     
     @commands.command(name="fixproj")
     @commands.admin_or_permissions(administrator=True)
