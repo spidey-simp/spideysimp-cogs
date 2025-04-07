@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from redbot.core import commands
 import json
 import os
 import random
