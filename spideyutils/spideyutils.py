@@ -133,6 +133,11 @@ class SpideyUtils(commands.Cog):
 
         embed = discord.Embed(color=discord.Color.blue())
 
+        if not self.cold_war_data:
+            embed.title = "⚠️ Data Load Error"
+            embed.description = "`cold_war.json` failed to load or is empty. Please check the file path or syntax."
+            return await interaction.followup.send(embed=embed, ephemeral=True)
+
         if global_view:
             global_history = self.cold_war_data.get("global_history", {})
             embed.title = "🗳️ Global History Timeline"
