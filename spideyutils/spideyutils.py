@@ -132,7 +132,7 @@ class SpideyUtils(commands.Cog):
     @app_commands.describe(country="Choose a country or leave blank for global", global_view="Toggle to view global history")
     @app_commands.autocomplete(country=autocomplete_country)
     async def view_history(self, interaction: discord.Interaction, country: str = None, global_view: bool = False):
-        await interaction.response.defer()
+        await interaction.response.defer(thinking=True, ephemeral=True)
 
 
         embed = discord.Embed(color=discord.Color.blue())
@@ -170,9 +170,11 @@ class SpideyUtils(commands.Cog):
     @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
     @app_commands.autocomplete(country=autocomplete_country)
     async def view_country_info(self, interaction: discord.Interaction, country: str):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
         country_data = self.cold_war_data.get("countries", {}).get(country)
         if not country_data:
-            return await interaction.response.send_message(f"⚠️ Country '{country}' not found.", ephemeral=True)
+            return await interaction.followup.send(f"⚠️ Country '{country}' not found.", ephemeral=True)
 
         leader = country_data.get("leader", {})
         ideology = country_data.get("ideology", {})
@@ -204,7 +206,7 @@ class SpideyUtils(commands.Cog):
             joined = "\n\n".join(spirit_summaries)
             embed.add_field(name="National Spirits", value=joined[:1024], inline=False)
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     
     @app_commands.command(name="setturn", description="Set the current in-game turn and year.")
