@@ -149,7 +149,7 @@ class SpideyUtils(commands.Cog):
                 events = global_history[year]
                 if isinstance(events, dict):
                     desc_lines = [f"**{headline}**\n{content['description']}" for headline, content in events.items()]
-                    embed.add_field(name=f"**_{year}_**", value="\n\n".join(desc_lines), inline=False)
+                    embed.add_field(name=f"__**{year}**__", value="\n\n".join(desc_lines), inline=False)
         elif country:
             country_data = self.cold_war_data.get("countries", {}).get(country)
             if not country_data:
@@ -159,9 +159,9 @@ class SpideyUtils(commands.Cog):
             for year in sorted(history.keys()):
                 entry = history[year]
                 if isinstance(entry, list):
-                    embed.add_field(name=f"**_{year}_**", value="\n".join(f"- {e}" for e in entry), inline=False)
+                    embed.add_field(name=f"__**{year}**__", value="\n".join(f"- {e}" for e in entry), inline=False)
                 else:
-                    embed.add_field(name=f"**_{year}_**", value=entry, inline=False)
+                    embed.add_field(name=f"__**{year}**__", value=entry, inline=False)
         else:
             return await interaction.followup.send("⚠️ You must specify either a country or set global_view=True.", ephemeral=True)
 
