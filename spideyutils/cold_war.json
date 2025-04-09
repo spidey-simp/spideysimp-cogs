@@ -1,0 +1,1284 @@
+{
+    "name": "Cold War RP",
+    "global_history": {
+      "1943": {
+        "Sino-Japanese Conflict Ends": {
+          "description": "Armistice signed between Imperial Japan and the Republic of China, ending the Pacific Front.",
+          "image": "https://s3.amazonaws.com/s3.timetoast.com/public/uploads/photos/6545179/4749_KorJ_Treaty.1965.jpg"
+        }
+      },
+      "1945": {
+        "Berlin Reduced to Ashes by U.S. Nuclear Strike!": {
+          "description": "United States drops the atomic bomb on Berlin, killing Hitler and collapsing Nazi leadership.",
+          "image": "https://imgur.com/berlin-ruins-during-aftermath-of-second-world-war-1945-3264x2448-9oXOjYa"
+        },
+        "U.N. Declares End to World War: No Victors, Only Survivors": {
+          "description": "World War II ends without a formal victor as major powers collapse or retreat into isolation.",
+          "image": "https://www.thenation.com/wp-content/uploads/2015/06/un_charter_flickr_img1.jpg"
+        }
+      },
+      "1946": {
+        "Stalin Dead at 67! Kremlin Power Vacuum Begins": {
+          "description": "Lavrentiy Beria rises to power in the Soviet Union following Stalin\u2019s death.",
+          "image": "http://www.orlandofiges.info/section16_Khrushchev/images/Mourning_Stalins_death.png"
+        },
+        "Otto von Habsburg Returns to Vienna, Calls for Restoration": {
+          "description": "Otto von Habsburg returns to Austria, initiating monarchist restoration talks.",
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359405939907891260/ChatGPT_Image_Apr_8_2025_10_52_04_PM.png?ex=67f75cf0&is=67f60b70&hm=39836f4c62e2015bb9b478b68d5845b7307977ff992bbb075db600c6d0355855&"
+        },
+        "UN Appoints Jebb as German High Commissioner": {
+          "description": "The United Nations names British diplomat Sir Gladwyn Jebb as Provisional High Commissioner of Germany, establishing international civilian oversight following the nuclear strike on Berlin.",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Sr._Gladwyn_Jebb.jpg/423px-Sr._Gladwyn_Jebb.jpg"
+        }
+      },
+      "1947": {
+        "French Colonial Empire Cracks Under Global Pressure": {
+          "description": "Widespread decolonization movements begin to fracture European empires in Asia and Africa.",
+          "image": "https://www.ourhistory.org.uk/wp-content/uploads/decolonisation-of-Africa.jpeg"
+        },
+        "Germany Begins Construction of New Capital": {
+          "description": "With U.S. funding, the German provisional government breaks ground on a new capital to replace Berlin, symbolizing cautious international reintegration.",
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359416880804135034/ChatGPT_Image_Apr_8_2025_11_34_57_PM.png?ex=67f76721&is=67f615a1&hm=476e35a1b0b53a9c226f9df912579cf3522419e303ef8fd4820c459db8654206&"
+        },
+        "Chinese Civil War Ends in Nationalist Victory": {
+          "description": "Chiang Kai-shek's Kuomintang forces officially declare victory as the last communist strongholds fall. The Republic of China tightens control over the mainland amid regional instability.",
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359568147790692553/ChatGPT_Image_Apr_9_2025_09_38_12_AM.png?ex=67f7f401&is=67f6a281&hm=235c7bf8ddde54cc6376bbf069151d04f78a3ef624200e5bc3d922fc13a80565&"
+        }
+      },
+      "1948": {
+        "Pope Pius XIII Elected After Sudden Death of Pius XII": {
+          "description": "Pope Pius XIII elected following sudden death of Pius XII, heralding a conservative Catholic resurgence.",
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359411309371723806/ChatGPT_Image_Apr_8_2025_11_14_30_PM.png?ex=67f761f0&is=67f61070&hm=8ea1e1a5bbfba232fd747faea56c10c2e53adc2636672d5e86897c1a08f92d48&"
+        },
+        "Catholic Pact Takes Root in Austria and Spain": {
+          "description": "Austria and Spain, backed by the Vatican, lay the groundwork for a pan-Catholic alliance in response to communist expansion.",
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359438625992872026/ChatGPT_Image_Apr_9_2025_01_02_50_AM.png?ex=67f77b61&is=67f629e1&hm=6a302a33da7bc70f5800369fefb1aba1c0b8046385f06ea38efce80489a3a1ce&"
+        }
+      },
+      "1949": {
+        "Soviets Locked Out of Nuclear Oversight Talks": {
+          "description": "UN Security Council votes to exclude the Soviet Union from nuclear oversight talks.",
+          "image": "https://nsarchive2.gwu.edu/NSAEBB/NSAEBB472/IMAGE%20NO%201.jpg"
+        },
+        "UN Mediation Fails to Reconcile German Factions": {
+          "description": "After years of international mediation, negotiations between monarchist, democratic, and communist cells in Germany break down entirely.",
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359444393781887099/ChatGPT_Image_Apr_9_2025_01_26_10_AM.png?ex=67f780c0&is=67f62f40&hm=c95c6c9452efeab6a26c6cedec5dcb91b238bd8466fc592d92c8261cdbcce8a0&"
+        }
+      },
+      "1950": {
+        "Japan Declares 'Greater East Asian Mandate'": {
+          "description": "Japan declares full economic and military dominance over East Asia through the Greater Mandate.",
+          "image": "https://www.worldwar2facts.org/wp-content/uploads/2021/03/Hideki-Tojo-Japan-World-War-2.jpg"
+        }
+      },
+      "1951": {
+        "Geneva Summit Fails to Cool U.S.\u2013USSR Tensions": {
+          "description": "International summit in Geneva fails to prevent Cold War escalation between U.S. and USSR.",
+          "image": "https://www.enemyinmirror.com/wp-content/uploads/2021/11/1955_Geneva_Big_4_Summit.jpg"
+        },
+        "UN Commissioner Assassinated in Frankfurt!": {
+          "description": "Sir Gladwyn Jebb is assassinated under mysterious circumstances. UN withdraws civilian oversight from Germany. His death signals the collapse of the provisional civil government, paving the way for a full military junta takeover.",
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359446693547872368/ChatGPT_Image_Apr_9_2025_01_35_10_AM.png?ex=67f782e5&is=67f63165&hm=032dc7e6124857c4fbb4e0fd5189beffadf45b0d5306e5dce1a0acad0ec09fe6&"
+        }
+      },
+      "1952": {
+        "U.S. Confirms 500 Nuclear Warheads in Arsenal": {
+          "description": "Global arms race accelerates as United States announces deployment of 500th nuclear warhead.",
+          "image": "https://minutemanmissile.com/images/MinutemanIIIMK12B.jpg"
+        }
+      }
+    },
+    "countries": {
+      "United States": {
+        "military": {
+          "army_divisions": 60,
+          "aviation_wings": 80,
+          "fleet_task_groups": 12,
+          "officer_skill_level": 4,
+          "avg_troop_skill_level": 4,
+          "military_readiness": "partial"
+        },
+        "economic": {
+          "budget_surplus": 20,
+          "industrial_sectors": 45,
+          "oil_reserves": 30,
+          "infrastructure_rating": 5
+        },
+        "political": {
+          "population": 160000000,
+          "recruitable_manpower": 30000000,
+          "public_support_score": 70,
+          "civil_unrest_level": 10
+        },
+        "research": {
+          "research_coefficient": 5,
+          "spy_network_score": 65,
+          "nuclear_arsenal": 500
+        },
+        "country_history": {
+          "1945": "United States drops atomic bomb on Berlin, killing Hitler and top Nazi leadership.",
+          "1947": "Truman Doctrine announced to counter Soviet expansion through nuclear deterrence.",
+          "1952": "United States unveils its 500th nuclear warhead, escalating Cold War tensions."
+        },
+        "past_turns": {},
+        "global": {
+          "global_influence": 95,
+          "doctrine_focus": "containment",
+          "conscription_policy": "selective service"
+        },
+        "leader": {
+          "name": "Harry S. Truman",
+          "description": "Thrust into leadership after Roosevelt\u2019s death, Truman ended the war with a devastating nuclear strike on Berlin, a decision that defines both his legacy and America's role in the world. Now nearing the end of his presidency, Truman walks a tightrope between containment abroad and stability at home. He is a man of directness and resolve, with no appetite for idealism, only results.",
+          "image": "https://hips.hearstapps.com/hmg-prod/images/president-harry-s-truman-seated-at-his-desk-holding-a-pencil-getty.jpg?resize=1200:*"
+        },
+        "details": "Without any major battles attributed to it in WWII, the United States asserts global power not through battlefield triumphs, but through overwhelming nuclear dominance. With traditional military prestige diminished, America relies on deterrence, diplomacy, and containment to secure its place in a rapidly polarizing world.",
+        "chief_of_staff": "General Omar Bradley",
+        "ideology": {
+          "leading_ideology": "democratic",
+          "democratic": 80,
+          "fascist": 2,
+          "communist": 5,
+          "authoritarian": 10,
+          "monarchic": 3
+        },
+        "starter_goals": [
+          "Strengthen NATO alternatives",
+          "Expand nuclear deterrence",
+          "Contain communism"
+        ],
+        "doctrine_focus": "brinkmanship",
+        "conscription_policy": "selective_service",
+        "image": "https://1.bp.blogspot.com/-4pbDn_qn35Q/YI63UTYpftI/AAAAAAAB-rA/-db-xMvD9Xk4ERvyUY4qTOZYYfBAp3RFQCLcBGAsYHQ/s1920/xehmaQFN.jpeg",
+        "national_spirits": [
+          {
+            "name": "Future of Democracy",
+            "description": "The United States has positioned itself as the global standard-bearer of democratic governance. Whether by diplomacy or deterrence, Washington claims to protect the ideals of liberty and republicanism wherever they are threatened.",
+            "modifiers": {
+              "ideology_support_bonus_democratic": 20,
+              "foreign_influence_modifier": 10
+            }
+          },
+          {
+            "name": "A Becoming Naval Dominance",
+            "description": "Though traditionally eclipsed by European sea powers, America's rapid naval expansion during the war has left it with the most modern fleet on Earth. With foreign bases and nuclear carriers, the U.S. now commands oceans once ruled by others.",
+            "modifiers": {
+              "naval_combat_bonus": 15,
+              "amphibious_invasion_modifier": 10
+            }
+          },
+          {
+            "name": "First Nuclear Arsenal",
+            "description": "As the first and only country to wield nuclear firepower in war, the United States maintains the largest stockpile of weapons of mass destruction. Its atomic superiority acts as both shield and sword, a deterrent, and a threat.",
+            "modifiers": {
+              "nuclear_intimidation": 25,
+              "diplomatic_pressure_in_conflicts": 10
+            }
+          },
+          {
+            "name": "Home of the UN",
+            "description": "The United Nations was born on American soil, and for now, it dances to Washington\u2019s tune. From peacekeeping to arbitration, American diplomats quietly steer global consensus for better or worse.",
+            "modifiers": {
+              "un_resolution_influence": 20,
+              "neutral_nation_diplomacy": 10
+            }
+          },
+          {
+            "name": "Renewed Monroe Doctrine",
+            "description": "Old doctrines have found new life. With Latin America still within its shadow, the U.S. is committed to denying Soviet or Japanese influence in the Western Hemisphere covertly, if not overtly.",
+            "modifiers": {
+              "intervention_modifier_western_hemisphere": 25,
+              "foreign_subversion_resistance_in_americas": 15
+            }
+          },
+          {
+            "name": "Marshall Plan",
+            "description": "Billions of dollars flow from Washington to the devastated cities of Europe. Though branded as charity, the Marshall Plan ties recovering nations into the American economic orbit and makes ideological resistance all the harder.",
+            "modifiers": {
+              "economic_influence_in_western_europe": 30,
+              "communist_influence_roll_penalty_in_western_europe": -15
+            }
+          }
+        ]
+      },
+      "Soviet Union": {
+        "military": {
+          "army_divisions": 120,
+          "aviation_wings": 60,
+          "fleet_task_groups": 4,
+          "officer_skill_level": 2,
+          "avg_troop_skill_level": 3,
+          "military_readiness": "war"
+        },
+        "economic": {
+          "budget_surplus": -15,
+          "industrial_sectors": 35,
+          "oil_reserves": 25,
+          "infrastructure_rating": 2
+        },
+        "political": {
+          "population": 190000000,
+          "recruitable_manpower": 40000000,
+          "public_support_score": 50,
+          "civil_unrest_level": 20
+        },
+        "research": {
+          "research_coefficient": 3,
+          "spy_network_score": 80,
+          "nuclear_arsenal": 0
+        },
+        "country_history": {
+          "1946": "Stalin dies unexpectedly. Lavrentiy Beria assumes power amid Kremlin intrigue.",
+          "1948": "The Soviet Union announces the Eastern Bloc but most European nations seem hesitant to join. Still communism is beginning to take hold in the Baltic.",
+          "1950": [
+            "USSR fails its third nuclear test attempt",
+            "Beria begins full militarization of Poland"
+          ]
+        },
+        "past_turns": {},
+        "global": {
+          "global_influence": 90,
+          "doctrine_focus": "revolutionary socialism",
+          "conscription_policy": "universal conscription"
+        },
+        "leader": {
+          "name": "Lavrentiy Beria",
+          "description": "The shadow behind the throne for decades, Beria seized control of the Soviet Union following Stalin\u2019s sudden death. A master of political purges and secret files, Beria rules not with ideology but with control, wielding fear like a scalpel. Under his leadership, the USSR is colder, more calculated, and more dangerous than ever before.",
+          "image": "https://everipedia-storage.s3.amazonaws.com/ProfilePicture/en/Lavrentiy_Beria__e749ef/Lavrentiy_Beria_%2528close-up%2529.jpg__07954.jpeg"
+        },
+        "details": "Reeling from internal purges and the devastation of prolonged war, the USSR is now ruled by Beria\u2019s iron grip. Lacking nuclear weapons, the Soviet Union pushes outward with ideology and occupation, desperate to hold its sphere against encroaching Western influence.",
+        "chief_of_staff": "Marshal Aleksandr Vasilevsky",
+        "ideology": {
+          "leading_ideology": "communist",
+          "democratic": 5,
+          "fascist": 0,
+          "communist": 85,
+          "authoritarian": 10,
+          "monarchic": 0
+        },
+        "starter_goals": [
+          "Consolidate Eastern Europe",
+          "Develop nuclear weapons",
+          "Suppress dissent"
+        ],
+        "doctrine_focus": "expansionism",
+        "conscription_policy": "universal_conscription",
+        "image": "https://russiatrek.org/blog/wp-content/uploads/2017/03/stalin-soviet-union-moscow-1953-1954-26.jpg",
+        "national_spirits": [
+          {
+            "name": "Bastion of Communism",
+            "description": "As the first state to declare itself a worker\u2019s republic, the USSR remains the ideological anchor of global communism. Its influence spreads not just through tanks or treaties, but through revolution and resistance.",
+            "modifiers": {
+              "ideology_support_bonus_communist": 25,
+              "democracy_resistance_modifier": 10
+            }
+          },
+          {
+            "name": "NKVD and KGB Primacy",
+            "description": "Intelligence, not ideology, is the true foundation of Soviet power. With the NKVD restructured and the KGB rising, internal control and foreign subversion are executed with mechanical efficiency and in terrifying silence.",
+            "modifiers": {
+              "counterintelligence_defense": 20,
+              "foreign_subversion_bonus": 15
+            }
+          },
+          {
+            "name": "Grounded Air Force",
+            "description": "Years of internal purges and low investment have left the Soviet Air Force bloated but inefficient. Aging bombers and undertrained pilots have grounded much of its strength for now.",
+            "modifiers": {
+              "air_superiority_penalty": -15,
+              "strategic_bombing_penalty": -10
+            }
+          },
+          {
+            "name": "Outdated Fleets",
+            "description": "Once a theoretical blue-water navy, the Soviet fleet is now a patchwork of aging hulls and coastal patrols. Naval influence is limited to intimidation, not projection.",
+            "modifiers": {
+              "naval_combat_penalty": -20,
+              "blockade_resistance": -10
+            }
+          },
+          {
+            "name": "Lasting Effects of the Stalin Purges",
+            "description": "Beria may wear the uniform of control, but the scars of Stalin\u2019s purges run deep. Officers are cautious, soldiers mistrustful, and innovation throttled by fear. Loyalty has replaced brilliance.",
+            "modifiers": {
+              "military_planning_speed": -15,
+              "officer_trait_bonus": -10
+            }
+          },
+          {
+            "name": "Gun in Every Soldier\u2019s Hand",
+            "description": "If the Soviet Union cannot guarantee quality, it guarantees quantity. Every soldier regardless of experience is armed and ordered to stand their ground. To retreat is to die.",
+            "modifiers": {
+              "infantry_breakthrough_bonus": 10,
+              "militia_spam_resistance": 15
+            }
+          },
+          {
+            "name": "Commissar Oversight",
+            "description": "Political officers are embedded in every military unit, ensuring ideological loyalty. While effective at preventing dissent, this oversight suppresses initiative and delays decision-making.",
+            "modifiers": {
+              "unit_initiative_penalty": -10,
+              "propaganda_effectiveness": 10
+            }
+          },
+          {
+            "name": "Red Banner Diplomacy",
+            "description": "Across the neutral world, the hammer and sickle still carries weight. From factories in Latin America to strikes in the Balkans, Soviet ideology travels faster than its fleets.",
+            "modifiers": {
+              "communist_influence_in_neutral_nations": 20,
+              "diplomatic_roll_bonus_with_leftist_movements": 15
+            }
+          }
+        ]
+      },
+      "United Kingdom": {
+        "military": {
+          "army_divisions": 35,
+          "aviation_wings": 40,
+          "fleet_task_groups": 7,
+          "officer_skill_level": 4,
+          "avg_troop_skill_level": 4,
+          "military_readiness": "partial"
+        },
+        "economic": {
+          "budget_surplus": 5,
+          "industrial_sectors": 28,
+          "oil_reserves": 15,
+          "infrastructure_rating": 4
+        },
+        "political": {
+          "population": 50000000,
+          "recruitable_manpower": 8000000,
+          "public_support_score": 65,
+          "civil_unrest_level": 15
+        },
+        "research": {
+          "research_coefficient": 4,
+          "spy_network_score": 55,
+          "nuclear_arsenal": 5
+        },
+        "country_history": {
+          "1946": "United Kingdom retains full control of India after suppressing independence movements.",
+          "1949": "British Empire formalizes new Commonwealth Compact, strengthening colonial bonds.",
+          "1951": "Churchill returns to power, pledging to restore imperial prestige."
+        },
+        "past_turns": {},
+        "global": {
+          "global_influence": 85,
+          "doctrine_focus": "imperial diplomacy",
+          "conscription_policy": "reserve conscription"
+        },
+        "leader": {
+          "name": "Winston Churchill",
+          "description": "Having returned to power in a Britain still clinging to imperial relevance, Churchill faces the postwar world with vintage defiance. He sees the Cold War not as a conflict of arms, but of will, one where rhetoric is as sharp as any blade. Though age and austerity press upon him, he remains the lion of the empire, roaring even as the sun sets on its glory.",
+          "image": "https://66.media.tumblr.com/430c3bdb76c003e0f54264f0d3c1aa95/tumblr_mnxhp2bYYe1suudv8o1_1280.jpg"
+        },
+        "details": "Emerging from WWII relatively intact, Britain remains a cornerstone of the global order. Its influence endures through colonial ties, the Commonwealth, and royal symbolism, even as economic strain and global unrest challenge its imperial legacy.",
+        "chief_of_staff": "Field Marshal Alan Brooke",
+        "ideology": {
+          "leading_ideology": "monarchic",
+          "democratic": 45,
+          "fascist": 5,
+          "communist": 5,
+          "authoritarian": 5,
+          "monarchic": 40
+        },
+        "starter_goals": [
+          "Reassert colonial control",
+          "Counter Soviet influence",
+          "Stabilize Commonwealth"
+        ],
+        "doctrine_focus": "liberal_internationalism",
+        "conscription_policy": "reserve_conscription",
+        "image": "https://4.bp.blogspot.com/-tgMhVFEyupo/UrGjkmRe_dI/AAAAAAAAXBA/Tauk62HIUuc/s1600/England+in+the+1950's+(8).jpg",
+        "national_spirits": [
+          {
+            "name": "Pax Britannica",
+            "description": "Though her empire wanes, the mythos of Britain as a stabilizing force endures. With deep-rooted diplomatic ties, financial institutions, and overseas garrisons, Britain still casts a long imperial shadow.",
+            "modifiers": {
+              "colonial_administration_bonus": 15,
+              "diplomatic_stability_rolls": 20
+            }
+          },
+          {
+            "name": "Renewed Monarchism",
+            "description": "As postwar Europe crumbles into factions and ideologies, the British Crown has found renewed reverence. In an age of uncertainty, loyalty to tradition becomes a strength.",
+            "modifiers": {
+              "monarchic_support_increase_rate": 15,
+              "resistance_to_political_extremes": 10
+            }
+          },
+          {
+            "name": "Britannia Rule the Waves",
+            "description": "The Royal Navy remains a symbol of pride and protection for the British people. With a worldwide presence and strategic bases, Britannia\u2019s command of the seas is uncontested west of the Pacific.",
+            "modifiers": {
+              "naval_combat_bonus": 20,
+              "naval_blockade_modifier": 10
+            }
+          },
+          {
+            "name": "Lions in the Face of Cowards",
+            "description": "Haunted by the ghost of appeasement and hardened by war, Britain now faces communism with Churchillian resolve. Whether in Parliament or in proxy wars, the lion never sleeps.",
+            "modifiers": {
+              "anti_communist_initiative_bonus": 15,
+              "war_support_against_leftist_factions": 10
+            }
+          },
+          {
+            "name": "Last True Colonial Empire",
+            "description": "While others retreat, Britain holds the line. The Commonwealth remains vast and administratively intact, but pressure is mounting from both within and without.",
+            "modifiers": {
+              "colonial_resistance_penalty": -10,
+              "international_colonial_legitimacy": 15
+            }
+          },
+          {
+            "name": "Indian Instability",
+            "description": "Though India remains under British control, nationalist movements gain momentum with each passing year. The jewel of the empire glimmers with unrest.",
+            "modifiers": {
+              "rebellion_suppression_modifier_in_asia": -20,
+              "administrative_cost_in_colonies": -10
+            }
+          }
+        ]
+      },
+      "Empire of Japan": {
+        "military": {
+          "army_divisions": 85,
+          "aviation_wings": 55,
+          "fleet_task_groups": 10,
+          "officer_skill_level": 3,
+          "avg_troop_skill_level": 4,
+          "military_readiness": "war"
+        },
+        "economic": {
+          "budget_surplus": 10,
+          "industrial_sectors": 30,
+          "oil_reserves": 10,
+          "infrastructure_rating": 3
+        },
+        "political": {
+          "population": 90000000,
+          "recruitable_manpower": 20000000,
+          "public_support_score": 60,
+          "civil_unrest_level": 25
+        },
+        "research": {
+          "research_coefficient": 4,
+          "spy_network_score": 50,
+          "nuclear_arsenal": 0
+        },
+        "country_history": {
+          "1943": "Japan signs armistice with Chiang Kai-shek, annexing North China.",
+          "1950": "Japan declares Greater East Asian Military Mandate, consolidating its empire."
+        },
+        "past_turns": {},
+        "global": {
+          "global_influence": 80,
+          "doctrine_focus": "imperial restoration",
+          "conscription_policy": "mandatory for all able-bodied males"
+        },
+        "leader": {
+          "name": "Hideki Tojo",
+          "description": "Restored to prominence in Japan\u2019s militarist revival, Tojo is both statesman and sword: unflinching, imperial, and vengeful. He presides over an empire re-forged through steel and fire, projecting dominance across East Asia. Tojo does not merely seek victory. He seeks a rebirth of divine order, with Japan as its shining center.",
+          "image": "https://s.hdnux.com/photos/10/73/20/2339885/8/1200x0.jpg"
+        },
+        "details": "Isolationist during WWII, Japan consolidated its grip over East Asia and emerged as a ruthless modern empire. Ruled by hardline militarists and a restored divine monarchy, it now dominates China\u2019s coast and the Pacific through industrial might and sheer force.",
+        "chief_of_staff": "General Tomoyuki Yamashita",
+        "ideology": {
+          "leading_ideology": "fascist",
+          "democratic": 5,
+          "fascist": 70,
+          "communist": 5,
+          "authoritarian": 15,
+          "monarchic": 5
+        },
+        "starter_goals": [
+          "Pacify China",
+          "Secure oil in SE Asia",
+          "Restore imperial glory"
+        ],
+        "doctrine_focus": "expansionism",
+        "conscription_policy": "extensive_conscription",
+        "image": "https://1.bp.blogspot.com/-SPo1ooPjw-I/X43b7pFH1NI/AAAAAAAD53Y/klDf3QeuBcs_NCNxPNcrkQEoeitHTh97gCLcBGAsYHQ/s2048/mid-1950s-japan-2.jpg",
+        "national_spirits": [
+          {
+            "name": "Imperial Navy",
+            "description": "Though damaged by years of isolation, Japan\u2019s Imperial Navy remains one of the most advanced and well-organized maritime forces in the Pacific. It serves both as a projection of power and as a pillar of domestic pride.",
+            "modifiers": {
+              "naval_combat_bonus": 20,
+              "power_projection_from_fleets": 10
+            }
+          },
+          {
+            "name": "Kodoha Faction",
+            "description": "The radical Kodoha faction, deeply rooted in traditionalist Shinto militarism, exerts growing influence within the military. Though disorganized and extreme, it pushes Japan toward a divine imperial destiny.",
+            "modifiers": {
+              "militarist_policy_adoption_chance": 15,
+              "resistance_to_foreign_diplomatic_pressure": 10
+            }
+          },
+          {
+            "name": "Hyperextended Garrisons",
+            "description": "With forces stretched thin across East Asia, Japan struggles to maintain control in its farthest holdings. Restless populations and undergarrisoned cities threaten to ignite rebellion.",
+            "modifiers": {
+              "resistance_suppression": -20,
+              "administrative_efficiency_in_occupied_territories": -10
+            }
+          },
+          {
+            "name": "Traitor in Our Ranks",
+            "description": "Though publicly denied, factions within the Japanese officer corps covertly aided Chiang Kai-shek to crush the Chinese Communists. The truth lingers in whispers, but so does its consequence.",
+            "modifiers": {
+              "covert_ops_risk": 15,
+              "influence_penalty_with_extremist_militarists": -10
+            }
+          },
+          {
+            "name": "Anti-Communist Pacific",
+            "description": "The Empire views communism as a disease that must be eradicated before it takes root in Asia. From Manchuria to Malaya, Japan\u2019s policy is clear: red is unacceptable.",
+            "modifiers": {
+              "anti_communist_operations_bonus": 20,
+              "diplomatic_pressure_on_socialist_states": 10
+            }
+          },
+          {
+            "name": "Anti-Colonial Devotion",
+            "description": "Japan claims to be the liberator of Asia from Western imperialism, masking its own ambitions behind a fa\u00e7ade of pan-Asian unity. While some believe it, others simply fear it.",
+            "modifiers": {
+              "influence_in_former_colonies": 15,
+              "propaganda_effectiveness": 10
+            }
+          },
+          {
+            "name": "There Is No Honor in Defeat!",
+            "description": "Culturally entrenched and ideologically weaponized, the Japanese military philosophy holds that surrender is disgraceful. This doctrine drives troops to extreme measures, for better or worse.",
+            "modifiers": {
+              "combat_endurance": 20,
+              "retreat_penalty": -15
+            }
+          },
+          {
+            "name": "Imperial Civilian Obedience",
+            "description": "Years of controlled media, loyalty campaigns, and indoctrination have forged a populace that rarely questions authority, until the illusion cracks.",
+            "modifiers": {
+              "resistance_to_internal_dissent": 10,
+              "civilian_loyalty_bonus": 10
+            }
+          }
+        ]
+      },
+      "Republic of China (KMT)": {
+        "military": {
+          "army_divisions": 95,
+          "aviation_wings": 30,
+          "fleet_task_groups": 3,
+          "officer_skill_level": 2,
+          "avg_troop_skill_level": 2,
+          "military_readiness": "war"
+        },
+        "economic": {
+          "budget_surplus": -10,
+          "industrial_sectors": 20,
+          "oil_reserves": 5,
+          "infrastructure_rating": 2
+        },
+        "political": {
+          "population": 450000000,
+          "recruitable_manpower": 60000000,
+          "public_support_score": 45,
+          "civil_unrest_level": 35
+        },
+        "research": {
+          "research_coefficient": 2,
+          "spy_network_score": 40,
+          "nuclear_arsenal": 0
+        },
+        "country_history": {
+          "1947": "KMT defeats Chinese communists with covert Japanese military aid.",
+          "1949": "KMT recognized by the UN as legitimate government of China.",
+          "1951": "Warlord uprisings erupt in western provinces, threatening KMT cohesion."
+        },
+        "past_turns": {},
+        "global": {
+          "global_influence": 70,
+          "doctrine_focus": "nationalist unity",
+          "conscription_policy": "regional quotas"
+        },
+        "leader": {
+          "name": "Chiang Kai-shek",
+          "description": "Victorious over the communists but weakened by war, Chiang rules a China that is united in name but fractured in spirit. Beneath his stoic exterior lies a man driven by destiny: to rebuild, to modernize, and to keep the revolution at bay. Surrounded by warlords, advisors, and ghosts, Chiang balances on a knife\u2019s edge between order and collapse.",
+          "image": "https://www.debate.com.mx/__export/1743930869899/sites/debate/img/2025/04/06/6_abril.jpg_242310155.jpg"
+        },
+        "details": "Victorious in the civil war but fractured from within, the KMT clings to control of a vast, divided China. Propped up by Western recognition but burdened by regional warlords, corruption, and unrest, it remains a powder keg barely held together by nationalist will.",
+        "chief_of_staff": "General Bai Chongxi",
+        "ideology": {
+          "leading_ideology": "authoritarian",
+          "democratic": 20,
+          "fascist": 5,
+          "communist": 25,
+          "authoritarian": 40,
+          "monarchic": 10
+        },
+        "starter_goals": [
+          "Eliminate communist remnants",
+          "Modernize army",
+          "Secure foreign recognition"
+        ],
+        "doctrine_focus": "nationalist_unity",
+        "conscription_policy": "limited_conscription",
+        "image": "https://i.pinimg.com/originals/f1/13/30/f11330e9d7f7fd3eb5f7e56f7b5449fa.jpg",
+        "national_spirits": [
+          {
+            "name": "The Dragon with No Fire",
+            "description": "Though the Kuomintang claims control over all of China, it rules a land fractured by warlords, ideology, and exhaustion. Unity exists only on paper, not in strength.",
+            "modifiers": {
+              "central_government_legitimacy_penalty": -15,
+              "domestic_cohesion_rolls": -10
+            }
+          },
+          {
+            "name": "Yunnan\u2019s Soft Rebellion",
+            "description": "Yunnan\u2019s leaders publicly pledge loyalty to the KMT, yet resist all reform or integration. Their bureaucracy functions independently, and their militias answer to no one in Nanjing.",
+            "modifiers": {
+              "warlord_obedience_modifier": -15,
+              "tax_revenue_from_yunnan": -10
+            }
+          },
+          {
+            "name": "Guangxi\u2019s Economic Grasp",
+            "description": "Guangxi\u2019s merchant lords and generals control key trade corridors and supply routes. While technically part of the Republic, they often act as if it were the other way around.",
+            "modifiers": {
+              "economic_influence_penalty_from_guangxi": -10,
+              "military_supply_efficiency_penalty": -10
+            }
+          },
+          {
+            "name": "Ma Clique Loyalty, For Now",
+            "description": "The Muslim Ma warlords remain nominally aligned with the KMT, bound by anti-communist sentiment more than ideology. But history has shown that loyalty is negotiable.",
+            "modifiers": {
+              "warlord_loyalty": -10,
+              "temporary_anti_communist_bonus": 15
+            }
+          },
+          {
+            "name": "Sinkiang: The Distant Frontier",
+            "description": "Sinkiang exists on the edge of the Republic, both geographically and politically. Ethnic unrest and warlord autonomy make it more liability than asset.",
+            "modifiers": {
+              "rebellion_penalty_in_sinkiang": -20,
+              "governance_efficiency_penalty_in_frontiers": -10
+            }
+          },
+          {
+            "name": "The Communists in the Shadows",
+            "description": "Though defeated in the civil war, remnants of the Chinese Communist Party endure in cells and whispers. Mao may be imprisoned, but his flame still burns underground.",
+            "modifiers": {
+              "civil_unrest": -15,
+              "communist_sympathy_among_populace": 10
+            }
+          },
+          {
+            "name": "Blue Water Ambitions, Riverboat Reality",
+            "description": "While the Republic boasts of modern naval expansion, its reality is aging river patrols and limited coastal reach. The sea is controlled not by China, but by wishful thinking.",
+            "modifiers": {
+              "naval_projection_penalty": -20,
+              "amphibious_support_efficiency": -10
+            }
+          }
+        ]
+      },
+      "Germany": {
+        "military": {
+          "army_divisions": 50,
+          "aviation_wings": 20,
+          "fleet_task_groups": 1,
+          "officer_skill_level": 3,
+          "avg_troop_skill_level": 3,
+          "military_readiness": "war"
+        },
+        "economic": {
+          "budget_surplus": -20,
+          "industrial_sectors": 18,
+          "oil_reserves": 3,
+          "infrastructure_rating": 1
+        },
+        "political": {
+          "population": 65000000,
+          "recruitable_manpower": 9000000,
+          "public_support_score": 35,
+          "civil_unrest_level": 40
+        },
+        "research": {
+          "research_coefficient": 2,
+          "spy_network_score": 60,
+          "nuclear_arsenal": 0
+        },
+        "country_history": {
+          "1945": [
+            "Berlin is obliterated by U.S. atomic bomb, ending Nazi leadership.",
+            "Hitler presumed dead: no remains recovered. UN declares official death to stabilize postwar order."
+          ],
+          "1946": [
+            "Germany is divided into four occupation zones.",
+            "UN appoints Sir Gladwyn Jebb as provisional authority over Germany."
+          ],
+          "1947": "Construction begins on a new German capital with U.S. funding under UN supervision.",
+          "1949": "UN mediation efforts collapse as German factions fail to reach constitutional consensus.",
+          "1951": "UN Commissioner Sir Gladwyn Jebb is assassinated in Frankfurt. The UN withdraws. A military junta seizes control.",
+          "1952": "Armed skirmishes erupt between democratic and communist factions in Frankfurt."
+        },
+        "past_turns": {},
+        "global": {
+          "global_influence": 35,
+          "doctrine_focus": "fragmented",
+          "conscription_policy": "factional"
+        },
+        "leader": {
+          "name": "Military Junta",
+          "description": "A fragile coalition of Germany's surviving military leadership, unified only by hatred of foreign control and the belief that Germany must be ruled by Germans.",
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359376014525857872/IMG_0316.png?ex=67f74111&is=67f5ef91&hm=a5532157d927e39db79b23abc66b0fc11d550501350111f3bc2db5eb8ac62260&"
+        },
+        "details": "Nuked, leaderless, and torn into rival factions, Germany has become the second great battleground of the Cold War. Its future is a prize contested by monarchists, communists, democrats, and fascist remnants, each backed by a different foreign power. Though the world believes Hitler died in the atomic fire, rumors persist among extremist cells that he survived, hidden, waiting for the rise of a Fourth Reich.",
+        "chief_of_staff": "Field Marshal Heinz Guderian",
+        "ideology": {
+          "leading_ideology": "authoritarian",
+          "democratic": 25,
+          "fascist": 25,
+          "communist": 25,
+          "authoritarian": 15,
+          "monarchic": 10
+        },
+        "starter_goals": [
+          "Unify factions",
+          "Purge communist elements",
+          "End foreign occupation"
+        ],
+        "image": "https://1.bp.blogspot.com/-UU_Dd8X7bh8/V8WCsVRuVyI/AAAAAAAAgYo/vm-mPDNBLpcKnh4u9B0vytj8t172r0rpQCLcB/s640/Germany%2Bduring%2Bthe%2B1950s%2B%25288%2529.jpg",
+        "national_spirits": [
+          {
+            "name": "Site of the First Atomic Detonation",
+            "description": "The obliteration of Berlin lingers in both memory and mutation. Germany was not only the first victim of atomic warfare, it is a living monument to what happens when ambition meets annihilation.",
+            "modifiers": {
+              "civil_unrest": -10,
+              "international_sympathy_bonus": 10,
+              "nuclear_anxiety_modifier": -15
+            }
+          },
+          {
+            "name": "Military Junta Leadership",
+            "description": "In the absence of a civilian government, the military has seized control. The generals agree on one thing only: that Germany must be ruled by Germans. Beyond that, the cracks run deep.",
+            "modifiers": {
+              "military_authority_modifier": 20,
+              "democratic_influence_resistance": -10,
+              "governance_efficiency_penalty": -10
+            }
+          },
+          {
+            "name": "Factional Disarray",
+            "description": "Monarchists, democrats, communists, and fascists each claim a vision for Germany's future. The provisional state functions, but only just held together by threat more than agreement.",
+            "modifiers": {
+              "internal_conflict_modifier": -15,
+              "stability_modifier": -10
+            }
+          },
+          {
+            "name": "Spirit of Iron",
+            "description": "Whatever their ideology, the German people remain marked by resilience and militaristic pride. Their identity fractured though it may be is forged in iron.",
+            "modifiers": {
+              "infantry_morale": 10,
+              "combat_endurance": 5
+            }
+          },
+          {
+            "name": "External Influence",
+            "description": "Foreign powers hover over every decision. The United States, Soviet Union, and Britain each back rival factions. Germany is a sovereign state in name. In truth, it is a chessboard.",
+            "modifiers": {
+              "foreign_diplomatic_pressure_bonus_against_germany": 20,
+              "global_influence_penalty": -10
+            }
+          },
+          {
+            "name": "Growing Instability",
+            "description": "Without meaningful reform, civil unrest will continue to grow with every passing year. This wound, if left untreated, will inevitably burst open.",
+            "modifiers": {
+              "civil_unrest": -5
+            }
+          },
+          {
+            "name": "Shadow of National Socialism",
+            "description": "Though officially condemned, the specter of the Third Reich still lingers in the minds of some and in the underground networks of others. The longer this shadow remains unaddressed, the darker it grows.",
+            "modifiers": {
+              "ideology_support_bonus_fascist": 10,
+              "international_trust_penalty": -15
+            }
+          },
+          {
+            "name": "Home of the Panzer",
+            "description": "Despite the devastation of war, Germany retains its legacy of mechanized innovation. The Panzer divisions legendary in name if not in number remain a cornerstone of national defense.",
+            "modifiers": {
+              "armor_combat_bonus": 20,
+              "mechanized_logistics_bonus": 10
+            }
+          },
+          {
+            "name": "Blitzkrieg Primacy",
+            "description": "Rapid mobility, overwhelming force the doctrine of blitzkrieg remains embedded in German military philosophy. While adapted for modern war, its roots run deep.",
+            "modifiers": {
+              "first_strike_bonus": 15,
+              "tactical_surprise_rolls": 10
+            }
+          },
+          {
+            "name": "The Luftwaffe",
+            "description": "Though fractured postwar, the German air force retains elite training protocols and advanced design philosophies. Rebuilding may take time but the skies are not forgotten.",
+            "modifiers": {
+              "air_superiority_bonus": 10,
+              "fighter_production_efficiency": 10
+            }
+          },
+          {
+            "name": "Kriegsmarine Legacy",
+            "description": "Germany\u2019s naval capacity has been hollowed by war and politics. Yet the Kriegsmarine\u2019s legacy of wolfpacks, U-boats, and ambition still haunts the docks.",
+            "modifiers": {
+              "submarine_warfare_bonus": 10,
+              "naval_construction_modifier": 10
+            }
+          }
+        ]
+      },
+      "Kingdom of Spain": {
+        "military": {
+          "army_divisions": 25,
+          "aviation_wings": 12,
+          "fleet_task_groups": 2,
+          "officer_skill_level": 3,
+          "avg_troop_skill_level": 3,
+          "military_readiness": "partial"
+        },
+        "economic": {
+          "budget_surplus": -5,
+          "industrial_sectors": 12,
+          "oil_reserves": 3,
+          "infrastructure_rating": 3
+        },
+        "political": {
+          "population": 28000000,
+          "recruitable_manpower": 4000000,
+          "public_support_score": 60,
+          "civil_unrest_level": 25
+        },
+        "research": {
+          "research_coefficient": 2,
+          "spy_network_score": 30,
+          "nuclear_arsenal": 0
+        },
+        "country_history": {
+          "1940": "Carlist faction wins Spanish Civil War, establishes traditionalist monarchy.",
+          "1947": "Spain signs Concordat with the Vatican, forming ideological backbone of Catholic Pact.",
+          "1948": "Spain formally recognizes the Austrian Empire as legitimate successor to Holy Rome."
+        },
+        "past_turns": {},
+        "global": {
+          "global_influence": 55,
+          "doctrine_focus": "Catholic traditionalism",
+          "conscription_policy": "volunteer corps with noble officer class"
+        },
+        "leader": {
+          "name": "Juan, Count of Barcelona",
+          "description": "Exiled for years and passed over once already, Juan now rules a Spain where monarchy and religion are inseparable. Though lacking his father's iron charisma, he carries the weight of restoration with quiet discipline. In a land shaped by crusade and civil war, Juan\u2019s rule is seen not as a beginning, but a return to divine order.",
+          "image": "https://alchetron.com/cdn/infante-juan-count-of-barcelona-98c7662c-77ea-49b1-83ea-3ccb3d5572b-resize-750.jpeg"
+        },
+        "details": "Ruled by a Carlist monarch with divine mandate, Spain is the ideological vanguard of the Catholic Pact. While stable at home, it yearns for a renewed role in Europe and looks to Austria and the Church to expand its moral and political authority.",
+        "chief_of_staff": "General Gonzalo Queipo de Llano",
+        "ideology": {
+          "leading_ideology": "monarchic",
+          "democratic": 10,
+          "fascist": 20,
+          "communist": 5,
+          "authoritarian": 15,
+          "monarchic": 50
+        },
+        "starter_goals": [
+          "Suppress regionalism",
+          "Build Catholic alliance",
+          "Expand military"
+        ],
+        "doctrine_focus": "traditionalism",
+        "conscription_policy": "volunteer_only",
+        "image": "https://1.bp.blogspot.com/-UNNUQ2hxZ0w/Xjt5cJbyyKI/AAAAAAACPdY/83f7_p_af6U2On2zV4ClrWzzPbGyzeI_gCLcBGAsYHQ/s640/spain-1950s-15.jpg",
+        "national_spirits": [
+          {
+            "name": "History of the Spanish",
+            "description": "From the Reconquista to the Empire, Spain's soul has always been entwined with tradition, honor, and faith. The past is not forgotten, it is restored.",
+            "modifiers": {
+              "reactionary_policy_bonus": 15,
+              "resistance_to_social_reforms": 10
+            }
+          },
+          {
+            "name": "Blessed by the Papacy",
+            "description": "With the full backing of Pope Pius XIII, Spain stands not just as a kingdom, but as the spiritual guardian of Europe. Divine legitimacy radiates from Madrid to the Vatican and back.",
+            "modifiers": {
+              "diplomatic_influence_with_catholic_nations": 20,
+              "stability_modifier": 15
+            }
+          },
+          {
+            "name": "Strength through Faith",
+            "description": "In Spain, faith is not simply practiced, it is lived. Every village, regiment, and law is built on divine order. The righteous march with certainty. The heretic with doubt.",
+            "modifiers": {
+              "military_morale_bonus": 10,
+              "rebellion_resistance_in_religious_regions": 15
+            }
+          },
+          {
+            "name": "Habsburg Alliance",
+            "description": "The alliance with Austria is more than political, it is spiritual. Together, the Catholic Pact seeks to restore the divine order of monarchs and God above republics and man.",
+            "modifiers": {
+              "alliance_cohesion_with_austria": 20,
+              "monarchic_propaganda_bonus": 15
+            }
+          },
+          {
+            "name": "Legacy of the Inquisition",
+            "description": "Though long abolished, Spain's inquisitorial spirit lingers in censorship, loyalty oaths, and cultural policing. Dissent is met not with debate but with silence.",
+            "modifiers": {
+              "political_expression_penalty": -15,
+              "civil_rights_roll_penalty": -10
+            }
+          }
+        ]
+      },
+      "Austrian Empire": {
+        "military": {
+          "army_divisions": 18,
+          "aviation_wings": 10,
+          "fleet_task_groups": 0,
+          "officer_skill_level": 4,
+          "avg_troop_skill_level": 2,
+          "military_readiness": "peace"
+        },
+        "economic": {
+          "budget_surplus": 5,
+          "industrial_sectors": 16,
+          "oil_reserves": 1,
+          "infrastructure_rating": 4
+        },
+        "political": {
+          "population": 12000000,
+          "recruitable_manpower": 1800000,
+          "public_support_score": 70,
+          "civil_unrest_level": 10
+        },
+        "research": {
+          "research_coefficient": 3,
+          "spy_network_score": 35,
+          "nuclear_arsenal": 0
+        },
+        "country_history": {
+          "1946": "Otto von Habsburg returns to Austria amid royalist resurgence.",
+          "1947": "Austrian Empire is restored by constitutional referendum.",
+          "1948": "Austria and Spain establish Catholic Pact for continental diplomacy."
+        },
+        "past_turns": {},
+        "global": {
+          "global_influence": 60,
+          "doctrine_focus": "dynastic legitimacy",
+          "conscription_policy": "voluntary officer academies"
+        },
+        "leader": {
+          "name": "Otto von Habsburg",
+          "description": "Raised in exile and educated across Europe, Otto returns not as a conqueror but as a philosopher-king. His vision for Austria is equal parts legacy and modernity and a new Holy Roman ideal for a fractured continent. Charismatic yet cautious, Otto rules by principle, hoping to rebuild an empire not through force, but through faith, diplomacy, and law.",
+          "image": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhvRLDBqltGVdmwVyaLCa4PGvkaHH3h4HpObgJ2cT_BcbOlMGUKcUxiOwJV_BP-JJ8L64w_d0BINSxKPn6Rrrxpn1D_AJn5jc_GlkySpSDV08VpKZcBgkI9sSdxkyJcdjselSGjA0yxYA0r0OZoFL7dwMg6AnOYGc1RKWUaP_T6dS34-yA_v24QOl547V4/s1233/Otto%20Von%20Habsburg.jpg"
+        },
+        "details": "Restored under the Habsburgs, Austria is both symbol and spearhead of dynastic legitimacy. Though small in stature, its alliances, heritage, and unified vision make it the spiritual core of the monarchist bloc in a divided Europe.",
+        "chief_of_staff": "General Rudolf von Habsburg",
+        "ideology": {
+          "leading_ideology": "monarchic",
+          "democratic": 20,
+          "fascist": 5,
+          "communist": 5,
+          "authoritarian": 10,
+          "monarchic": 60
+        },
+        "starter_goals": [
+          "Restore Habsburg prestige",
+          "Forge Catholic pact",
+          "Claim Central Europe"
+        ],
+        "doctrine_focus": "traditionalism",
+        "conscription_policy": "voluntary_officer_academies",
+        "image": "https://2.bp.blogspot.com/_q_WGHXnqn-Q/TTYBy_At8hI/AAAAAAAABq8/yPUrYhTbZWg/s1600/Innsbruck+tram+1950s.jpg",
+        "national_spirits": [
+          {
+            "name": "Legacy of the Habsburg Crown",
+            "description": "The return of Otto von Habsburg has reignited imperial pride. Though the empire may be small, its crown weighs heavy with history and hope.",
+            "modifiers": {
+              "monarchic_legitimacy_bonus": 20,
+              "resistance_to_republican_influence": 10
+            }
+          },
+          {
+            "name": "Custodian of Catholic Unity",
+            "description": "Austria serves not as conqueror but as mediator, a sanctified court binding Spain and the Vatican through shared faith. It is diplomatically sanctified.",
+            "modifiers": {
+              "diplomatic_influence_with_catholic_nations": 15,
+              "alliance_stability_in_catholic_pact": 10
+            }
+          },
+          {
+            "name": "Restoration through Ceremony",
+            "description": "Austria has little military might, but much grandeur. Processions, symphonies, and coronations speak louder than bullets, at least, for now.",
+            "modifiers": {
+              "soft_power_projection_bonus": 15,
+              "military_mobilization_modifier": -10
+            }
+          },
+          {
+            "name": "Heirs of the Holy Roman Empire",
+            "description": "Once the central force of a thousand fractured states, Austria again seeks to unify Europe though this time not through domination, but through divine right.",
+            "modifiers": {
+              "imperial_diplomacy_bonus": 10,
+              "monarchic_conversion_bonus": 10
+            }
+          },
+          {
+            "name": "A Court of Diplomats",
+            "description": "Austria\u2019s strength lies in silken words and closed-door treaties. While others threaten, Vienna persuades.",
+            "modifiers": {
+              "negotiation_success_chance": 15,
+              "foreign_policy_respect_bonus": 10
+            }
+          },
+          {
+            "name": "Ghosts of the Dual Monarchy",
+            "description": "From Bohemia to Galicia, Austria\u2019s old wounds never healed. Ethnic divisions simmer beneath courtly unity, threatening to fracture the reborn crown from within.",
+            "modifiers": {
+              "ethnic_unrest_penalty": -15,
+              "domestic_policy_gridlock_risk": -10
+            }
+          }
+        ]
+      }
+    },
+    "France": {
+      "military": {
+        "army_divisions": 25,
+        "aviation_wings": 20,
+        "fleet_task_groups": 4,
+        "officer_skill_level": 3,
+        "avg_troop_skill_level": 3,
+        "military_readiness": "partial"
+      },
+      "economic": {
+        "budget_surplus": -5,
+        "industrial_sectors": 22,
+        "oil_reserves": 5,
+        "infrastructure_rating": 3
+      },
+      "political": {
+        "population": 45000000,
+        "recruitable_manpower": 6000000,
+        "public_support_score": 55,
+        "civil_unrest_level": 25
+      },
+      "research": {
+        "research_coefficient": 3,
+        "spy_network_score": 45,
+        "nuclear_arsenal": 0
+      },
+      "country_history": {
+        "1945": "French provisional government re-established following Nazi occupation.",
+        "1947": "France formally cedes Indochina to the Kingdom of Siam to avoid large-scale rebellion.",
+        "1948": "Faced with economic collapse, France transfers most West and Central African colonies to British administrative control.",
+        "1950": "French forces suppress uprising in Algiers, reinforcing their grip on Algeria, Morocco, and Madagascar.",
+        "1952": "Internal political gridlock intensifies between Gaullists, republicans, and left-wing coalitions."
+      },
+      "past_turns": {},
+      "global": {
+        "global_influence": 60,
+        "doctrine_focus": "protectionism",
+        "conscription_policy": "limited_conscription"
+      },
+      "leader": {
+        "name": "Ren\u00e9 Pleven",
+        "description": "A pragmatic leader presiding over a fragile postwar republic, Pleven struggles to maintain unity in the face of ideological fracture and colonial collapse.",
+        "image": "https://www.biografiasyvidas.com/biografia/p/fotos/pleven.jpg"
+      },
+      "details": "France stands at a crossroads. Once a dominant empire, it now clings to its fading influence, divided by internal ideologies and scarred by war. Though its military and economy are recovering, the soul of the Republic remains uncertain.",
+      "chief_of_staff": "General Jean de Lattre de Tassigny",
+      "ideology": {
+        "leading_ideology": "democratic",
+        "democratic": 65,
+        "fascist": 5,
+        "communist": 20,
+        "authoritarian": 5,
+        "monarchic": 5
+      },
+      "starter_goals": [
+        "Reclaim colonial prestige",
+        "Unify republican factions",
+        "Counter communist influence in Paris"
+      ],
+      "image": "https://1.bp.blogspot.com/-W7xdNbvUoAA/V-qmoVpZYTI/AAAAAAACYtE/OF3TojHIvTYSqFnIwpRPgu3sHywAb0zGwCLcB/s1600/Paris-1952-2.jpg",
+      "national_spirits": [
+        {
+          "name": "Le Reconstruction",
+          "description": "Though ravaged by war and drained by retreat, France rebuilds brick by brick. The road is slow, but each step forward echoes with determination.",
+          "modifiers": {
+            "infrastructure_repair_bonus": 15,
+            "economic_growth_modifier": 10
+          }
+        },
+        {
+          "name": "Libert\u00e9, \u00c9galit\u00e9, Fraternit\u00e9",
+          "description": "The words still adorn every courthouse, but their meaning is contested. France remains committed to republican ideals, even as cracks begin to show.",
+          "modifiers": {
+            "democratic_support_bonus": 15,
+            "ideological_resistance_authoritarian": 10
+          }
+        },
+        {
+          "name": "Shadow of Collaboration",
+          "description": "The wounds of Vichy have not healed. Across the Republic, ghosts of betrayal linger in courtrooms, police forces, and family names.",
+          "modifiers": {
+            "civil_unrest": -15
+          }
+        },
+        {
+          "name": "The Tricolor Still Flies",
+          "description": "Stripped of colonies and humbled in war, France nonetheless clings to pride, tradition, and the idea of greatness. The Republic endures, scarred, but unbroken.",
+          "modifiers": {
+            "national_unity_bonus": 10,
+            "resilience_against_foreign_pressure": 10
+          }
+        },
+        {
+          "name": "Republican Gridlock",
+          "description": "Divided between Gaullists, moderates, and radicals, the French legislature struggles to move forward. Grand ambitions stall beneath parliamentary bickering.",
+          "modifiers": {
+            "political_initiative_penalty": -15,
+            "legislation_success_rate": -10
+          }
+        },
+        {
+          "name": "Legacy of Napoleon",
+          "description": "Some in France still dream of a restored glory of discipline, conquest, and purpose. Though these whispers rarely reach the Assembly, they echo in the hearts of many.",
+          "modifiers": {
+            "militarist_sentiment_growth_rate": 10,
+            "republican_policy_resistance": 5
+          }
+        }
+      ]
+    },
+    "Turkey": {
+      "military": {
+        "army_divisions": 18,
+        "aviation_wings": 10,
+        "fleet_task_groups": 2,
+        "officer_skill_level": 3,
+        "avg_troop_skill_level": 3,
+        "military_readiness": "partial"
+      },
+      "economic": {
+        "budget_surplus": -3,
+        "industrial_sectors": 12,
+        "oil_reserves": 7,
+        "infrastructure_rating": 2
+      },
+      "political": {
+        "population": 21000000,
+        "recruitable_manpower": 3000000,
+        "public_support_score": 60,
+        "civil_unrest_level": 20
+      },
+      "research": {
+        "research_coefficient": 2,
+        "spy_network_score": 40,
+        "nuclear_arsenal": 0
+      },
+      "country_history": {
+        "1945": "Turkey maintains neutrality through the final phase of World War II.",
+        "1947": "Major political reforms shift power toward Cel\u00e2l Bayar\u2019s Democratic Party.",
+        "1949": "Anti-communist crackdowns intensify along the eastern border.",
+        "1951": "Naval buildup begins in the Aegean to counter Soviet Black Sea activity.",
+        "1952": "Political debate erupts over whether Turkey should join a Western alliance."
+      },
+      "past_turns": {},
+      "global": {
+        "global_influence": 50,
+        "doctrine_focus": "traditionalism",
+        "conscription_policy": "limited_conscription"
+      },
+      "leader": {
+        "name": "Cel\u00e2l Bayar",
+        "description": "The conservative president of a transitioning Turkey, Bayar champions political reform while maintaining a careful distance from both Cold War blocs.",
+        "image": "https://isteataturk.com/gorseller/1508353850_ataturk.jpg"
+      },
+      "details": "With its Ottoman past lingering and its republic under strain, Turkey remains an unpredictable force. As Europe and Asia polarize, Ankara may choose alignment or carve its own path as a new regional hegemon.",
+      "chief_of_staff": "General Nuri Yamut",
+      "ideology": {
+        "leading_ideology": "authoritarian",
+        "democratic": 20,
+        "fascist": 5,
+        "communist": 10,
+        "authoritarian": 60,
+        "monarchic": 5
+      },
+      "starter_goals": [
+        "Secure Black Sea dominance",
+        "Expand Middle Eastern influence",
+        "Suppress Kurdish separatism"
+      ],
+      "image": "https://i.pinimg.com/originals/83/be/0e/83be0ea260b3b4ad3ab3af954ef0b9b2.jpg",
+      "national_spirits": [
+        {
+          "name": "Legacy of Atat\u00fcrk",
+          "description": "Though a decade has passed since his death, the presence of Mustafa Kemal Atat\u00fcrk still defines the Republic. His vision of secularism, reform, and Western alignment guides the faithful and haunts the ambitious.",
+          "modifiers": {
+            "resistance_to_religious_extremism": 15,
+            "ideology_support_bonus_democratic": 10
+          }
+        },
+        {
+          "name": "Protector of the Bosphorus",
+          "description": "Controlling the vital chokepoint between the Black Sea and the Mediterranean, Turkey wields disproportionate power over naval logistics and global trade routes and knows it.",
+          "modifiers": {
+            "naval_blockade_power_in_black_sea": 20,
+            "diplomatic_leverage_in_regional_conflicts": 10
+          }
+        },
+        {
+          "name": "Eyes on the Balkans",
+          "description": "Though Ankara disclaims expansionism, many in government whisper of a \u2018natural sphere\u2019 that includes the fractured Balkans. Old loyalties, old debts, and old ambitions remain unresolved.",
+          "modifiers": {
+            "influence_in_balkan_nations": 15,
+            "justification_speed_in_balkans": 10
+          }
+        },
+        {
+          "name": "Ottoman Echoes",
+          "description": "While the Republic stands in opposition to its imperial predecessor, Ottoman aesthetics, titles, and pride creep back into Turkish consciousness and politics.",
+          "modifiers": {
+            "ideology_support_bonus_monarchic": 10,
+            "identity_conflict_penalty": -5
+          }
+        },
+        {
+          "name": "The Army Guards the State",
+          "description": "The Turkish military views itself as the guardian of the republic. Loyal to Atat\u00fcrk\u2019s secular ideals, it remains a silent enforcer and a shadow behind every civilian office.",
+          "modifiers": {
+            "coup_chance_if_secularism_threatened": 20,
+            "military_authority_modifier": 15
+          }
+        },
+        {
+          "name": "Torn Between Two Worlds",
+          "description": "Caught between NATO overtures and Soviet intimidation, Turkey hesitates. Its geography makes it vital and its politics make it volatile.",
+          "modifiers": {
+            "foreign_policy_stalemate_chance": 15,
+            "neutrality_resistance_penalty": -10
+          }
+        }
+      ]
+    }
+  }

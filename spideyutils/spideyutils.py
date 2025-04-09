@@ -11,6 +11,8 @@ import datetime
 
 BASE_DIR = "/mnt/data/rpdata"
 
+
+
 class RequestRoll(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -18,6 +20,33 @@ class RequestRoll(commands.Cog):
     @app_commands.command(name="requestroll", description="Submit a roll request to the GM.")
     async def requestroll(self, interaction: discord.Interaction):
         await interaction.response.send_modal(RequestRollModal())
+    
+    @app_commands.command(name="myrequests", description="View your own roll request history.")
+    async def myrequests(self, interaction: discord.Interaction):
+        filepath = "roll_requests.json"
+        if not os.path.exists(filepath):
+            return await interaction.response.send_message("You have no roll requests.", ephemeral=True)
+
+        with open(filepath, "r") as f:
+            requests = json.load(f)
+
+        user_requests = [r for r in requests if r["user_id"] == interaction.user.id]
+        if not user_requests:
+            return await interaction.response.send_message("You have no roll requests.", ephemeral=True)
+
+        embed = discord.Embed(title=f"🎲 Roll Requests for {interaction.user.display_name}", color=discord.Color.blurple())
+        for r in reversed(user_requests[-10:]):
+            embed.add_field(
+                name=f"{r['reason']} (Turn {r['game_turn']}, {r['game_year']})",
+                value=(
+                    f"**Status:** {r['status']}\n"
+                    f"**Modifier:** {r['modifier']}\n"
+                    f"**Submitted:** {r['timestamp']} UTC"
+                ),
+                inline=False
+            )
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
     reason = discord.ui.TextInput(label="Reason for roll", style=discord.TextStyle.paragraph)
@@ -77,6 +106,55 @@ class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
 class SpideyUtils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.cold_war_data = {}
+        self.load_data()
+
+    
+    def load_data(self):
+        try:
+            with open("cold_war_standardized.json", "r") as f:
+                self.cold_war_data = json.load(f)
+        except Exception as e:
+            print("Failed to load cold_war.json:", e)
+
+    async def autocomplete_country(self, interaction: discord.Interaction, current: str):
+        return [
+            app_commands.Choice(name=country, value=country)
+            for country in self.cold_war_data.get("countries", {}).keys()
+            if current.lower() in country.lower()
+        ][:25]
+
+    @app_commands.command(name="view_history", description="View the global timeline or a specific country's history.")
+    @app_commands.describe(country="Choose a country or leave blank for global", global_view="Toggle to view global history")
+    @app_commands.autocomplete(country=autocomplete_country)
+    async def view_history(self, interaction: discord.Interaction, country: str = None, global_view: bool = False):
+        embed = discord.Embed(color=discord.Color.blue())
+
+        if global_view:
+            global_history = self.cold_war_data.get("global_history", {})
+            embed.title = "🗳️ Global History Timeline"
+            for year in sorted(global_history.keys()):
+                events = global_history[year]
+                if isinstance(events, dict):
+                    desc_lines = [f"**{headline}**\n{content['description']}" for headline, content in events.items()]
+                    embed.add_field(name=f"**_{year}_**", value="\n\n".join(desc_lines), inline=False)
+        elif country:
+            country_data = self.cold_war_data.get("countries", {}).get(country)
+            if not country_data:
+                return await interaction.response.send_message(f"⚠️ Country '{country}' not found.", ephemeral=True)
+            history = country_data.get("country_history", {})
+            embed.title = f"📜 {country} – National History"
+            for year in sorted(history.keys()):
+                entry = history[year]
+                if isinstance(entry, list):
+                    embed.add_field(name=f"**_{year}_**", value="\n".join(f"- {e}" for e in entry), inline=False)
+                else:
+                    embed.add_field(name=f"**_{year}_**", value=entry, inline=False)
+        else:
+            return await interaction.response.send_message("⚠️ You must specify either a country or set global_view=True.", ephemeral=True)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     
     @app_commands.command(name="setturn", description="Set the current in-game turn and year.")
     async def setturn(self, interaction: discord.Interaction, turn: int, year: str):
