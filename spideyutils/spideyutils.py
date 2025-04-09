@@ -12,6 +12,10 @@ import datetime
 BASE_DIR = "/mnt/data/rpdata"
 
 
+file_path = os.path.join(os.path.dirname(__file__), "cold_war.json")
+
+
+
 
 class RequestRoll(commands.Cog):
     def __init__(self, bot):
@@ -112,7 +116,7 @@ class SpideyUtils(commands.Cog):
     
     def load_data(self):
         try:
-            with open("cold_war.json", "r") as f:
+            with open(file_path, "r") as f:
                 self.cold_war_data = json.load(f)
         except Exception as e:
             print("Failed to load cold_war.json:", e)
