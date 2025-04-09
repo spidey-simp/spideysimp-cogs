@@ -128,6 +128,9 @@ class SpideyUtils(commands.Cog):
     @app_commands.describe(country="Choose a country or leave blank for global", global_view="Toggle to view global history")
     @app_commands.autocomplete(country=autocomplete_country)
     async def view_history(self, interaction: discord.Interaction, country: str = None, global_view: bool = False):
+        await interaction.response.defer()
+
+
         embed = discord.Embed(color=discord.Color.blue())
 
         if global_view:
@@ -141,7 +144,7 @@ class SpideyUtils(commands.Cog):
         elif country:
             country_data = self.cold_war_data.get("countries", {}).get(country)
             if not country_data:
-                return await interaction.response.send_message(f"⚠️ Country '{country}' not found.", ephemeral=True)
+                return await interaction.followup.send(f"⚠️ Country '{country}' not found.", ephemeral=True)
             history = country_data.get("country_history", {})
             embed.title = f"📜 {country} – National History"
             for year in sorted(history.keys()):
@@ -151,9 +154,9 @@ class SpideyUtils(commands.Cog):
                 else:
                     embed.add_field(name=f"**_{year}_**", value=entry, inline=False)
         else:
-            return await interaction.response.send_message("⚠️ You must specify either a country or set global_view=True.", ephemeral=True)
+            return await interaction.followup.send("⚠️ You must specify either a country or set global_view=True.", ephemeral=True)
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     
     @app_commands.command(name="setturn", description="Set the current in-game turn and year.")
