@@ -187,8 +187,11 @@ class SpideyUtils(commands.Cog):
             color=discord.Color.gold()
         )
 
-        if leader.get("name"):
-            embed.set_author(name=f"Leader: {leader['name']}", icon_url=leader.get("image", discord.Embed.Empty))
+        if leader.get("image"):
+            embed.set_author(name=f"Leader: {leader['name']}", icon_url=leader["image"])
+        else:
+            embed.set_author(name=f"Leader: {leader['name']}")
+
         if country_data.get("image"):
             embed.set_image(url=country_data["image"])
 
