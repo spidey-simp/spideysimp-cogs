@@ -166,6 +166,45 @@ class SpideyUtils(commands.Cog):
             return await interaction.followup.send("⚠️ You must specify either a country or set global_view=True.", ephemeral=True)
 
         await interaction.followup.send(embed=embed, ephemeral=True)
+    
+    @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
+    @app_commands.autocomplete(country=autocomplete_country)
+    async def view_country_info(self, interaction: discord.Interaction, country: str):
+        country_data = self.cold_war_data.get("countries", {}).get(country)
+        if not country_data:
+            return await interaction.response.send_message(f"⚠️ Country '{country}' not found.", ephemeral=True)
+
+        leader = country_data.get("leader", {})
+        ideology = country_data.get("ideology", {})
+        global_info = country_data.get("global", {})
+        spirits = country_data.get("national_spirits", [])
+
+        embed = discord.Embed(
+            title=f"{country} – Public Overview",
+            description=country_data.get("details", "No description available."),
+            color=discord.Color.gold()
+        )
+
+        if leader.get("name"):
+            embed.set_author(name=f"Leader: {leader['name']}", icon_url=leader.get("image", discord.Embed.Empty))
+        if country_data.get("image"):
+            embed.set_image(url=country_data["image"])
+
+        if ideology:
+            leading = ideology.get("leading_ideology", "Unknown")
+            embed.add_field(name="Leading Ideology", value=leading, inline=True)
+
+        doctrine = global_info.get("doctrine_focus", "N/A")
+        conscription = global_info.get("conscription_policy", "N/A")
+        embed.add_field(name="Doctrine Focus", value=doctrine, inline=True)
+        embed.add_field(name="Conscription Policy", value=conscription, inline=True)
+
+        if spirits:
+            spirit_summaries = [f"**{sp['name']}**: {sp['description']}" for sp in spirits]
+            joined = "\n\n".join(spirit_summaries)
+            embed.add_field(name="National Spirits", value=joined[:1024], inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     
     @app_commands.command(name="setturn", description="Set the current in-game turn and year.")
