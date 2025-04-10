@@ -418,46 +418,68 @@ class SpideyUtils(commands.Cog):
     @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
     @app_commands.autocomplete(country=autocomplete_country)
     async def view_country_info(self, interaction: discord.Interaction, country: str):
-        await interaction.response.defer(thinking=True, ephemeral=True)
+        await interaction.response.defer(thinking=True,ephemeral=False)
+        
+        data = self.bot.get_cog("SpideyUtils").cold_war_data
+        countries = data.get("countries", {})
+        info = countries.get(country)
+        if not info:
+            return await interaction.followup.send(f"❌ Country '{country}' not found.", ephemeral=True)
 
-        country_data = self.cold_war_data.get("countries", {}).get(country)
-        if not country_data:
-            return await interaction.followup.send(f"⚠️ Country '{country}' not found.", ephemeral=True)
+        global_data = info.get("global", {})
+        ideology = info.get("ideology", {})
+        leader = info.get("leader", {})
 
-        leader = country_data.get("leader", {})
-        ideology = country_data.get("ideology", {})
-        global_info = country_data.get("global", {})
-        spirits = country_data.get("national_spirits", [])
-
+        # Basic Info Embed
         embed = discord.Embed(
-            title=f"{country} – Public Overview",
-            description=country_data.get("details", "No description available."),
-            color=discord.Color.gold()
+            title=f"📋 Bureau of Global Intelligence – Summary Report",
+            description=info.get("public_desc", "No public information available."),
+            color=discord.Color.blue()
+        )
+        embed.set_author(name=f"Filed under: Public Record – {country}")
+
+        embed.add_field(name="Ideology", value=ideology.get("leading_ideology", "Unknown"))
+        embed.add_field(name="Doctrine", value=global_data.get("doctrine_focus", "Unknown"), inline=True)
+        embed.add_field(name="Conscription", value=global_data.get("conscription_policy", "Unknown"), inline=True)
+
+        if info.get("image"):
+            embed.set_image(url=info["image"])
+        
+        embed.set_footer(text="United Nations' Materials | Not for Public Distribution")
+
+        # Leader Embed
+        leader_embed = discord.Embed(
+            title=f"{country}'s Leader",
+            description=leader.get("name", "Unknown"),
+            color=discord.Color.dark_gold()
+        )
+        if leader.get("image"):
+            leader_embed.set_image(url=leader["image"])
+
+        # National Spirits (public only)
+        spirits_data = info.get("national_spirits", [])
+        public_spirits = [s for s in spirits_data if s.get("public")]
+
+        spirit_embed = discord.Embed(
+            title=f"🕊️ National Spirits",
+            color=discord.Color.teal()
         )
 
-        if leader.get("image"):
-            embed.set_author(name=f"Leader: {leader['name']}", icon_url=leader["image"])
+        if len(public_spirits) == 0:
+            summary = f"The UN advisory report lacks any knowledge of {country}'s internal or foreign policy goals. Please contact the Secretary of State's Office of {country} or visit the {country} Embassy in your nation to lodge a diplomatic decree."
+        elif len(public_spirits) <= 2:
+            summary = f"The UN advisory report does not encapsulate all of {country}'s spirits. The committee has compiled some of the publicly available ones."
         else:
-            embed.set_author(name=f"Leader: {leader['name']}")
+            summary = f"The UN advisory report has a compilation of most all of {country}'s spirit."
 
-        if country_data.get("image"):
-            embed.set_image(url=country_data["image"])
+        if public_spirits:
+            spirit_names = "\n".join(f"• {s['name']}" for s in public_spirits)
+            spirit_embed.description = f"{summary}\n\n{spirit_names}"
+        else:
+            spirit_embed.description = summary
 
-        if ideology:
-            leading = ideology.get("leading_ideology", "Unknown")
-            embed.add_field(name="Leading Ideology", value=leading, inline=True)
+        await interaction.followup.send(embeds=[embed, leader_embed, spirit_embed], ephemeral=False)
 
-        doctrine = global_info.get("doctrine_focus", "N/A")
-        conscription = global_info.get("conscription_policy", "N/A")
-        embed.add_field(name="Doctrine Focus", value=doctrine, inline=True)
-        embed.add_field(name="Conscription Policy", value=conscription, inline=True)
-
-        if spirits:
-            spirit_summaries = [f"**{sp['name']}**: {sp['description']}" for sp in spirits]
-            joined = "\n\n".join(spirit_summaries)
-            embed.add_field(name="National Spirits", value=joined[:1024], inline=False)
-
-        await interaction.followup.send(embed=embed, ephemeral=True)
 
     
     @app_commands.command(name="setturn", description="Set the current in-game turn and year.")
