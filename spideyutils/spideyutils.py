@@ -9,6 +9,7 @@ import random
 import asyncio
 import datetime
 import re
+from collections import defaultdict
 
 BASE_DIR = "/mnt/data/rpdata"
 
@@ -360,29 +361,31 @@ class SpideyUtils(commands.Cog):
         # NATIONAL SPIRITS
         spirits_data = target.get("national_spirits", [])
         if spirits_data:
-            if not is_owner:
-                intro = discord.Embed(title="[CONFIDENTIAL] – National Spirits", color=discord.Color.teal())
-                intro.description = (
-                    f"Our operatives believe **{country}** maintains the following ideological initiatives.\n"
-                    f"Confidence Level: **{min(100, max(0, knowledge))}%**\n\n"
-                    "// Do NOT Distribute under any circumstance! //\n"
-                    "// – EYES ONLY – //"
-                )
-            else:
-                intro = discord.Embed(title="🕊️ National Spirits", color=discord.Color.teal())
-                intro.description = f"Nationally reported ideological priorities for {country}."
-
-            embeds.append(intro)
-
+            # Group spirits by type
+            spirit_groups = defaultdict(list)
             for spirit in spirits_data:
-                spirit_embed = discord.Embed(
-                    title=f"🕊️ {self.redacted(spirit.get('name', 'Unknown'), knowledge)}",
-                    description=self.redacted(spirit.get('description', 'No description available.'), knowledge),
+                spirit_type = spirit.get("type", "misc").replace("_", " ").title()
+                spirit_groups[spirit_type].append(spirit)
+
+            for category, spirits in spirit_groups.items():
+                embed = discord.Embed(
+                    title=(f"[CONFIDENTIAL] – {category} National Spirits" if not is_owner else f"{category} National Spirits"),
                     color=discord.Color.teal()
                 )
-                if spirit.get("icon"):
-                    spirit_embed.set_thumbnail(url=spirit["icon"])
-                embeds.append(spirit_embed)
+
+                if not is_owner:
+                    embed.description = (
+                        f"Our operatives suspect **{country}** maintains the following initiatives under **{category}**:\n"
+                        f"Confidence Level: **{min(100, max(0, knowledge))}%**\n\n"
+                        "// EYES ONLY – DO NOT DISTRIBUTE //"
+                    )
+
+                for spirit in spirits:
+                    name = self.redacted(spirit.get("name", "Unknown"), knowledge)
+                    desc = self.redacted(spirit.get("description", "No description available."), knowledge)
+                    embed.add_field(name=f"🕊️ {name}", value=desc, inline=False)
+
+                embeds.append(embed)
 
 
         if esp.get("spy_networks") and knowledge >= 70:

@@ -153,6 +153,7 @@
           {
             "name": "Future of Democracy",
             "description": "The United States has positioned itself as the global standard-bearer of democratic governance. Whether by diplomacy or deterrence, Washington claims to protect the ideals of liberty and republicanism wherever they are threatened.",
+            "type": "political",
             "modifiers": {
               "ideology_support_bonus_democratic": 20,
               "foreign_influence_modifier": 10
@@ -161,6 +162,7 @@
           {
             "name": "A Becoming Naval Dominance",
             "description": "Though traditionally eclipsed by European sea powers, America's rapid naval expansion during the war has left it with the most modern fleet on Earth. With foreign bases and nuclear carriers, the U.S. now commands oceans once ruled by others.",
+            "type": "military",
             "modifiers": {
               "naval_combat_bonus": 15,
               "amphibious_invasion_modifier": 10
@@ -169,6 +171,7 @@
           {
             "name": "First Nuclear Arsenal",
             "description": "As the first and only country to wield nuclear firepower in war, the United States maintains the largest stockpile of weapons of mass destruction. Its atomic superiority acts as both shield and sword, a deterrent, and a threat.",
+            "type": "military",
             "modifiers": {
               "nuclear_intimidation": 25,
               "diplomatic_pressure_in_conflicts": 10
@@ -177,6 +180,7 @@
           {
             "name": "Home of the UN",
             "description": "The United Nations was born on American soil, and for now, it dances to Washington\u2019s tune. From peacekeeping to arbitration, American diplomats quietly steer global consensus for better or worse.",
+            "type": "political",
             "modifiers": {
               "un_resolution_influence": 20,
               "neutral_nation_diplomacy": 10
@@ -185,6 +189,7 @@
           {
             "name": "Renewed Monroe Doctrine",
             "description": "Old doctrines have found new life. With Latin America still within its shadow, the U.S. is committed to denying Soviet or Japanese influence in the Western Hemisphere covertly, if not overtly.",
+            "type": "military",
             "modifiers": {
               "intervention_modifier_western_hemisphere": 25,
               "foreign_subversion_resistance_in_americas": 15
@@ -193,6 +198,7 @@
           {
             "name": "Marshall Plan",
             "description": "Billions of dollars flow from Washington to the devastated cities of Europe. Though branded as charity, the Marshall Plan ties recovering nations into the American economic orbit and makes ideological resistance all the harder.",
+            "type": "economic",
             "modifiers": {
               "economic_influence_in_western_europe": 30,
               "communist_influence_roll_penalty_in_western_europe": -15
@@ -279,6 +285,7 @@
           {
             "name": "Bastion of Communism",
             "description": "As the first state to declare itself a worker\u2019s republic, the USSR remains the ideological anchor of global communism. Its influence spreads not just through tanks or treaties, but through revolution and resistance.",
+            "type": "political",
             "modifiers": {
               "ideology_support_bonus_communist": 25,
               "democracy_resistance_modifier": 10
@@ -287,6 +294,7 @@
           {
             "name": "NKVD and KGB Primacy",
             "description": "Intelligence, not ideology, is the true foundation of Soviet power. With the NKVD restructured and the KGB rising, internal control and foreign subversion are executed with mechanical efficiency and in terrifying silence.",
+            "type": "research_espionage",
             "modifiers": {
               "counterintelligence_defense": 20,
               "foreign_subversion_bonus": 15
@@ -295,6 +303,7 @@
           {
             "name": "Grounded Air Force",
             "description": "Years of internal purges and low investment have left the Soviet Air Force bloated but inefficient. Aging bombers and undertrained pilots have grounded much of its strength for now.",
+            "type": "political",
             "modifiers": {
               "air_superiority_penalty": -15,
               "strategic_bombing_penalty": -10
@@ -303,6 +312,7 @@
           {
             "name": "Outdated Fleets",
             "description": "Once a theoretical blue-water navy, the Soviet fleet is now a patchwork of aging hulls and coastal patrols. Naval influence is limited to intimidation, not projection.",
+            "type": "military",
             "modifiers": {
               "naval_combat_penalty": -20,
               "blockade_resistance": -10
@@ -311,6 +321,7 @@
           {
             "name": "Lasting Effects of the Stalin Purges",
             "description": "Beria may wear the uniform of control, but the scars of Stalin\u2019s purges run deep. Officers are cautious, soldiers mistrustful, and innovation throttled by fear. Loyalty has replaced brilliance.",
+            "type": "military",
             "modifiers": {
               "military_planning_speed": -15,
               "officer_trait_bonus": -10
@@ -319,6 +330,7 @@
           {
             "name": "Gun in Every Soldier\u2019s Hand",
             "description": "If the Soviet Union cannot guarantee quality, it guarantees quantity. Every soldier regardless of experience is armed and ordered to stand their ground. To retreat is to die.",
+            "type": "military",
             "modifiers": {
               "infantry_breakthrough_bonus": 10,
               "militia_spam_resistance": 15
@@ -327,6 +339,7 @@
           {
             "name": "Commissar Oversight",
             "description": "Political officers are embedded in every military unit, ensuring ideological loyalty. While effective at preventing dissent, this oversight suppresses initiative and delays decision-making.",
+            "type": "military",
             "modifiers": {
               "unit_initiative_penalty": -10,
               "propaganda_effectiveness": 10
@@ -335,6 +348,7 @@
           {
             "name": "Red Banner Diplomacy",
             "description": "Across the neutral world, the hammer and sickle still carries weight. From factories in Latin America to strikes in the Balkans, Soviet ideology travels faster than its fleets.",
+            "type": "military",
             "modifiers": {
               "communist_influence_in_neutral_nations": 20,
               "diplomatic_roll_bonus_with_leftist_movements": 15
@@ -416,6 +430,7 @@
           {
             "name": "Pax Britannica",
             "description": "Though her empire wanes, the mythos of Britain as a stabilizing force endures. With deep-rooted diplomatic ties, financial institutions, and overseas garrisons, Britain still casts a long imperial shadow.",
+            "type": "political",
             "modifiers": {
               "colonial_administration_bonus": 15,
               "diplomatic_stability_rolls": 20
@@ -424,6 +439,7 @@
           {
             "name": "Renewed Monarchism",
             "description": "As postwar Europe crumbles into factions and ideologies, the British Crown has found renewed reverence. In an age of uncertainty, loyalty to tradition becomes a strength.",
+            "type": "political",
             "modifiers": {
               "monarchic_support_increase_rate": 15,
               "resistance_to_political_extremes": 10
@@ -432,6 +448,7 @@
           {
             "name": "Britannia Rule the Waves",
             "description": "The Royal Navy remains a symbol of pride and protection for the British people. With a worldwide presence and strategic bases, Britannia\u2019s command of the seas is uncontested west of the Pacific.",
+             "type": "military",
             "modifiers": {
               "naval_combat_bonus": 20,
               "naval_blockade_modifier": 10
@@ -440,6 +457,7 @@
           {
             "name": "Lions in the Face of Cowards",
             "description": "Haunted by the ghost of appeasement and hardened by war, Britain now faces communism with Churchillian resolve. Whether in Parliament or in proxy wars, the lion never sleeps.",
+            "type": "political",
             "modifiers": {
               "anti_communist_initiative_bonus": 15,
               "war_support_against_leftist_factions": 10
@@ -448,6 +466,7 @@
           {
             "name": "Last True Colonial Empire",
             "description": "While others retreat, Britain holds the line. The Commonwealth remains vast and administratively intact, but pressure is mounting from both within and without.",
+            "type": "political",
             "modifiers": {
               "colonial_resistance_penalty": -10,
               "international_colonial_legitimacy": 15
@@ -456,6 +475,7 @@
           {
             "name": "Indian Instability",
             "description": "Though India remains under British control, nationalist movements gain momentum with each passing year. The jewel of the empire glimmers with unrest.",
+            "type": "political",
             "modifiers": {
               "rebellion_suppression_modifier_in_asia": -20,
               "administrative_cost_in_colonies": -10
@@ -537,6 +557,7 @@
           {
             "name": "Imperial Navy",
             "description": "Though damaged by years of isolation, Japan\u2019s Imperial Navy remains one of the most advanced and well-organized maritime forces in the Pacific. It serves both as a projection of power and as a pillar of domestic pride.",
+            "type": "military",
             "modifiers": {
               "naval_combat_bonus": 20,
               "power_projection_from_fleets": 10
@@ -545,6 +566,7 @@
           {
             "name": "Kodoha Faction",
             "description": "The radical Kodoha faction, deeply rooted in traditionalist Shinto militarism, exerts growing influence within the military. Though disorganized and extreme, it pushes Japan toward a divine imperial destiny.",
+            "type": "political",
             "modifiers": {
               "militarist_policy_adoption_chance": 15,
               "resistance_to_foreign_diplomatic_pressure": 10
@@ -553,6 +575,7 @@
           {
             "name": "Hyperextended Garrisons",
             "description": "With forces stretched thin across East Asia, Japan struggles to maintain control in its farthest holdings. Restless populations and undergarrisoned cities threaten to ignite rebellion.",
+            "type": "military",
             "modifiers": {
               "resistance_suppression": -20,
               "administrative_efficiency_in_occupied_territories": -10
@@ -561,6 +584,7 @@
           {
             "name": "Traitor in Our Ranks",
             "description": "Though publicly denied, factions within the Japanese officer corps covertly aided Chiang Kai-shek to crush the Chinese Communists. The truth lingers in whispers, but so does its consequence.",
+            "type": "research_espionage",
             "modifiers": {
               "covert_ops_risk": 15,
               "influence_penalty_with_extremist_militarists": -10
@@ -569,6 +593,7 @@
           {
             "name": "Anti-Communist Pacific",
             "description": "The Empire views communism as a disease that must be eradicated before it takes root in Asia. From Manchuria to Malaya, Japan\u2019s policy is clear: red is unacceptable.",
+            "type": "political",
             "modifiers": {
               "anti_communist_operations_bonus": 20,
               "diplomatic_pressure_on_socialist_states": 10
@@ -577,6 +602,7 @@
           {
             "name": "Anti-Colonial Devotion",
             "description": "Japan claims to be the liberator of Asia from Western imperialism, masking its own ambitions behind a fa\u00e7ade of pan-Asian unity. While some believe it, others simply fear it.",
+            "type": "political",
             "modifiers": {
               "influence_in_former_colonies": 15,
               "propaganda_effectiveness": 10
@@ -585,6 +611,7 @@
           {
             "name": "There Is No Honor in Defeat!",
             "description": "Culturally entrenched and ideologically weaponized, the Japanese military philosophy holds that surrender is disgraceful. This doctrine drives troops to extreme measures, for better or worse.",
+            "type": "military",
             "modifiers": {
               "combat_endurance": 20,
               "retreat_penalty": -15
@@ -593,6 +620,7 @@
           {
             "name": "Imperial Civilian Obedience",
             "description": "Years of controlled media, loyalty campaigns, and indoctrination have forged a populace that rarely questions authority, until the illusion cracks.",
+            "type": "political",
             "modifiers": {
               "resistance_to_internal_dissent": 10,
               "civilian_loyalty_bonus": 10
@@ -674,6 +702,7 @@
           {
             "name": "The Dragon with No Fire",
             "description": "Though the Kuomintang claims control over all of China, it rules a land fractured by warlords, ideology, and exhaustion. Unity exists only on paper, not in strength.",
+            "type": "political",
             "modifiers": {
               "central_government_legitimacy_penalty": -15,
               "domestic_cohesion_rolls": -10
@@ -682,6 +711,7 @@
           {
             "name": "Yunnan\u2019s Soft Rebellion",
             "description": "Yunnan\u2019s leaders publicly pledge loyalty to the KMT, yet resist all reform or integration. Their bureaucracy functions independently, and their militias answer to no one in Nanjing.",
+            "type": "political",
             "modifiers": {
               "warlord_obedience_modifier": -15,
               "tax_revenue_from_yunnan": -10
@@ -690,6 +720,7 @@
           {
             "name": "Guangxi\u2019s Economic Grasp",
             "description": "Guangxi\u2019s merchant lords and generals control key trade corridors and supply routes. While technically part of the Republic, they often act as if it were the other way around.",
+            "type": "economic",
             "modifiers": {
               "economic_influence_penalty_from_guangxi": -10,
               "military_supply_efficiency_penalty": -10
@@ -698,6 +729,7 @@
           {
             "name": "Ma Clique Loyalty, For Now",
             "description": "The Muslim Ma warlords remain nominally aligned with the KMT, bound by anti-communist sentiment more than ideology. But history has shown that loyalty is negotiable.",
+            "type": "political",
             "modifiers": {
               "warlord_loyalty": -10,
               "temporary_anti_communist_bonus": 15
@@ -706,6 +738,7 @@
           {
             "name": "Sinkiang: The Distant Frontier",
             "description": "Sinkiang exists on the edge of the Republic, both geographically and politically. Ethnic unrest and warlord autonomy make it more liability than asset.",
+            "type": "political",
             "modifiers": {
               "rebellion_penalty_in_sinkiang": -20,
               "governance_efficiency_penalty_in_frontiers": -10
@@ -714,6 +747,7 @@
           {
             "name": "The Communists in the Shadows",
             "description": "Though defeated in the civil war, remnants of the Chinese Communist Party endure in cells and whispers. Mao may be imprisoned, but his flame still burns underground.",
+            "type": "political",
             "modifiers": {
               "civil_unrest": -15,
               "communist_sympathy_among_populace": 10
@@ -722,6 +756,7 @@
           {
             "name": "Blue Water Ambitions, Riverboat Reality",
             "description": "While the Republic boasts of modern naval expansion, its reality is aging river patrols and limited coastal reach. The sea is controlled not by China, but by wishful thinking.",
+            "type": "military",
             "modifiers": {
               "naval_projection_penalty": -20,
               "amphibious_support_efficiency": -10
@@ -810,6 +845,7 @@
           {
             "name": "Site of the First Atomic Detonation",
             "description": "The obliteration of Berlin lingers in both memory and mutation. Germany was not only the first victim of atomic warfare, it is a living monument to what happens when ambition meets annihilation.",
+            "type": "political",
             "modifiers": {
               "civil_unrest": -10,
               "international_sympathy_bonus": 10,
@@ -819,6 +855,7 @@
           {
             "name": "Military Junta Leadership",
             "description": "In the absence of a civilian government, the military has seized control. The generals agree on one thing only: that Germany must be ruled by Germans. Beyond that, the cracks run deep.",
+            "type": "political",
             "modifiers": {
               "military_authority_modifier": 20,
               "democratic_influence_resistance": -10,
@@ -828,6 +865,7 @@
           {
             "name": "Factional Disarray",
             "description": "Monarchists, democrats, communists, and fascists each claim a vision for Germany's future. The provisional state functions, but only just held together by threat more than agreement.",
+            "type": "political",
             "modifiers": {
               "internal_conflict_modifier": -15,
               "stability_modifier": -10
@@ -836,6 +874,7 @@
           {
             "name": "Spirit of Iron",
             "description": "Whatever their ideology, the German people remain marked by resilience and militaristic pride. Their identity fractured though it may be is forged in iron.",
+            "type": "military",
             "modifiers": {
               "infantry_morale": 10,
               "combat_endurance": 5
@@ -844,6 +883,7 @@
           {
             "name": "External Influence",
             "description": "Foreign powers hover over every decision. The United States, Soviet Union, and Britain each back rival factions. Germany is a sovereign state in name. In truth, it is a chessboard.",
+            "type": "political",
             "modifiers": {
               "foreign_diplomatic_pressure_bonus_against_germany": 20,
               "global_influence_penalty": -10
@@ -852,6 +892,7 @@
           {
             "name": "Growing Instability",
             "description": "Without meaningful reform, civil unrest will continue to grow with every passing year. This wound, if left untreated, will inevitably burst open.",
+            "type": "political",
             "modifiers": {
               "civil_unrest": -5
             }
@@ -859,6 +900,7 @@
           {
             "name": "Shadow of National Socialism",
             "description": "Though officially condemned, the specter of the Third Reich still lingers in the minds of some and in the underground networks of others. The longer this shadow remains unaddressed, the darker it grows.",
+            "type": "political",
             "modifiers": {
               "ideology_support_bonus_fascist": 10,
               "international_trust_penalty": -15
@@ -867,6 +909,7 @@
           {
             "name": "Home of the Panzer",
             "description": "Despite the devastation of war, Germany retains its legacy of mechanized innovation. The Panzer divisions legendary in name if not in number remain a cornerstone of national defense.",
+            "type": "military",
             "modifiers": {
               "armor_combat_bonus": 20,
               "mechanized_logistics_bonus": 10
@@ -875,6 +918,7 @@
           {
             "name": "Blitzkrieg Primacy",
             "description": "Rapid mobility, overwhelming force the doctrine of blitzkrieg remains embedded in German military philosophy. While adapted for modern war, its roots run deep.",
+            "type": "military",
             "modifiers": {
               "first_strike_bonus": 15,
               "tactical_surprise_rolls": 10
@@ -883,6 +927,7 @@
           {
             "name": "The Luftwaffe",
             "description": "Though fractured postwar, the German air force retains elite training protocols and advanced design philosophies. Rebuilding may take time but the skies are not forgotten.",
+            "type": "military",
             "modifiers": {
               "air_superiority_bonus": 10,
               "fighter_production_efficiency": 10
@@ -891,6 +936,7 @@
           {
             "name": "Kriegsmarine Legacy",
             "description": "Germany\u2019s naval capacity has been hollowed by war and politics. Yet the Kriegsmarine\u2019s legacy of wolfpacks, U-boats, and ambition still haunts the docks.",
+            "type": "military",
             "modifiers": {
               "submarine_warfare_bonus": 10,
               "naval_construction_modifier": 10
@@ -968,6 +1014,7 @@
           {
             "name": "History of the Spanish",
             "description": "From the Reconquista to the Empire, Spain's soul has always been entwined with tradition, honor, and faith. The past is not forgotten, it is restored.",
+            "type": "political",
             "modifiers": {
               "reactionary_policy_bonus": 15,
               "resistance_to_social_reforms": 10
@@ -976,6 +1023,7 @@
           {
             "name": "Blessed by the Papacy",
             "description": "With the full backing of Pope Pius XIII, Spain stands not just as a kingdom, but as the spiritual guardian of Europe. Divine legitimacy radiates from Madrid to the Vatican and back.",
+            "type": "political",
             "modifiers": {
               "diplomatic_influence_with_catholic_nations": 20,
               "stability_modifier": 15
@@ -984,6 +1032,7 @@
           {
             "name": "Strength through Faith",
             "description": "In Spain, faith is not simply practiced, it is lived. Every village, regiment, and law is built on divine order. The righteous march with certainty. The heretic with doubt.",
+            "type": "political",
             "modifiers": {
               "military_morale_bonus": 10,
               "rebellion_resistance_in_religious_regions": 15
@@ -992,6 +1041,7 @@
           {
             "name": "Habsburg Alliance",
             "description": "The alliance with Austria is more than political, it is spiritual. Together, the Catholic Pact seeks to restore the divine order of monarchs and God above republics and man.",
+            "type": "political",
             "modifiers": {
               "alliance_cohesion_with_austria": 20,
               "monarchic_propaganda_bonus": 15
@@ -1000,6 +1050,7 @@
           {
             "name": "Legacy of the Inquisition",
             "description": "Though long abolished, Spain's inquisitorial spirit lingers in censorship, loyalty oaths, and cultural policing. Dissent is met not with debate but with silence.",
+            "type": "political",
             "modifiers": {
               "political_expression_penalty": -15,
               "civil_rights_roll_penalty": -10
@@ -1079,6 +1130,7 @@
           {
             "name": "Legacy of the Habsburg Crown",
             "description": "The return of Otto von Habsburg has reignited imperial pride. Though the empire may be small, its crown weighs heavy with history and hope.",
+            "type": "political",
             "modifiers": {
               "monarchic_legitimacy_bonus": 20,
               "resistance_to_republican_influence": 10
@@ -1087,6 +1139,7 @@
           {
             "name": "Custodian of Catholic Unity",
             "description": "Austria serves not as conqueror but as mediator, a sanctified court binding Spain and the Vatican through shared faith. It is diplomatically sanctified.",
+            "type": "political",
             "modifiers": {
               "diplomatic_influence_with_catholic_nations": 15,
               "alliance_stability_in_catholic_pact": 10
@@ -1095,6 +1148,7 @@
           {
             "name": "Restoration through Ceremony",
             "description": "Austria has little military might, but much grandeur. Processions, symphonies, and coronations speak louder than bullets, at least, for now.",
+            "type": "political",
             "modifiers": {
               "soft_power_projection_bonus": 15,
               "military_mobilization_modifier": -10
@@ -1103,6 +1157,7 @@
           {
             "name": "Heirs of the Holy Roman Empire",
             "description": "Once the central force of a thousand fractured states, Austria again seeks to unify Europe though this time not through domination, but through divine right.",
+            "type": "political",
             "modifiers": {
               "imperial_diplomacy_bonus": 10,
               "monarchic_conversion_bonus": 10
@@ -1111,6 +1166,7 @@
           {
             "name": "A Court of Diplomats",
             "description": "Austria\u2019s strength lies in silken words and closed-door treaties. While others threaten, Vienna persuades.",
+            "type": "political",
             "modifiers": {
               "negotiation_success_chance": 15,
               "foreign_policy_respect_bonus": 10
@@ -1119,6 +1175,7 @@
           {
             "name": "Ghosts of the Dual Monarchy",
             "description": "From Bohemia to Galicia, Austria\u2019s old wounds never healed. Ethnic divisions simmer beneath courtly unity, threatening to fracture the reborn crown from within.",
+            "type": "political",
             "modifiers": {
               "ethnic_unrest_penalty": -15,
               "domestic_policy_gridlock_risk": -10
@@ -1198,6 +1255,7 @@
         {
           "name": "Le Reconstruction",
           "description": "Though ravaged by war and drained by retreat, France rebuilds brick by brick. The road is slow, but each step forward echoes with determination.",
+          "type": "economic",
           "modifiers": {
             "infrastructure_repair_bonus": 15,
             "economic_growth_modifier": 10
@@ -1206,6 +1264,7 @@
         {
           "name": "Libert\u00e9, \u00c9galit\u00e9, Fraternit\u00e9",
           "description": "The words still adorn every courthouse, but their meaning is contested. France remains committed to republican ideals, even as cracks begin to show.",
+          "type": "political",
           "modifiers": {
             "democratic_support_bonus": 15,
             "ideological_resistance_authoritarian": 10
@@ -1214,6 +1273,7 @@
         {
           "name": "Shadow of Collaboration",
           "description": "The wounds of Vichy have not healed. Across the Republic, ghosts of betrayal linger in courtrooms, police forces, and family names.",
+          "type": "political",
           "modifiers": {
             "civil_unrest": -15
           }
@@ -1221,6 +1281,7 @@
         {
           "name": "The Tricolor Still Flies",
           "description": "Stripped of colonies and humbled in war, France nonetheless clings to pride, tradition, and the idea of greatness. The Republic endures, scarred, but unbroken.",
+          "type": "political",
           "modifiers": {
             "national_unity_bonus": 10,
             "resilience_against_foreign_pressure": 10
@@ -1229,6 +1290,7 @@
         {
           "name": "Republican Gridlock",
           "description": "Divided between Gaullists, moderates, and radicals, the French legislature struggles to move forward. Grand ambitions stall beneath parliamentary bickering.",
+          "type": "political",
           "modifiers": {
             "political_initiative_penalty": -15,
             "legislation_success_rate": -10
@@ -1237,6 +1299,7 @@
         {
           "name": "Legacy of Napoleon",
           "description": "Some in France still dream of a restored glory of discipline, conquest, and purpose. Though these whispers rarely reach the Assembly, they echo in the hearts of many.",
+          "type": "political",
           "modifiers": {
             "militarist_sentiment_growth_rate": 10,
             "republican_policy_resistance": 5
@@ -1318,6 +1381,7 @@
         {
           "name": "Legacy of Atat\u00fcrk",
           "description": "Though a decade has passed since his death, the presence of Mustafa Kemal Atat\u00fcrk still defines the Republic. His vision of secularism, reform, and Western alignment guides the faithful and haunts the ambitious.",
+          "type": "political",
           "modifiers": {
             "resistance_to_religious_extremism": 15,
             "ideology_support_bonus_democratic": 10
@@ -1326,6 +1390,7 @@
         {
           "name": "Protector of the Bosphorus",
           "description": "Controlling the vital chokepoint between the Black Sea and the Mediterranean, Turkey wields disproportionate power over naval logistics and global trade routes and knows it.",
+          "type": "economic",
           "modifiers": {
             "naval_blockade_power_in_black_sea": 20,
             "diplomatic_leverage_in_regional_conflicts": 10
@@ -1334,6 +1399,7 @@
         {
           "name": "Eyes on the Balkans",
           "description": "Though Ankara disclaims expansionism, many in government whisper of a \u2018natural sphere\u2019 that includes the fractured Balkans. Old loyalties, old debts, and old ambitions remain unresolved.",
+          "type": "political",
           "modifiers": {
             "influence_in_balkan_nations": 15,
             "justification_speed_in_balkans": 10
@@ -1342,6 +1408,7 @@
         {
           "name": "Ottoman Echoes",
           "description": "While the Republic stands in opposition to its imperial predecessor, Ottoman aesthetics, titles, and pride creep back into Turkish consciousness and politics.",
+          "type": "political",
           "modifiers": {
             "ideology_support_bonus_monarchic": 10,
             "identity_conflict_penalty": -5
@@ -1350,6 +1417,7 @@
         {
           "name": "The Army Guards the State",
           "description": "The Turkish military views itself as the guardian of the republic. Loyal to Atat\u00fcrk\u2019s secular ideals, it remains a silent enforcer and a shadow behind every civilian office.",
+          "type": "military",
           "modifiers": {
             "coup_chance_if_secularism_threatened": 20,
             "military_authority_modifier": 15
@@ -1358,6 +1426,7 @@
         {
           "name": "Torn Between Two Worlds",
           "description": "Caught between NATO overtures and Soviet intimidation, Turkey hesitates. Its geography makes it vital and its politics make it volatile.",
+          "type": "political",
           "modifiers": {
             "foreign_policy_stalemate_chance": 15,
             "neutrality_resistance_penalty": -10
