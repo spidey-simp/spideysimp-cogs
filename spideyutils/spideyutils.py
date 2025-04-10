@@ -129,45 +129,88 @@ class SpideyUtils(commands.Cog):
             for country in self.cold_war_data.get("countries", {}).keys()
             if current.lower() in country.lower()
         ][:25]
+    
+    def get_all_event_years(self, data):
+        global_years = list(data.get("global_history", {}).keys())
+        country_years = set()
+        for country_data in data.get("countries", {}).values():
+            country_years.update(country_data.get("country_history", {}).keys())
+        return sorted(set(global_years).union(country_years), reverse=True)
 
-    @app_commands.command(name="view_history", description="View the global timeline or a specific country's history.")
-    @app_commands.describe(country="Choose a country or leave blank for global", global_view="Toggle to view global history")
-    @app_commands.autocomplete(country=autocomplete_country)
-    async def view_history(self, interaction: discord.Interaction, country: str = None, global_view: bool = False):
-        await interaction.response.defer(thinking=True, ephemeral=True)
+    async def autocomplete_year(self, interaction: discord.Interaction, current: str):
+        data = self.bot.get_cog("SpideyUtils").cold_war_data
+        return [
+            app_commands.Choice(name=yr, value=yr)
+            for yr in self.get_all_event_years(data)
+            if current in yr
+        ][:25]
 
+    @app_commands.command(name="view_history", description="View historical events for a specific country or globally.")
+    @app_commands.describe(country="Optional country name to filter history.", global_view="Set to true to view global history.", year="Filter by a specific year")
+    @app_commands.autocomplete(year=autocomplete_year)
+    async def view_history(self, interaction: discord.Interaction, country: str = None, global_view: bool = False, year: str = None):
+        await interaction.response.defer(thinking=True, ephemeral=False)
 
-        embed = discord.Embed(color=discord.Color.blue())
-
-        if not self.cold_war_data:
-            embed.title = "⚠️ Data Load Error"
-            embed.description = "`cold_war.json` failed to load or is empty. Please check the file path or syntax."
-            return await interaction.followup.send(embed=embed, ephemeral=True)
+        
+        data = self.bot.get_cog("SpideyUtils").cold_war_data
 
         if global_view:
-            global_history = self.cold_war_data.get("global_history", {})
-            embed.title = "🗳️ Global History Timeline"
-            for year in sorted(global_history.keys()):
-                events = global_history[year]
-                if isinstance(events, dict):
-                    desc_lines = [f"**{headline}**\n{content['description']}" for headline, content in events.items()]
-                    embed.add_field(name=f"__**{year}**__", value="\n\n".join(desc_lines), inline=False)
-        elif country:
-            country_data = self.cold_war_data.get("countries", {}).get(country)
-            if not country_data:
-                return await interaction.followup.send(f"⚠️ Country '{country}' not found.", ephemeral=True)
-            history = country_data.get("country_history", {})
-            embed.title = f"📜 {country} – National History"
-            for year in sorted(history.keys()):
-                entry = history[year]
-                if isinstance(entry, list):
-                    embed.add_field(name=f"__**{year}**__", value="\n".join(f"- {e}" for e in entry), inline=False)
-                else:
-                    embed.add_field(name=f"__**{year}**__", value=entry, inline=False)
-        else:
-            return await interaction.followup.send("⚠️ You must specify either a country or set global_view=True.", ephemeral=True)
+            global_events = data.get("global_history", {})
+            if not year:
+                # Summary view – just year + headlines
+                embed = discord.Embed(title="📰 Global Historical Record", color=discord.Color.blurple())
+                for y, events in global_events.items():
+                    if isinstance(events, dict):
+                        event_names = "\n".join(f"• {title}" for title in events.keys())
+                    else:
+                        event_names = f"• {events}"
+                    embed.add_field(name=f"{y}", value=event_names, inline=False)
+                return await interaction.followup.send(embed=embed)
+            else:
+                # Specific year view – full embeds per event
+                if year not in global_events:
+                    return await interaction.followup.send(f"No global events found for {year}.", ephemeral=True)
 
-        await interaction.followup.send(embed=embed, ephemeral=True)
+                year_data = global_events[year]
+                embeds = []
+                if isinstance(year_data, dict):
+                    for title, ev in year_data.items():
+                        desc = ev.get("description", "No information available.")
+                        img = ev.get("image")
+                        e = discord.Embed(title=f"📰 {title} ({year})", description=desc, color=discord.Color.blurple())
+                        if img:
+                            e.set_image(url=img)
+                        embeds.append(e)
+                else:
+                    e = discord.Embed(title=f"📰 Event in {year}", description=year_data, color=discord.Color.blurple())
+                    embeds.append(e)
+                return await interaction.followup.send(embeds=embeds[:10])
+
+        # Country-specific view
+        countries = data.get("countries", {})
+        if country not in countries:
+            return await interaction.response.send_message(f"❌ Country '{country}' not found.", ephemeral=True)
+
+        country_data = countries[country].get("country_history", {})
+        if not year:
+            embed = discord.Embed(title=f"📜 Historical Timeline – {country}", color=discord.Color.gold())
+            for y, ev in sorted(country_data.items()):
+                if isinstance(ev, list):
+                    embed.add_field(name=f"{y}", value="\n".join(f"• {e}" for e in ev), inline=False)
+                else:
+                    embed.add_field(name=f"{y}", value=f"• {ev}", inline=False)
+            return await interaction.followup.send(embed=embed)
+        else:
+            events = country_data.get(year)
+            if not events:
+                return await interaction.followup.send(f"No events found for {country} in {year}.", ephemeral=True)
+
+            embed = discord.Embed(title=f"📜 {country} – Historical Record ({year})", color=discord.Color.gold())
+            if isinstance(events, list):
+                embed.description = "\n".join(f"• {e}" for e in events)
+            else:
+                embed.description = f"• {events}"
+            return await interaction.followup.send(embed=embed)
     
     def redact_paragraph_weighted(self, text, knowledge):
         words = text.split()
@@ -397,7 +440,7 @@ class SpideyUtils(commands.Cog):
                     )
 
                 for spirit in spirits:
-                    name = self.redacted(spirit.get("name", "Unknown"), knowledge)
+                    name = self.redacted(spirit.get("name", "Unknown"), knowledge) if not spirit.get("public") else spirit.get("name")
                     desc = self.redact_paragraph_weighted(spirit.get("description", "No description available."), (knowledge if not spirit.get("public") else (knowledge + 25)))
                     embed.add_field(name=f"**{name}**", value=desc, inline=False)
 
