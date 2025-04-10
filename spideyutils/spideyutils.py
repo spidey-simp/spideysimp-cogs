@@ -193,9 +193,7 @@ class SpideyUtils(commands.Cog):
         return f"{low}–{high} (est.)"
 
     @app_commands.command(name="view_country_info_detailed", description="View detailed info for a Cold War RP country.")
-    @app_commands.autocomplete(country=lambda self, interaction, current: [
-        app_commands.Choice(name=k, value=k) for k in self.bot.get_cog("SpideyUtils").cold_war_data.get("countries", {}) if current.lower() in k.lower()
-    ][:25])
+    @app_commands.autocomplete(country= autocomplete_country)
     async def view_country_info_detailed(self, interaction: discord.Interaction, country: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
