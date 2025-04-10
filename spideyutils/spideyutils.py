@@ -360,12 +360,29 @@ class SpideyUtils(commands.Cog):
         # NATIONAL SPIRITS
         spirits_data = target.get("national_spirits", [])
         if spirits_data:
-            spirits = discord.Embed(title="🕊️ National Spirits", color=discord.Color.teal())
+            if not is_owner:
+                intro = discord.Embed(title="[CONFIDENTIAL] – National Spirits", color=discord.Color.teal())
+                intro.description = (
+                    f"Our operatives believe **{country}** maintains the following ideological initiatives.\n"
+                    f"Confidence Level: **{min(100, max(0, knowledge))}%**\n\n"
+                    "// Do NOT Distribute under any circumstance! //\n"
+                    "// – EYES ONLY – //"
+                )
+            else:
+                intro = discord.Embed(title="🕊️ National Spirits", color=discord.Color.teal())
+                intro.description = f"Nationally reported ideological priorities for {country}."
+
+            embeds.append(intro)
+
             for spirit in spirits_data:
-                name = self.redacted(spirit.get("name", "Unknown"), knowledge)
-                desc = self.redacted(spirit.get("description", "No description available."), knowledge)
-                spirits.add_field(name=f"**{name}**", value=desc, inline=False)
-            embeds.append(spirits)
+                spirit_embed = discord.Embed(
+                    title=f"🕊️ {self.redacted(spirit.get('name', 'Unknown'), knowledge)}",
+                    description=self.redacted(spirit.get('description', 'No description available.'), knowledge),
+                    color=discord.Color.teal()
+                )
+                if spirit.get("icon"):
+                    spirit_embed.set_thumbnail(url=spirit["icon"])
+                embeds.append(spirit_embed)
 
 
         if esp.get("spy_networks") and knowledge >= 70:
