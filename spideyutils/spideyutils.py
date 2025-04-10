@@ -182,7 +182,7 @@ class SpideyUtils(commands.Cog):
                                           x[1].get("espionage", {}).get("spy_network_score", 0))
 
     def redacted(self, text, knowledge, threshold=50):
-        return text if knowledge >= threshold else random.choice("[REDACTED]", "Information Unclear")
+        return text if knowledge >= threshold else random.choice(["**[REDACTED]**", "Information Unclear"])
 
     def ranged_value(self, actual, knowledge, stat_type="generic"):
         if knowledge >= 100:
@@ -198,10 +198,10 @@ class SpideyUtils(commands.Cog):
         variance, redact_threshold = thresholds.get(stat_type, thresholds["generic"])
 
         if knowledge < redact_threshold:
-            return random.choice("Information Unclear", "Redacted")
+            return random.choice(["Information Unclear", "**[REDACTED]**"])
 
         if variance is None:
-            return str(actual) if knowledge >= 100 else random.choice("Information Unclear")
+            return str(actual) if knowledge >= 100 else random.choice(["Information Unclear", "**[REDACTED]**"])
 
         margin = max(1, int(actual * variance))
         low = max(0, actual - random.randint(0, margin))
