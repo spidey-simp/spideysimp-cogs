@@ -90,6 +90,7 @@
     },
     "countries": {
       "United States": {
+        "player_id": 759677758431035433,
         "military": {
           "army_divisions": 60,
           "aviation_wings": 80,
@@ -112,7 +113,6 @@
         },
         "research": {
           "research_coefficient": 5,
-          "spy_network_score": 65,
           "nuclear_arsenal": 500
         },
         "country_history": {
@@ -198,13 +198,26 @@
               "communist_influence_roll_penalty_in_western_europe": -15
             }
           }
-        ]
+        ],
+        "espionage": {
+          "foreign_intelligence_score": 90,
+          "domestic_intelligence_score": 85,
+          "spy_network_score": 80,
+          "spy_networks": {
+            "United Kingdom": 85,
+            "French Republic": 85,
+            "Germany": 80,
+            "Soviet Union": 65,
+            "Empire of Japan": 45
+          }
+        }
       },
       "Soviet Union": {
+        "player_id": 735313620719632425,
         "military": {
           "army_divisions": 120,
           "aviation_wings": 60,
-          "fleet_task_groups": 4,
+          "fleet_task_groups": 5,
           "officer_skill_level": 2,
           "avg_troop_skill_level": 3,
           "military_readiness": "war"
@@ -223,7 +236,6 @@
         },
         "research": {
           "research_coefficient": 3,
-          "spy_network_score": 80,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -328,9 +340,20 @@
               "diplomatic_roll_bonus_with_leftist_movements": 15
             }
           }
-        ]
+        ],
+        "espionage": {
+          "foreign_intelligence_score": 85,
+          "domestic_intelligence_score": 75,
+          "spy_network_score": 75,
+          "spy_networks": {
+            "Republic of Turkey": 85,
+            "Germany": 80,
+            "United States": 65
+          }
+        }
       },
       "United Kingdom": {
+        "player_id": 650814947437182977,
         "military": {
           "army_divisions": 35,
           "aviation_wings": 40,
@@ -353,7 +376,6 @@
         },
         "research": {
           "research_coefficient": 4,
-          "spy_network_score": 55,
           "nuclear_arsenal": 5
         },
         "country_history": {
@@ -439,9 +461,21 @@
               "administrative_cost_in_colonies": -10
             }
           }
-        ]
+        ],
+        "espionage": {
+          "foreign_intelligence_score": 80,
+          "domestic_intelligence_score": 80,
+          "spy_network_score": 70,
+          "spy_networks": {
+            "United States": 85,
+            "French Republic": 85,
+            "Germany": 75,
+            "Soviet Union": 60
+          }
+        }
       },
       "Empire of Japan": {
+        "player_id": 721740604199141408,
         "military": {
           "army_divisions": 85,
           "aviation_wings": 55,
@@ -464,7 +498,6 @@
         },
         "research": {
           "research_coefficient": 4,
-          "spy_network_score": 50,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -565,9 +598,20 @@
               "civilian_loyalty_bonus": 10
             }
           }
-        ]
+        ],
+        "espionage": {
+          "foreign_intelligence_score": 50,
+          "domestic_intelligence_score": 90,
+          "spy_network_score": 65,
+          "spy_networks": {
+            "Republic of China (KMT)": 60,
+            "Soviet Union": 40,
+            "United States": 20
+          }
+        }
       },
       "Republic of China (KMT)": {
+        "player_id": 422159946956931083,
         "military": {
           "army_divisions": 95,
           "aviation_wings": 30,
@@ -590,7 +634,6 @@
         },
         "research": {
           "research_coefficient": 2,
-          "spy_network_score": 40,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -684,9 +727,20 @@
               "amphibious_support_efficiency": -10
             }
           }
-        ]
+        ],
+        "espionage": {
+          "foreign_intelligence_score": 55,
+          "domestic_intelligence_score": 60,
+          "spy_network_score": 50,
+          "spy_networks": {
+            "United States": 50,
+            "Empire of Japan": 60,
+            "Soviet Union": 10
+          }
+        }
       },
       "Germany": {
+        "player_id": 751471305894920304,
         "military": {
           "army_divisions": 50,
           "aviation_wings": 20,
@@ -709,7 +763,6 @@
         },
         "research": {
           "research_coefficient": 2,
-          "spy_network_score": 60,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -843,9 +896,16 @@
               "naval_construction_modifier": 10
             }
           }
-        ]
+        ],
+        "espionage": {
+          "foreign_intelligence_score": 30,
+          "domestic_intelligence_score": 25,
+          "spy_network_score": 20,
+          "spy_networks": {}
+        }
       },
       "Kingdom of Spain": {
+        "player_id": 684457913250480143,
         "military": {
           "army_divisions": 25,
           "aviation_wings": 12,
@@ -868,7 +928,6 @@
         },
         "research": {
           "research_coefficient": 2,
-          "spy_network_score": 30,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -946,9 +1005,18 @@
               "civil_rights_roll_penalty": -10
             }
           }
-        ]
+        ],
+        "espionage": {
+          "foreign_intelligence_score": 40,
+          "domestic_intelligence_score": 70,
+          "spy_network_score": 45,
+          "spy_networks": {
+            "Austrian Empire": 85
+          }
+        }
       },
       "Austrian Empire": {
+        "player_id": 684457913250480143,
         "military": {
           "army_divisions": 18,
           "aviation_wings": 10,
@@ -971,7 +1039,6 @@
         },
         "research": {
           "research_coefficient": 3,
-          "spy_network_score": 35,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -1057,9 +1124,18 @@
               "domestic_policy_gridlock_risk": -10
             }
           }
-        ]
+        ],
+        "espionage": {
+          "foreign_intelligence_score": 35,
+          "domestic_intelligence_score": 65,
+          "spy_network_score": 40,
+          "spy_networks": {
+            "Kingdom of Spain": 85
+          }
+        }
     },
     "France": {
+      "player_id": 558327879952498708,
       "military": {
         "army_divisions": 25,
         "aviation_wings": 20,
@@ -1082,7 +1158,6 @@
       },
       "research": {
         "research_coefficient": 3,
-        "spy_network_score": 45,
         "nuclear_arsenal": 0
       },
       "country_history": {
@@ -1167,9 +1242,20 @@
             "republican_policy_resistance": 5
           }
         }
-      ]
+      ],
+      "espionage":{
+        "domestic_intelligence_score": 50,
+        "foreign_intelligence_score": 60,
+        "spy_network_score": 40,
+        "spy_networks": {
+          "Germany": 60,
+          "Soviet Union": 50,
+          "United Kingdom": 40
+        }
+      }
     },
     "Turkey": {
+      "player_id": 261908926889459713,
       "military": {
         "army_divisions": 18,
         "aviation_wings": 10,
@@ -1192,7 +1278,6 @@
       },
       "research": {
         "research_coefficient": 2,
-        "spy_network_score": 40,
         "nuclear_arsenal": 0
       },
       "country_history": {
@@ -1278,7 +1363,22 @@
             "neutrality_resistance_penalty": -10
           }
         }
-      ]
+      ],
+      "espionage": {
+        "domestic_intelligence_score": 40,
+        "foreign_intelligence_score": 30,
+        "spy_network_score": 30,
+        "spy_networks": {
+          "Soviet Union": 30,
+          "United States": 30,
+          "Germany": 30
+        }
+      }
+    }
+  },
+  "alliances": {
+    "Catholic Pact": {
+      "members": ["Kingdom of Spain", "Austrian Empire"]
     }
   }
 }
