@@ -184,7 +184,7 @@ class SpideyUtils(commands.Cog):
 
                         dateline_str = f"**Dateline: {dateline}, {year}**\n\n" if dateline else ""
                         quote_str = f"\n\n_{quote}_" if quote else ""
-                        tag_str = f"\n\n**TAGS:** {" | ".join(tags.upper())}" if tags else ""
+                        tag_str = f"\n\n**TAGS:** {' | '.join(tags.upper())}" if tags else ""
 
                         e = discord.Embed(
                             title=f"📰 {title} ({year})",
