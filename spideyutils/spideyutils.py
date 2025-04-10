@@ -314,10 +314,12 @@ class SpideyUtils(commands.Cog):
             leader_desc.append(self.redact_paragraph_weighted(leader.get("description"), knowledge))
         leader_img = leader.get("image", None)
 
+        leader_description = "\n\n".join(leader_desc)
+
         if leader_name or leader_desc:
             leader_embed = discord.Embed(
                 title=f"[CONFIDENTIAL] - EVAL. OF {leader_name.upper()}" if not is_owner else f"{leader_name} Profile",
-                description=f"{'\n'.join(leader_desc)}"
+                description=f"{leader_description}"
             )
             if leader_img:
                 leader_embed.set_image(url=leader_img)
