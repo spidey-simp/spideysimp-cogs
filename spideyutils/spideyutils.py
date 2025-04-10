@@ -8,6 +8,7 @@ import os
 import random
 import asyncio
 import datetime
+import re
 
 BASE_DIR = "/mnt/data/rpdata"
 
@@ -167,12 +168,34 @@ class SpideyUtils(commands.Cog):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
     
+    def redact_paragraph_weighted(self, text, knowledge):
+        words = text.split()
+        redacted = []
+        for word in words:
+            clean = re.sub(r'[.,;!?()\"\']', '', word)
+            is_proper = clean[:1].isupper()
+            is_number = clean.isdigit() or re.match(r"\d{2,4}[hH]|\d{2,4}", clean)
+            redact_chance = 100 - knowledge
+
+            if is_proper or is_number:
+                threshold = random.randint(0, 100)
+                if threshold < redact_chance:
+                    redacted.append(random.choice(["**[REDACTED]**", "███████"]))
+                    continue
+            else:
+                threshold = random.randint(0, 100)
+                if threshold < redact_chance * 0.3:  # Lower chance for filler/common words
+                    redacted.append(random.choice(["**[REDACTED]**", "███████"]))
+                    continue
+            redacted.append(word)
+        return ' '.join(redacted)
+    
     def calculate_knowledge(self, viewer_data, target_data, target_name):
         spy_networks = viewer_data.get("espionage", {}).get("spy_networks", {})
         spy_score = spy_networks.get(target_name, 0)
         foreign = viewer_data.get("espionage", {}).get("foreign_intelligence_score", 0)
         domestic = target_data.get("espionage", {}).get("domestic_intelligence_score", 0)
-        return (foreign + spy_score) - domestic
+        return max(10, (foreign + spy_score) - domestic)
 
     def get_best_intel_country(self, user_id, countries):
         options = [(name, data) for name, data in countries.items() if data.get("player_id") == user_id]
@@ -182,7 +205,7 @@ class SpideyUtils(commands.Cog):
                                           x[1].get("espionage", {}).get("spy_network_score", 0))
 
     def redacted(self, text, knowledge, threshold=50):
-        return text if knowledge >= threshold else random.choice(["**[REDACTED]**", "Information Unclear"])
+        return text if knowledge >= threshold else self.redact_paragraph_weighted(text, knowledge)
 
     def ranged_value(self, actual, knowledge, stat_type="generic"):
         if knowledge >= 100:
@@ -198,16 +221,43 @@ class SpideyUtils(commands.Cog):
         variance, redact_threshold = thresholds.get(stat_type, thresholds["generic"])
 
         if knowledge < redact_threshold:
-            return random.choice(["Information Unclear", "**[REDACTED]**"])
+            return random.choice(["Information Unclear", "**[REDACTED]**", "██████████"])
 
         if variance is None:
-            return str(actual) if knowledge >= 100 else random.choice(["Information Unclear", "**[REDACTED]**"])
+            return str(actual) if knowledge >= 100 else random.choice(["Information Unclear", "**[REDACTED]**", "██████████"])
 
         margin = max(1, int(actual * variance))
         low = max(0, actual - random.randint(0, margin))
         high = actual + random.randint(0, margin)
         return f"{low}–{high} (est.)"
+    
+    def general_report(self, country: str, knowledge: int) -> str:
+        agent = random.choice(["RAVEN-7", "WOLFHOUND", "WHISPER FLARE", "SHADOW ECHO"])
+        if knowledge >= 90:
+            return f"_Report received via Asset {agent}. Data believed accurate._\nOur operatives report near-complete visibility into {country}."
+        elif knowledge >= 60:
+            return f"_Report received via Asset {agent}. Source reliability: moderate._\nPartial visibility into {country}'s internal affairs. Data may be speculative."
+        elif knowledge >= 30:
+            return f"_Report received via Asset {agent}. Surveillance limited._\nMinimal intelligence retrieved from {country}. Further infiltration required."
+        else:
+            return f"_Report intercepted by {agent}. Subject heavily encrypted._\nOur agents failed to penetrate the intelligence sector of {country}. Greater resources necessary."
 
+    def classify_stamp(self, knowledge: int):
+        if knowledge >= 90:
+            return "**// TOP SECRET //**\n**// EYES ONLY – DO NOT DISTRIBUTE //**"
+        elif knowledge >= 60:
+            return "**// RESTRICTED ACCESS //**"
+        else:
+            return "**// UNCONFIRMED FILES //**"
+
+    def rotating_footer(self, knowledge: int):
+        if knowledge >= 100:
+            return "Compiled by the Office of the Secretary of State | Confidential – Authorized Personnel Only"
+        return random.choice([
+            "Compiled by Division 7 | Clearance: SIGINT-3",
+            "Intercepted by Field Agent WOLFHOUND | Source not verified",
+            "Retrieved from Cipher Channel 22–Delta | Clearance Level III"
+        ]) + f" | Confidence Rating: {min(100, max(0, knowledge))}%"
 
     @app_commands.command(name="view_country_info_detailed", description="View detailed info for a Cold War RP country.")
     @app_commands.autocomplete(country= autocomplete_country)
@@ -231,13 +281,15 @@ class SpideyUtils(commands.Cog):
         # OVERVIEW
         if is_owner:
             title = f"[GOVERNMENT FILE] – {country}"
-            footer_text = "Compiled by the Office of the Secretary of State | Confidential – Authorized Personnel Only"
         else:
             title = f"[CONFIDENTIAL DOSSIER] – {country}"
-            footer_text = f"Compiled by Division 7 | Clearance: SIGINT-3 | Confidence Rating: {min(100, max(0, knowledge))}%"
+
+        footer_text = self.rotating_footer(knowledge)
 
         # OVERVIEW
         overview = discord.Embed(title=title, color=discord.Color.dark_blue())
+        if not is_owner:
+            overview.add_field(name=self.classify_stamp(knowledge), value=self.general_report(country, knowledge), inline=False)
         overview.description = self.redacted(target.get("details", "No description."), knowledge)
         overview.set_footer(text=footer_text)
         if leader.get("image"):
