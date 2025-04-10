@@ -167,6 +167,124 @@ class SpideyUtils(commands.Cog):
 
         await interaction.followup.send(embed=embed, ephemeral=True)
     
+    def calculate_knowledge(self, viewer_data, target_data, target_name):
+        spy_networks = viewer_data.get("espionage", {}).get("spy_networks", {})
+        spy_score = spy_networks.get(target_name, 0)
+        foreign = viewer_data.get("espionage", {}).get("foreign_intelligence_score", 0)
+        domestic = target_data.get("espionage", {}).get("domestic_intelligence_score", 0)
+        return (foreign + spy_score) - domestic
+
+    def get_best_intel_country(self, user_id, countries):
+        options = [(name, data) for name, data in countries.items() if data.get("player_id") == user_id]
+        if not options:
+            return None
+        return max(options, key=lambda x: x[1].get("espionage", {}).get("foreign_intelligence_score", 0) +
+                                          x[1].get("espionage", {}).get("spy_network_score", 0))
+
+    def redacted(self, text, knowledge, threshold=50):
+        return text if knowledge >= threshold else "[REDACTED]"
+
+    def ranged_value(self, actual, knowledge):
+        if knowledge >= 100:
+            return str(actual)
+        margin = max(5, int((100 - knowledge) * 0.1))
+        low = max(0, actual - margin)
+        high = actual + margin
+        return f"{low}–{high} (est.)"
+
+    @app_commands.command(name="view_country_info_detailed", description="View detailed info for a Cold War RP country.")
+    @app_commands.autocomplete(country=lambda self, interaction, current: [
+        app_commands.Choice(name=k, value=k) for k in self.bot.get_cog("SpideyUtils").cold_war_data.get("countries", {}) if current.lower() in k.lower()
+    ][:25])
+    async def view_country_info_detailed(self, interaction: discord.Interaction, country: str):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        cold_war_data = self.bot.get_cog("SpideyUtils").cold_war_data
+        countries = cold_war_data.get("countries", {})
+        target = countries.get(country)
+        if not target:
+            return await interaction.followup.send(f"❌ Country '{country}' not found.", ephemeral=True)
+
+        is_owner = interaction.user.id == target.get("player_id")
+        viewer_info = self.get_best_intel_country(interaction.user.id, countries)
+        viewer_data = viewer_info[1] if viewer_info else None
+        knowledge = 100 if is_owner else self.calculate_knowledge(viewer_data, target, country)
+
+        embeds = []
+        leader = target.get("leader", {})
+
+        # OVERVIEW
+        overview = discord.Embed(title=f"{country} – Intelligence Dossier", color=discord.Color.dark_blue())
+        overview.description = self.redacted(target.get("details", "No description."), knowledge)
+        if leader.get("image"):
+            overview.set_author(name=f"Leader: {leader.get('name', '[REDACTED]')}", icon_url=leader["image"])
+        else:
+            overview.set_author(name=f"Leader: {self.redacted(leader.get('name', 'Unknown'), knowledge)}")
+        if target.get("image"):
+            overview.set_image(url=target["image"])
+        ideology = target.get("ideology", {})
+        overview.add_field(name="Leading Ideology", value=ideology.get("leading_ideology", "Unknown"))
+        overview.add_field(name="Doctrine", value=target.get("global", {}).get("doctrine_focus", "N/A"), inline=True)
+        overview.add_field(name="Conscription", value=target.get("global", {}).get("conscription_policy", "N/A"), inline=True)
+        embeds.append(overview)
+
+        # MILITARY
+        m = target.get("military", {})
+        mil = discord.Embed(title="🪖 Military Overview", color=discord.Color.red())
+        for k, label in [("army_divisions", "Army Divisions"),
+                         ("aviation_wings", "Aviation Wings"),
+                         ("fleet_task_groups", "Fleet Task Groups"),
+                         ("officer_skill_level", "Officer Skill Level"),
+                         ("avg_troop_skill_level", "Troop Skill Level"),
+                         ("military_readiness", "Readiness")]:
+            value = m.get(k, 0 if "level" in k else "Unknown")
+            if isinstance(value, int):
+                mil.add_field(name=label, value=self.ranged_value(value, knowledge))
+            else:
+                mil.add_field(name=label, value=self.redacted(value, knowledge))
+        embeds.append(mil)
+
+        # ECONOMY
+        econ = target.get("economic", {})
+        eco = discord.Embed(title="💰 Economic Overview", color=discord.Color.green())
+        for k, label in [("budget_surplus", "Budget Surplus"),
+                         ("industrial_sectors", "Industrial Sectors"),
+                         ("oil_reserves", "Oil Reserves"),
+                         ("infrastructure_rating", "Infrastructure")]:
+            eco.add_field(name=label, value=self.ranged_value(econ.get(k, 0), knowledge))
+        embeds.append(eco)
+
+        # POLITICAL
+        p = target.get("political", {})
+        pol = discord.Embed(title="📊 Political/Demographic Overview", color=discord.Color.purple())
+        for k, label in [("population", "Population"),
+                         ("recruitable_manpower", "Recruitable Manpower"),
+                         ("public_support_score", "Public Support"),
+                         ("civil_unrest_level", "Civil Unrest")]:
+            pol.add_field(name=label, value=self.ranged_value(p.get(k, 0), knowledge))
+        ideology_breakdown = target.get("ideology", {})
+        for ideol in ["democratic", "fascist", "communist", "authoritarian", "monarchic"]:
+            pol.add_field(name=f"{ideol.title()} Support", value=self.ranged_value(ideology_breakdown.get(ideol, 0), knowledge), inline=True)
+        embeds.append(pol)
+
+        # INTEL
+        esp = target.get("espionage", {})
+        intel = discord.Embed(title="🕵️ Intelligence & Research", color=discord.Color.greyple())
+        intel.add_field(name="Research Coefficient", value=self.ranged_value(target.get("research", {}).get("research_coefficient", 0), knowledge))
+        intel.add_field(name="Nuclear Arsenal", value=self.ranged_value(target.get("research", {}).get("nuclear_arsenal", 0), knowledge))
+        intel.add_field(name="Foreign Intel Score", value=self.ranged_value(esp.get("foreign_intelligence_score", 0), knowledge))
+        intel.add_field(name="Domestic Intel Score", value=self.ranged_value(esp.get("domestic_intelligence_score", 0), knowledge))
+        intel.add_field(name="Spy Network Efficiency", value=self.ranged_value(esp.get("spy_network_score", 0), knowledge))
+
+        if esp.get("spy_networks") and knowledge >= 70:
+            for tgt, val in esp.get("spy_networks", {}).items():
+                intel.add_field(name=f"Network in {tgt}", value=self.ranged_value(val, knowledge), inline=True)
+
+        embeds.append(intel)
+
+        await interaction.followup.send(embeds=embeds, ephemeral=True)
+
+    
     @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
     @app_commands.autocomplete(country=autocomplete_country)
     async def view_country_info(self, interaction: discord.Interaction, country: str):
