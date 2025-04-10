@@ -357,6 +357,17 @@ class SpideyUtils(commands.Cog):
         intel.add_field(name="Domestic Intel Score", value=self.ranged_value(esp.get("domestic_intelligence_score", 0), knowledge, "intel"))
         intel.add_field(name="Spy Network Efficiency", value=self.ranged_value(esp.get("spy_network_score", 0), knowledge, "intel"))
 
+        # NATIONAL SPIRITS
+        spirits_data = target.get("national_spirits", [])
+        if spirits_data:
+            spirits = discord.Embed(title="🕊️ National Spirits", color=discord.Color.teal())
+            for spirit in spirits_data:
+                name = self.redacted(spirit.get("name", "Unknown"), knowledge)
+                desc = self.redacted(spirit.get("description", "No description available."), knowledge)
+                spirits.add_field(name=f"**{name}**", value=desc, inline=False)
+            embeds.append(spirits)
+
+
         if esp.get("spy_networks") and knowledge >= 70:
             for tgt, val in esp.get("spy_networks", {}).items():
                 intel.add_field(name=f"Network in {tgt}", value=self.ranged_value(val, knowledge, "intel"), inline=True)
