@@ -382,7 +382,7 @@ class SpideyUtils(commands.Cog):
 
                 for spirit in spirits:
                     name = self.redacted(spirit.get("name", "Unknown"), knowledge)
-                    desc = self.redacted(spirit.get("description", "No description available."), knowledge)
+                    desc = self.redact_paragraph_weighted(spirit.get("description", "No description available."), knowledge)
                     embed.add_field(name=f"🕊️ {name}", value=desc, inline=False)
 
                 embeds.append(embed)
