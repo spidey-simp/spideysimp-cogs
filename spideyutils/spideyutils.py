@@ -310,7 +310,8 @@ class SpideyUtils(commands.Cog):
         leader_desc = []
         if not is_owner:
             leader_desc.append("// EYES ONLY - DO NOT DISTRIBUTE //")
-        leader_desc.append(self.redact_paragraph_weighted(leader.get("description"), knowledge))
+        if leader.get("description"):
+            leader_desc.append(self.redact_paragraph_weighted(leader.get("description"), knowledge))
         leader_img = leader.get("image", None)
 
         if leader_name or leader_desc:
