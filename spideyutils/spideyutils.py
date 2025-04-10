@@ -188,7 +188,7 @@ class SpideyUtils(commands.Cog):
                         if tags:
                             tag_length = len(tags)
                             for _ in tags:
-                                if _ != tags[tag_length]:
+                                if _ != tags[tag_length - 1]:
                                     tag_str += f"{_.upper()} | "
                                 else:
                                     tag_str += f"{_.upper()}"
