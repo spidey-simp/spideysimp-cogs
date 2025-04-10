@@ -317,7 +317,7 @@ class SpideyUtils(commands.Cog):
         if leader_name or leader_desc:
             leader_embed = discord.Embed(
                 title=f"[CONFIDENTIAL] - EVAL. OF {leader_name.upper()}" if not is_owner else f"{leader_name} Profile",
-                description=f"{'/n'.join(leader_desc)}"
+                description=f"{'\n'.join(leader_desc)}"
             )
             if leader_img:
                 leader_embed.set_image(url=leader_img)
