@@ -180,15 +180,19 @@ class SpideyUtils(commands.Cog):
             if is_proper or is_number:
                 threshold = random.randint(0, 100)
                 if threshold < redact_chance:
-                    redacted.append(random.choice(["**[REDACTED]**", "███████"]))
+                    redacted.append("███████")
                     continue
             else:
                 threshold = random.randint(0, 100)
-                if threshold < redact_chance * 0.3:  # Lower chance for filler/common words
-                    redacted.append(random.choice(["**[REDACTED]**", "███████"]))
+                if threshold < redact_chance * 0.3:
+                    redacted.append("███████")
                     continue
             redacted.append(word)
-        return ' '.join(redacted)
+
+        # Join and collapse adjacent blocks of ███████ with no space
+        paragraph = ' '.join(redacted)
+        paragraph = re.sub(r'(█{3,})(\s+)(█{3,})', r'\1\3', paragraph)
+        return paragraph
     
     def calculate_knowledge(self, viewer_data, target_data, target_name):
         spy_networks = viewer_data.get("espionage", {}).get("spy_networks", {})
