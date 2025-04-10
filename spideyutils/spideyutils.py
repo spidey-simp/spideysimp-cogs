@@ -177,9 +177,28 @@ class SpideyUtils(commands.Cog):
                     for title, ev in year_data.items():
                         desc = ev.get("description", "No information available.")
                         img = ev.get("image")
-                        e = discord.Embed(title=f"📰 {title} ({year})", description=desc, color=discord.Color.blurple())
+                        dateline = ev.get("dateline")
+                        byline = ev.get("byline")
+                        quote = ev.get("quote")
+                        tags = ev.get("tags", [])
+
+                        dateline_str = f"**Dateline: {dateline}, {year}**\n\n" if dateline else ""
+                        quote_str = f"\n\n_{quote}_" if quote else ""
+                        tag_str = f"\n\n**TAGS:** {" | ".join(tags.upper())}" if tags else ""
+
+                        e = discord.Embed(
+                            title=f"📰 {title} ({year})",
+                            description=f"{dateline_str}{desc}{quote_str}{tag_str}",
+                            color=discord.Color.blurple()
+                        )
+
                         if img:
                             e.set_image(url=img)
+                            e.set_footer(text="Image courtesy of the Associated Press")
+
+                        if byline:
+                            e.set_author(name=byline)
+
                         embeds.append(e)
                 else:
                     e = discord.Embed(title=f"📰 Event in {year}", description=year_data, color=discord.Color.blurple())

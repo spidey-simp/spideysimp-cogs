@@ -4,87 +4,175 @@
       "1943": {
         "Sino-Japanese Conflict Ends": {
           "description": "Armistice signed between Imperial Japan and the Republic of China, ending the Pacific Front.",
-          "image": "https://s3.amazonaws.com/s3.timetoast.com/public/uploads/photos/6545179/4749_KorJ_Treaty.1965.jpg"
+          "image": "https://s3.amazonaws.com/s3.timetoast.com/public/uploads/photos/6545179/4749_KorJ_Treaty.1965.jpg",
+          "byline": "Filed by UN Military Observer Corps",
+          "quote": "\"Peace is merely the absence of open fire.\""
         }
       },
       "1945": {
         "Berlin Reduced to Ashes by U.S. Nuclear Strike!": {
-          "description": "United States drops the atomic bomb on Berlin, killing Hitler and collapsing Nazi leadership.",
-          "image": "https://imgur.com/berlin-ruins-during-aftermath-of-second-world-war-1945-3264x2448-9oXOjYa"
+          "description": "United States drops the atomic bomb on Berlin, with Hitler and Nazi leadership presumed dead.",
+          "image": "https://imgur.com/berlin-ruins-during-aftermath-of-second-world-war-1945-3264x2448-9oXOjYa",
+          "byline": "By Anatoly Petrov, Pravda Correspondent",
+          "quote": "\"We cannot rebuild what has been atomized.\"",
+          "tags": [
+            "Nuclear",
+            "Crisis",
+            "International"
+          ]
         },
         "U.N. Declares End to World War: No Victors, Only Survivors": {
           "description": "World War II ends without a formal victor as major powers collapse or retreat into isolation.",
-          "image": "https://www.thenation.com/wp-content/uploads/2015/06/un_charter_flickr_img1.jpg"
+          "image": "https://www.thenation.com/wp-content/uploads/2015/06/un_charter_flickr_img1.jpg",
+          "byline": "By Hugo Varela, El Mundo Internacional",
+          "quote": "\"We honor the dead of the war and hope that their sacrifices lead to a lasting peace.\""
         }
       },
       "1946": {
         "Stalin Dead at 67! Kremlin Power Vacuum Begins": {
           "description": "Lavrentiy Beria rises to power in the Soviet Union following Stalin\u2019s death.",
-          "image": "http://www.orlandofiges.info/section16_Khrushchev/images/Mourning_Stalins_death.png"
+          "image": "http://www.orlandofiges.info/section16_Khrushchev/images/Mourning_Stalins_death.png",
+          "byline": "Special Dispatch \u2013 Global Intelligence Press",
+          "quote": "\"The stress of the war was simply too much to bear.\""
         },
         "Otto von Habsburg Returns to Vienna, Calls for Restoration": {
           "description": "Otto von Habsburg returns to Austria, initiating monarchist restoration talks.",
-          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359405939907891260/ChatGPT_Image_Apr_8_2025_10_52_04_PM.png?ex=67f75cf0&is=67f60b70&hm=39836f4c62e2015bb9b478b68d5845b7307977ff992bbb075db600c6d0355855&"
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359405939907891260/ChatGPT_Image_Apr_8_2025_10_52_04_PM.png?ex=67f75cf0&is=67f60b70&hm=39836f4c62e2015bb9b478b68d5845b7307977ff992bbb075db600c6d0355855&",
+          "byline": "By Clara Bennett, Associated Press",
+          "quote": "\"Could crowns be making their reappearance into the Western World?\""
         },
         "UN Appoints Jebb as German High Commissioner": {
           "description": "The United Nations names British diplomat Sir Gladwyn Jebb as Provisional High Commissioner of Germany, establishing international civilian oversight following the nuclear strike on Berlin.",
-          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Sr._Gladwyn_Jebb.jpg/423px-Sr._Gladwyn_Jebb.jpg"
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Sr._Gladwyn_Jebb.jpg/423px-Sr._Gladwyn_Jebb.jpg",
+          "byline": "Reuters Foreign Desk",
+          "quote": "\"If people can't govern themselves, they'll find the world does it for them.\"",
+          "tags": [
+            "Espionage",
+            "Assassination",
+            "Instability"
+          ]
         }
       },
       "1947": {
         "French Colonial Empire Cracks Under Global Pressure": {
           "description": "Widespread decolonization movements begin to fracture European empires in Asia and Africa.",
-          "image": "https://www.ourhistory.org.uk/wp-content/uploads/decolonisation-of-Africa.jpeg"
+          "image": "https://www.ourhistory.org.uk/wp-content/uploads/decolonisation-of-Africa.jpeg",
+          "byline": "By Miho Takeda, Tokyo Press Network",
+          "quote": "\"The downfall of Western Influence betrays the colonies they've failed to pull into the future.\"",
+          "tags": [
+            "Colonial",
+            "Africa",
+            "Independence"
+          ]
         },
         "Germany Begins Construction of New Capital": {
           "description": "With U.S. funding, the German provisional government breaks ground on a new capital to replace Berlin, symbolizing cautious international reintegration.",
-          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359416880804135034/ChatGPT_Image_Apr_8_2025_11_34_57_PM.png?ex=67f76721&is=67f615a1&hm=476e35a1b0b53a9c226f9df912579cf3522419e303ef8fd4820c459db8654206&"
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359416880804135034/ChatGPT_Image_Apr_8_2025_11_34_57_PM.png?ex=67f76721&is=67f615a1&hm=476e35a1b0b53a9c226f9df912579cf3522419e303ef8fd4820c459db8654206&",
+          "dateline": "Berlin",
+          "byline": "By Clara Bennett, Associated Press",
+          "quote": "\"Can a Germany shrouded in the shadow of war truly rebuild the former industrial powerhouse?\""
         },
         "Chinese Civil War Ends in Nationalist Victory": {
           "description": "Chiang Kai-shek's Kuomintang forces officially declare victory as the last communist strongholds fall. The Republic of China tightens control over the mainland amid regional instability.",
-          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359568147790692553/ChatGPT_Image_Apr_9_2025_09_38_12_AM.png?ex=67f7f401&is=67f6a281&hm=235c7bf8ddde54cc6376bbf069151d04f78a3ef624200e5bc3d922fc13a80565&"
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359568147790692553/ChatGPT_Image_Apr_9_2025_09_38_12_AM.png?ex=67f7f401&is=67f6a281&hm=235c7bf8ddde54cc6376bbf069151d04f78a3ef624200e5bc3d922fc13a80565&",
+          "byline": "Reuters Foreign Desk",
+          "quote": "\"The East seems safe. For now.\"",
+          "tags": [
+            "Civil Conflict",
+            "Asia",
+            "Ideology"
+          ]
         }
       },
       "1948": {
         "Pope Pius XIII Elected After Sudden Death of Pius XII": {
           "description": "Pope Pius XIII elected following sudden death of Pius XII, heralding a conservative Catholic resurgence.",
-          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359411309371723806/ChatGPT_Image_Apr_8_2025_11_14_30_PM.png?ex=67f761f0&is=67f61070&hm=8ea1e1a5bbfba232fd747faea56c10c2e53adc2636672d5e86897c1a08f92d48&"
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359411309371723806/ChatGPT_Image_Apr_8_2025_11_14_30_PM.png?ex=67f761f0&is=67f61070&hm=8ea1e1a5bbfba232fd747faea56c10c2e53adc2636672d5e86897c1a08f92d48&",
+          "byline": "By Anatoly Petrov, Pravda Correspondent",
+          "quote": "\"Is Catholicism making a resurrgence?\"",
+          "tags": [
+            "Religion",
+            "Catholic",
+            "Europe"
+          ]
         },
         "Catholic Pact Takes Root in Austria and Spain": {
           "description": "Austria and Spain, backed by the Vatican, lay the groundwork for a pan-Catholic alliance in response to communist expansion.",
-          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359438625992872026/ChatGPT_Image_Apr_9_2025_01_02_50_AM.png?ex=67f77b61&is=67f629e1&hm=6a302a33da7bc70f5800369fefb1aba1c0b8046385f06ea38efce80489a3a1ce&"
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359438625992872026/ChatGPT_Image_Apr_9_2025_01_02_50_AM.png?ex=67f77b61&is=67f629e1&hm=6a302a33da7bc70f5800369fefb1aba1c0b8046385f06ea38efce80489a3a1ce&",
+          "dateline": "Rome",
+          "byline": "Special Dispatch \u2013 Global Intelligence Press",
+          "quote": "\"Religious alliances were once the norm of the 1600s. Are they coming back in this modern world?\"",
+          "tags": [
+            "Religion",
+            "Catholic",
+            "Europe"
+          ]
         }
       },
       "1949": {
         "Soviets Locked Out of Nuclear Oversight Talks": {
           "description": "UN Security Council votes to exclude the Soviet Union from nuclear oversight talks.",
-          "image": "https://nsarchive2.gwu.edu/NSAEBB/NSAEBB472/IMAGE%20NO%201.jpg"
+          "image": "https://nsarchive2.gwu.edu/NSAEBB/NSAEBB472/IMAGE%20NO%201.jpg",
+          "byline": "By Hugo Varela, El Mundo Internacional",
+          "quote": "\"Beria reportedly was furious at the decision according to an anonymous informant.\"",
+          "tags": [
+            "Nuclear",
+            "Crisis",
+            "International"
+          ]
         },
         "UN Mediation Fails to Reconcile German Factions": {
           "description": "After years of international mediation, negotiations between monarchist, democratic, and communist cells in Germany break down entirely.",
-          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359444393781887099/ChatGPT_Image_Apr_9_2025_01_26_10_AM.png?ex=67f780c0&is=67f62f40&hm=c95c6c9452efeab6a26c6cedec5dcb91b238bd8466fc592d92c8261cdbcce8a0&"
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359444393781887099/ChatGPT_Image_Apr_9_2025_01_26_10_AM.png?ex=67f780c0&is=67f62f40&hm=c95c6c9452efeab6a26c6cedec5dcb91b238bd8466fc592d92c8261cdbcce8a0&",
+          "byline": "By Miho Takeda, Tokyo Press Network",
+          "quote": "\"Diplomacy has always been reliant on empathy. One might think empathy was devoid from Germany.\""
         }
       },
       "1950": {
         "Japan Declares 'Greater East Asian Mandate'": {
           "description": "Japan declares full economic and military dominance over East Asia through the Greater Mandate.",
-          "image": "https://www.worldwar2facts.org/wp-content/uploads/2021/03/Hideki-Tojo-Japan-World-War-2.jpg"
+          "image": "https://www.worldwar2facts.org/wp-content/uploads/2021/03/Hideki-Tojo-Japan-World-War-2.jpg",
+          "byline": "Filed by UN Military Observer Corps",
+          "quote": "\"He who controls history controls the future.\""
         }
       },
       "1951": {
         "Geneva Summit Fails to Cool U.S.\u2013USSR Tensions": {
           "description": "International summit in Geneva fails to prevent Cold War escalation between U.S. and USSR.",
-          "image": "https://www.enemyinmirror.com/wp-content/uploads/2021/11/1955_Geneva_Big_4_Summit.jpg"
+          "image": "https://www.enemyinmirror.com/wp-content/uploads/2021/11/1955_Geneva_Big_4_Summit.jpg",
+          "dateline": "Geneva",
+          "byline": "Reuters Foreign Desk",
+          "quote": "\"The sparks of war can often be avoided with one conversation.\"",
+          "tags": [
+            "Diplomacy",
+            "High-Level",
+            "UN"
+          ]
         },
         "UN Commissioner Assassinated in Frankfurt!": {
           "description": "Sir Gladwyn Jebb is assassinated under mysterious circumstances. UN withdraws civilian oversight from Germany. His death signals the collapse of the provisional civil government, paving the way for a full military junta takeover.",
-          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359446693547872368/ChatGPT_Image_Apr_9_2025_01_35_10_AM.png?ex=67f782e5&is=67f63165&hm=032dc7e6124857c4fbb4e0fd5189beffadf45b0d5306e5dce1a0acad0ec09fe6&"
+          "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359446693547872368/ChatGPT_Image_Apr_9_2025_01_35_10_AM.png?ex=67f782e5&is=67f63165&hm=032dc7e6124857c4fbb4e0fd5189beffadf45b0d5306e5dce1a0acad0ec09fe6&",
+          "dateline": "Frankfurt",
+          "byline": "Special Dispatch \u2013 Global Intelligence Press",
+          "quote": "\"His death will surely bring about a factional war.\"",
+          "tags": [
+            "Espionage",
+            "Assassination",
+            "Instability"
+          ]
         }
       },
       "1952": {
         "U.S. Confirms 500 Nuclear Warheads in Arsenal": {
           "description": "Global arms race accelerates as United States announces deployment of 500th nuclear warhead.",
-          "image": "https://minutemanmissile.com/images/MinutemanIIIMK12B.jpg"
+          "image": "https://minutemanmissile.com/images/MinutemanIIIMK12B.jpg",
+          "byline": "By Hugo Varela, El Mundo Internacional",
+          "quote": "\"When do they have enough weapons?\"",
+          "tags": [
+            "Nuclear",
+            "Crisis",
+            "International"
+          ]
         }
       }
     },
