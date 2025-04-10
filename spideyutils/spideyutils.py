@@ -182,15 +182,32 @@ class SpideyUtils(commands.Cog):
                                           x[1].get("espionage", {}).get("spy_network_score", 0))
 
     def redacted(self, text, knowledge, threshold=50):
-        return text if knowledge >= threshold else "[REDACTED]"
+        return text if knowledge >= threshold else random.choice("[REDACTED]", "Information Unclear")
 
-    def ranged_value(self, actual, knowledge):
+    def ranged_value(self, actual, knowledge, stat_type="generic"):
         if knowledge >= 100:
             return str(actual)
-        margin = max(5, int((100 - knowledge) * 0.1))
-        low = max(0, actual - margin)
-        high = actual + margin
+
+        thresholds = {
+            "population": (0.02, 40),
+            "research": (None, 80),  # Show only if knowledge >= 80
+            "military": (0.15, 30),
+            "intel": (0.10, 50),
+            "generic": (0.10, 50)
+        }
+        variance, redact_threshold = thresholds.get(stat_type, thresholds["generic"])
+
+        if knowledge < redact_threshold:
+            return random.choice("Information Unclear", "Redacted")
+
+        if variance is None:
+            return str(actual) if knowledge >= 100 else random.choice("Information Unclear")
+
+        margin = max(1, int(actual * variance))
+        low = max(0, actual - random.randint(0, margin))
+        high = actual + random.randint(0, margin)
         return f"{low}–{high} (est.)"
+
 
     @app_commands.command(name="view_country_info_detailed", description="View detailed info for a Cold War RP country.")
     @app_commands.autocomplete(country= autocomplete_country)
@@ -212,8 +229,17 @@ class SpideyUtils(commands.Cog):
         leader = target.get("leader", {})
 
         # OVERVIEW
-        overview = discord.Embed(title=f"{country} – Intelligence Dossier", color=discord.Color.dark_blue())
+        if is_owner:
+            title = f"[GOVERNMENT FILE] – {country}"
+            footer_text = "Compiled by the Office of the Secretary of State | Confidential – Authorized Personnel Only"
+        else:
+            title = f"[CONFIDENTIAL DOSSIER] – {country}"
+            footer_text = f"Compiled by Division 7 | Clearance: SIGINT-3 | Confidence Rating: {min(100, max(0, knowledge))}%"
+
+        # OVERVIEW
+        overview = discord.Embed(title=title, color=discord.Color.dark_blue())
         overview.description = self.redacted(target.get("details", "No description."), knowledge)
+        overview.set_footer(text=footer_text)
         if leader.get("image"):
             overview.set_author(name=f"Leader: {leader.get('name', '[REDACTED]')}", icon_url=leader["image"])
         else:
@@ -236,8 +262,9 @@ class SpideyUtils(commands.Cog):
                          ("avg_troop_skill_level", "Troop Skill Level"),
                          ("military_readiness", "Readiness")]:
             value = m.get(k, 0 if "level" in k else "Unknown")
+            stat_type = "military"
             if isinstance(value, int):
-                mil.add_field(name=label, value=self.ranged_value(value, knowledge))
+                mil.add_field(name=label, value=self.ranged_value(value, knowledge, stat_type))
             else:
                 mil.add_field(name=label, value=self.redacted(value, knowledge))
         embeds.append(mil)
@@ -259,7 +286,7 @@ class SpideyUtils(commands.Cog):
                          ("recruitable_manpower", "Recruitable Manpower"),
                          ("public_support_score", "Public Support"),
                          ("civil_unrest_level", "Civil Unrest")]:
-            pol.add_field(name=label, value=self.ranged_value(p.get(k, 0), knowledge))
+            pol.add_field(name=label, value=self.ranged_value(p.get(k, 0), knowledge, "population" if k == "population" else "generic"))
         ideology_breakdown = target.get("ideology", {})
         for ideol in ["democratic", "fascist", "communist", "authoritarian", "monarchic"]:
             pol.add_field(name=f"{ideol.title()} Support", value=self.ranged_value(ideology_breakdown.get(ideol, 0), knowledge), inline=True)
@@ -268,19 +295,21 @@ class SpideyUtils(commands.Cog):
         # INTEL
         esp = target.get("espionage", {})
         intel = discord.Embed(title="🕵️ Intelligence & Research", color=discord.Color.greyple())
-        intel.add_field(name="Research Coefficient", value=self.ranged_value(target.get("research", {}).get("research_coefficient", 0), knowledge))
+        intel.add_field(name="Research Coefficient", value=self.ranged_value(target.get("research", {}).get("research_coefficient", 0), knowledge, "research"))
         intel.add_field(name="Nuclear Arsenal", value=self.ranged_value(target.get("research", {}).get("nuclear_arsenal", 0), knowledge))
-        intel.add_field(name="Foreign Intel Score", value=self.ranged_value(esp.get("foreign_intelligence_score", 0), knowledge))
-        intel.add_field(name="Domestic Intel Score", value=self.ranged_value(esp.get("domestic_intelligence_score", 0), knowledge))
-        intel.add_field(name="Spy Network Efficiency", value=self.ranged_value(esp.get("spy_network_score", 0), knowledge))
+        intel.add_field(name="Foreign Intel Score", value=self.ranged_value(esp.get("foreign_intelligence_score", 0), knowledge, "intel"))
+        intel.add_field(name="Domestic Intel Score", value=self.ranged_value(esp.get("domestic_intelligence_score", 0), knowledge, "intel"))
+        intel.add_field(name="Spy Network Efficiency", value=self.ranged_value(esp.get("spy_network_score", 0), knowledge, "intel"))
 
         if esp.get("spy_networks") and knowledge >= 70:
             for tgt, val in esp.get("spy_networks", {}).items():
-                intel.add_field(name=f"Network in {tgt}", value=self.ranged_value(val, knowledge), inline=True)
+                intel.add_field(name=f"Network in {tgt}", value=self.ranged_value(val, knowledge, "intel"), inline=True)
 
         embeds.append(intel)
 
         await interaction.followup.send(embeds=embeds, ephemeral=True)
+
+
 
     
     @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
