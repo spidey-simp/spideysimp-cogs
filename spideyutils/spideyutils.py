@@ -398,7 +398,7 @@ class SpideyUtils(commands.Cog):
 
                 for spirit in spirits:
                     name = self.redacted(spirit.get("name", "Unknown"), knowledge)
-                    desc = self.redact_paragraph_weighted(spirit.get("description", "No description available."), knowledge)
+                    desc = self.redact_paragraph_weighted(spirit.get("description", "No description available."), (knowledge if not spirit.get("public") else (knowledge + 25)))
                     embed.add_field(name=f"**{name}**", value=desc, inline=False)
 
                 embeds.append(embed)
@@ -464,6 +464,8 @@ class SpideyUtils(commands.Cog):
             title=f"🕊️ National Spirits",
             color=discord.Color.teal()
         )
+
+        spirit_embed.set_footer(text="United Nations' Advisory Committee Report | Not to be treated as factual")
 
         if len(public_spirits) == 0:
             summary = f"The UN advisory report lacks any knowledge of {country}'s internal or foreign policy goals. Please contact the Secretary of State's Office of {country} or visit the {country} Embassy in your nation to lodge a diplomatic decree."
