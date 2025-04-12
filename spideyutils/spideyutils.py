@@ -243,12 +243,23 @@ class SpideyUtils(commands.Cog):
         return [app_commands.Choice(name=b, value=b) for b in branches if current.lower() in b.lower()][:25]
 
     async def autocomplete_sub_branch(self, interaction: discord.Interaction, current: str):
-        branches = self.cold_war_data.get("tech_tree", {})
+        tech_tree = self.cold_war_data.get("tech_tree", {})
+        branch = interaction.namespace.branch
         results = []
-        for branch_name, branch_data in branches.items():
-            for sub_branch in branch_data.keys():
-                if current.lower() in sub_branch.lower():
-                    results.append(app_commands.Choice(name=sub_branch, value=sub_branch))
+        if branch:
+            branch_data = tech_tree.get(branch, {})
+            for sub_branch_data in branch_data.values():
+                if isinstance(sub_branch_data, dict):
+                    sub_branch_name = sub_branch_data.get("sub_branch_name")
+                    if sub_branch_name and current.lower() in sub_branch_name.lower():
+                        results.append(app_commands.Choice(name=sub_branch_name, value=sub_branch_name))
+        else:
+            for branch_data in tech_tree.values():
+                for sub_branch_data in branch_data.values():
+                    if isinstance(sub_branch_data, dict):
+                        sub_branch_name = sub_branch_data.get("sub_branch_name")
+                        if sub_branch_name and current.lower() in sub_branch_name.lower():
+                            results.append(app_commands.Choice(name=sub_branch_name, value=sub_branch_name))
         return results[:25]
 
     def add_tech_with_children(self, embed, tech, data, year):
@@ -258,7 +269,7 @@ class SpideyUtils(commands.Cog):
         calc_time = self.calculate_research_time(base, r_year, year)
         label = f"**{tech} ({r_year or 'n/a'}) – {calc_time} days**"
         embed.add_field(name=label, value=desc, inline=False)
-        for child, child_data in data.get("children", {}).items():
+        for child, child_data in data.get("child", {}).items():
             self.add_tech_with_children(embed, child, child_data, year)
 
     @app_commands.command(name="view_tech", description="View the Cold War RP tech tree.")
@@ -272,7 +283,7 @@ class SpideyUtils(commands.Cog):
         if not branch and not sub_branch:
             embed = discord.Embed(title="📚 Tech Tree Overview", color=discord.Color.blue())
             for branch_name, contents in tech_tree.items():
-                subs = "\n".join([f"• {sb}" for sb in contents])
+                subs = "\n".join([f"• {sub_data.get('sub_branch_name', sb)}" for sb, sub_data in contents.items() if sb != "branch"])
                 embed.add_field(name=branch_name, value=subs or "(No sub-branches)", inline=False)
             return await interaction.followup.send(embed=embed)
 
@@ -282,27 +293,29 @@ class SpideyUtils(commands.Cog):
                 return await interaction.followup.send(f"Branch '{branch}' not found.", ephemeral=True)
 
             embeds = []
-            main_embed = discord.Embed(title=f"🧠 {branch} Branch", color=discord.Color.dark_gold())
-            embeds.append(main_embed)
-            for sub, techs in branch_data.items():
-                if not isinstance(techs, dict):
+            for key, sub_data in branch_data.items():
+                if key == "branch" or not isinstance(sub_data, dict):
                     continue
-                sub_embed = discord.Embed(title=f"📦 {sub}", color=discord.Color.gold())
-                for tech, tdata in techs.get("children", {}).items():
-                    self.add_tech_with_children(sub_embed, tech, tdata, year)
+                sub_name = sub_data.get("sub_branch_name", key)
+                sub_embed = discord.Embed(title=f"📦 {sub_name} Sub-Branch", color=discord.Color.gold())
+                tech = sub_data.get("starter_tech")
+                self.add_tech_with_children(sub_embed, tech, sub_data, year)
                 embeds.append(sub_embed)
             return await interaction.followup.send(embeds=embeds[:10])
 
         # If sub-branch (including "main") is selected
         for branch_name, contents in tech_tree.items():
-            for sb, tdata in contents.items():
-                if sb.lower() == sub_branch.lower():
-                    embed = discord.Embed(title=f"🔬 {sb} Sub-Branch", color=discord.Color.blurple())
-                    for tech, data in tdata.get("children", {}).items():
-                        self.add_tech_with_children(embed, tech, data, year)
+            for sb_key, sub_data in contents.items():
+                if sb_key == "branch" or not isinstance(sub_data, dict):
+                    continue
+                if sub_data.get("sub_branch_name", "").lower() == sub_branch.lower():
+                    embed = discord.Embed(title=f"🔬 {sub_data['sub_branch_name']} Sub-Branch", color=discord.Color.blurple())
+                    tech = sub_data.get("starter_tech")
+                    self.add_tech_with_children(embed, tech, sub_data, year)
                     return await interaction.followup.send(embed=embed)
 
         await interaction.followup.send("❌ Could not find specified branch or sub-branch.", ephemeral=True)
+
 
 
     

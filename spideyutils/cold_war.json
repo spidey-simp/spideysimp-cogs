@@ -1703,875 +1703,828 @@
     }
   },
   "tech_tree": {
-    "INFANTRY AND SUPPORT": {
-      "Cold War Infantry Weapons": {
-        "description": "Lays the foundation for modern infantry loadouts, standardizing Cold War-era rifles and field kits.",
-        "research_time": 120,
-        "children": {
-          "Improved Infantry Weapons": {
-            "description": "Upgrades standard rifles and support arms for increased firepower, accuracy, and durability.",
-            "research_time": 180,
-            "children": {
-              "Advanced Infantry Weapons": {
-                "description": "Incorporates modular weapon attachments and specialized ammunition for elite units.",
-                "research_time": 240,
-                "children": {
-                  "Digital Targeting Lenses": {
-                    "description": "Deploys helmet-mounted optics with range-finding and heads-up display systems.",
-                    "research_time": 180,
-                    "children": {
-                      "Combat Data Terminals": {
-                        "description": "Introduces portable battlefield computers for real-time communication and intel.",
-                        "research_time": 300,
-                        "children": {
-                          "Powered Exoskeleton Prototypes": {
-                            "description": "Experimental suits that boost strength and endurance for front-line infantry.",
-                            "research_time": 540,
-                            "research_year": 1964
-                          }
-                        },
-                        "research_year": 1961
-                      }
-                    },
-                    "research_year": 1956
-                  },
-                  "Combat Drugs & Stimulants": {
-                    "description": "Administers chemical enhancers to increase soldier endurance and suppress pain.",
-                    "research_time": 300,
-                    "research_year": 1957
-                  }
-                },
-                "research_year": 1951
-              },
-              "Basic Body Armor": {
-                "description": "Equips infantry with flak vests and hardened inserts for protection against small arms fire.",
-                "research_time": 180,
-                "children": {
-                  "Advanced Body Armor": {
-                    "description": "Introduces composite plating and flexible kevlar for enhanced mobility and protection.",
-                    "research_time": 240,
-                    "children": {
-                      "Integrated Night Vision Equipment": {
-                        "description": "Provides soldiers with head-mounted low-light optics for night operations.",
-                        "research_time": 180,
-                        "research_year": 1962
-                      },
-                      "Cold Climate Infantry Gear": {
-                        "description": "Specialized clothing and equipment for extreme cold-weather combat environments.",
-                        "research_time": 120,
-                        "research_year": 1963
-                      }
-                    },
-                    "research_year": 1958
-                  }
-                },
-                "research_year": 1952
-              },
-              "Modular Field Gear": {
-                "description": "Allows soldiers to customize their packs with mission-specific tools and supplies.",
-                "research_time": 180,
-                "children": {
-                  "NBC Infantry Readiness": {
-                    "description": "Prepares infantry for operations in nuclear, biological, and chemical threat zones.",
-                    "research_time": 300,
-                    "research_year": 1959
-                  },
-                  "Jungle Warfare Specialization": {
-                    "description": "Tailors gear and tactics for survival and combat in dense, tropical terrain.",
-                    "research_time": 180,
-                    "research_year": 1960
-                  }
-                },
-                "research_year": 1953
-              },
-              "Anti-Tank Infantry Weapons": {
-                "description": "Equips infantry squads with man-portable weapons to engage enemy armored vehicles.",
-                "research_time": 240,
-                "research_year": 1954
-              }
-            },
-            "research_year": 1947
-          }
+      "INFANTRY AND SUPPORT": {
+        "branch": {
+          "branch_name": "Infantry & Support",
+          "starter_tech": "World War II Era Firearms",
+          "description": "Though the Second World War has ended, its weapons remain widely available. Most militaries enter the Cold War era equipped with legacy bolt-action rifles, basic kit, and a tired generation of uniforms.",
+          "research_time": 180,
+          "research_year": 1945
         },
-        "research_year": 1945
-      },
-      "Basic Support Companies": {
-        "description": "Forms the logistical backbone of modern armies, including engineers, medics, and comms.",
-        "research_time": 150,
-        "children": {
-          "Infantry Squad Radios": {
-            "description": "Introduces short-range communications for squad-level coordination.",
-            "research_time": 120,
-            "research_year": 1948
-          },
-          "Basic Urban Combat Training": {
-            "description": "Provides infantry with essential tactics and maneuvers for fighting in city environments.",
-            "research_time": 150,
-            "research_year": 1949
-          },
-          "Paratrooper Optimization": {
-            "description": "Improves jump protocols, landing zone survival, and equipment for airborne units.",
-            "research_time": 210,
-            "research_year": 1950
-          }
-        },
-        "research_year": 1946
-      }
-    },
-    "ARTILLERY": {
-      "Post-War Field Guns": {
-        "description": "Modernizes WW2-era artillery designs with longer barrels and more accurate fire control.",
-        "research_time": 180,
-        "research_year": 1945,
-        "children": {
-          "Refined Breechloaders": {
-            "description": "Improves rate of fire and crew safety through redesigned loading systems.",
-            "research_time": 180,
-            "research_year": 1948,
-            "children": {
-              "Standardized Artillery Platforms": {
-                "description": "Unifies calibers and platform chassis to simplify logistics and ammunition.",
-                "research_time": 180,
-                "research_year": 1951,
-                "children": {
-                  "Advanced Towed Guns": {
-                    "description": "Introduces auto-aim assist systems and longer-range rifled barrels.",
-                    "research_time": 210,
-                    "research_year": 1956,
-                    "children": {
-                      "Digital Fire Calibration Units": {
-                        "description": "Deploys early computers to calculate windage and angle in real time.",
-                        "research_time": 240,
-                        "research_year": 1962
-                      }
-                    }
-                  }
-                }
+        "sub_branch1": {
+          "sub_branch_name": "Infantry Firearms",
+          "starter_tech": "Early Cold War Rifles",
+          "description": "A new generation of firearms \u2014 semi-automatics, assault rifles, and improved machine guns \u2014 begins to take shape as Cold War tensions rise.",
+          "research_time": 210,
+          "research_year": 1949,
+          "child": {
+            "tech": "Improved Infantry Weapons",
+            "description": "Refines standard service rifles with better tolerances, fire rates, and battlefield durability.",
+            "research_time": 240,
+            "research_year": 1952,
+            "child": {
+              "tech": "Advanced Infantry Weapons",
+              "description": "Modular weapon systems emerge, including under-barrel attachments and mission-adaptable loadouts.",
+              "research_time": 270,
+              "research_year": 1956,
+              "child": {
+                "tech": "Powered Exoskeleton Prototypes",
+                "description": "Experimental suits enhance infantry strength and load capacity, but suffer from limited field viability.",
+                "research_time": 400,
+                "research_year": 1964
               }
             }
           }
-        }
-      },
-      "Dedicated Anti-Tank Artillery": {
-        "description": "Develops direct-fire, high-velocity guns to neutralize enemy armor at range.",
-        "research_time": 180,
-        "research_year": 1953,
-        "children": {
-          "Shaped Charge Shells": {
-            "description": "Adopts HEAT rounds to pierce tank armor through explosive jet technology.",
-            "research_time": 210,
+        },
+        "sub_branch2": {
+          "sub_branch_name": "Infantry Equipment",
+          "starter_tech": "Postwar Combat Uniforms",
+          "description": "Modern combat uniforms signal a break from the past \u2014 prioritizing function over form, and adaptability over ceremony.",
+          "research_time": 120,
+          "research_year": 1950,
+          "child": {
+            "tech": "Basic Body Armor",
+            "description": "Flak vests and hardened inserts offer basic protection against small arms and shrapnel.",
+            "research_time": 180,
+            "research_year": 1952,
+            "child": {
+              "tech": "Advanced Body Armor",
+              "description": "Kevlar and composite plating increase mobility while enhancing protection.",
+              "research_time": 240,
+              "research_year": 1958,
+              "child": {
+                "tech": "Smart Armor Readiness",
+                "description": "Preliminary trials of sensor-integrated armor plates, capable of damage detection and battlefield diagnostics.",
+                "research_time": 300,
+                "research_year": 1966
+              }
+            }
+          }
+        },
+        "sub_branch3": {
+          "sub_branch_name": "Environmental Gear",
+          "starter_tech": "Basic Climate Gear",
+          "description": "Environmental specialization becomes essential as Cold War proxy conflicts stretch into extreme terrain.",
+          "research_time": 160,
+          "research_year": 1951,
+          "child": {
+            "tech": "Cold Climate Infantry Gear",
+            "description": "Specialized boots, insulated layers, and winterized weapon grease for Arctic and alpine campaigns.",
+            "research_time": 220,
             "research_year": 1956,
-            "children": {
-              "Recoilless Rifles": {
-                "description": "Builds shoulder-fired and vehicle-mounted anti-tank weapons with minimal recoil.",
-                "research_time": 210,
-                "research_year": 1960
-              }
-            }
-          }
-        }
-      },
-      "Dedicated Anti-Air Artillery": {
-        "description": "Focuses on flak and autocannons to counteract increasing aerial threats.",
-        "research_time": 180,
-        "research_year": 1954,
-        "children": {
-          "Radar-Fused Shells": {
-            "description": "Enables timed airburst detonation based on radar proximity sensors.",
-            "research_time": 210,
-            "research_year": 1957,
-            "children": {
-              "Mobile SAM Platforms": {
-                "description": "Mounts surface-to-air missiles on trucks for battlefield air denial.",
-                "research_time": 240,
+            "child": {
+              "tech": "Jungle Warfare Specialization",
+              "description": "Lightweight fabrics, insect resistance, and water-purification gear for tropical conflict zones.",
+              "research_time": 260,
+              "research_year": 1960,
+              "child": {
+                "tech": "Desert Combat Adaptation",
+                "description": "Heat-reflective uniforms, hydration systems, and desert-ready ammunition sealing for prolonged operations.",
+                "research_time": 280,
                 "research_year": 1963
               }
             }
           }
         }
+      }
+    },
+    "ARTILLERY": {
+      "branch": {
+        "branch_name": "Artillery",
+        "starter_tech": "Post-War Artillery Doctrine",
+        "description": "Artillery remains the backbone of most ground forces. After WWII, doctrines shift toward mobility, specialization, and advanced munitions.",
+        "research_time": 160,
+        "research_year": 1945
       },
-      "Mounted Self-Propelled Artillery": {
-        "description": "Mounts large-caliber guns on tracked chassis for flexible deployment.",
+      "sub_branch1": {
+        "sub_branch_name": "Towed Artillery",
+        "starter_tech": "Post-War Field Guns",
+        "description": "Standardized medium-caliber guns are fielded in large numbers with improved breech systems and durability.",
         "research_time": 180,
-        "research_year": 1950,
-        "children": {
-          "Autoloading SPGs": {
-            "description": "Adds mechanized reloading to reduce crew fatigue and increase tempo.",
-            "research_time": 210,
-            "research_year": 1954,
-            "children": {
-              "Networked Artillery Batteries": {
-                "description": "Connects SPG teams into coordinated firing networks.",
-                "research_time": 240,
-                "research_year": 1960
-              }
-            }
-          }
-        }
-      },
-      "Motorized Artillery Carriages": {
-        "description": "Deploys light artillery on wheeled vehicles for rapid repositioning.",
-        "research_time": 180,
-        "research_year": 1950,
-        "children": {
-          "Improved Trailer Mounts": {
-            "description": "Strengthens stability and load balancing during mobile fire missions.",
-            "research_time": 180,
+        "research_year": 1946,
+        "child": {
+          "tech": "Refined Breechloaders",
+          "description": "Reduces misfires and boosts fire rate with redesigned mechanisms and smoother shell handling.",
+          "research_time": 210,
+          "research_year": 1949,
+          "child": {
+            "tech": "Precision Shells",
+            "description": "Tighter manufacturing standards improve accuracy and reduce in-field dud rates.",
+            "research_time": 250,
             "research_year": 1953
           }
         }
       },
-      "Specialized Support Artillery": {
-        "description": "Focuses on smoke, illumination, and psychological impact rounds.",
+      "sub_branch2": {
+        "sub_branch_name": "Self-Propelled Guns",
+        "starter_tech": "Mounted Light SPGs",
+        "description": "Artillery mobility improves as field guns are mounted on tracked chassis for rapid redeployment.",
+        "research_time": 200,
+        "research_year": 1950,
+        "child": {
+          "tech": "Autoloading SPGs",
+          "description": "Adds mechanized loaders to increase sustained fire output and reduce crew fatigue.",
+          "research_time": 260,
+          "research_year": 1954,
+          "child": {
+            "tech": "Networked Artillery Batteries",
+            "description": "Radio-coordinated fire missions improve precision and enable swarm targeting from multiple SPGs.",
+            "research_time": 320,
+            "research_year": 1959
+          }
+        }
+      },
+      "sub_branch3": {
+        "sub_branch_name": "Anti-Air Artillery",
+        "starter_tech": "Basic Flak Cannons",
+        "description": "WWII-era flak platforms continue to serve as low-altitude air denial tools.",
         "research_time": 180,
+        "research_year": 1945,
+        "child": {
+          "tech": "Radar-Fused Shells",
+          "description": "Timed detonation flak is replaced with radar-activated proximity bursts, improving air kill rate.",
+          "research_time": 240,
+          "research_year": 1952,
+          "child": {
+            "tech": "Mobile SAM Platforms",
+            "description": "Mounts early guided missiles on tracked vehicles for higher-altitude precision.",
+            "research_time": 300,
+            "research_year": 1958
+          }
+        }
+      },
+      "sub_branch4": {
+        "sub_branch_name": "Anti-Tank Artillery",
+        "starter_tech": "Post-War Tank Destroyers",
+        "description": "High-velocity direct fire platforms evolve from German and Soviet wartime designs.",
+        "research_time": 190,
+        "research_year": 1948,
+        "child": {
+          "tech": "Shaped Charge Ammunition",
+          "description": "Widespread deployment of HEAT rounds makes even lighter platforms dangerous to enemy armor.",
+          "research_time": 240,
+          "research_year": 1952,
+          "child": {
+            "tech": "Recoilless Rifles",
+            "description": "Shoulder or tripod-mounted weapons allow infantry to field armor-piercing tools with low recoil.",
+            "research_time": 280,
+            "research_year": 1956
+          }
+        }
+      },
+      "sub_branch5": {
+        "sub_branch_name": "Artillery Coordination",
+        "starter_tech": "Forward Observer Squads",
+        "description": "Integrating radio-linked observers into infantry units improves artillery call-in timing and accuracy.",
+        "research_time": 200,
         "research_year": 1951,
-        "children": {
-          "White Phosphorus Shells": {
-            "description": "Deploys shells for vision denial, area denial, and psychological disruption.",
-            "research_time": 180,
-            "research_year": 1955,
-            "children": {
-              "Multi-Purpose Fusing": {
-                "description": "Creates shell types that can shift behavior on-the-fly based on mission needs.",
-                "research_time": 210,
-                "research_year": 1961
-              }
-            }
+        "child": {
+          "tech": "Mobile Artillery Radar Units",
+          "description": "Ground-based radar trucks can detect incoming artillery and trace enemy firing positions.",
+          "research_time": 260,
+          "research_year": 1956,
+          "child": {
+            "tech": "Computerized Fire Control Relay",
+            "description": "Tactical computers process terrain data and correct fire in real-time across units.",
+            "research_time": 330,
+            "research_year": 1961
           }
         }
       }
     },
     "ARMOR": {
-      "Cold War Era Tanks": {
-        "description": "Modernizes tank development post-WWII, creating platforms suited for Cold War battlefields.",
-        "research_time": 150,
-        "children": {
-          "Improved MBTs": {
-            "description": "Enhances main battle tanks with upgraded armor, guns, and mobility systems.",
-            "research_time": 240,
-            "children": {
-              "Advanced MBTs": {
-                "description": "Refines tank design with composite armor, stabilized guns, and improved fire control.",
-                "research_time": 360,
-                "children": {
-                  "Next-Gen MBTs": {
-                    "description": "Designs tanks with digital targeting, modular armor, and cutting-edge propulsion.",
-                    "research_time": 540,
-                    "research_year": 1953
-                  }
-                },
-                "research_year": 1952
-              },
-              "Heavy Armor Focus": {
-                "description": "Develops slower, heavier tanks with increased survivability and firepower.",
-                "research_time": 300,
-                "research_year": 1952
-              },
-              "Mobility Focus (Light MBTs)": {
-                "description": "Designs lighter tanks for speed, maneuverability, and reconnaissance support.",
-                "research_time": 300,
-                "research_year": 1952
-              },
-              "Infantry Fighting Vehicles (IFVs)": {
-                "description": "Combines troop transport with direct-fire support in a single armored platform.",
-                "research_time": 300,
-                "children": {
-                  "Armored Recovery Vehicles (ARVs)": {
-                    "description": "Deploys specialized vehicles for frontline repair and recovery of damaged armor.",
-                    "research_time": 240,
-                    "research_year": 1953
-                  }
-                },
-                "research_year": 1952
-              }
-            },
-            "research_year": 1951
-          },
-          "Tank Destroyers": {
-            "description": "Equips tracked or wheeled vehicles with high-velocity guns to counter enemy armor.",
-            "research_time": 240,
-            "research_year": 1951
-          },
-          "Amphibious Tanks": {
-            "description": "Adapts tanks for river crossings and coastal invasions through water-sealed designs.",
-            "research_time": 240,
-            "children": {
-              "Advanced Amphibious Tanks": {
-                "description": "Optimizes amphibious armor with hydrodynamic shaping and improved buoyancy systems.",
-                "research_time": 300,
-                "research_year": 1952
-              }
-            },
-            "research_year": 1951
-          }
-        },
-        "research_year": 1950
+      "branch": {
+        "branch_name": "Armor",
+        "starter_tech": "Late-War Tank Chassis",
+        "description": "Many Cold War nations enter the postwar era with battle-hardened tank designs from WWII. The race begins to modernize and specialize those platforms for new threats.",
+        "research_time": 180,
+        "research_year": 1945
       },
-      "Digital Armor Command Systems": {
-        "description": "Equips tanks with onboard computers for real-time target data and battlefield coordination.",
+      "sub_branch1": {
+        "sub_branch_name": "Main Battle Tanks",
+        "starter_tech": "Transitional MBT Prototypes",
+        "description": "Merges heavy tank firepower with medium tank mobility, forming the basis of the first true MBTs.",
         "research_time": 210,
-        "research_year": 1962,
-        "children": {
-          "Networked MBTs": {
-            "description": "Links tanks into fire control webs, improving target sharing and reaction speed.",
-            "research_time": 240,
-            "research_year": 1965
-          },
-          "Modular Armor Plating": {
-            "description": "Allows tanks to quickly swap and repair armor sections in the field.",
-            "research_time": 210,
-            "research_year": 1967
-          },
-          "Explosive Reactive Armor": {
-            "description": "Adds protective panels that explode outward to reduce the impact of incoming projectiles.",
-            "research_time": 240,
-            "research_year": 1969
+        "research_year": 1949,
+        "child": {
+          "tech": "Standardized MBT Designs",
+          "description": "Streamlines parts, logistics, and crew training by unifying the tank fleet around a core model.",
+          "research_time": 260,
+          "research_year": 1953,
+          "child": {
+            "tech": "Advanced MBT Optics",
+            "description": "Thermal sights, rangefinders, and stabilization upgrades improve targeting on the move.",
+            "research_time": 320,
+            "research_year": 1959
+          }
+        }
+      },
+      "sub_branch2": {
+        "sub_branch_name": "Tank Armor",
+        "starter_tech": "Reinforced Hull Plating",
+        "description": "Postwar tanks use sloped and composite steel to improve survivability against shaped charges.",
+        "research_time": 190,
+        "research_year": 1947,
+        "child": {
+          "tech": "Modular Armor Panels",
+          "description": "Quick-swap armor configurations allow for field adaptation to enemy tactics or terrain.",
+          "research_time": 240,
+          "research_year": 1952,
+          "child": {
+            "tech": "Explosive Reactive Armor",
+            "description": "Panels detonate outward to disrupt incoming penetrators before hull contact.",
+            "research_time": 300,
+            "research_year": 1960
+          }
+        }
+      },
+      "sub_branch3": {
+        "sub_branch_name": "Tank Armament",
+        "starter_tech": "High-Velocity Main Guns",
+        "description": "Large-caliber smoothbore and rifled barrels improve penetration against heavy armor.",
+        "research_time": 200,
+        "research_year": 1948,
+        "child": {
+          "tech": "Autoloading Turrets",
+          "description": "Mechanized loaders reduce crew size and increase sustained rate of fire.",
+          "research_time": 260,
+          "research_year": 1954,
+          "child": {
+            "tech": "Advanced Armor-Piercing Rounds",
+            "description": "Sabot and fin-stabilized shells allow for longer-range accurate armor penetration.",
+            "research_time": 320,
+            "research_year": 1961
+          }
+        }
+      },
+      "sub_branch4": {
+        "sub_branch_name": "Recon & Light Tanks",
+        "starter_tech": "Fast Recon Tanks",
+        "description": "Light tanks sacrifice armor for speed and observation \u2014 ideal for hit-and-run tactics or scouting.",
+        "research_time": 170,
+        "research_year": 1950,
+        "child": {
+          "tech": "Radio-Linked Scout Units",
+          "description": "Dedicated comms upgrades allow recon tanks to transmit terrain and enemy info live.",
+          "research_time": 220,
+          "research_year": 1955,
+          "child": {
+            "tech": "Armored Recon Drones",
+            "description": "Wheeled and tracked drones perform forward recon missions without risking crew.",
+            "research_time": 320,
+            "research_year": 1964
+          }
+        }
+      },
+      "sub_branch5": {
+        "sub_branch_name": "Engineering Vehicles",
+        "starter_tech": "Dozer Tanks",
+        "description": "Modified tanks with blade attachments for battlefield clearance, mine removal, and fortification.",
+        "research_time": 180,
+        "research_year": 1951,
+        "child": {
+          "tech": "Bridge-Laying Armor Units",
+          "description": "Deployable bridge systems for crossing rivers and anti-tank trenches under fire.",
+          "research_time": 240,
+          "research_year": 1957,
+          "child": {
+            "tech": "Combat Recovery Tanks",
+            "description": "Heavy-duty winches and repair arms recover damaged armor under combat conditions.",
+            "research_time": 280,
+            "research_year": 1962
           }
         }
       }
     },
     "AERIAL": {
-      "Jet Fighter Prototype": {
-        "description": "Initiates Cold War-era jet propulsion research for air superiority fighters.",
+      "branch": {
+        "branch_name": "Aerial",
+        "starter_tech": "Propeller Fighter Doctrine",
+        "description": "As WWII ends, most nations field prop-driven fighters and bombers. The jet age is dawning, and those who adapt will dominate the skies.",
         "research_time": 180,
-        "children": {
-          "Jet Fighter Mk I": {
-            "description": "Early production jet fighters with limited maneuverability and short range.",
-            "research_time": 240,
-            "children": {
-              "Jet Fighter Mk II": {
-                "description": "Improves airframe, engine thrust, and avionics for more reliable jet operations.",
-                "research_time": 300,
-                "children": {
-                  "Missile Fighter Mk I": {
-                    "description": "Equips fighters with early air-to-air missiles for beyond-visual-range combat.",
-                    "research_time": 360,
-                    "children": {
-                      "Advanced Missile Fighters": {
-                        "description": "Upgrades missile technology with multi-target tracking and radar-lock capabilities.",
-                        "research_time": 420,
-                        "research_year": 1958
-                      }
-                    },
-                    "research_year": 1955
-                  },
-                  "Jet Fighter Mk III": {
-                    "description": "Refines jet performance with better thrust-to-weight ratios and high-altitude tolerance.",
-                    "research_time": 360,
-                    "children": {
-                      "Supersonic Fighters": {
-                        "description": "Breaks the sound barrier with afterburners and aerodynamic design.",
-                        "research_time": 480,
-                        "children": {
-                          "Stealth Interceptors": {
-                            "description": "Implements radar-absorbing materials and low-observable shapes for surprise attacks.",
-                            "research_time": 600,
-                            "research_year": 1960
-                          }
-                        },
-                        "research_year": 1959
-                      }
-                    },
-                    "research_year": 1956
-                  }
-                },
-                "research_year": 1951
-              }
-            },
-            "research_year": 1948
-          }
-        },
         "research_year": 1945
       },
-      "Cold War Jet Bombers": {
-        "description": "Builds strategic bombing capability using jet propulsion and long-range payload delivery.",
-        "research_time": 240,
-        "children": {
-          "Strategic Jet Bombers": {
-            "description": "Designs long-range jet bombers for nuclear and high-explosive strategic payloads.",
+      "sub_branch1": {
+        "sub_branch_name": "Jet Interceptors",
+        "starter_tech": "First-Generation Jet Fighters",
+        "description": "Early jets improve speed and climb rate, but suffer from short range and engine reliability.",
+        "research_time": 220,
+        "research_year": 1947,
+        "child": {
+          "tech": "Supersonic Interceptors",
+          "description": "Mach-capable aircraft designed to catch high-altitude bombers before payload release.",
+          "research_time": 270,
+          "research_year": 1953,
+          "child": {
+            "tech": "All-Weather Jet Fighters",
+            "description": "Advanced radar and onboard computers allow jets to operate effectively in any conditions.",
+            "research_time": 320,
+            "research_year": 1959,
+            "child": {
+              "tech": "High-G Maneuverability Enhancements",
+              "description": "Airframes and pilot equipment optimized to handle violent evasive maneuvers.",
+              "research_time": 370,
+              "research_year": 1964
+            }
+          }
+        }
+      },
+      "sub_branch2": {
+        "sub_branch_name": "Strategic Bombing",
+        "starter_tech": "Heavy Bomber Retention",
+        "description": "Legacy bombers remain a key deterrent and delivery system for postwar powers.",
+        "research_time": 200,
+        "research_year": 1946,
+        "child": {
+          "tech": "Jet-Engine Strategic Bombers",
+          "description": "Large, swept-wing bombers carry heavy payloads over intercontinental distances.",
+          "research_time": 260,
+          "research_year": 1954,
+          "child": {
+            "tech": "Stealth Bombing Prototypes",
+            "description": "Angular airframes and radar-absorbing materials reduce visibility to early warning systems.",
             "research_time": 360,
-            "children": {
-              "Supersonic Bombers": {
-                "description": "Develops bombers capable of outrunning interceptors using sheer velocity.",
-                "research_time": 480,
-                "children": {
-                  "Stealth Bombers": {
-                    "description": "Employs stealth geometry and advanced ECM to avoid radar detection during bombing runs.",
-                    "research_time": 600,
-                    "research_year": 1957
-                  }
-                },
-                "research_year": 1952
-              },
-              "Nuclear Payload Integration": {
-                "description": "Modifies bomb bays and targeting systems to support nuclear delivery.",
-                "research_time": 300,
-                "research_year": 1953
-              }
-            },
-            "research_year": 1949
-          }
-        },
-        "research_year": 1946
-      },
-      "Jet Recon Aircraft": {
-        "description": "Modernizes aerial reconnaissance with jet-powered surveillance platforms.",
-        "research_time": 180,
-        "children": {
-          "Supersonic Spy Planes": {
-            "description": "High-speed recon aircraft capable of outrunning enemy defenses at extreme altitudes.",
-            "research_time": 300,
-            "children": {
-              "High-Altitude Recon Platforms": {
-                "description": "Deploys sensor-loaded aircraft for global intelligence gathering beyond interception range.",
-                "research_time": 420,
-                "research_year": 1954
-              }
-            },
-            "research_year": 1950
-          }
-        },
-        "research_year": 1947
-      },
-      "Stealth Airframe Research": {
-        "description": "Explores radar-diffusing geometry and materials for hard-to-detect aircraft.",
-        "research_time": 210,
-        "research_year": 1961,
-        "children": {
-          "Pre-Stealth Fighter Designs": {
-            "description": "Tests angular airframe theory to reduce radar cross-sections.",
-            "research_time": 240,
             "research_year": 1962
-          },
-          "Advanced Avionics": {
-            "description": "Integrates heads-up displays, terrain following, and ECM suites into fighter systems.",
-            "research_time": 210,
+          }
+        }
+      },
+      "sub_branch3": {
+        "sub_branch_name": "Missile & Air Combat",
+        "starter_tech": "Basic Air-to-Air Missiles",
+        "description": "Heat-seeking missiles begin to replace gunfire as the primary method of air combat.",
+        "research_time": 210,
+        "research_year": 1950,
+        "child": {
+          "tech": "Radar-Guided Interception",
+          "description": "Beyond-visual-range missiles extend the reach of fighter command.",
+          "research_time": 280,
+          "research_year": 1957,
+          "child": {
+            "tech": "Countermeasure Resistant Missiles",
+            "description": "Advanced seekers reduce the effectiveness of flares and chaff.",
+            "research_time": 340,
+            "research_year": 1965
+          }
+        }
+      },
+      "sub_branch4": {
+        "sub_branch_name": "Air Reconnaissance",
+        "starter_tech": "High-Altitude Reconnaissance Flights",
+        "description": "Prop planes with specialized cameras take the first photos of postwar adversaries from above.",
+        "research_time": 200,
+        "research_year": 1948,
+        "child": {
+          "tech": "Jet Reconnaissance Craft",
+          "description": "Fast, unarmed aircraft slip past radar to capture intel deep behind enemy lines.",
+          "research_time": 260,
+          "research_year": 1955,
+          "child": {
+            "tech": "Unmanned Recon Drones",
+            "description": "Early autonomous aircraft relay images and signals intelligence with no pilot risk.",
+            "research_time": 340,
+            "research_year": 1964,
+            "child": {
+              "tech": "High-Altitude Autonomous Platforms",
+              "description": "Persistent drones capable of loitering in the stratosphere for long-duration surveillance.",
+              "research_time": 400,
+              "research_year": 1968
+            }
+          }
+        }
+      },
+      "sub_branch5": {
+        "sub_branch_name": "Close Air Support",
+        "starter_tech": "Fighter-Bomber Conversion",
+        "description": "WWII-era fighters are adapted to carry bombs and provide ground support on the cheap.",
+        "research_time": 180,
+        "research_year": 1946,
+        "child": {
+          "tech": "Dedicated CAS Aircraft",
+          "description": "Low-speed, high-resilience aircraft are optimized for tank-busting and trench-strafing.",
+          "research_time": 240,
+          "research_year": 1952,
+          "child": {
+            "tech": "Jet-Powered CAS Platforms",
+            "description": "Improved maneuverability and payload capacity let CAS aircraft survive modern air defenses.",
+            "research_time": 300,
+            "research_year": 1960
+          }
+        }
+      },
+      "sub_branch6": {
+        "sub_branch_name": "Aerial Support Operations",
+        "starter_tech": "Signal Relay Aircraft",
+        "description": "Retrofit bombers and prop aircraft to act as airborne communication repeaters.",
+        "research_time": 200,
+        "research_year": 1951,
+        "child": {
+          "tech": "Aerial Tankers",
+          "description": "In-flight refueling extends range for strategic and tactical operations alike.",
+          "research_time": 260,
+          "research_year": 1956,
+          "child": {
+            "tech": "Electronic Warfare Platforms",
+            "description": "Jamming suites and radar disruption tools deny enemy air control.",
+            "research_time": 340,
             "research_year": 1963
-          },
-          "Prototype Unmanned Recon Aircraft": {
-            "description": "Deploys experimental UAVs for long-range surveillance without risking pilots.",
-            "research_time": 240,
-            "research_year": 1964
           }
         }
       }
     },
-    "NAVY": {
-      "Cold War Submarine": {
-        "description": "Modernizes undersea warfare with faster, quieter, and longer-endurance submarines.",
+    "NAVAL": {
+      "branch": {
+        "branch_name": "Naval",
+        "starter_tech": "Post-War Fleet Organization",
+        "description": "After WWII, fleets across the world are reorganized around carrier groups, submarine warfare, and naval aviation. The oceans remain a decisive battleground in the Cold War.",
         "research_time": 180,
-        "children": {
-          "Advanced Submarine": {
-            "description": "Refines hull design and sonar stealth, making subs harder to detect and easier to maneuver.",
-            "research_time": 240,
-            "children": {
-              "Nuclear Submarine": {
-                "description": "Adds nuclear propulsion for indefinite underwater range and rapid global deployment.",
-                "research_time": 360,
-                "children": {
-                  "Ballistic Missile Submarine (SSBN)": {
-                    "description": "Equips nuclear subs with missile silos, enabling stealthy second-strike capabilities.",
-                    "research_time": 480,
-                    "research_year": 1960
-                  }
-                },
-                "research_year": 1953
-              },
-              "Stealth Submarine Hulls": {
-                "description": "Incorporates sound-dampening materials and hull shapes to reduce acoustic signatures.",
-                "research_time": 360,
-                "research_year": 1954
-              }
-            },
-            "research_year": 1948
-          }
-        },
         "research_year": 1945
       },
-      "Cold War Battleship": {
-        "description": "Revives heavy surface combatants with advanced armor and long-range strike capability.",
-        "research_time": 240,
-        "children": {
-          "Superbattleship Design": {
-            "description": "Designs behemoth capital ships with massive guns and enhanced survivability.",
+      "sub_branch1": {
+        "sub_branch_name": "Destroyers & Escorts",
+        "starter_tech": "Late-War Destroyers",
+        "description": "Fast, lightly armored ships form the defensive screen around capital vessels and convoys.",
+        "research_time": 200,
+        "research_year": 1946,
+        "child": {
+          "tech": "Guided Missile Destroyers",
+          "description": "Multi-role destroyers equipped with radar-guided missiles for both anti-air and anti-ship operations.",
+          "research_time": 260,
+          "research_year": 1954,
+          "child": {
+            "tech": "Fleet Coordination Suites",
+            "description": "Integrated combat systems allow destroyers to coordinate missile targeting with carrier radars.",
+            "research_time": 320,
+            "research_year": 1962
+          }
+        }
+      },
+      "sub_branch2": {
+        "sub_branch_name": "Cruisers",
+        "starter_tech": "Heavy Cruiser Retention",
+        "description": "Large-caliber gun cruisers remain useful for surface action and shore bombardment.",
+        "research_time": 210,
+        "research_year": 1946,
+        "child": {
+          "tech": "Missile Cruiser Conversions",
+          "description": "Older cruisers are refitted with vertical launch systems and fire-control radar.",
+          "research_time": 280,
+          "research_year": 1956,
+          "child": {
+            "tech": "Radar-Integrated Command Cruisers",
+            "description": "These flagships control air defense, anti-submarine warfare, and regional targeting data.",
+            "research_time": 340,
+            "research_year": 1964
+          }
+        }
+      },
+      "sub_branch3": {
+        "sub_branch_name": "Aircraft Carriers",
+        "starter_tech": "WWII Carrier Doctrine",
+        "description": "Carriers become the centerpiece of modern fleets, replacing the battleship as strategic capital ships.",
+        "research_time": 220,
+        "research_year": 1947,
+        "child": {
+          "tech": "Angled Deck Carriers",
+          "description": "Allows safer jet landings and simultaneous launch and recovery operations.",
+          "research_time": 280,
+          "research_year": 1954,
+          "child": {
+            "tech": "Nuclear-Powered Carriers",
+            "description": "Massive range and onboard power allow for unmatched carrier deployment and onboard radar capacity.",
             "research_time": 360,
-            "children": {
-              "Nuclear-Powered Dreadnought": {
-                "description": "Integrates nuclear propulsion into battleship-class vessels for unmatched endurance.",
-                "research_time": 540,
-                "research_year": 1954
-              }
-            },
-            "research_year": 1948
-          },
-          "Guided Missile Cruisers": {
-            "description": "Replaces traditional gun batteries with surface-to-air and anti-ship missiles.",
+            "research_year": 1965
+          }
+        }
+      },
+      "sub_branch4": {
+        "sub_branch_name": "Submarines",
+        "starter_tech": "Diesel Attack Submarines",
+        "description": "Silent hunters that harass enemy convoys and operate independently along enemy coastlines.",
+        "research_time": 190,
+        "research_year": 1946,
+        "child": {
+          "tech": "Snorkel Upgrades",
+          "description": "Allows diesel subs to remain submerged longer while recharging batteries.",
+          "research_time": 230,
+          "research_year": 1950,
+          "child": {
+            "tech": "Nuclear Submarine Propulsion",
+            "description": "Near-unlimited underwater range and improved depth survivability revolutionize submarine warfare.",
             "research_time": 300,
-            "children": {
-              "Multi-role Heavy Cruisers": {
-                "description": "Fuses naval firepower, missile systems, and air defense into versatile flagship designs.",
-                "research_time": 420,
-                "research_year": 1955
-              }
-            },
-            "research_year": 1949
+            "research_year": 1957,
+            "child": {
+              "tech": "Cruise Missile Submarines",
+              "description": "Subs capable of launching guided anti-ship or land-attack missiles without surfacing.",
+              "research_time": 380,
+              "research_year": 1965
+            }
           }
-        },
-        "research_year": 1945
+        }
       },
-      "Cold War Carrier": {
-        "description": "Transforms naval warfare with jet-capable aircraft carriers and air-wing integration.",
-        "research_time": 240,
-        "children": {
-          "Advanced Carrier": {
-            "description": "Modern carrier designs featuring angled decks and arrestor gear for jet operations.",
+      "sub_branch5": {
+        "sub_branch_name": "Amphibious Warfare",
+        "starter_tech": "Landing Craft Standardization",
+        "description": "Postwar revisions standardize landing vessels for troop and equipment transport.",
+        "research_time": 180,
+        "research_year": 1946,
+        "child": {
+          "tech": "Dock Landing Ships",
+          "description": "Specialized ships allow for vehicle deployment directly onto beaches or from offshore.",
+          "research_time": 240,
+          "research_year": 1952,
+          "child": {
+            "tech": "Helicopter Assault Ships",
+            "description": "Modernized amphibious doctrine relies on airlifted marines rather than risky beach landings.",
             "research_time": 300,
-            "children": {
-              "Nuclear Carrier": {
-                "description": "Enables global deployment with near-unlimited range and greater operational endurance.",
-                "research_time": 480,
-                "research_year": 1956
-              },
-              "Naval Air Integration Systems": {
-                "description": "Enhances coordination between carrier command and air squadrons for seamless sorties.",
-                "research_time": 360,
-                "research_year": 1956
-              }
-            },
-            "research_year": 1950
+            "research_year": 1962
           }
-        },
-        "research_year": 1946
+        }
       },
-      "Cold War Cruiser": {
-        "description": "Updates light and heavy cruisers for escort, missile defense, and anti-air warfare.",
-        "research_time": 180,
-        "children": {
-          "Light Cruiser Upgrade": {
-            "description": "Improves armor, speed, and radar capability for frontline AA screening.",
-            "research_time": 240,
-            "children": {
-              "Anti-Air Light Cruiser (AA CL)": {
-                "description": "Specializes light cruisers in anti-aircraft roles to protect carriers and convoys.",
-                "research_time": 300,
-                "children": {
-                  "Radar Integration Systems": {
-                    "description": "Connects fleet ships into a shared radar grid for early threat detection.",
-                    "research_time": 300,
-                    "research_year": 1961
-                  }
-                },
-                "research_year": 1957
-              }
-            },
-            "research_year": 1950
-          },
-          "Heavy Cruiser Upgrade": {
-            "description": "Equips heavy cruisers with improved fire control, survivability, and command modules.",
-            "research_time": 240,
-            "children": {
-              "Guided Missile Heavy Cruiser (CA+)": {
-                "description": "Adds missile launch capability to heavy cruisers for deep strike operations.",
-                "research_time": 360,
-                "children": {
-                  "Multi-role Heavy Cruisers": {
-                    "description": "Converts heavy cruisers into hybrid platforms with both kinetic and missile weapons.",
-                    "research_time": 420,
-                    "research_year": 1962
-                  }
-                },
-                "research_year": 1958
-              }
-            },
-            "research_year": 1951
+      "sub_branch6": {
+        "sub_branch_name": "Naval Aviation",
+        "starter_tech": "Jet Naval Fighters",
+        "description": "Jet fighters adapted for carrier use require reinforced undercarriages and catapult compatibility.",
+        "research_time": 220,
+        "research_year": 1950,
+        "child": {
+          "tech": "Carrier-Based Strategic Bombers",
+          "description": "High-speed nuclear-capable jets deliver payloads from strike carriers deep into enemy territory.",
+          "research_time": 280,
+          "research_year": 1958,
+          "child": {
+            "tech": "Carrier-Based Recon UAVs",
+            "description": "Pilotless aircraft conduct recon and coordinate missile strikes from offshore.",
+            "research_time": 340,
+            "research_year": 1966
           }
-        },
-        "research_year": 1946
+        }
       },
-      "Cold War Destroyer": {
-        "description": "Maintains fast-response naval presence with multipurpose destroyer-class vessels.",
-        "research_time": 150,
-        "children": {
-          "Coastal Defense Ship": {
-            "description": "Builds light destroyers and patrol boats suited for near-shore and riverine operations.",
-            "research_time": 180,
-            "children": {
-              "Riverine Gunboat / Brownwater Escort": {
-                "description": "Designs shallow-draft gunboats to support amphibious landings and coastal raids.",
-                "research_time": 240,
-                "research_year": 1958
-              }
-            },
-            "research_year": 1952
-          },
-          "Advanced Destroyer": {
-            "description": "Increases firepower, sonar capability, and damage control systems for blue-water combat.",
-            "research_time": 240,
-            "children": {
-              "Guided Missile Frigates": {
-                "description": "Creates hybrid destroyer-frigates equipped with anti-air and anti-ship missiles.",
-                "research_time": 360,
-                "research_year": 1959
-              },
-              "ASW Specialization": {
-                "description": "Adds towed sonar arrays and depth charge systems to hunt enemy submarines.",
-                "research_time": 300,
-                "children": {
-                  "Sonar Buoy Networks": {
-                    "description": "Deploys floating sonar grids to monitor vast sea regions for enemy movement.",
-                    "research_time": 420,
-                    "research_year": 1962
-                  }
-                },
-                "research_year": 1960
-              }
-            },
-            "research_year": 1952
-          }
-        },
-        "research_year": 1947
-      },
-      "Shipboard Missile Integration": {
-        "description": "Replaces gun-focused designs with surface-to-air and anti-ship missile systems.",
-        "research_time": 180,
-        "research_year": 1963,
-        "children": {
-          "Naval Combat Computers": {
-            "description": "Digitizes ship targeting and threat detection to speed up combat decision-making.",
-            "research_time": 210,
-            "research_year": 1964
-          },
-          "Cruise Missile Destroyers": {
-            "description": "Builds destroyers centered around long-range missile strikes rather than direct gunfire.",
-            "research_time": 240,
-            "research_year": 1964
-          },
-          "Anti-Submarine Missile Systems": {
-            "description": "Uses rockets and sonar guidance to strike submerged threats beyond depth charge range.",
-            "research_time": 240,
+      "sub_branch7": {
+        "sub_branch_name": "Fleet Logistics",
+        "starter_tech": "Fleet Replenishment Ships",
+        "description": "Naval support ships allow capital fleets to refuel and rearm at sea.",
+        "research_time": 200,
+        "research_year": 1949,
+        "child": {
+          "tech": "Sea-Based Radar & Comms Ships",
+          "description": "Floating sensor platforms provide long-range surveillance and fleet coordination.",
+          "research_time": 260,
+          "research_year": 1955,
+          "child": {
+            "tech": "Naval Satellite Relay Systems",
+            "description": "Satellites integrated into naval command networks boost long-range precision and tracking.",
+            "research_time": 360,
             "research_year": 1965
           }
         }
       }
     },
     "ELECTRONICS": {
-      "Cold War Signal Equipment": {
-        "description": "Forms the electronic foundation of modern military operations through communication and detection systems.",
-        "research_time": 150,
-        "children": {
-          "Electronic Encryption Machines": {
-            "description": "Implements rotor and plugboard-based cipher machines to protect military transmissions.",
-            "research_time": 180,
-            "children": {
-              "Advanced Data Processing": {
-                "description": "Early digital systems enable faster data analysis, laying groundwork for command automation.",
-                "research_time": 240,
-                "children": {
-                  "Early Network Terminals": {
-                    "description": "Establishes primitive digital terminals for real-time data entry and messaging.",
-                    "research_time": 300,
-                    "children": {
-                      "Rudimentary Internet": {
-                        "description": "A basic packet-switching protocol connecting defense and academic institutions.",
-                        "research_time": 420,
-                        "research_year": 1956
-                      }
-                    },
-                    "research_year": 1953
-                  },
-                  "Ballistic Computation Modules": {
-                    "description": "Calculates optimal firing solutions for artillery and missile systems in real time.",
-                    "research_time": 300,
-                    "children": {
-                      "Fire Control Systems": {
-                        "description": "Digitally links targeting data with weapon systems for synchronized strikes.",
-                        "research_time": 360,
-                        "research_year": 1957
-                      }
-                    },
-                    "research_year": 1954
-                  }
-                },
-                "research_year": 1949
-              }
-            },
-            "research_year": 1946
-          },
-          "Basic Codebreaking Protocols": {
-            "description": "Trains analysts and develops primitive algorithms for intercepting enemy communications.",
-            "research_time": 180,
-            "children": {
-              "Advanced Decryption AI": {
-                "description": "Uses early heuristic models to accelerate pattern recognition and cryptanalysis.",
-                "research_time": 360,
-                "research_year": 1950
-              }
-            },
-            "research_year": 1947
-          },
-          "Radar Integration Systems": {
-            "description": "Centralizes radar inputs from air, land, and sea into a unified detection grid.",
-            "research_time": 240,
-            "children": {
-              "Airborne Early Warning Systems (AEW&C)": {
-                "description": "Deploys radar-equipped aircraft to detect long-range threats and relay targeting data.",
-                "research_time": 360,
-                "children": {
-                  "Satellite Detection Systems": {
-                    "description": "Uses space-based infrared and radar platforms to monitor missile launches and aircraft movements globally.",
-                    "research_time": 540,
-                    "research_year": 1955
-                  }
-                },
-                "research_year": 1952
-              }
-            },
-            "research_year": 1948
-          }
-        },
+      "branch": {
+        "branch_name": "Electronics",
+        "starter_tech": "Wartime Radio & Radar Systems",
+        "description": "WWII technology left behind a foundation of analog comms, crude radar, and basic logic devices. The Cold War accelerates it into an age of cybernetic warfare.",
+        "research_time": 180,
         "research_year": 1945
       },
-      "Cold War Computing Revolution": {
-        "description": "Establishes the foundation of civilian and military computing infrastructure.",
+      "sub_branch1": {
+        "sub_branch_name": "Radar & Signal Detection",
+        "starter_tech": "Rotating Radar Platforms",
+        "description": "Basic battlefield radar systems allow detection of aircraft and ships at medium range.",
+        "research_time": 200,
+        "research_year": 1947,
+        "child": {
+          "tech": "Phased Array Radar",
+          "description": "Electronically steered arrays provide faster, multi-target detection and tracking.",
+          "research_time": 260,
+          "research_year": 1953,
+          "child": {
+            "tech": "Over-the-Horizon Radar",
+            "description": "Long-range radar that uses atmospheric bounce to track missile launches and aircraft far beyond the horizon.",
+            "research_time": 320,
+            "research_year": 1962
+          }
+        }
+      },
+      "sub_branch2": {
+        "sub_branch_name": "Radio & Encryption",
+        "starter_tech": "Frequency-Hopping Radios",
+        "description": "Encrypted, jam-resistant radios provide secure comms in contested environments.",
+        "research_time": 190,
+        "research_year": 1948,
+        "child": {
+          "tech": "Digital Voice Transmission",
+          "description": "Compression algorithms enable low-latency voice over secure lines.",
+          "research_time": 240,
+          "research_year": 1955,
+          "child": {
+            "tech": "Quantum Random Number Encryption",
+            "description": "Foundational research into non-repeating keys for uncrackable message security.",
+            "research_time": 310,
+            "research_year": 1965
+          }
+        }
+      },
+      "sub_branch3": {
+        "sub_branch_name": "Early Computing",
+        "starter_tech": "Vacuum Tube Computers",
+        "description": "Bulky, power-hungry mainframes capable of mathematical calculations at unprecedented speeds.",
+        "research_time": 220,
+        "research_year": 1949,
+        "child": {
+          "tech": "Transistorized Computing",
+          "description": "Smaller, cooler, and far more efficient machines begin replacing wartime giants.",
+          "research_time": 280,
+          "research_year": 1956,
+          "child": {
+            "tech": "Early Integrated Circuits",
+            "description": "Massive leaps in miniaturization and logic density unlock entire new fields of tech.",
+            "research_time": 360,
+            "research_year": 1963
+          }
+        }
+      },
+      "sub_branch4": {
+        "sub_branch_name": "Automation & Robotics",
+        "starter_tech": "Analog Relay Systems",
+        "description": "Basic mechanical automation systems increase factory and field equipment consistency.",
+        "research_time": 200,
+        "research_year": 1950,
+        "child": {
+          "tech": "Programmable Controllers",
+          "description": "Early programmable logic controllers (PLCs) automate precise industrial or weapon functions.",
+          "research_time": 270,
+          "research_year": 1957,
+          "child": {
+            "tech": "Autonomous Tactical Platforms",
+            "description": "Experimental battlefield drones and auto-turrets allow limited action without direct orders.",
+            "research_time": 340,
+            "research_year": 1966
+          }
+        }
+      },
+      "sub_branch5": {
+        "sub_branch_name": "Electronic Warfare",
+        "starter_tech": "Basic Signal Jammers",
+        "description": "Deployable jammers can block unprotected comms or radar systems in limited range.",
+        "research_time": 210,
+        "research_year": 1951,
+        "child": {
+          "tech": "Spectrum Targeting Arrays",
+          "description": "Precision jamming isolates specific enemy frequencies while maintaining friendly channels.",
+          "research_time": 270,
+          "research_year": 1958,
+          "child": {
+            "tech": "Electronic Counter-Countermeasures",
+            "description": "Systems detect and adapt to enemy jamming in real time, re-securing communications.",
+            "research_time": 330,
+            "research_year": 1965
+          }
+        }
+      },
+      "sub_branch6": {
+        "sub_branch_name": "Tech Research Optimization",
+        "starter_tech": "Basic Simulation Systems",
+        "description": "Simple predictive models allow researchers to test concepts virtually before prototyping.",
         "research_time": 180,
-        "research_year": 1959,
-        "children": {
-          "Integrated Circuits": {
-            "description": "Miniaturizes logic components, enabling portable electronics and faster computation.",
-            "research_time": 180,
-            "research_year": 1960,
-            "children": {
-              "Mainframe Networks": {
-                "description": "Links large-scale computers for distributed data storage and real-time communication.",
-                "research_time": 210,
-                "research_year": 1962
-              },
-              "Digital Targeting Systems": {
-                "description": "Improves military fire control with real-time computerized targeting algorithms.",
-                "research_time": 210,
-                "research_year": 1963
-              }
-            }
-          },
-          "Automated Cryptography": {
-            "description": "Develops machines capable of encrypting and decrypting data without human oversight.",
-            "research_time": 210,
-            "research_year": 1961,
-            "children": {
-              "Decentralized Command Networks": {
-                "description": "Protects high-value military commands with fault-tolerant, encrypted systems.",
-                "research_time": 240,
-                "research_year": 1964
-              }
-            }
+        "research_year": 1950,
+        "child": {
+          "tech": "Integrated Research Networks",
+          "description": "Cross-linked research labs share results instantly, boosting project synergy.",
+          "research_time": 240,
+          "research_year": 1957,
+          "child": {
+            "tech": "Accelerated Learning Algorithms",
+            "description": "Computational assistants learn from experimental results to optimize future research paths.",
+            "research_time": 320,
+            "research_year": 1964
           }
         }
       }
     },
     "INDUSTRY": {
-      "Cold War Industrial Base": {
-        "description": "Establishes the economic foundation for Cold War powers through modernized factories and logistics.",
-        "research_time": 150,
-        "children": {
-          "Streamlined Production Systems": {
-            "description": "Reduces material waste and labor inefficiencies across civilian and military industries.",
-            "research_time": 180,
-            "children": {
-              "Industrial Process Automation": {
-                "description": "Automates routine factory tasks with mechanical relays and assembly timing systems.",
-                "research_time": 240,
-                "children": {
-                  "Robotic Assembly Lines": {
-                    "description": "Introduces early programmable machinery to speed up precision manufacturing.",
-                    "research_time": 360,
-                    "research_year": 1954
-                  },
-                  "Remote Mining Techniques": {
-                    "description": "Expands access to rare materials via automated and hazard-resistant extraction systems.",
-                    "research_time": 300,
-                    "research_year": 1956
-                  }
-                },
-                "research_year": 1948
-              },
-              "Chemical Fertilizers": {
-                "description": "Boosts agricultural yields through synthetic nitrogen compounds and soil science.",
-                "research_time": 180,
-                "research_year": 1949
-              },
-              "Motorized Supply Fleets": {
-                "description": "Replaces draft convoys with truck-based logistics for rapid supply movement.",
-                "research_time": 240,
-                "children": {
-                  "Rail Infrastructure Modernization": {
-                    "description": "Electrifies major rail hubs and upgrades cargo efficiency across national networks.",
-                    "research_time": 300,
-                    "children": {
-                      "Containerized Shipping": {
-                        "description": "Standardizes shipping containers for multi-modal logistics across land and sea.",
-                        "research_time": 360,
-                        "research_year": 1958
-                      }
-                    },
-                    "research_year": 1957
-                  }
-                },
-                "research_year": 1951
-              }
-            },
-            "research_year": 1946
-          },
-          "Petrochemical Extraction": {
-            "description": "Refines industrial techniques for extracting oil, gas, and derivatives on a mass scale.",
-            "research_time": 180,
-            "children": {
-              "Synthetic Rubber Production": {
-                "description": "Produces rubber alternatives from petrochemical feedstocks for use in tires, seals, and equipment.",
-                "research_time": 240,
-                "research_year": 1952
-              },
-              "Synthetic Oil Alternatives": {
-                "description": "Creates fuel substitutes from coal, tar sands, and chemical cracking methods.",
-                "research_time": 300,
-                "research_year": 1953
-              }
-            },
-            "research_year": 1947
-          }
-        },
+      "branch": {
+        "branch_name": "Industry",
+        "starter_tech": "Postwar Industrial Grid",
+        "description": "Nations emerge from WWII with strained or shattered industry. Cold War survival demands infrastructure rebuilding and industrial reform.",
+        "research_time": 180,
         "research_year": 1945
       },
-      "Post-War Industrial Expansion": {
-        "description": "Focuses on high-throughput, decentralized production hubs and international logistics.",
-        "research_time": 180,
-        "research_year": 1959,
-        "children": {
-          "Global Containerized Shipping": {
-            "description": "Revolutionizes freight by standardizing containers across sea, rail, and truck transport.",
-            "research_time": 210,
+      "sub_branch1": {
+        "sub_branch_name": "Civilian Production",
+        "starter_tech": "Resource Allocation Reforms",
+        "description": "Policies prioritize efficient material flow between mining, refining, and factory outputs.",
+        "research_time": 200,
+        "research_year": 1947,
+        "child": {
+          "tech": "Factory Assembly Line Modernization",
+          "description": "Mechanized lines reduce error and increase throughput, especially in standardized goods.",
+          "research_time": 260,
+          "research_year": 1953,
+          "child": {
+            "tech": "Industrial Robotics Foundations",
+            "description": "Rudimentary robotic systems begin to automate dangerous or repetitive factory jobs.",
+            "research_time": 320,
             "research_year": 1962
-          },
-          "Synthetic Plastics Boom": {
-            "description": "Mass-produces synthetic plastics for packaging, construction, and military gear.",
-            "research_time": 180,
-            "research_year": 1961,
-            "children": {
-              "Advanced Polymers": {
-                "description": "Improves material durability, leading to better armor, equipment, and medical tools.",
-                "research_time": 210,
-                "research_year": 1963
-              }
-            }
-          },
-          "Corporate Logistics Modeling": {
-            "description": "Applies business intelligence tools to optimize production chains and reduce waste.",
-            "research_time": 240,
+          }
+        }
+      },
+      "sub_branch2": {
+        "sub_branch_name": "Military Manufacturing",
+        "starter_tech": "Dedicated Arms Facilities",
+        "description": "Segregating civilian and military production improves efficiency and security.",
+        "research_time": 190,
+        "research_year": 1948,
+        "child": {
+          "tech": "Flexible Assembly Platforms",
+          "description": "Factories can switch between multiple weapons platforms with minimal retooling.",
+          "research_time": 240,
+          "research_year": 1955,
+          "child": {
+            "tech": "Rapid Mobilization Networks",
+            "description": "Supply chains and rail networks are optimized for wartime surge production.",
+            "research_time": 300,
+            "research_year": 1963
+          }
+        }
+      },
+      "sub_branch3": {
+        "sub_branch_name": "Infrastructure Expansion",
+        "starter_tech": "Postwar Construction Corps",
+        "description": "Recruited and repurposed units are deployed to rebuild war-torn bridges, roads, and power lines.",
+        "research_time": 200,
+        "research_year": 1946,
+        "child": {
+          "tech": "Unified Construction Standards",
+          "description": "Improved planning and universal specs allow multiple branches to coordinate on projects seamlessly.",
+          "research_time": 260,
+          "research_year": 1952,
+          "child": {
+            "tech": "Prefabricated Deployment Systems",
+            "description": "Modular components allow cities, bunkers, or bases to be constructed in record time.",
+            "research_time": 320,
+            "research_year": 1960
+          }
+        }
+      },
+      "sub_branch4": {
+        "sub_branch_name": "Resource Extraction",
+        "starter_tech": "Mine & Quarry Optimization",
+        "description": "Upgrades to extraction tools, safety systems, and logistics reduce waste and increase yield.",
+        "research_time": 180,
+        "research_year": 1949,
+        "child": {
+          "tech": "Strategic Resource Mapping",
+          "description": "Aerial surveys and geology teams increase access to rare metals and fossil fuels.",
+          "research_time": 240,
+          "research_year": 1956,
+          "child": {
+            "tech": "Remote Extraction Platforms",
+            "description": "Semi-automated rigs extract resources from hostile or inaccessible terrain.",
+            "research_time": 300,
             "research_year": 1964
           }
         }
+      },
+      "sub_branch5": {
+        "sub_branch_name": "Autarky & Resilience",
+        "starter_tech": "Subsidized Domestic Industry",
+        "description": "Protectionist policies and subsidies shield local industry from foreign competition.",
+        "research_time": 200,
+        "research_year": 1950,
+        "child": {
+          "tech": "Parallel Supply Chains",
+          "description": "Multiple redundant production pathways mitigate sabotage and embargo effects.",
+          "research_time": 260,
+          "research_year": 1957,
+          "child": {
+            "tech": "Self-Sustaining Economic Cells",
+            "description": "Decentralized industry hubs ensure regional economic independence during wartime.",
+            "research_time": 320,
+            "research_year": 1965
+          }
+        }
+      },
+      "sub_branch6": {
+        "sub_branch_name": "Construction Engineering",
+        "starter_tech": "Field Engineering Teams",
+        "description": "Construction battalions are assigned to military and civil defense projects.",
+        "research_time": 190,
+        "research_year": 1951,
+        "child": {
+          "tech": "Combat-Ready Fortification Units",
+          "description": "Teams construct bunkers, barricades, and trenches under live fire conditions.",
+          "research_time": 250,
+          "research_year": 1958,
+          "child": {
+            "tech": "Rapid Deployment Construction Kits",
+            "description": "Pre-stocked modular kits allow troops to erect airfields or encampments overnight.",
+            "research_time": 310,
+            "research_year": 1966
+          }
+        }
       }
-    }
-  },
+    },
   "DOCTRINES": {
     "LAND DOCTRINES": {
       "Mass Mobilization Doctrine": {
