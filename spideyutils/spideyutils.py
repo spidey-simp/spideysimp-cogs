@@ -251,6 +251,16 @@ class SpideyUtils(commands.Cog):
                     results.append(app_commands.Choice(name=sub_branch, value=sub_branch))
         return results[:25]
 
+    def add_tech_with_children(self, embed, tech, data, year):
+        base = data.get("research_time", 0)
+        r_year = data.get("research_year", None)
+        desc = data.get("description", "No description.")
+        calc_time = self.calculate_research_time(base, r_year, year)
+        label = f"**{tech} ({r_year or 'n/a'}) – {calc_time} days**"
+        embed.add_field(name=label, value=desc, inline=False)
+        for child, child_data in data.get("children", {}).items():
+            self.add_tech_with_children(embed, child, child_data, year)
+
     @app_commands.command(name="view_tech", description="View the Cold War RP tech tree.")
     @app_commands.autocomplete(branch=autocomplete_branch, sub_branch=autocomplete_sub_branch)
     async def view_tech(self, interaction: discord.Interaction, branch: str = None, sub_branch: str = None):
@@ -279,11 +289,7 @@ class SpideyUtils(commands.Cog):
                     continue
                 sub_embed = discord.Embed(title=f"📦 {sub}", color=discord.Color.gold())
                 for tech, tdata in techs.get("children", {}).items():
-                    base = tdata.get("research_time", 0)
-                    r_year = tdata.get("research_year", None)
-                    calc_time = self.calculate_research_time(base, r_year, year)
-                    label = f"{tech} ({r_year or 'n/a'}) – {calc_time} days"
-                    sub_embed.add_field(name=label, value="", inline=False)
+                    self.add_tech_with_children(sub_embed, tech, tdata, year)
                 embeds.append(sub_embed)
             return await interaction.followup.send(embeds=embeds[:10])
 
@@ -293,15 +299,11 @@ class SpideyUtils(commands.Cog):
                 if sb.lower() == sub_branch.lower():
                     embed = discord.Embed(title=f"🔬 {sb} Sub-Branch", color=discord.Color.blurple())
                     for tech, data in tdata.get("children", {}).items():
-                        base = data.get("research_time", 0)
-                        r_year = data.get("research_year", None)
-                        desc = data.get("description", "No description.")
-                        calc_time = self.calculate_research_time(base, r_year, year)
-                        label = f"**{tech} ({r_year or 'n/a'}) – {calc_time} days**"
-                        embed.add_field(name=label, value=desc, inline=False)
+                        self.add_tech_with_children(embed, tech, data, year)
                     return await interaction.followup.send(embed=embed)
 
         await interaction.followup.send("❌ Could not find specified branch or sub-branch.", ephemeral=True)
+
 
     
     def redact_paragraph_weighted(self, text, knowledge):
