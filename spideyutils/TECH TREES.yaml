@@ -1,0 +1,399 @@
+TECH TREES
+
+# INFANTRY AND SUPPORT
+
+Cold War Infantry Weapons
+└── Improved Infantry Weapons
+    ├── Advanced Infantry Weapons
+    │   ├── Digital Targeting Lenses
+    │   │   └── Combat Data Terminals
+    │   │       └── Powered Exoskeleton Prototypes
+    │   └── Combat Drugs & Stimulants
+    ├── Basic Body Armor
+    │   ├── Advanced Body Armor
+    │       └── Integrated Night Vision Equipment
+    │       └── Cold Climate Infantry Gear
+    ├── Modular Field Gear
+    │   ├── NBC Infantry Readiness
+    │   └── Jungle Warfare Specialization
+    └── Anti-Tank Infantry Weapons
+
+Basic Support Companies
+├── Infantry Squad Radios
+├── Basic Urban Combat Training
+└── Paratrooper Optimization
+
+# ARTILLERY
+
+Cold War Artillery
+├── Improved Field Guns
+│   └── Self-Propelled Artillery
+│       └── Networked Artillery Batteries
+├── Basic Rocket Systems
+│   └── Truck-Mounted Artillery
+│       └── Guided Rocket Systems
+├── Towed Anti-Air Artillery
+│   └── Mobile AA Guns
+│       └── SAM Batteries
+│           └── Anti-Missile Systems
+
+# ARMOR
+
+Cold War Era Tanks
+├── Improved MBTs
+│   ├── Advanced MBTs
+│   │   └── Next-Gen MBTs
+│   ├── Heavy Armor Focus
+│   ├── Mobility Focus (Light MBTs)
+│   └── Infantry Fighting Vehicles (IFVs)
+│       └── Armored Recovery Vehicles (ARVs)
+├── Tank Destroyers
+├── Amphibious Tanks
+│   └── Advanced Amphibious Tanks
+
+# AERIAL
+
+Jet Fighter Prototype
+└── Jet Fighter Mk I
+    └── Jet Fighter Mk II
+        ├── Missile Fighter Mk I
+        │   └── Advanced Missile Fighters
+        └── Jet Fighter Mk III
+            └── Supersonic Fighters
+                └── Stealth Interceptors
+
+Cold War Jet Bombers
+└── Strategic Jet Bombers
+    ├── Supersonic Bombers
+    │   └── Stealth Bombers
+    └── Nuclear Payload Integration
+
+Jet Recon Aircraft
+└── Supersonic Spy Planes
+    └── High-Altitude Recon Platforms
+
+# NAVY
+
+Cold War Submarine
+└── Advanced Submarine
+    ├── Nuclear Submarine
+    │   └── Ballistic Missile Submarine (SSBN)
+    └── Stealth Submarine Hulls
+
+Cold War Battleship
+├── Superbattleship Design
+│   └── Nuclear-Powered Dreadnought
+└── Guided Missile Cruisers
+    └── Multi-role Heavy Cruisers
+
+Cold War Carrier
+└── Advanced Carrier
+    ├── Nuclear Carrier
+    └── Naval Air Integration Systems
+
+Cold War Cruiser
+├── Light Cruiser Upgrade
+│   └── Anti-Air Light Cruiser (AA CL)
+│       └── Radar Integration Systems
+├── Heavy Cruiser Upgrade
+│   └── Guided Missile Heavy Cruiser (CA+)
+│       └── Multi-role Heavy Cruisers
+
+Cold War Destroyer
+├── Coastal Defense Ship
+│   └── Riverine Gunboat / Brownwater Escort
+└── Advanced Destroyer
+    ├── Guided Missile Frigates
+    └── ASW Specialization
+        └── Sonar Buoy Networks
+
+# ELECTRONICS
+Cold War Signal Equipment
+├── Electronic Encryption Machines
+│   └── Advanced Data Processing
+│       └── Early Network Terminals
+│           └── Rudimentary Internet
+│       └── Ballistic Computation Modules
+│           └── Fire Control Systems
+├── Basic Codebreaking Protocols
+│   └── Advanced Decryption AI
+├── Radar Integration Systems
+│   └── Airborne Early Warning Systems (AEW&C)
+│       └── Satellite Detection Systems
+
+# INDUSTRY
+Cold War Industrial Base
+├── Streamlined Production Systems
+│   ├── Industrial Process Automation
+│   │   ├── Robotic Assembly Lines
+│   │   └── Remote Mining Techniques
+│   ├── Chemical Fertilizers
+│   └── Motorized Supply Fleets
+│       └── Rail Infrastructure Modernization
+│           └── Containerized Shipping
+├── Petrochemical Extraction
+│   ├── Synthetic Rubber Production
+│   └── Synthetic Oil Alternatives
+
+# ROCKETRY/NUCLEAR SCIENCE
+Basic Rocket Propulsion
+└── Advanced Rocketry
+    ├── Intermediate-Range Ballistic Missiles (IRBMs)
+    │   └── Intercontinental Ballistic Missiles (ICBMs)
+    │       └── MIRV Integration
+    ├── Satellite Launch Capability
+    │   ├── Communications Satellites
+    │   └── Spy Satellites
+    │       └── Super-Resolution Surveillance
+    ├── Space Capsule Design
+    │   └── Crewed Orbital Flight
+    │       └── Moon Landing
+    └── Reusable Rocket Technologies
+        └── Orbital Shuttle Platform
+
+Fission Reactions
+└── Fission Bomb Development
+    ├── Miniaturized Nuclear Weapons
+    ├── Nuclear Submarine Propulsion
+    └── Fusion Research
+        └── Thermonuclear Bombs (Hydrogen Bomb)
+
+# LAND DOCTRINES
+Mass Mobilization Doctrine
+├── Peasant-to-Patriot Pipeline
+├── Citizen Soldier Model
+├── Fortress Society
+├── Party Officer Supervision
+├── Wave Attack Acceptance
+├── Gun in Every Hand
+└── Branch Choice:
+    ├── Protracted Warfare Doctrine
+    │   ├── Decentralized Command Nodes
+    │   ├── Camouflage Supply Routes
+    │   ├── Tactical Dissolution Training
+    │   └── Mountain & Forest War Doctrine
+    └── Red Flood Doctrine
+        ├── Coordinated Mass Charges
+        ├── Kill-Zone Saturation Tactics
+        ├── Officer Suicide Protocols
+        └── Overrun Psychology Warfare
+
+Combined Arms Doctrine
+├── Unified Battlefield Philosophy
+├── Modular Division Design
+├── Forward Operating Bases
+├── Tactical Target Networking
+├── Command Layer Specialization
+├── Logistics-as-Weapon Strategy
+└── Branch Choice:
+    ├── Precision Coordination Doctrine
+    │   ├── Joint Ops Special Forces Teams
+    │   ├── Orbital-Linked Command Relay
+    │   ├── Strategic Multinational Coordination
+    │   └── Neural Battlefield Simulations
+    └── Full-Spectrum Warfare Doctrine
+        ├── Rotating Assault Chains
+        ├── Saturation Intel Management
+        ├── Autonomous Fire Coordination
+        └── Multitheater Joint Force Priority
+
+Mobile Warfare Doctrine
+├── Maneuver Over Mass
+├── Mobile Logistics Corps
+├── Breakthrough Doctrine
+├── Encirclement-as-Default Strategy
+├── Autonomous Division Movement
+├── Air-Ground Assault Integration
+└── Branch Choice:
+    ├── Lightning War Doctrine
+    │   ├── Rapid Deployment Hubs
+    │   ├── High-Tempo Unit Cycling
+    │   ├── Forward Airfield Spawning
+    │   └── Command-Level Blitz Wargaming
+    └── Drawn Engagement Doctrine
+        ├── Tactical Harassment Squads
+        ├── Delayed Offensive Baiting
+        ├── Road Denial & Infrastructure Collapse
+        └── Civilian Panic Warfare
+
+Sustained Occupation Doctrine
+├── COIN Warfare Fundamentals
+├── Embedded Local Militias
+├── Geographic Suppression Modeling
+├── Narrative Warfare
+├── Stability Through Infrastructure
+├── Total Civilian Surveillance
+└── Branch Choice:
+    ├── Hearts & Minds Doctrine
+    │   ├── Decentralized Administration Cells
+    │   ├── Cultural Tolerance Training
+    │   ├── Civilian Incentive Programs
+    │   └── Ritualized National Identity Celebrations
+    └── Iron Glove Doctrine
+        ├── Tactical Interrogation Squads
+        ├── Curfew Enforcement Regimens
+        ├── Exile & Re-education Protocols
+        └── Targeted Disappearances
+
+# AERIAL DOCTRINES
+Air Superiority Doctrine
+├── Radar-Based Scrambling
+├── Altitude-Based Tactics
+├── Multi-role Fighter Integration
+├── Advanced Dogfighting Maneuvers
+└── Branch Choice:
+    ├── High-Speed Pursuit Doctrine
+    │   ├── Afterburner Conditioning
+    │   ├── Interceptor Dominance Protocols
+    │   ├── Anti-Stealth Countermeasures
+    │   └── Hypersonic Response Teams
+    └── Air Denial Doctrine
+        ├── ECM Suite Coordination
+        ├── High-Altitude No-Fly Zones
+        ├── Radar Grid Overlap
+        └── Sky Control C&C Automation
+
+Close Air Support Doctrine
+├── Forward Observer Datalinks
+├── Fire Mission Streamlining
+├── Infantry-Linked Strike Packages
+├── On-Demand Air Wings
+└── Branch Choice:
+    ├── Precision Strike Doctrine
+    │   ├── Smart Targeting Algorithms
+    │   ├── Urban Friendly-Fire Minimization
+    │   ├── Mobile Command Drones
+    │   └── Forward-CAS Microburst Deployment
+    └── Area Saturation Doctrine
+        ├── Cluster Bomb Coordination
+        ├── Burn Zone Approval Protocols
+        ├── Napalm Line Authorizations
+        └── Close-Range Shock-and-Awe
+
+Interceptor Defense Doctrine
+├── Civilian Radar Grid
+├── Emergency Runway Basing
+├── Standby Scramble Readiness
+├── Multi-Point Interception Plans
+└── Branch Choice:
+    ├── Missile Dome Doctrine
+    │   ├── Anti-Bomber Missile Shielding
+    │   ├── Ground-Attached Silo Coordination
+    │   ├── Hypersonic Anti-Missile Trials
+    │   └── Air-Debris Containment Systems
+    └── Aerial Denial Web Doctrine
+        ├── Multi-Layered No-Fly Enforcement
+        ├── AWACS Lock-Chain Targeting
+        ├── Auto-Fighter Prelaunch Grids
+        └── Early-Warning AI Systems
+
+# NAVAL DOCTRINES
+Carrier Dominance Doctrine
+├── Jet Carrier Operations
+├── Carrier-Based Radar Control
+├── Deep Water Strike Groups
+├── Global Resupply Chains
+└── Branch Choice:
+    ├── Air Supremacy Carrier Doctrine
+    │   ├── Deck Fighter Swarm Strategy
+    │   ├── Mid-Sea Aircraft Refueling
+    │   ├── Jet-Landing Precision Drills
+    │   └── VTOL-Capable Hangar Adaptation
+    └── Naval Strike Support Doctrine
+        ├── Anti-Ship Strike Package Mods
+        ├── Guided Bombing Calibration
+        ├── Deck-to-Shore Fire Relay
+        └── Coastal Invasion Airlock Integration
+
+Trade Interdiction Doctrine
+├── Submarine Ambush Protocols
+├── Radio Silence Maneuvers
+├── Convoy Disruption Analysis
+├── Long-Distance Mine Grids
+└── Branch Choice:
+    ├── Total Sea Denial Doctrine
+    │   ├── Chokepoint Domination Training
+    │   ├── Convoy Invisibility Nets
+    │   ├── Underwater Drone Emplacements
+    │   └── Oceanic Attrition Focus
+    └── Sabotage & Surveillance Doctrine
+        ├── Merchant Boarding Interception
+        ├── Fake Navigation Signal Protocols
+        ├── Hull-Tagging Microbuoys
+        └── Cargo Chain Disruption
+
+Forward Base Doctrine
+├── Refit Depot Ships
+├── Mobile Air Refueling Rigs
+├── Modular Floating Ports
+├── Deepwater Patrol Convoys
+└── Branch Choice:
+    ├── Regional Power Projection Doctrine
+    │   ├── Political Port Agreements
+    │   ├── Shared Refueling Pacts
+    │   ├── UN Blue Fleet Certifications
+    │   └── UN Sanctioned Fleet Operations
+    └── Fortress Sea Doctrine
+        ├── Naval Fortress Integration
+        ├── Missile Turrets on Sea Platforms
+        ├── Floating SAM Grids
+        └── Oceanwide Detection Web
+
+# ESPIONAGE DOCTRINES
+
+HUMINT Doctrine
+├── Spy School Acceleration Program
+├── False Identity Networks
+├── Handler-Deniability Protocols
+├── Sleeper Agent Expansion
+├── Counter-Counterintelligence Training
+├── Exfiltration Route Mapping
+└── Branch Choice:
+    ├── Deep Penetration Strategy
+    │   ├── Compromised Official Domination
+    │   ├── Agent Replacement Procedures
+    │   ├── Long-Term Memory Conditioning
+    │   └── Dual-Face Identity Systems
+    └── Disruptive Saboteur Strategy
+        ├── Targeted Infrastructure Collapse
+        ├── Industrial Labor Infiltration
+        ├── Assassination Trigger Cells
+        └── Suicide Exploitation Doctrine
+
+SIGINT Doctrine
+├── Signals Monitoring Corps
+├── Language Decryption Algorithms
+├── Global Tap Expansion
+├── Inter-Embassy Cable Hijacks
+├── Satellite Frequency Hijacking
+├── Data Interception Logistics
+└── Branch Choice:
+    ├── Cyber-Embedded Surveillance Net
+    │   ├── Predictive Behavior Modeling
+    │   ├── Facial Indexing Protocols
+    │   ├── Real-Time Movement Analytics
+    │   └── AI-Backed Threat Scoring
+    └── Counter-Insider Suppression Doctrine
+        ├── Loyalty Screening Centers
+        ├── Intelligence Leak Lockdown Zones
+        ├── False Flag Discreditation
+        └── Mirror Ops (Trap-Based Misinformation)
+
+POLINT Doctrine
+├── Subversive Media Cell Creation
+├── Opposition Party Seeding
+├── Religious and Cultural Division Exploitation
+├── Currency Destabilization Tactics
+├── False Martyr Campaigns
+├── Civil Unrest Simulation Training
+└── Branch Choice:
+    ├── Narrative Hijack Doctrine
+    │   ├── Disinformation Saturation
+    │   ├── Cultural Rewriting Cells
+    │   ├── Staged Revolution Engineering
+    │   └── Controlled Coup Installation
+    └── Societal Implosion Doctrine
+        ├── Racial & Class Conflict Amplification
+        ├── Institutional Trust Sabotage
+        ├── Moral Panic Programming
+        └── Psychological Civil War Simulation

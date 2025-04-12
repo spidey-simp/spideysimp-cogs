@@ -1,5 +1,8 @@
 {
     "name": "Cold War RP",
+    "turn": 0,
+    "current_year": 1952,
+    "period_limitation": false,
     "global_history": {
       "1943": {
         "Sino-Japanese Conflict Ends": {
@@ -1176,7 +1179,9 @@
           "domestic_intelligence_score": 70,
           "spy_network_score": 45,
           "spy_networks": {
-            "Austrian Empire": 85
+            "Austrian Empire": 85,
+            "Kingdom of Italy": 65,
+            "France": 45
           }
         }
       },
@@ -1307,7 +1312,8 @@
           "domestic_intelligence_score": 65,
           "spy_network_score": 40,
           "spy_networks": {
-            "Kingdom of Spain": 85
+            "Kingdom of Spain": 85,
+            "Kingdom of Italy": 60
           }
         }
     },
@@ -1570,11 +1576,1741 @@
           "Germany": 30
         }
       }
+    },
+    "Kingdom of Italy": {
+      "player_id": 982830901836791839,
+      "military": {
+        "army_divisions": 22,
+        "aviation_wings": 16,
+        "fleet_task_groups": 4,
+        "officer_skill_level": 3,
+        "avg_troop_skill_level": 3,
+        "military_readiness": "partial"
+      },
+      "economic": {
+        "budget_surplus": -2,
+        "industrial_sectors": 18,
+        "oil_reserves": 4,
+        "infrastructure_rating": 3
+      },
+      "political": {
+        "population": 46000000,
+        "recruitable_manpower": 7000000,
+        "public_support_score": 60,
+        "civil_unrest_level": 15
+      },
+      "research": {
+        "research_coefficient": 2,
+        "nuclear_arsenal": 0
+      },
+      "country_history": {
+        "1945": "Italy avoids direct involvement in WWII and begins expanding influence in the Balkans through diplomacy.",
+        "1947": "Annexes Dalmatia peacefully and establishes a royal protectorate over Albania under King Umberto II.",
+        "1951": "Stability is maintained, but observers note the resurgence of ultranationalist elements within the officer corps."
+      },
+      "past_turns": {},
+      "global": {
+        "global_influence": 58,
+        "doctrine_focus": "combined_arms",
+        "conscription_policy": "selective_service"
+      },
+      "leader": {
+        "name": "Umberto II",
+        "description": "Having ascended to the throne through cautious diplomacy and a refusal to join the global war, Umberto II rules a kingdom carefully balancing modernization and monarchy. His reserved demeanor hides a shrewd understanding of Italy's precarious position between Catholic monarchies and rising ideological blocs.",
+        "image": "https://farm4.staticflickr.com/3377/4641849242_ff3bb19a9c_o.jpg"
+      },
+      "details": "Italy has emerged from the war relatively unscathed, choosing negotiation over aggression. With territorial expansion achieved through diplomacy rather than conquest, it now eyes internal modernization and regional influence under the cautious guidance of its monarchy.",
+      "public_desc": "Under the House of Savoy, Italy maintains a fragile neutrality backed by regional influence and postwar industrial growth.",
+      "chief_of_staff": "Field Marshal Giovanni Messe",
+      "ideology": {
+        "leading_ideology": "monarchic",
+        "democratic": 20,
+        "fascist": 10,
+        "communist": 5,
+        "authoritarian": 20,
+        "monarchic": 45
+      },
+      "starter_goals": [
+        "Modernize industrial sector",
+        "Strengthen Mediterranean fleet",
+        "Deepen ties with Austria and Spain"
+      ],
+      "image": "https://1.bp.blogspot.com/-ERmCtVdLfmQ/UatYYVKPLVI/AAAAAAAADx8/cPuMteq8oOk/s1600/Life+in+Italy,+1950s+(3).jpg",
+      "national_spirits": [
+        {
+          "name": "Savoyard Continuity",
+          "description": "While other monarchies fell to war and revolution, Italy's crown endures. This continuity brings prestige, but also the burden of history.",
+          "type": "political",
+          "public": true,
+          "modifiers": {
+            "monarchic_support_bonus": 10,
+            "resistance_to_ideological_shifts": 10
+          }
+        },
+        {
+          "name": "Industrial Fragmentation",
+          "description": "Italy's north is rich in factories and capital. Its south lags behind. This imbalance stirs regional frustration.",
+          "type": "economic",
+          "modifiers": {
+            "infrastructure_development_penalty_in_south": -10,
+            "industrial_growth_rate": 5
+          }
+        },
+        {
+          "name": "Mare Nostrum",
+          "description": "Italy's fleet harkens back to ancient maritime supremacy. Its officers carry that pride, sometimes to excess.",
+          "type": "military",
+          "public": true,
+          "modifiers": {
+            "naval_combat_bonus": 10,
+            "coastal_patrol_bonus": 10
+          }
+        },
+        {
+          "name": "Eyes on the Adriatic",
+          "description": "With Dalmatia annexed and Albania under royal oversight, Italy is the gatekeeper of the Adriatic, and it knows it.",
+          "type": "political",
+          "modifiers": {
+            "influence_in_balkans": 15,
+            "territorial_claim_justification_bonus": 10
+          }
+        },
+        {
+          "name": "Pax Romana",
+          "description": "Italy draws from the Roman legacy of order through dominance. Its officer corps idolizes the efficiency and discipline of imperial legions, especially in occupied territories.",
+          "type": "military",
+          "modifiers": {
+            "garrison_effectiveness": 10,
+            "occupied_territory_stability": 5
+          }
+        }        
+      ],
+      "espionage": {
+        "domestic_intelligence_score": 50,
+        "foreign_intelligence_score": 40,
+        "spy_network_score": 35,
+        "spy_networks": {
+          "Kingdom of Spain": 60,
+          "Austrian Empire": 55,
+          "Federation of Balkan Republics": 50
+        }
+      }
     }
   },
   "alliances": {
     "Catholic Pact": {
       "members": ["Kingdom of Spain", "Austrian Empire"]
+    }
+  },
+  "tech_tree": {
+    "INFANTRY AND SUPPORT": {
+      "Cold War Infantry Weapons": {
+        "description": "Lays the foundation for modern infantry loadouts, standardizing Cold War-era rifles and field kits.",
+        "research_time": 120,
+        "children": {
+          "Improved Infantry Weapons": {
+            "description": "Upgrades standard rifles and support arms for increased firepower, accuracy, and durability.",
+            "research_time": 180,
+            "children": {
+              "Advanced Infantry Weapons": {
+                "description": "Incorporates modular weapon attachments and specialized ammunition for elite units.",
+                "research_time": 240,
+                "children": {
+                  "Digital Targeting Lenses": {
+                    "description": "Deploys helmet-mounted optics with range-finding and heads-up display systems.",
+                    "research_time": 180,
+                    "children": {
+                      "Combat Data Terminals": {
+                        "description": "Introduces portable battlefield computers for real-time communication and intel.",
+                        "research_time": 300,
+                        "children": {
+                          "Powered Exoskeleton Prototypes": {
+                            "description": "Experimental suits that boost strength and endurance for front-line infantry.",
+                            "research_time": 540,
+                            "research_year": 1964
+                          }
+                        },
+                        "research_year": 1961
+                      }
+                    },
+                    "research_year": 1956
+                  },
+                  "Combat Drugs & Stimulants": {
+                    "description": "Administers chemical enhancers to increase soldier endurance and suppress pain.",
+                    "research_time": 300,
+                    "research_year": 1957
+                  }
+                },
+                "research_year": 1951
+              },
+              "Basic Body Armor": {
+                "description": "Equips infantry with flak vests and hardened inserts for protection against small arms fire.",
+                "research_time": 180,
+                "children": {
+                  "Advanced Body Armor": {
+                    "description": "Introduces composite plating and flexible kevlar for enhanced mobility and protection.",
+                    "research_time": 240,
+                    "children": {
+                      "Integrated Night Vision Equipment": {
+                        "description": "Provides soldiers with head-mounted low-light optics for night operations.",
+                        "research_time": 180,
+                        "research_year": 1962
+                      },
+                      "Cold Climate Infantry Gear": {
+                        "description": "Specialized clothing and equipment for extreme cold-weather combat environments.",
+                        "research_time": 120,
+                        "research_year": 1963
+                      }
+                    },
+                    "research_year": 1958
+                  }
+                },
+                "research_year": 1952
+              },
+              "Modular Field Gear": {
+                "description": "Allows soldiers to customize their packs with mission-specific tools and supplies.",
+                "research_time": 180,
+                "children": {
+                  "NBC Infantry Readiness": {
+                    "description": "Prepares infantry for operations in nuclear, biological, and chemical threat zones.",
+                    "research_time": 300,
+                    "research_year": 1959
+                  },
+                  "Jungle Warfare Specialization": {
+                    "description": "Tailors gear and tactics for survival and combat in dense, tropical terrain.",
+                    "research_time": 180,
+                    "research_year": 1960
+                  }
+                },
+                "research_year": 1953
+              },
+              "Anti-Tank Infantry Weapons": {
+                "description": "Equips infantry squads with man-portable weapons to engage enemy armored vehicles.",
+                "research_time": 240,
+                "research_year": 1954
+              }
+            },
+            "research_year": 1947
+          }
+        },
+        "research_year": 1945
+      },
+      "Basic Support Companies": {
+        "description": "Forms the logistical backbone of modern armies, including engineers, medics, and comms.",
+        "research_time": 150,
+        "children": {
+          "Infantry Squad Radios": {
+            "description": "Introduces short-range communications for squad-level coordination.",
+            "research_time": 120,
+            "research_year": 1948
+          },
+          "Basic Urban Combat Training": {
+            "description": "Provides infantry with essential tactics and maneuvers for fighting in city environments.",
+            "research_time": 150,
+            "research_year": 1949
+          },
+          "Paratrooper Optimization": {
+            "description": "Improves jump protocols, landing zone survival, and equipment for airborne units.",
+            "research_time": 210,
+            "research_year": 1950
+          }
+        },
+        "research_year": 1946
+      }
+    },
+    "ARTILLERY": {
+      "Post-War Field Guns": {
+        "description": "Modernizes WW2-era artillery designs with longer barrels and more accurate fire control.",
+        "research_time": 180,
+        "research_year": 1945,
+        "children": {
+          "Refined Breechloaders": {
+            "description": "Improves rate of fire and crew safety through redesigned loading systems.",
+            "research_time": 180,
+            "research_year": 1948,
+            "children": {
+              "Standardized Artillery Platforms": {
+                "description": "Unifies calibers and platform chassis to simplify logistics and ammunition.",
+                "research_time": 180,
+                "research_year": 1951,
+                "children": {
+                  "Advanced Towed Guns": {
+                    "description": "Introduces auto-aim assist systems and longer-range rifled barrels.",
+                    "research_time": 210,
+                    "research_year": 1956,
+                    "children": {
+                      "Digital Fire Calibration Units": {
+                        "description": "Deploys early computers to calculate windage and angle in real time.",
+                        "research_time": 240,
+                        "research_year": 1962
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Dedicated Anti-Tank Artillery": {
+        "description": "Develops direct-fire, high-velocity guns to neutralize enemy armor at range.",
+        "research_time": 180,
+        "research_year": 1953,
+        "children": {
+          "Shaped Charge Shells": {
+            "description": "Adopts HEAT rounds to pierce tank armor through explosive jet technology.",
+            "research_time": 210,
+            "research_year": 1956,
+            "children": {
+              "Recoilless Rifles": {
+                "description": "Builds shoulder-fired and vehicle-mounted anti-tank weapons with minimal recoil.",
+                "research_time": 210,
+                "research_year": 1960
+              }
+            }
+          }
+        }
+      },
+      "Dedicated Anti-Air Artillery": {
+        "description": "Focuses on flak and autocannons to counteract increasing aerial threats.",
+        "research_time": 180,
+        "research_year": 1954,
+        "children": {
+          "Radar-Fused Shells": {
+            "description": "Enables timed airburst detonation based on radar proximity sensors.",
+            "research_time": 210,
+            "research_year": 1957,
+            "children": {
+              "Mobile SAM Platforms": {
+                "description": "Mounts surface-to-air missiles on trucks for battlefield air denial.",
+                "research_time": 240,
+                "research_year": 1963
+              }
+            }
+          }
+        }
+      },
+      "Mounted Self-Propelled Artillery": {
+        "description": "Mounts large-caliber guns on tracked chassis for flexible deployment.",
+        "research_time": 180,
+        "research_year": 1950,
+        "children": {
+          "Autoloading SPGs": {
+            "description": "Adds mechanized reloading to reduce crew fatigue and increase tempo.",
+            "research_time": 210,
+            "research_year": 1954,
+            "children": {
+              "Networked Artillery Batteries": {
+                "description": "Connects SPG teams into coordinated firing networks.",
+                "research_time": 240,
+                "research_year": 1960
+              }
+            }
+          }
+        }
+      },
+      "Motorized Artillery Carriages": {
+        "description": "Deploys light artillery on wheeled vehicles for rapid repositioning.",
+        "research_time": 180,
+        "research_year": 1950,
+        "children": {
+          "Improved Trailer Mounts": {
+            "description": "Strengthens stability and load balancing during mobile fire missions.",
+            "research_time": 180,
+            "research_year": 1953
+          }
+        }
+      },
+      "Specialized Support Artillery": {
+        "description": "Focuses on smoke, illumination, and psychological impact rounds.",
+        "research_time": 180,
+        "research_year": 1951,
+        "children": {
+          "White Phosphorus Shells": {
+            "description": "Deploys shells for vision denial, area denial, and psychological disruption.",
+            "research_time": 180,
+            "research_year": 1955,
+            "children": {
+              "Multi-Purpose Fusing": {
+                "description": "Creates shell types that can shift behavior on-the-fly based on mission needs.",
+                "research_time": 210,
+                "research_year": 1961
+              }
+            }
+          }
+        }
+      }
+    },
+    "ARMOR": {
+      "Cold War Era Tanks": {
+        "description": "Modernizes tank development post-WWII, creating platforms suited for Cold War battlefields.",
+        "research_time": 150,
+        "children": {
+          "Improved MBTs": {
+            "description": "Enhances main battle tanks with upgraded armor, guns, and mobility systems.",
+            "research_time": 240,
+            "children": {
+              "Advanced MBTs": {
+                "description": "Refines tank design with composite armor, stabilized guns, and improved fire control.",
+                "research_time": 360,
+                "children": {
+                  "Next-Gen MBTs": {
+                    "description": "Designs tanks with digital targeting, modular armor, and cutting-edge propulsion.",
+                    "research_time": 540,
+                    "research_year": 1953
+                  }
+                },
+                "research_year": 1952
+              },
+              "Heavy Armor Focus": {
+                "description": "Develops slower, heavier tanks with increased survivability and firepower.",
+                "research_time": 300,
+                "research_year": 1952
+              },
+              "Mobility Focus (Light MBTs)": {
+                "description": "Designs lighter tanks for speed, maneuverability, and reconnaissance support.",
+                "research_time": 300,
+                "research_year": 1952
+              },
+              "Infantry Fighting Vehicles (IFVs)": {
+                "description": "Combines troop transport with direct-fire support in a single armored platform.",
+                "research_time": 300,
+                "children": {
+                  "Armored Recovery Vehicles (ARVs)": {
+                    "description": "Deploys specialized vehicles for frontline repair and recovery of damaged armor.",
+                    "research_time": 240,
+                    "research_year": 1953
+                  }
+                },
+                "research_year": 1952
+              }
+            },
+            "research_year": 1951
+          },
+          "Tank Destroyers": {
+            "description": "Equips tracked or wheeled vehicles with high-velocity guns to counter enemy armor.",
+            "research_time": 240,
+            "research_year": 1951
+          },
+          "Amphibious Tanks": {
+            "description": "Adapts tanks for river crossings and coastal invasions through water-sealed designs.",
+            "research_time": 240,
+            "children": {
+              "Advanced Amphibious Tanks": {
+                "description": "Optimizes amphibious armor with hydrodynamic shaping and improved buoyancy systems.",
+                "research_time": 300,
+                "research_year": 1952
+              }
+            },
+            "research_year": 1951
+          }
+        },
+        "research_year": 1950
+      },
+      "Digital Armor Command Systems": {
+        "description": "Equips tanks with onboard computers for real-time target data and battlefield coordination.",
+        "research_time": 210,
+        "research_year": 1962,
+        "children": {
+          "Networked MBTs": {
+            "description": "Links tanks into fire control webs, improving target sharing and reaction speed.",
+            "research_time": 240,
+            "research_year": 1965
+          },
+          "Modular Armor Plating": {
+            "description": "Allows tanks to quickly swap and repair armor sections in the field.",
+            "research_time": 210,
+            "research_year": 1967
+          },
+          "Explosive Reactive Armor": {
+            "description": "Adds protective panels that explode outward to reduce the impact of incoming projectiles.",
+            "research_time": 240,
+            "research_year": 1969
+          }
+        }
+      }
+    },
+    "AERIAL": {
+      "Jet Fighter Prototype": {
+        "description": "Initiates Cold War-era jet propulsion research for air superiority fighters.",
+        "research_time": 180,
+        "children": {
+          "Jet Fighter Mk I": {
+            "description": "Early production jet fighters with limited maneuverability and short range.",
+            "research_time": 240,
+            "children": {
+              "Jet Fighter Mk II": {
+                "description": "Improves airframe, engine thrust, and avionics for more reliable jet operations.",
+                "research_time": 300,
+                "children": {
+                  "Missile Fighter Mk I": {
+                    "description": "Equips fighters with early air-to-air missiles for beyond-visual-range combat.",
+                    "research_time": 360,
+                    "children": {
+                      "Advanced Missile Fighters": {
+                        "description": "Upgrades missile technology with multi-target tracking and radar-lock capabilities.",
+                        "research_time": 420,
+                        "research_year": 1958
+                      }
+                    },
+                    "research_year": 1955
+                  },
+                  "Jet Fighter Mk III": {
+                    "description": "Refines jet performance with better thrust-to-weight ratios and high-altitude tolerance.",
+                    "research_time": 360,
+                    "children": {
+                      "Supersonic Fighters": {
+                        "description": "Breaks the sound barrier with afterburners and aerodynamic design.",
+                        "research_time": 480,
+                        "children": {
+                          "Stealth Interceptors": {
+                            "description": "Implements radar-absorbing materials and low-observable shapes for surprise attacks.",
+                            "research_time": 600,
+                            "research_year": 1960
+                          }
+                        },
+                        "research_year": 1959
+                      }
+                    },
+                    "research_year": 1956
+                  }
+                },
+                "research_year": 1951
+              }
+            },
+            "research_year": 1948
+          }
+        },
+        "research_year": 1945
+      },
+      "Cold War Jet Bombers": {
+        "description": "Builds strategic bombing capability using jet propulsion and long-range payload delivery.",
+        "research_time": 240,
+        "children": {
+          "Strategic Jet Bombers": {
+            "description": "Designs long-range jet bombers for nuclear and high-explosive strategic payloads.",
+            "research_time": 360,
+            "children": {
+              "Supersonic Bombers": {
+                "description": "Develops bombers capable of outrunning interceptors using sheer velocity.",
+                "research_time": 480,
+                "children": {
+                  "Stealth Bombers": {
+                    "description": "Employs stealth geometry and advanced ECM to avoid radar detection during bombing runs.",
+                    "research_time": 600,
+                    "research_year": 1957
+                  }
+                },
+                "research_year": 1952
+              },
+              "Nuclear Payload Integration": {
+                "description": "Modifies bomb bays and targeting systems to support nuclear delivery.",
+                "research_time": 300,
+                "research_year": 1953
+              }
+            },
+            "research_year": 1949
+          }
+        },
+        "research_year": 1946
+      },
+      "Jet Recon Aircraft": {
+        "description": "Modernizes aerial reconnaissance with jet-powered surveillance platforms.",
+        "research_time": 180,
+        "children": {
+          "Supersonic Spy Planes": {
+            "description": "High-speed recon aircraft capable of outrunning enemy defenses at extreme altitudes.",
+            "research_time": 300,
+            "children": {
+              "High-Altitude Recon Platforms": {
+                "description": "Deploys sensor-loaded aircraft for global intelligence gathering beyond interception range.",
+                "research_time": 420,
+                "research_year": 1954
+              }
+            },
+            "research_year": 1950
+          }
+        },
+        "research_year": 1947
+      },
+      "Stealth Airframe Research": {
+        "description": "Explores radar-diffusing geometry and materials for hard-to-detect aircraft.",
+        "research_time": 210,
+        "research_year": 1961,
+        "children": {
+          "Pre-Stealth Fighter Designs": {
+            "description": "Tests angular airframe theory to reduce radar cross-sections.",
+            "research_time": 240,
+            "research_year": 1962
+          },
+          "Advanced Avionics": {
+            "description": "Integrates heads-up displays, terrain following, and ECM suites into fighter systems.",
+            "research_time": 210,
+            "research_year": 1963
+          },
+          "Prototype Unmanned Recon Aircraft": {
+            "description": "Deploys experimental UAVs for long-range surveillance without risking pilots.",
+            "research_time": 240,
+            "research_year": 1964
+          }
+        }
+      }
+    },
+    "NAVY": {
+      "Cold War Submarine": {
+        "description": "Modernizes undersea warfare with faster, quieter, and longer-endurance submarines.",
+        "research_time": 180,
+        "children": {
+          "Advanced Submarine": {
+            "description": "Refines hull design and sonar stealth, making subs harder to detect and easier to maneuver.",
+            "research_time": 240,
+            "children": {
+              "Nuclear Submarine": {
+                "description": "Adds nuclear propulsion for indefinite underwater range and rapid global deployment.",
+                "research_time": 360,
+                "children": {
+                  "Ballistic Missile Submarine (SSBN)": {
+                    "description": "Equips nuclear subs with missile silos, enabling stealthy second-strike capabilities.",
+                    "research_time": 480,
+                    "research_year": 1960
+                  }
+                },
+                "research_year": 1953
+              },
+              "Stealth Submarine Hulls": {
+                "description": "Incorporates sound-dampening materials and hull shapes to reduce acoustic signatures.",
+                "research_time": 360,
+                "research_year": 1954
+              }
+            },
+            "research_year": 1948
+          }
+        },
+        "research_year": 1945
+      },
+      "Cold War Battleship": {
+        "description": "Revives heavy surface combatants with advanced armor and long-range strike capability.",
+        "research_time": 240,
+        "children": {
+          "Superbattleship Design": {
+            "description": "Designs behemoth capital ships with massive guns and enhanced survivability.",
+            "research_time": 360,
+            "children": {
+              "Nuclear-Powered Dreadnought": {
+                "description": "Integrates nuclear propulsion into battleship-class vessels for unmatched endurance.",
+                "research_time": 540,
+                "research_year": 1954
+              }
+            },
+            "research_year": 1948
+          },
+          "Guided Missile Cruisers": {
+            "description": "Replaces traditional gun batteries with surface-to-air and anti-ship missiles.",
+            "research_time": 300,
+            "children": {
+              "Multi-role Heavy Cruisers": {
+                "description": "Fuses naval firepower, missile systems, and air defense into versatile flagship designs.",
+                "research_time": 420,
+                "research_year": 1955
+              }
+            },
+            "research_year": 1949
+          }
+        },
+        "research_year": 1945
+      },
+      "Cold War Carrier": {
+        "description": "Transforms naval warfare with jet-capable aircraft carriers and air-wing integration.",
+        "research_time": 240,
+        "children": {
+          "Advanced Carrier": {
+            "description": "Modern carrier designs featuring angled decks and arrestor gear for jet operations.",
+            "research_time": 300,
+            "children": {
+              "Nuclear Carrier": {
+                "description": "Enables global deployment with near-unlimited range and greater operational endurance.",
+                "research_time": 480,
+                "research_year": 1956
+              },
+              "Naval Air Integration Systems": {
+                "description": "Enhances coordination between carrier command and air squadrons for seamless sorties.",
+                "research_time": 360,
+                "research_year": 1956
+              }
+            },
+            "research_year": 1950
+          }
+        },
+        "research_year": 1946
+      },
+      "Cold War Cruiser": {
+        "description": "Updates light and heavy cruisers for escort, missile defense, and anti-air warfare.",
+        "research_time": 180,
+        "children": {
+          "Light Cruiser Upgrade": {
+            "description": "Improves armor, speed, and radar capability for frontline AA screening.",
+            "research_time": 240,
+            "children": {
+              "Anti-Air Light Cruiser (AA CL)": {
+                "description": "Specializes light cruisers in anti-aircraft roles to protect carriers and convoys.",
+                "research_time": 300,
+                "children": {
+                  "Radar Integration Systems": {
+                    "description": "Connects fleet ships into a shared radar grid for early threat detection.",
+                    "research_time": 300,
+                    "research_year": 1961
+                  }
+                },
+                "research_year": 1957
+              }
+            },
+            "research_year": 1950
+          },
+          "Heavy Cruiser Upgrade": {
+            "description": "Equips heavy cruisers with improved fire control, survivability, and command modules.",
+            "research_time": 240,
+            "children": {
+              "Guided Missile Heavy Cruiser (CA+)": {
+                "description": "Adds missile launch capability to heavy cruisers for deep strike operations.",
+                "research_time": 360,
+                "children": {
+                  "Multi-role Heavy Cruisers": {
+                    "description": "Converts heavy cruisers into hybrid platforms with both kinetic and missile weapons.",
+                    "research_time": 420,
+                    "research_year": 1962
+                  }
+                },
+                "research_year": 1958
+              }
+            },
+            "research_year": 1951
+          }
+        },
+        "research_year": 1946
+      },
+      "Cold War Destroyer": {
+        "description": "Maintains fast-response naval presence with multipurpose destroyer-class vessels.",
+        "research_time": 150,
+        "children": {
+          "Coastal Defense Ship": {
+            "description": "Builds light destroyers and patrol boats suited for near-shore and riverine operations.",
+            "research_time": 180,
+            "children": {
+              "Riverine Gunboat / Brownwater Escort": {
+                "description": "Designs shallow-draft gunboats to support amphibious landings and coastal raids.",
+                "research_time": 240,
+                "research_year": 1958
+              }
+            },
+            "research_year": 1952
+          },
+          "Advanced Destroyer": {
+            "description": "Increases firepower, sonar capability, and damage control systems for blue-water combat.",
+            "research_time": 240,
+            "children": {
+              "Guided Missile Frigates": {
+                "description": "Creates hybrid destroyer-frigates equipped with anti-air and anti-ship missiles.",
+                "research_time": 360,
+                "research_year": 1959
+              },
+              "ASW Specialization": {
+                "description": "Adds towed sonar arrays and depth charge systems to hunt enemy submarines.",
+                "research_time": 300,
+                "children": {
+                  "Sonar Buoy Networks": {
+                    "description": "Deploys floating sonar grids to monitor vast sea regions for enemy movement.",
+                    "research_time": 420,
+                    "research_year": 1962
+                  }
+                },
+                "research_year": 1960
+              }
+            },
+            "research_year": 1952
+          }
+        },
+        "research_year": 1947
+      },
+      "Shipboard Missile Integration": {
+        "description": "Replaces gun-focused designs with surface-to-air and anti-ship missile systems.",
+        "research_time": 180,
+        "research_year": 1963,
+        "children": {
+          "Naval Combat Computers": {
+            "description": "Digitizes ship targeting and threat detection to speed up combat decision-making.",
+            "research_time": 210,
+            "research_year": 1964
+          },
+          "Cruise Missile Destroyers": {
+            "description": "Builds destroyers centered around long-range missile strikes rather than direct gunfire.",
+            "research_time": 240,
+            "research_year": 1964
+          },
+          "Anti-Submarine Missile Systems": {
+            "description": "Uses rockets and sonar guidance to strike submerged threats beyond depth charge range.",
+            "research_time": 240,
+            "research_year": 1965
+          }
+        }
+      }
+    },
+    "ELECTRONICS": {
+      "Cold War Signal Equipment": {
+        "description": "Forms the electronic foundation of modern military operations through communication and detection systems.",
+        "research_time": 150,
+        "children": {
+          "Electronic Encryption Machines": {
+            "description": "Implements rotor and plugboard-based cipher machines to protect military transmissions.",
+            "research_time": 180,
+            "children": {
+              "Advanced Data Processing": {
+                "description": "Early digital systems enable faster data analysis, laying groundwork for command automation.",
+                "research_time": 240,
+                "children": {
+                  "Early Network Terminals": {
+                    "description": "Establishes primitive digital terminals for real-time data entry and messaging.",
+                    "research_time": 300,
+                    "children": {
+                      "Rudimentary Internet": {
+                        "description": "A basic packet-switching protocol connecting defense and academic institutions.",
+                        "research_time": 420,
+                        "research_year": 1956
+                      }
+                    },
+                    "research_year": 1953
+                  },
+                  "Ballistic Computation Modules": {
+                    "description": "Calculates optimal firing solutions for artillery and missile systems in real time.",
+                    "research_time": 300,
+                    "children": {
+                      "Fire Control Systems": {
+                        "description": "Digitally links targeting data with weapon systems for synchronized strikes.",
+                        "research_time": 360,
+                        "research_year": 1957
+                      }
+                    },
+                    "research_year": 1954
+                  }
+                },
+                "research_year": 1949
+              }
+            },
+            "research_year": 1946
+          },
+          "Basic Codebreaking Protocols": {
+            "description": "Trains analysts and develops primitive algorithms for intercepting enemy communications.",
+            "research_time": 180,
+            "children": {
+              "Advanced Decryption AI": {
+                "description": "Uses early heuristic models to accelerate pattern recognition and cryptanalysis.",
+                "research_time": 360,
+                "research_year": 1950
+              }
+            },
+            "research_year": 1947
+          },
+          "Radar Integration Systems": {
+            "description": "Centralizes radar inputs from air, land, and sea into a unified detection grid.",
+            "research_time": 240,
+            "children": {
+              "Airborne Early Warning Systems (AEW&C)": {
+                "description": "Deploys radar-equipped aircraft to detect long-range threats and relay targeting data.",
+                "research_time": 360,
+                "children": {
+                  "Satellite Detection Systems": {
+                    "description": "Uses space-based infrared and radar platforms to monitor missile launches and aircraft movements globally.",
+                    "research_time": 540,
+                    "research_year": 1955
+                  }
+                },
+                "research_year": 1952
+              }
+            },
+            "research_year": 1948
+          }
+        },
+        "research_year": 1945
+      },
+      "Cold War Computing Revolution": {
+        "description": "Establishes the foundation of civilian and military computing infrastructure.",
+        "research_time": 180,
+        "research_year": 1959,
+        "children": {
+          "Integrated Circuits": {
+            "description": "Miniaturizes logic components, enabling portable electronics and faster computation.",
+            "research_time": 180,
+            "research_year": 1960,
+            "children": {
+              "Mainframe Networks": {
+                "description": "Links large-scale computers for distributed data storage and real-time communication.",
+                "research_time": 210,
+                "research_year": 1962
+              },
+              "Digital Targeting Systems": {
+                "description": "Improves military fire control with real-time computerized targeting algorithms.",
+                "research_time": 210,
+                "research_year": 1963
+              }
+            }
+          },
+          "Automated Cryptography": {
+            "description": "Develops machines capable of encrypting and decrypting data without human oversight.",
+            "research_time": 210,
+            "research_year": 1961,
+            "children": {
+              "Decentralized Command Networks": {
+                "description": "Protects high-value military commands with fault-tolerant, encrypted systems.",
+                "research_time": 240,
+                "research_year": 1964
+              }
+            }
+          }
+        }
+      }
+    },
+    "INDUSTRY": {
+      "Cold War Industrial Base": {
+        "description": "Establishes the economic foundation for Cold War powers through modernized factories and logistics.",
+        "research_time": 150,
+        "children": {
+          "Streamlined Production Systems": {
+            "description": "Reduces material waste and labor inefficiencies across civilian and military industries.",
+            "research_time": 180,
+            "children": {
+              "Industrial Process Automation": {
+                "description": "Automates routine factory tasks with mechanical relays and assembly timing systems.",
+                "research_time": 240,
+                "children": {
+                  "Robotic Assembly Lines": {
+                    "description": "Introduces early programmable machinery to speed up precision manufacturing.",
+                    "research_time": 360,
+                    "research_year": 1954
+                  },
+                  "Remote Mining Techniques": {
+                    "description": "Expands access to rare materials via automated and hazard-resistant extraction systems.",
+                    "research_time": 300,
+                    "research_year": 1956
+                  }
+                },
+                "research_year": 1948
+              },
+              "Chemical Fertilizers": {
+                "description": "Boosts agricultural yields through synthetic nitrogen compounds and soil science.",
+                "research_time": 180,
+                "research_year": 1949
+              },
+              "Motorized Supply Fleets": {
+                "description": "Replaces draft convoys with truck-based logistics for rapid supply movement.",
+                "research_time": 240,
+                "children": {
+                  "Rail Infrastructure Modernization": {
+                    "description": "Electrifies major rail hubs and upgrades cargo efficiency across national networks.",
+                    "research_time": 300,
+                    "children": {
+                      "Containerized Shipping": {
+                        "description": "Standardizes shipping containers for multi-modal logistics across land and sea.",
+                        "research_time": 360,
+                        "research_year": 1958
+                      }
+                    },
+                    "research_year": 1957
+                  }
+                },
+                "research_year": 1951
+              }
+            },
+            "research_year": 1946
+          },
+          "Petrochemical Extraction": {
+            "description": "Refines industrial techniques for extracting oil, gas, and derivatives on a mass scale.",
+            "research_time": 180,
+            "children": {
+              "Synthetic Rubber Production": {
+                "description": "Produces rubber alternatives from petrochemical feedstocks for use in tires, seals, and equipment.",
+                "research_time": 240,
+                "research_year": 1952
+              },
+              "Synthetic Oil Alternatives": {
+                "description": "Creates fuel substitutes from coal, tar sands, and chemical cracking methods.",
+                "research_time": 300,
+                "research_year": 1953
+              }
+            },
+            "research_year": 1947
+          }
+        },
+        "research_year": 1945
+      },
+      "Post-War Industrial Expansion": {
+        "description": "Focuses on high-throughput, decentralized production hubs and international logistics.",
+        "research_time": 180,
+        "research_year": 1959,
+        "children": {
+          "Global Containerized Shipping": {
+            "description": "Revolutionizes freight by standardizing containers across sea, rail, and truck transport.",
+            "research_time": 210,
+            "research_year": 1962
+          },
+          "Synthetic Plastics Boom": {
+            "description": "Mass-produces synthetic plastics for packaging, construction, and military gear.",
+            "research_time": 180,
+            "research_year": 1961,
+            "children": {
+              "Advanced Polymers": {
+                "description": "Improves material durability, leading to better armor, equipment, and medical tools.",
+                "research_time": 210,
+                "research_year": 1963
+              }
+            }
+          },
+          "Corporate Logistics Modeling": {
+            "description": "Applies business intelligence tools to optimize production chains and reduce waste.",
+            "research_time": 240,
+            "research_year": 1964
+          }
+        }
+      }
+    }
+  },
+  "DOCTRINES": {
+    "LAND DOCTRINES": {
+      "Mass Mobilization Doctrine": {
+        "description": "Overwhelms enemies through sheer manpower and ideological zeal.",
+        "children": {
+          "Peasant-to-Patriot Pipeline": {
+            "description": "Rapidly militarizes the civilian population through basic drills and propaganda."
+          },
+          "Citizen Soldier Model": {
+            "description": "Fuses civilian life and military service into a seamless patriotic identity."
+          },
+          "Fortress Society": {
+            "description": "Turns cities and towns into defensible bastions prepared for prolonged siege."
+          },
+          "Party Officer Supervision": {
+            "description": "Installs ideological officers in all units to ensure loyalty and discipline."
+          },
+          "Wave Attack Acceptance": {
+            "description": "Accepts high casualties as a strategic necessity in breakthrough offensives."
+          },
+          "Gun in Every Hand": {
+            "description": "Promotes widespread civilian armament as a bulwark against invasion."
+          },
+          "Branch Choice": {
+            "Protracted Warfare Doctrine": {
+              "description": "Focuses on attrition, irregular supply lines, and terrain-based resistance.",
+              "children": {
+                "Decentralized Command Nodes": {
+                  "description": "Trains local commanders to operate independently of central control."
+                },
+                "Camouflage Supply Routes": {
+                  "description": "Obscures logistics routes through deception and terrain adaptation."
+                },
+                "Tactical Dissolution Training": {
+                  "description": "Teaches units to scatter and reform under pressure without losing cohesion."
+                },
+                "Mountain & Forest War Doctrine": {
+                  "description": "Optimizes combat effectiveness in rugged, hard-to-reach environments."
+                }
+              }
+            },
+            "Red Flood Doctrine": {
+              "description": "Glorifies sacrificial assaults and psychological dominance through fear.",
+              "children": {
+                "Coordinated Mass Charges": {
+                  "description": "Saturates enemy lines with synchronized waves of infantry."
+                },
+                "Kill-Zone Saturation Tactics": {
+                  "description": "Floods contested areas with disposable troops to bait enemy fire."
+                },
+                "Officer Suicide Protocols": {
+                  "description": "Orders officers to die rather than surrender or retreat under fire."
+                },
+                "Overrun Psychology Warfare": {
+                  "description": "Instills terror by relentlessly pushing until morale collapses."
+                }
+              }
+            }
+          }
+        }
+      },
+      "Combined Arms Doctrine": {
+        "description": "Coordinates infantry, armor, artillery, and airpower into a seamless war machine.",
+        "children": {
+          "Unified Battlefield Philosophy": {
+            "description": "Treats all branches of the military as components of a single operational ecosystem."
+          },
+          "Modular Division Design": {
+            "description": "Enables flexible division templates tailored to specific objectives."
+          },
+          "Forward Operating Bases": {
+            "description": "Establishes semi-permanent bases near the front to increase tempo and sustainment."
+          },
+          "Tactical Target Networking": {
+            "description": "Connects units and sensors to rapidly assign and eliminate priority targets."
+          },
+          "Command Layer Specialization": {
+            "description": "Builds a multi-tiered leadership hierarchy for real-time control and oversight."
+          },
+          "Logistics-as-Weapon Strategy": {
+            "description": "Turns supply chains into strategic tools to cripple enemy momentum."
+          },
+          "Branch Choice": {
+            "Precision Coordination Doctrine": {
+              "description": "Emphasizes surgical strikes and flawless cross-branch synchronization.",
+              "children": {
+                "Joint Ops Special Forces Teams": {
+                  "description": "Deploys elite mixed-branch units trained for multi-role missions."
+                },
+                "Orbital-Linked Command Relay": {
+                  "description": "Ties battlefield comms to satellite systems for instant coordination."
+                },
+                "Strategic Multinational Coordination": {
+                  "description": "Trains doctrine for leading coalition and alliance-based armies."
+                },
+                "Neural Battlefield Simulations": {
+                  "description": "Uses early AI to simulate engagements and plan for contingencies."
+                }
+              }
+            },
+            "Full-Spectrum Warfare Doctrine": {
+              "description": "Seeks total operational dominance across every theater simultaneously.",
+              "children": {
+                "Rotating Assault Chains": {
+                  "description": "Cycles divisions between attack, rest, and reserve phases without downtime."
+                },
+                "Saturation Intel Management": {
+                  "description": "Processes overwhelming amounts of recon data to fuel rapid decisions."
+                },
+                "Autonomous Fire Coordination": {
+                  "description": "Allows artillery to operate on pre-approved threat maps without command input."
+                },
+                "Multitheater Joint Force Priority": {
+                  "description": "Establishes doctrine for intercontinental and split-front operations."
+                }
+              }
+            }
+          }
+        }
+      },
+      "Mobile Warfare Doctrine": {
+        "description": "Champions speed, encirclement, and shock tactics over brute strength.",
+        "children": {
+          "Maneuver Over Mass": {
+            "description": "Prioritizes outflanking and disruption over direct confrontation."
+          },
+          "Mobile Logistics Corps": {
+            "description": "Designs ultra-flexible supply units to keep pace with rapid movement."
+          },
+          "Breakthrough Doctrine": {
+            "description": "Focuses firepower to pierce frontlines and exploit soft rear areas."
+          },
+          "Encirclement-as-Default Strategy": {
+            "description": "Turns every offensive into a trap by isolating enemy units."
+          },
+          "Autonomous Division Movement": {
+            "description": "Trains units to relocate and reorient without waiting for higher orders."
+          },
+          "Air-Ground Assault Integration": {
+            "description": "Synchronizes aviation and armored divisions for shock-and-awe penetrations."
+          },
+          "Branch Choice": {
+            "Lightning War Doctrine": {
+              "description": "Maximizes tempo and firepower to cripple enemies before they respond.",
+              "children": {
+                "Rapid Deployment Hubs": {
+                  "description": "Creates forward logistics hubs that enable sudden mass redeployment."
+                },
+                "High-Tempo Unit Cycling": {
+                  "description": "Keeps units rotating through combat without losing cohesion or momentum."
+                },
+                "Forward Airfield Spawning": {
+                  "description": "Builds temporary airstrips mid-advance for constant CAS coverage."
+                },
+                "Command-Level Blitz Wargaming": {
+                  "description": "Simulates rapid campaign planning to exploit instability."
+                }
+              }
+            },
+            "Drawn Engagement Doctrine": {
+              "description": "Turns prolonged conflicts into psychological and logistical death traps.",
+              "children": {
+                "Tactical Harassment Squads": {
+                  "description": "Disrupts enemy morale and rest cycles through constant skirmishing."
+                },
+                "Delayed Offensive Baiting": {
+                  "description": "Lures enemy forces into extended overexposed deployments."
+                },
+                "Road Denial & Infrastructure Collapse": {
+                  "description": "Destroys transit routes to paralyze enemy logistics."
+                },
+                "Civilian Panic Warfare": {
+                  "description": "Weaponizes local unrest and disinformation to bog down enemy occupation."
+                }
+              }
+            }
+          }
+        }
+      },
+      "Sustained Occupation Doctrine": {
+        "description": "Designs policy for long-term control of hostile regions through surveillance, fear, or compliance.",
+        "children": {
+          "COIN Warfare Fundamentals": {
+            "description": "Trains forces in counterinsurgency and terrain-aware peace enforcement."
+          },
+          "Embedded Local Militias": {
+            "description": "Raises region-specific auxiliaries with local knowledge and loyalty to the regime."
+          },
+          "Geographic Suppression Modeling": {
+            "description": "Digitally maps areas of unrest to optimize response force placement."
+          },
+          "Narrative Warfare": {
+            "description": "Uses propaganda and symbolic victories to win hearts or break spirits."
+          },
+          "Stability Through Infrastructure": {
+            "description": "Buys loyalty with utilities, education, and employment programs."
+          },
+          "Total Civilian Surveillance": {
+            "description": "Builds a society-wide network of monitoring tools and informants."
+          },
+          "Branch Choice": {
+            "Hearts & Minds Doctrine": {
+              "description": "Focuses on voluntary cooperation, civic outreach, and long-term integration.",
+              "children": {
+                "Decentralized Administration Cells": {
+                  "description": "Splits governance into micro-regions managed by cooperative locals."
+                },
+                "Cultural Tolerance Training": {
+                  "description": "Educates troops on local customs to reduce friction and resentment."
+                },
+                "Civilian Incentive Programs": {
+                  "description": "Provides education, food, and resources in return for loyalty."
+                },
+                "Ritualized National Identity Celebrations": {
+                  "description": "Replaces local pride with national pride through parades and propaganda."
+                }
+              }
+            },
+            "Iron Glove Doctrine": {
+              "description": "Crushes dissent through fear, punishment, and removal of subversives.",
+              "children": {
+                "Tactical Interrogation Squads": {
+                  "description": "Trains specialized teams for rapid information extraction."
+                },
+                "Curfew Enforcement Regimens": {
+                  "description": "Tightly controls civilian movement during occupation periods."
+                },
+                "Exile & Re-education Protocols": {
+                  "description": "Relocates troublemakers and indoctrinates them into obedience."
+                },
+                "Targeted Disappearances": {
+                  "description": "Silently eliminates key agitators to prevent martyrdom or revolt."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AERIAL DOCTRINES": {
+      "Air Superiority Doctrine": {
+        "description": "Dominates the skies through superior speed, interception, and radar coordination.",
+        "children": {
+          "Radar-Based Scrambling": {
+            "description": "Connects radar to airbases for real-time scramble responses."
+          },
+          "Altitude-Based Tactics": {
+            "description": "Teaches altitude advantage and vertical maneuvering to fighter pilots."
+          },
+          "Multi-role Fighter Integration": {
+            "description": "Equips fighters with both dogfight and ground-attack loadouts."
+          },
+          "Advanced Dogfighting Maneuvers": {
+            "description": "Drills advanced aerial tactics like yo-yos, scissors, and lag pursuit."
+          },
+          "Branch Choice": {
+            "High-Speed Pursuit Doctrine": {
+              "description": "Maximizes raw speed and reactivity for overwhelming aerial dominance.",
+              "children": {
+                "Afterburner Conditioning": {
+                  "description": "Prepares pilots and engines for prolonged high-thrust engagements."
+                },
+                "Interceptor Dominance Protocols": {
+                  "description": "Optimizes aircraft and response chains for bomber interception."
+                },
+                "Anti-Stealth Countermeasures": {
+                  "description": "Deploys radar filtering and IRST systems to track stealth threats."
+                },
+                "Hypersonic Response Teams": {
+                  "description": "Field-tests ultra-high-speed aircraft for global response capability."
+                }
+              }
+            },
+            "Air Denial Doctrine": {
+              "description": "Prevents enemy air dominance through layered radar and jamming networks.",
+              "children": {
+                "ECM Suite Coordination": {
+                  "description": "Links electronic warfare aircraft and systems for effective jamming coverage."
+                },
+                "High-Altitude No-Fly Zones": {
+                  "description": "Establishes airspace denial corridors patrolled by interceptors and SAMs."
+                },
+                "Radar Grid Overlap": {
+                  "description": "Ensures redundant radar fields to reduce blind spots."
+                },
+                "Sky Control C&C Automation": {
+                  "description": "Automates airspace management using early AI and centralized command."
+                }
+              }
+            }
+          }
+        }
+      },
+      "Close Air Support Doctrine": {
+        "description": "Supports ground units through precision strikes, low-altitude dominance, and tactical integration.",
+        "children": {
+          "Forward Observer Datalinks": {
+            "description": "Connects ground spotters to air wings for on-demand strikes."
+          },
+          "Fire Mission Streamlining": {
+            "description": "Simplifies command chains for rapid strike authorization."
+          },
+          "Infantry-Linked Strike Packages": {
+            "description": "Pairs CAS aircraft with specific divisions for close support."
+          },
+          "On-Demand Air Wings": {
+            "description": "Allows battalion-level requests for air cover with minimal delay."
+          },
+          "Branch Choice": {
+            "Precision Strike Doctrine": {
+              "description": "Minimizes collateral damage while surgically eliminating threats.",
+              "children": {
+                "Smart Targeting Algorithms": {
+                  "description": "Integrates targeting computers for precise munition delivery."
+                },
+                "Urban Friendly-Fire Minimization": {
+                  "description": "Refines fire control for operations in densely populated areas."
+                },
+                "Mobile Command Drones": {
+                  "description": "Deploys forward drones to maintain targeting in high-risk zones."
+                },
+                "Forward-CAS Microburst Deployment": {
+                  "description": "Utilizes precision cluster bursts to deny terrain without overkill."
+                }
+              }
+            },
+            "Area Saturation Doctrine": {
+              "description": "Favors overwhelming firepower over precision for morale and terrain denial.",
+              "children": {
+                "Cluster Bomb Coordination": {
+                  "description": "Times overlapping cluster bomb runs for maximum chaos."
+                },
+                "Burn Zone Approval Protocols": {
+                  "description": "Designates entire zones for air clearance via fire-based munitions."
+                },
+                "Napalm Line Authorizations": {
+                  "description": "Authorizes pre-cleared use of incendiaries to disrupt troop movements."
+                },
+                "Close-Range Shock-and-Awe": {
+                  "description": "Leverages low-flying overpressure strikes to suppress infantry en masse."
+                }
+              }
+            }
+          }
+        }
+      },
+      "Interceptor Defense Doctrine": {
+        "description": "Protects homeland airspace through rapid reaction, redundancy, and missile interception.",
+        "children": {
+          "Civilian Radar Grid": {
+            "description": "Integrates civil radar sites into military air warning systems."
+          },
+          "Emergency Runway Basing": {
+            "description": "Prepares highways and remote strips for emergency fighter deployment."
+          },
+          "Standby Scramble Readiness": {
+            "description": "Maintains fighters and crews on 24/7 alert for immediate launch."
+          },
+          "Multi-Point Interception Plans": {
+            "description": "Calculates interception zones to maximize engagement chances across regions."
+          },
+          "Branch Choice": {
+            "Missile Dome Doctrine": {
+              "description": "Focuses on intercepting bombers and missiles with a layered air defense net.",
+              "children": {
+                "Anti-Bomber Missile Shielding": {
+                  "description": "Deploys high-speed SAMs and interceptor coordination to destroy inbound bombers."
+                },
+                "Ground-Attached Silo Coordination": {
+                  "description": "Links surface silos and AA sites to function as a grid instead of individual units."
+                },
+                "Hypersonic Anti-Missile Trials": {
+                  "description": "Tests experimental weapons capable of intercepting hypersonic threats."
+                },
+                "Air-Debris Containment Systems": {
+                  "description": "Implements systems to manage missile debris falling over populated areas."
+                }
+              }
+            },
+            "Aerial Denial Web Doctrine": {
+              "description": "Turns friendly airspace into a no-fly deathtrap using automation and net theory.",
+              "children": {
+                "Multi-Layered No-Fly Enforcement": {
+                  "description": "Designs multiple tiers of lethal enforcement at all altitude bands."
+                },
+                "AWACS Lock-Chain Targeting": {
+                  "description": "Chains surveillance aircraft into a shared firing matrix for instant responses."
+                },
+                "Auto-Fighter Prelaunch Grids": {
+                  "description": "Deploys ready-to-launch fighters on rails for instant vertical liftoff."
+                },
+                "Early-Warning AI Systems": {
+                  "description": "Uses simple AI models to pre-identify threats and optimize scramble timing."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "NAVAL DOCTRINES": {
+      "Carrier Dominance Doctrine": {
+        "description": "Focuses naval strategy around aircraft carriers as mobile airbases and command centers.",
+        "children": {
+          "Jet Carrier Operations": {
+            "description": "Upgrades deck layouts, catapults, and landings for jet aircraft."
+          },
+          "Carrier-Based Radar Control": {
+            "description": "Allows carriers to manage task force radar coordination and tracking."
+          },
+          "Deep Water Strike Groups": {
+            "description": "Organizes carriers and escorts into permanent high-seas combat groups."
+          },
+          "Global Resupply Chains": {
+            "description": "Enables replenishment fleets to support carrier groups across oceans."
+          },
+          "Branch Choice": {
+            "Air Supremacy Carrier Doctrine": {
+              "description": "Emphasizes total air control from the sea through rapid sortie generation.",
+              "children": {
+                "Deck Fighter Swarm Strategy": {
+                  "description": "Maximizes carrier fighter capacity for air dominance operations."
+                },
+                "Mid-Sea Aircraft Refueling": {
+                  "description": "Implements air-to-air and ship-deck refueling systems for extended range."
+                },
+                "Jet-Landing Precision Drills": {
+                  "description": "Trains pilots in high-speed carrier landings under stress."
+                },
+                "VTOL-Capable Hangar Adaptation": {
+                  "description": "Modifies decks to support vertical takeoff and landing aircraft."
+                }
+              }
+            },
+            "Naval Strike Support Doctrine": {
+              "description": "Focuses on supporting land invasions and naval bombardments from the sea.",
+              "children": {
+                "Anti-Ship Strike Package Mods": {
+                  "description": "Reconfigures aircraft for guided anti-ship missile delivery."
+                },
+                "Guided Bombing Calibration": {
+                  "description": "Improves bomb guidance for shore bombardment with minimal collateral damage."
+                },
+                "Deck-to-Shore Fire Relay": {
+                  "description": "Creates real-time comms between aircraft and ground spotters."
+                },
+                "Coastal Invasion Airlock Integration": {
+                  "description": "Coordinates carrier operations directly with amphibious landing forces."
+                }
+              }
+            }
+          }
+        }
+      },
+      "Trade Interdiction Doctrine": {
+        "description": "Disrupts enemy logistics and convoys through stealth, mines, and ambush tactics.",
+        "children": {
+          "Submarine Ambush Protocols": {
+            "description": "Trains captains in stealthy, multi-angle torpedo strikes on convoys."
+          },
+          "Radio Silence Maneuvers": {
+            "description": "Teaches submarines to operate without transmissions to avoid detection."
+          },
+          "Convoy Disruption Analysis": {
+            "description": "Identifies patterns in enemy trade to plan optimal attack routes."
+          },
+          "Long-Distance Mine Grids": {
+            "description": "Extends the reach of naval mines into deep sea and remote regions."
+          },
+          "Branch Choice": {
+            "Total Sea Denial Doctrine": {
+              "description": "Aims to paralyze enemy naval movement through attrition and traps.",
+              "children": {
+                "Chokepoint Domination Training": {
+                  "description": "Specializes fleets to control key sea lanes and canal zones."
+                },
+                "Convoy Invisibility Nets": {
+                  "description": "Uses sub-surface tech to mask your own convoys while hunting others."
+                },
+                "Underwater Drone Emplacements": {
+                  "description": "Deploys unmanned mine-laying or surveillance drones in contested waters."
+                },
+                "Oceanic Attrition Focus": {
+                  "description": "Uses slow, persistent damage over time to collapse naval operations."
+                }
+              }
+            },
+            "Sabotage & Surveillance Doctrine": {
+              "description": "Relies on intel gathering and selective strikes over brute force.",
+              "children": {
+                "Merchant Boarding Interception": {
+                  "description": "Authorizes seizure of trade ships suspected of aiding enemies."
+                },
+                "Fake Navigation Signal Protocols": {
+                  "description": "Spoofs maritime signals to mislead enemy vessels into traps."
+                },
+                "Hull-Tagging Microbuoys": {
+                  "description": "Attaches trackers to ships for long-range follow-up strikes."
+                },
+                "Cargo Chain Disruption": {
+                  "description": "Targets key supplies like fuel and munitions to unhinge enemy production."
+                }
+              }
+            }
+          }
+        }
+      },
+      "Forward Base Doctrine": {
+        "description": "Focuses on extending naval reach through mobile platforms and overseas agreements.",
+        "children": {
+          "Refit Depot Ships": {
+            "description": "Creates self-contained floating workshops to repair ships in the field."
+          },
+          "Mobile Air Refueling Rigs": {
+            "description": "Allows at-sea refueling of carrier aircraft to extend patrol range."
+          },
+          "Modular Floating Ports": {
+            "description": "Constructs mobile docks that can be assembled near conflict zones."
+          },
+          "Deepwater Patrol Convoys": {
+            "description": "Maintains constant sea presence in remote or strategic waters."
+          },
+          "Branch Choice": {
+            "Regional Power Projection Doctrine": {
+              "description": "Uses alliances and soft power to secure global naval access.",
+              "children": {
+                "Political Port Agreements": {
+                  "description": "Negotiates foreign base rights and dual-use port access."
+                },
+                "Shared Refueling Pacts": {
+                  "description": "Creates international tanker fleets to resupply coalition navies."
+                },
+                "UN Blue Fleet Certifications": {
+                  "description": "Flags operations as UN-sanctioned to ease foreign deployment."
+                },
+                "UN Sanctioned Fleet Operations": {
+                  "description": "Leads multinational task forces under legal global pretense."
+                }
+              }
+            },
+            "Fortress Sea Doctrine": {
+              "description": "Turns seas into kill zones with permanent weaponized platforms.",
+              "children": {
+                "Naval Fortress Integration": {
+                  "description": "Combines static and mobile defenses into seamless area denial."
+                },
+                "Missile Turrets on Sea Platforms": {
+                  "description": "Mounts long-range SAM and SSM turrets on fixed sea towers."
+                },
+                "Floating SAM Grids": {
+                  "description": "Deploys networked anti-air launchers on converted ships or barges."
+                },
+                "Oceanwide Detection Web": {
+                  "description": "Blankets major waterways with passive sonar and radar sensors."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ESPIONAGE DOCTRINES": {
+      "HUMINT Doctrine": {
+        "description": "Focuses on human intelligence through infiltration, recruitment, and psychological manipulation.",
+        "children": {
+          "Spy School Acceleration Program": {
+            "description": "Condenses training for covert agents into intensive, ideology-driven courses."
+          },
+          "False Identity Networks": {
+            "description": "Establishes cover personas and forged documentation for international operations."
+          },
+          "Handler-Deniability Protocols": {
+            "description": "Structures command hierarchies to protect handlers from agent blowback."
+          },
+          "Sleeper Agent Expansion": {
+            "description": "Places deep-cover operatives in enemy nations with long-term instructions."
+          },
+          "Counter-Counterintelligence Training": {
+            "description": "Prepares agents to resist interrogation and identify internal leaks."
+          },
+          "Exfiltration Route Mapping": {
+            "description": "Secures exit routes for compromised assets across borders and oceans."
+          },
+          "Branch Choice": {
+            "Deep Penetration Strategy": {
+              "description": "Emphasizes control over high-value enemy figures and long-term embedding.",
+              "children": {
+                "Compromised Official Domination": {
+                  "description": "Blackmails or converts enemy officials into loyal informants."
+                },
+                "Agent Replacement Procedures": {
+                  "description": "Trains operatives to mimic and replace real targets flawlessly."
+                },
+                "Long-Term Memory Conditioning": {
+                  "description": "Alters operatives\u2019 memories to protect secrets and loyalty chains."
+                },
+                "Dual-Face Identity Systems": {
+                  "description": "Gives agents layered personas to navigate multiple enemy factions."
+                }
+              }
+            },
+            "Disruptive Saboteur Strategy": {
+              "description": "Focuses on widespread destabilization and destruction inside enemy territory.",
+              "children": {
+                "Targeted Infrastructure Collapse": {
+                  "description": "Destroys key bridges, rails, and energy nodes during wartime."
+                },
+                "Industrial Labor Infiltration": {
+                  "description": "Encourages factory unrest and production sabotage from within."
+                },
+                "Assassination Trigger Cells": {
+                  "description": "Trains kill teams to act independently when signals go dark."
+                },
+                "Suicide Exploitation Doctrine": {
+                  "description": "Radicalizes agents willing to die for mission completion."
+                }
+              }
+            }
+          }
+        }
+      },
+      "SIGINT Doctrine": {
+        "description": "Collects digital and intercepted intelligence using advanced monitoring and decryption.",
+        "children": {
+          "Signals Monitoring Corps": {
+            "description": "Establishes global listening posts for radio, cable, and microwave signal capture."
+          },
+          "Language Decryption Algorithms": {
+            "description": "Develops multilingual pattern recognition software for coded message cracking."
+          },
+          "Global Tap Expansion": {
+            "description": "Installs cable taps and satellite scrapers across international lines."
+          },
+          "Inter-Embassy Cable Hijacks": {
+            "description": "Intercepts diplomatic cables via covert embassy infiltration or cable rerouting."
+          },
+          "Satellite Frequency Hijacking": {
+            "description": "Taps into enemy satellite feeds to monitor surveillance and communications."
+          },
+          "Data Interception Logistics": {
+            "description": "Establishes packet-capturing relay hubs at major internet choke points."
+          },
+          "Branch Choice": {
+            "Cyber-Embedded Surveillance Net": {
+              "description": "Integrates AI and biometric tracking into digital and physical surveillance.",
+              "children": {
+                "Predictive Behavior Modeling": {
+                  "description": "Uses past behavior to predict and preemptively neutralize threats."
+                },
+                "Facial Indexing Protocols": {
+                  "description": "Tracks high-risk individuals across footage and photos globally."
+                },
+                "Real-Time Movement Analytics": {
+                  "description": "Monitors troop movements and vehicle paths in real-time via surveillance mesh."
+                },
+                "AI-Backed Threat Scoring": {
+                  "description": "Assigns threat levels to individuals based on metadata and historical intel."
+                }
+              }
+            },
+            "Counter-Insider Suppression Doctrine": {
+              "description": "Builds tools to root out leaks, traitors, and internal espionage threats.",
+              "children": {
+                "Loyalty Screening Centers": {
+                  "description": "Regularly screens personnel using interviews, polygraphs, and metadata."
+                },
+                "Intelligence Leak Lockdown Zones": {
+                  "description": "Freezes movement and communications during internal breach events."
+                },
+                "False Flag Discreditation": {
+                  "description": "Plants fake evidence to discredit suspicious or subversive actors."
+                },
+                "Mirror Ops (Trap-Based Misinformation)": {
+                  "description": "Feeds misleading data into suspected leakers to confirm and eliminate them."
+                }
+              }
+            }
+          }
+        }
+      },
+      "POLINT Doctrine": {
+        "description": "Politically destabilizes enemy nations through propaganda, social division, and subversion.",
+        "children": {
+          "Subversive Media Cell Creation": {
+            "description": "Funds underground media outlets to sway foreign public opinion."
+          },
+          "Opposition Party Seeding": {
+            "description": "Establishes rival political groups designed to fragment enemy unity."
+          },
+          "Religious and Cultural Division Exploitation": {
+            "description": "Amplifies internal divisions within enemy states along identity lines."
+          },
+          "Currency Destabilization Tactics": {
+            "description": "Sows inflation and panic via targeted black-market or debt manipulation."
+          },
+          "False Martyr Campaigns": {
+            "description": "Fabricates stories of oppression to radicalize foreign populations."
+          },
+          "Civil Unrest Simulation Training": {
+            "description": "Teaches agents how to ignite and prolong riots, protests, and strikes."
+          },
+          "Branch Choice": {
+            "Narrative Hijack Doctrine": {
+              "description": "Seizes control of public perception via psychological operations and symbolic warfare.",
+              "children": {
+                "Disinformation Saturation": {
+                  "description": "Floods enemy media space with conflicting and false narratives."
+                },
+                "Cultural Rewriting Cells": {
+                  "description": "Rebrands enemy history and symbols to foster internal shame or confusion."
+                },
+                "Staged Revolution Engineering": {
+                  "description": "Organizes controlled uprisings to mask foreign interference."
+                },
+                "Controlled Coup Installation": {
+                  "description": "Prepares puppet leaders for sudden ascension when enemy governments collapse."
+                }
+              }
+            },
+            "Societal Implosion Doctrine": {
+              "description": "Pushes enemies into self-destruction by collapsing faith in institutions and unity.",
+              "children": {
+                "Racial & Class Conflict Amplification": {
+                  "description": "Inflames tensions using targeted propaganda and false-flag incidents."
+                },
+                "Institutional Trust Sabotage": {
+                  "description": "Reveals or fabricates scandals to undermine national cohesion."
+                },
+                "Moral Panic Programming": {
+                  "description": "Spreads fear-based messaging to make citizens distrust their own neighbors."
+                },
+                "Psychological Civil War Simulation": {
+                  "description": "Feeds all factions just enough to stay hostile but never decisive."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
