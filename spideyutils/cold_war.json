@@ -1786,8 +1786,7 @@
             }
           }
         }
-      }
-    },
+      },
     "ARTILLERY": {
       "branch": {
         "branch_name": "Artillery",
@@ -2524,7 +2523,8 @@
           }
         }
       }
-    },
+    }
+  },
   "DOCTRINES": {
     "LAND DOCTRINES": {
       "Mass Mobilization Doctrine": {
