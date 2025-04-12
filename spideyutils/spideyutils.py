@@ -239,13 +239,11 @@ class SpideyUtils(commands.Cog):
         return base_time + penalty
 
     async def autocomplete_branch(self, interaction: discord.Interaction, current: str):
-        data = self.bot.get_cog("SpideyUtils").cold_war_data
-        branches = data.get("tech_tree", {}).keys()
+        branches = self.cold_war_data.get("tech_tree", {}).keys()
         return [app_commands.Choice(name=b, value=b) for b in branches if current.lower() in b.lower()][:25]
 
     async def autocomplete_sub_branch(self, interaction: discord.Interaction, current: str):
-        data = self.bot.get_cog("SpideyUtils").cold_war_data
-        branches = data.get("tech_tree", {})
+        branches = self.cold_war_data.get("tech_tree", {})
         results = []
         for branch_name, branch_data in branches.items():
             for sub_branch in branch_data.keys():
@@ -258,11 +256,8 @@ class SpideyUtils(commands.Cog):
     async def view_tech(self, interaction: discord.Interaction, branch: str = None, sub_branch: str = None):
         await interaction.response.defer(thinking=True)
 
-        with open("cold_war.json") as f:
-            data = json.load(f)
-
-        tech_tree = data.get("tech_tree", {})
-        year = data.get("current_year", "1952")
+        tech_tree = self.cold_war_data.get("tech_tree", {})
+        year = self.cold_war_data.get("current_year", "1952")
 
         if not branch and not sub_branch:
             embed = discord.Embed(title="📚 Tech Tree Overview", color=discord.Color.blue())
