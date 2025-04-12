@@ -231,6 +231,84 @@ class SpideyUtils(commands.Cog):
                 embed.description = f"• {events}"
             return await interaction.followup.send(embed=embed)
     
+    def calculate_research_time(self, base_time, research_year, current_year):
+        penalty = 0
+        if research_year and int(current_year) < int(research_year):
+            ahead = int(research_year) - int(current_year)
+            penalty = int(base_time * (0.2 * ahead))
+        return base_time + penalty
+
+    async def autocomplete_branch(self, interaction: discord.Interaction, current: str):
+        data = self.bot.get_cog("SpideyUtils").cold_war_data
+        branches = data.get("tech_tree", {}).keys()
+        return [app_commands.Choice(name=b, value=b) for b in branches if current.lower() in b.lower()][:25]
+
+    async def autocomplete_sub_branch(self, interaction: discord.Interaction, current: str):
+        data = self.bot.get_cog("SpideyUtils").cold_war_data
+        branches = data.get("tech_tree", {})
+        results = []
+        for branch_name, branch_data in branches.items():
+            for sub_branch in branch_data.keys():
+                if current.lower() in sub_branch.lower():
+                    results.append(app_commands.Choice(name=sub_branch, value=sub_branch))
+        return results[:25]
+
+    @app_commands.command(name="view_tech", description="View the Cold War RP tech tree.")
+    @app_commands.autocomplete(branch=autocomplete_branch, sub_branch=autocomplete_sub_branch)
+    async def view_tech(self, interaction: discord.Interaction, branch: str = None, sub_branch: str = None):
+        await interaction.response.defer(thinking=True)
+
+        with open("cold_war.json") as f:
+            data = json.load(f)
+
+        tech_tree = data.get("tech_tree", {})
+        year = data.get("current_year", "1952")
+
+        if not branch and not sub_branch:
+            embed = discord.Embed(title="📚 Tech Tree Overview", color=discord.Color.blue())
+            for branch_name, contents in tech_tree.items():
+                subs = "\n".join([f"• {sb}" for sb in contents])
+                embed.add_field(name=branch_name, value=subs or "(No sub-branches)", inline=False)
+            return await interaction.followup.send(embed=embed)
+
+        if branch and not sub_branch:
+            branch_data = tech_tree.get(branch)
+            if not branch_data:
+                return await interaction.followup.send(f"Branch '{branch}' not found.", ephemeral=True)
+
+            embeds = []
+            main_embed = discord.Embed(title=f"🧠 {branch} Branch", color=discord.Color.dark_gold())
+            embeds.append(main_embed)
+            for sub, techs in branch_data.items():
+                if not isinstance(techs, dict):
+                    continue
+                sub_embed = discord.Embed(title=f"📦 {sub}", color=discord.Color.gold())
+                for tech, tdata in techs.get("children", {}).items():
+                    base = tdata.get("research_time", 0)
+                    r_year = tdata.get("research_year", None)
+                    calc_time = self.calculate_research_time(base, r_year, year)
+                    label = f"{tech} ({r_year or 'n/a'}) – {calc_time} days"
+                    sub_embed.add_field(name=label, value="", inline=False)
+                embeds.append(sub_embed)
+            return await interaction.followup.send(embeds=embeds[:10])
+
+        # If sub-branch (including "main") is selected
+        for branch_name, contents in tech_tree.items():
+            for sb, tdata in contents.items():
+                if sb.lower() == sub_branch.lower():
+                    embed = discord.Embed(title=f"🔬 {sb} Sub-Branch", color=discord.Color.blurple())
+                    for tech, data in tdata.get("children", {}).items():
+                        base = data.get("research_time", 0)
+                        r_year = data.get("research_year", None)
+                        desc = data.get("description", "No description.")
+                        calc_time = self.calculate_research_time(base, r_year, year)
+                        label = f"**{tech} ({r_year or 'n/a'}) – {calc_time} days**"
+                        embed.add_field(name=label, value=desc, inline=False)
+                    return await interaction.followup.send(embed=embed)
+
+        await interaction.followup.send("❌ Could not find specified branch or sub-branch.", ephemeral=True)
+
+    
     def redact_paragraph_weighted(self, text, knowledge):
         words = text.split()
         redacted = []
