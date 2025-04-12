@@ -296,7 +296,7 @@ class SpideyUtils(commands.Cog):
         margin = max(1, int(actual * variance))
         low = max(0, actual - random.randint(0, margin))
         high = actual + random.randint(0, margin)
-        estimate = f"{low}–{high} (est.)"
+        estimate = f"{low}–{high}"
         if max(low, high) >= 1000000:
             formatted_estimate = self.pretty_number_range(low, high)
         else:
@@ -333,7 +333,7 @@ class SpideyUtils(commands.Cog):
         ]) + f" | Confidence Rating: {min(100, max(0, knowledge))}%"
     
     def clean_duplicate_ranges(self, text) -> str:
-        return re.sub(r'\b(\d+)[--]\1\s+\(est\.\)', r'\1 (est.)', text)
+        return re.sub(r'\b(\d+)[–-]\1\s', text)
     
     def pretty_number_range(self, low, high):
         def round_mil(n):
