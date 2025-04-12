@@ -238,18 +238,21 @@ class SpideyUtils(commands.Cog):
             penalty = int(base_time * (0.2 * ahead))
         return base_time + penalty
 
-    def gather_the_children(self, children: dict, year: int, embed: discord.Embed):
-        for tech_name, tech_data in children.items():
-            if not isinstance(tech_data, dict):
-                continue
-            base = tech_data.get("research_time", 0)
-            r_year = tech_data.get("research_year", None)
-            desc = tech_data.get("description", "No description.")
+    def gather_the_children(self, node: dict, year: int, embed: discord.Embed):
+        if not isinstance(node, dict):
+            return
+
+        tech_name = node.get("tech")
+        if tech_name:
+            base = node.get("research_time", 0)
+            r_year = node.get("research_year", None)
+            desc = node.get("description", "No description.")
             calc_time = self.calculate_research_time(base, r_year, year)
             label = f"**{tech_name} ({r_year or 'n/a'}) – {calc_time} days**"
             embed.add_field(name=label, value=desc, inline=False)
-            if "child" in tech_data:
-                self.gather_the_children(tech_data["child"], year, embed)
+
+        if "child" in node:
+            self.gather_the_children(node["child"], year, embed)
 
     def create_the_embed(self, sub_branch, year):
         embed = discord.Embed(title=f"📦 {sub_branch['sub_branch_name']} Sub-Branch", color=discord.Color.gold())
