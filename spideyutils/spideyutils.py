@@ -265,15 +265,20 @@ class SpideyUtils(commands.Cog):
     def add_tech_with_children(self, embed, tech_name, data, year):
         if not isinstance(data, dict):
             return
-        base = data.get("research_time", 0)
-        r_year = data.get("research_year", None)
-        desc = data.get("description", "No description.")
-        calc_time = self.calculate_research_time(base, r_year, year)
-        label = f"**{tech_name} ({r_year or 'n/a'}) – {calc_time} days**"
-        embed.add_field(name=label, value=desc, inline=False)
-        if "child" in data:
-            for child_tech_name, child_data in data["child"].items():
-                self.add_tech_with_children(embed, child_tech_name, child_data, year)
+
+        def recurse(tech_name, node):
+            if not isinstance(node, dict):
+                return
+            base = node.get("research_time", 0)
+            r_year = node.get("research_year", None)
+            desc = node.get("description", "No description.")
+            calc_time = self.calculate_research_time(base, r_year, year)
+            label = f"**{tech_name} ({r_year or 'n/a'}) – {calc_time} days**"
+            embed.add_field(name=label, value=desc, inline=False)
+            for child_name, child_data in node.get("child", {}).items():
+                recurse(child_name, child_data)
+
+        recurse(tech_name, data)
 
     @app_commands.command(name="view_tech", description="View the Cold War RP tech tree.")
     @app_commands.autocomplete(branch=autocomplete_branch, sub_branch=autocomplete_sub_branch)
@@ -317,6 +322,7 @@ class SpideyUtils(commands.Cog):
                     return await interaction.followup.send(embed=embed)
 
         await interaction.followup.send("❌ Could not find specified branch or sub-branch.", ephemeral=True)
+
 
 
 
