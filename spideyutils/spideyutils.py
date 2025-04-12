@@ -296,7 +296,13 @@ class SpideyUtils(commands.Cog):
         margin = max(1, int(actual * variance))
         low = max(0, actual - random.randint(0, margin))
         high = actual + random.randint(0, margin)
-        return f"{low}–{high} (est.)"
+        estimate = f"{low}–{high} (est.)"
+        if max(low, high) >= 1000000:
+            formatted_estimate = self.pretty_number_range(low, high)
+        else:
+            formatted_estimate = self.clean_duplicate_ranges(estimate)
+        
+        return formatted_estimate
     
     def general_report(self, country: str, knowledge: int) -> str:
         agent = random.choice(["RAVEN-7", "WOLFHOUND", "WHISPER FLARE", "SHADOW ECHO"])
@@ -325,6 +331,18 @@ class SpideyUtils(commands.Cog):
             "Intercepted by Field Agent WOLFHOUND | Source not verified",
             "Retrieved from Cipher Channel 22–Delta | Clearance Level III"
         ]) + f" | Confidence Rating: {min(100, max(0, knowledge))}%"
+    
+    def clean_duplicate_ranges(self, text) -> str:
+        return re.sub(r'\b(\d+)[--]\1\s+\(est\.\)', r'\1 (est.)', text)
+    
+    def pretty_number_range(self, low, high):
+        def round_mil(n):
+            return round(n / 100000) / 10
+        
+        if low == high:
+            return f"{round_mil(low):.1f} million"
+        else:
+            return f"{round_mil(low):.1f}-{round_mil(high):.1f} million"
 
     @app_commands.command(name="view_country_info_detailed", description="View detailed info for a Cold War RP country.")
     @app_commands.autocomplete(country= autocomplete_country)
