@@ -333,7 +333,7 @@ class SpideyUtils(commands.Cog):
         ]) + f" | Confidence Rating: {min(100, max(0, knowledge))}%"
     
     def clean_duplicate_ranges(self, text) -> str:
-        return re.sub(r'\b(\d+)[–-]\1b', r'\1', text)
+        return re.sub(r'\b(\d+)[–-]\1\b', r'\1', text)
     
     def pretty_number_range(self, low, high):
         def round_mil(n):
