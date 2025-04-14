@@ -203,8 +203,19 @@
           "civil_unrest_level": 10
         },
         "research": {
-          "research_coefficient": 5,
-          "nuclear_arsenal": 500
+          "research_bonus": 0.2,
+          "unlocked_techs": [
+            "Frequency-Hopping Radios", 
+            "High-Velocity Main Guns",  
+            "Post-War Artillery Doctrine",     
+            "Post-War Fleet Organization",        
+            "Jet Interceptors",                   
+            "Chemical Weapon Prototyping",    
+            "Digital Voice Transmission"           
+          ],
+          "in_progress_techs": {},
+          "nuclear_arsenal": 500,
+          "research_slots": 5
         },
         "country_history": {
           "1945": "United States drops atomic bomb on Berlin, killing Hitler and top Nazi leadership.",
@@ -299,6 +310,31 @@
               "economic_influence_in_western_europe": 30,
               "communist_influence_roll_penalty_in_western_europe": -15
             }
+          },
+          {
+            "name": "Pioneers of Innovation",
+            "description": "With its unmatched investment in postwar research and a diaspora of global scientists, the United States leads the charge into a new technological era. From computers to nuclear theory, it seeks not only dominance—but definition.",
+            "type": "research",
+            "public": true,
+            "modifiers": {
+              "research_bonus": {
+                "Electronics": 0.15,
+                "WMD": 0.10,
+                "Aerial": 0.10,
+                "Armor": 0.05
+              }
+            }
+          },
+          {
+            "name": "Heartbeat of Industry",
+            "description": "Massive private and public sector investments in domestic industry have positioned the United States as the most productive nation on Earth. The assembly line isn’t just a system—it’s a national identity.",
+            "type": "economic",
+            "public": true,
+            "modifiers": {
+              "research_bonus": {
+                "Industry": 0.15
+              }
+            }
           }
         ],
         "espionage": {
@@ -337,8 +373,18 @@
           "civil_unrest_level": 20
         },
         "research": {
-          "research_coefficient": 3,
-          "nuclear_arsenal": 0
+          "research_bonus": 0.1,
+          "unlocked_techs": [
+            "World War II Era Firearms",
+            "Postwar Combat Uniforms",
+            "Post-War Field Guns",
+            "Late-War Tank Chassis",
+            "Wartime Radio & Radar Systems",
+            "Postwar Industrial Grid"
+          ],
+          "in_progress_techs": {},
+          "nuclear_arsenal": 0,
+          "research_slots": 5
         },
         "country_history": {
           "1946": "Stalin dies unexpectedly. Lavrentiy Beria assumes power amid Kremlin intrigue.",
@@ -390,6 +436,18 @@
             }
           },
           {
+            "name": "Academies of the Motherland",
+            "description": "Despite state oversight, the Soviet Union has fostered immense centers of scientific talent in Moscow, Leningrad, and beyond. These institutions, while constrained, produce brilliant minds trained in mathematics, physics, and engineering.",
+            "type": "research",
+            "public": true,
+            "modifiers": {
+              "research_bonus": {
+                "Electronics": 0.10,
+                "WMD": 0.05
+              }
+            }
+          },          
+          {
             "name": "NKVD and KGB Primacy",
             "description": "Intelligence, not ideology, is the true foundation of Soviet power. With the NKVD restructured and the KGB rising, internal control and foreign subversion are executed with mechanical efficiency and in terrifying silence.",
             "type": "research_espionage",
@@ -405,6 +463,9 @@
             "modifiers": {
               "air_superiority_penalty": -15,
               "strategic_bombing_penalty": -10
+            },
+            "research_bonus": {
+              "Aerial": -0.20
             }
           },
           {
@@ -414,6 +475,9 @@
             "modifiers": {
               "naval_combat_penalty": -20,
               "blockade_resistance": -10
+            },
+            "research_bonus": {
+              "Naval": -0.15
             }
           },
           {
@@ -432,6 +496,9 @@
             "modifiers": {
               "infantry_breakthrough_bonus": 10,
               "militia_spam_resistance": 15
+            },
+            "research_bonus": {
+              "Industry": 0.05
             }
           },
           {
@@ -487,8 +554,19 @@
           "civil_unrest_level": 15
         },
         "research": {
-          "research_coefficient": 4,
-          "nuclear_arsenal": 5
+          "research_bonus": 0.14,
+          "unlocked_techs": [
+            "World War II Era Firearms",
+            "Postwar Combat Uniforms",
+            "Post-War Field Guns",
+            "Post-War Fleet Organization",
+            "Late-War Tank Chassis",
+            "Wartime Radio & Radar Systems",
+            "Heavy Bomber Retention"
+          ],
+          "in_progress_techs": {},
+          "nuclear_arsenal": 5,
+          "research_slots": 5
         },
         "country_history": {
           "1946": "United Kingdom retains full control of India after suppressing independence movements.",
@@ -534,8 +612,39 @@
             "modifiers": {
               "colonial_administration_bonus": 15,
               "diplomatic_stability_rolls": 20
+            },
+            "research_bonus": {
+              "Infantry": -0.05,
+              "Armor": -0.05,
+              "Artillery": -0.05,
+              "WMD": -0.10
             }
           },
+          {
+            "name": "Legacy of the Commonwealth",
+            "description": "Shared military doctrine and academic exchanges across the Commonwealth ensure that Britain continues to benefit from international collaboration, even amid its imperial decline.",
+            "type": "research",
+            "public": true,
+            "modifiers": {
+              "research_bonus": {
+                "Infantry": 0.05,
+                "Artillery": 0.05,
+                "Industry": 0.05
+              }
+            }
+          },
+          {
+            "name": "Scientific Conservatism",
+            "description": "British institutions tend to favor traditional methods and rigorous vetting over radical experimentation. This slows breakthroughs, but stabilizes growth.",
+            "type": "research",
+            "public": true,
+            "modifiers": {
+              "ahead_of_time_penalty_multiplier": 1.10,
+              "research_bonus": {
+                "Electronics": -0.05
+              }
+            }
+          },                    
           {
             "name": "Renewed Monarchism",
             "description": "As postwar Europe crumbles into factions and ideologies, the British Crown has found renewed reverence. In an age of uncertainty, loyalty to tradition becomes a strength.",
@@ -554,6 +663,9 @@
             "modifiers": {
               "naval_combat_bonus": 20,
               "naval_blockade_modifier": 10
+            },
+            "research_bonus": {
+              "Naval": 0.15
             }
           },
           {
@@ -620,7 +732,18 @@
           "civil_unrest_level": 25
         },
         "research": {
-          "research_coefficient": 4,
+          "research_bonus": 0.12,
+          "unlocked_techs": [
+            "World War II Era Firearms",
+            "Postwar Combat Uniforms",
+            "Post-War Field Guns",
+            "Late-War Tank Chassis",
+            "Wartime Radio & Radar Systems",
+            "High-Explosive Warheads",
+            "Postwar Industrial Grid"
+          ],
+          "in_progress_techs": {},
+          "research_slots": 4,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -675,6 +798,9 @@
             "modifiers": {
               "militarist_policy_adoption_chance": 15,
               "resistance_to_foreign_diplomatic_pressure": 10
+            },
+            "research_bonus": {
+              "generic": -0.05
             }
           },
           {
@@ -769,7 +895,17 @@
           "civil_unrest_level": 35
         },
         "research": {
-          "research_coefficient": 2,
+          "research_bonus": 0.10,
+          "unlocked_techs": [
+            "World War II Era Firearms",
+            "Postwar Combat Uniforms",
+            "Post-War Field Guns",
+            "Wartime Radio & Radar Systems",
+            "Postwar Industrial Grid",
+            "Protective Mask & Uniform Standards"
+          ],
+          "in_progress_techs": {},
+          "research_slots": 3,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -869,8 +1005,24 @@
             "modifiers": {
               "naval_projection_penalty": -20,
               "amphibious_support_efficiency": -10
+            },
+            "research_bonus": {
+              "Naval": -0.10
             }
-          }
+          },
+          {
+            "name": "Engineering on a Shoestring",
+            "description": "Lacking resources but not ingenuity, ROC engineers have mastered the art of doing more with less. Their breakthroughs often come through desperation rather than design.",
+            "type": "research",
+            "public": true,
+            "modifiers": {
+              "research_bonus": {
+                "Industry": 0.05,
+                "Artillery": 0.05,
+                "Infantry": 0.05
+              }
+            }
+          }          
         ],
         "espionage": {
           "foreign_intelligence_score": 55,
@@ -906,7 +1058,18 @@
           "civil_unrest_level": 40
         },
         "research": {
-          "research_coefficient": 2,
+          "research_bonus": 0.11,
+          "unlocked_techs": [
+            "World War II Era Firearms",
+            "Postwar Combat Uniforms",
+            "Post-War Field Guns",
+            "Late-War Tank Chassis",
+            "Wartime Radio & Radar Systems",
+            "Protective Mask & Uniform Standards",
+            "High-Velocity Main Guns"
+          ],
+          "in_progress_techs":{},
+          "research_slots": 4,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -989,6 +1152,9 @@
             "modifiers": {
               "infantry_morale": 10,
               "combat_endurance": 5
+            },
+            "research_bonus": {
+              "Industry": 0.05
             }
           },
           {
@@ -1025,6 +1191,9 @@
             "modifiers": {
               "armor_combat_bonus": 20,
               "mechanized_logistics_bonus": 10
+            },
+            "research_bonus": {
+              "Armor": 0.15
             }
           },
           {
@@ -1043,6 +1212,9 @@
             "modifiers": {
               "air_superiority_bonus": 10,
               "fighter_production_efficiency": 10
+            },
+            "research_bonus": {
+              "Aerial": 0.10
             }
           },
           {
@@ -1052,6 +1224,9 @@
             "modifiers": {
               "submarine_warfare_bonus": 10,
               "naval_construction_modifier": 10
+            },
+            "research_bonus": {
+              "Naval": 0.10
             }
           }
         ],
@@ -1085,7 +1260,15 @@
           "civil_unrest_level": 25
         },
         "research": {
-          "research_coefficient": 2,
+          "research_bonus": 0.07,
+          "unlocked_techs": [
+            "World War II Era Firearms",
+            "Postwar Combat Uniforms",
+            "Post-War Field Guns",
+            "Postwar Industrial Grid"
+          ],
+          "in_progress_techs":{},
+          "research_slots": 3,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -1152,6 +1335,9 @@
             "modifiers": {
               "military_morale_bonus": 10,
               "rebellion_resistance_in_religious_regions": 15
+            },
+            "research_bonus": {
+              "generic": -0.05
             }
           },
           {
@@ -1162,6 +1348,10 @@
             "modifiers": {
               "alliance_cohesion_with_austria": 20,
               "monarchic_propaganda_bonus": 15
+            },
+            "research_bonus": {
+              "Industry": 0.05,
+              "Infantry": 0.05
             }
           },
           {
@@ -1171,6 +1361,21 @@
             "modifiers": {
               "political_expression_penalty": -15,
               "civil_rights_roll_penalty": -10
+            },
+            "research_bonus": {
+              "generic": -0.05
+            }
+          },
+          {
+            "name": "Ordained Scientists",
+            "description": "In the Kingdom of Spain, scientific work is not merely secular—it is divine. Every breakthrough is believed to be guided by God's will, and dissenting theories are cast aside in favor of holy certainty. What remains is focused, fervent, and unflinchingly dangerous.",
+            "type": "research",
+            "public": true,
+            "modifiers": {
+              "research_bonus": {
+                "Electronics": 0.05,
+                "WMD": 0.05
+              }
             }
           }
         ],
@@ -1208,7 +1413,16 @@
           "civil_unrest_level": 10
         },
         "research": {
-          "research_coefficient": 3,
+          "research_bonus": 0.09,
+          "unlocked_techs": [
+            "World War II Era Firearms",
+            "Postwar Combat Uniforms",
+            "Post-War Field Guns",
+            "Postwar Industrial Grid",
+            "Protective Mask & Uniform Standards"
+          ],
+          "in_progress_techs": {},
+          "research_slots": 3,
           "nuclear_arsenal": 0
         },
         "country_history": {
@@ -1258,6 +1472,18 @@
             }
           },
           {
+            "name": "Hearts of Europe",
+            "description": "Despite being smaller than its former self, Austria’s role as a diplomatic, cultural, and intellectual hub continues to thrive. Ideas flow through its embassies as easily as wine through its courts.",
+            "type": "research",
+            "public": true,
+            "modifiers": {
+              "research_bonus": {
+                "Industry": 0.05,
+                "Infantry": 0.05
+              }
+            }
+          },          
+          {
             "name": "Custodian of Catholic Unity",
             "description": "Austria serves not as conqueror but as mediator, a sanctified court binding Spain and the Vatican through shared faith. It is diplomatically sanctified.",
             "type": "political",
@@ -1265,6 +1491,9 @@
             "modifiers": {
               "diplomatic_influence_with_catholic_nations": 15,
               "alliance_stability_in_catholic_pact": 10
+            },
+            "research_bonus": {
+              "generic": -0.05
             }
           },
           {
@@ -1295,6 +1524,9 @@
             "modifiers": {
               "negotiation_success_chance": 15,
               "foreign_policy_respect_bonus": 10
+            },
+            "research_bonus": {
+              "Electronics": 0.05
             }
           },
           {
@@ -1304,6 +1536,9 @@
             "modifiers": {
               "ethnic_unrest_penalty": -15,
               "domestic_policy_gridlock_risk": -10
+            },
+            "research_bonus": {
+              "generic": -0.05
             }
           }
         ],
@@ -1340,7 +1575,17 @@
         "civil_unrest_level": 25
       },
       "research": {
-        "research_coefficient": 3,
+        "research_bonus": 0.10,
+        "unlocked_techs": [
+          "World War II Era Firearms",
+          "Postwar Combat Uniforms",
+          "Post-War Field Guns",
+          "Late-War Tank Chassis",
+          "Wartime Radio & Radar Systems",
+          "Postwar Industrial Grid"
+        ],
+        "in_progress_techs": {},
+        "research_slots":3,
         "nuclear_arsenal": 0
       },
       "country_history": {
@@ -1387,6 +1632,9 @@
           "modifiers": {
             "infrastructure_repair_bonus": 15,
             "economic_growth_modifier": 10
+          },
+          "research_bonus": {
+            "Industry": 0.05
           }
         },
         {
@@ -1405,6 +1653,9 @@
           "type": "political",
           "modifiers": {
             "civil_unrest": -15
+          },
+          "research_bonus": {
+            "generic": -0.05
           }
         },
         {
@@ -1424,6 +1675,10 @@
           "modifiers": {
             "political_initiative_penalty": -15,
             "legislation_success_rate": -10
+          },
+          "research_bonus": {
+            "Electronics": -0.05,
+            "WMD": -0.05
           }
         },
         {
@@ -1470,7 +1725,14 @@
         "civil_unrest_level": 20
       },
       "research": {
-        "research_coefficient": 2,
+        "research_bonus": 0.08,
+        "unlocked_techs": [
+          "World War II Era Firearms",
+          "Postwar Combat Uniforms",
+          "Post-War Field Guns",
+          "Postwar Industrial Grid"
+        ],
+        "in_progress_techs":{},
         "nuclear_arsenal": 0
       },
       "country_history": {
@@ -1517,6 +1779,9 @@
           "modifiers": {
             "resistance_to_religious_extremism": 15,
             "ideology_support_bonus_democratic": 10
+          },
+          "research_bonus": {
+            "generic": 0.05
           }
         },
         {
@@ -1545,6 +1810,9 @@
           "modifiers": {
             "ideology_support_bonus_monarchic": 10,
             "identity_conflict_penalty": -5
+          },
+          "research_bonus": {
+            "generic": -0.05
           }
         },
         {
@@ -1554,6 +1822,9 @@
           "modifiers": {
             "coup_chance_if_secularism_threatened": 20,
             "military_authority_modifier": 15
+          },
+          "research_bonus": {
+            "Infantry": 0.05
           }
         },
         {
@@ -1600,7 +1871,16 @@
         "civil_unrest_level": 15
       },
       "research": {
-        "research_coefficient": 2,
+        "research_bonus": 0.09,
+        "unlocked_techs": [
+          "World War II Era Firearms",
+          "Postwar Combat Uniforms",
+          "Post-War Field Guns",
+          "Wartime Radio & Radar Systems",
+          "Postwar Industrial Grid"
+        ],
+        "in_progress_techs":{},
+        "research_slots":3,
         "nuclear_arsenal": 0
       },
       "country_history": {
@@ -1654,6 +1934,9 @@
           "modifiers": {
             "infrastructure_development_penalty_in_south": -10,
             "industrial_growth_rate": 5
+          },
+          "research_bonus": {
+            "Industry": -0.05
           }
         },
         {
@@ -1673,6 +1956,9 @@
           "modifiers": {
             "influence_in_balkans": 15,
             "territorial_claim_justification_bonus": 10
+          },
+          "research_bonus": {
+            "Naval": 0.10
           }
         },
         {
@@ -1682,6 +1968,9 @@
           "modifiers": {
             "garrison_effectiveness": 10,
             "occupied_territory_stability": 5
+          },
+          "research_bonus": {
+            "Infantry": 0.05
           }
         }        
       ],
@@ -2523,7 +2812,123 @@
           }
         }
       }
+    },
+    "WMD": {
+    "branch": {
+      "branch_name": "Weapons of Mass Destruction",
+      "starter_tech": "Postwar NBC Theory",
+      "description": "The world emerged from WWII with fears of new weapons that could annihilate armies or civilizations. These advancements walk the line between deterrence and devastation.",
+      "research_time": 200,
+      "research_year": 1945
+    },
+    "sub_branch1": {
+      "sub_branch_name": "Chemical Weapons",
+      "starter_tech": "Chemical Weapon Prototyping",
+      "description": "Early research into lethal gas agents, inspired by WWI and suppressed postwar programs.",
+      "research_time": 220,
+      "research_year": 1948,
+      "child": {
+        "tech": "Napalm Deployment Platforms",
+        "description": "Enables delivery of incendiary gel via airstrike, artillery, or portable tank systems.",
+        "research_time": 260,
+        "research_year": 1952,
+        "child": {
+          "tech": "Tactical Nerve Agents",
+          "description": "Refines weaponized nerve gas delivery to target trenches, bunkers, and equipment hubs.",
+          "research_time": 320,
+          "research_year": 1958,
+          "child": {
+            "tech": "Advanced Chemical Dispersal Systems",
+            "description": "Improves aerosol deployment from missiles, aircraft, and remotely-operated vehicles.",
+            "research_time": 380,
+            "research_year": 1963
+          }
+        }
+      }
+    },
+    "sub_branch2": {
+      "sub_branch_name": "Ballistic Missiles",
+      "starter_tech": "V-2 Derivatives",
+      "description": "Captured German missile programs become the launchpad for Cold War rocket science.",
+      "research_time": 200,
+      "research_year": 1946,
+      "child": {
+        "tech": "Medium-Range Ballistic Missiles",
+        "description": "Land-based missiles capable of reaching distant enemy staging areas and capitals.",
+        "research_time": 260,
+        "research_year": 1952,
+        "child": {
+          "tech": "Intercontinental Ballistic Missiles",
+          "description": "ICBMs transcend borders, enabling nuclear delivery across continents.",
+          "research_time": 340,
+          "research_year": 1958,
+          "child": {
+            "tech": "MIRV Systems",
+            "description": "Allows a single missile to deploy multiple independently-targeted warheads.",
+            "research_time": 420,
+            "research_year": 1966
+          }
+        }
+      }
+    },
+    "sub_branch3": {
+      "sub_branch_name": "Biological Research",
+      "starter_tech": "Contagion Weaponization Theory",
+      "description": "Outlines methods for weaponizing diseases while minimizing risk to the attacker.",
+      "research_time": 220,
+      "research_year": 1950,
+      "child": {
+        "tech": "Field Dispersal Systems",
+        "description": "Designs battlefield-compatible dispersal canisters for bacteria, viruses, or spores.",
+        "research_time": 280,
+        "research_year": 1957,
+        "child": {
+          "tech": "Resistant Strain Engineering",
+          "description": "Creates strains resistant to antibiotics or vaccines to delay international response.",
+          "research_time": 360,
+          "research_year": 1965
+        }
+      }
+    },
+    "sub_branch4": {
+      "sub_branch_name": "Conventional Payload Enhancement",
+      "starter_tech": "High-Explosive Warheads",
+      "description": "Modern warheads use refined TNT or RDX-based mixtures for greater yield and fragmentation.",
+      "research_time": 200,
+      "research_year": 1950,
+      "child": {
+        "tech": "Fuel-Air Bombs",
+        "description": "Mixes fuel vapor in open air before ignition, generating massive blast radius.",
+        "research_time": 260,
+        "research_year": 1955,
+        "child": {
+          "tech": "EMP Research (Non-Nuclear)",
+          "description": "Begins weaponizing high-energy electromagnetic pulses without atomic detonation.",
+          "research_time": 320,
+          "research_year": 1965
+        }
+      }
+    },
+    "sub_branch5": {
+      "sub_branch_name": "NBC Infantry Readiness",
+      "starter_tech": "Protective Mask & Uniform Standards",
+      "description": "Standardized gas masks and suits improve survival chances in contaminated areas.",
+      "research_time": 180,
+      "research_year": 1951,
+      "child": {
+        "tech": "Mobile Decontamination Units",
+        "description": "Specialized infantry trucks cleanse gear and personnel after NBC exposure.",
+        "research_time": 240,
+        "research_year": 1957,
+        "child": {
+          "tech": "Full-Spectrum NBC Defense",
+          "description": "Tactical training, medical protocols, and sensor equipment ready units for worst-case scenarios.",
+          "research_time": 320,
+          "research_year": 1964
+        }
+      }
     }
+  }
   },
   "DOCTRINES": {
     "LAND DOCTRINES": {

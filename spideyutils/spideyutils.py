@@ -114,6 +114,7 @@ class SpideyUtils(commands.Cog):
         self.bot = bot
         self.cold_war_data = {}
         self.load_data()
+        self.alternate_country_dict = {}
 
     
     def load_data(self):
@@ -231,14 +232,15 @@ class SpideyUtils(commands.Cog):
                 embed.description = f"• {events}"
             return await interaction.followup.send(embed=embed)
     
-    def calculate_research_time(self, base_time, research_year, current_year):
+    def calculate_research_time(self, base_time, research_year, current_year, total_bonus=0):
         penalty = 0
         if research_year and int(current_year) < int(research_year):
             ahead = int(research_year) - int(current_year)
             penalty = int(base_time * (0.2 * ahead))
-        return base_time + penalty
+        adjusted = base_time + penalty
+        return int(adjusted * (1 - total_bonus))
 
-    def gather_the_children(self, node: dict, year: int, embed: discord.Embed):
+    def gather_the_children(self, node: dict, year: int, embed: discord.Embed, unlocked, in_progress, total_bonus):
         if not isinstance(node, dict):
             return
 
@@ -247,24 +249,27 @@ class SpideyUtils(commands.Cog):
             base = node.get("research_time", 0)
             r_year = node.get("research_year", None)
             desc = node.get("description", "No description.")
-            calc_time = self.calculate_research_time(base, r_year, year)
-            label = f"**{tech_name} ({r_year or 'n/a'}) – {calc_time} days**"
+            adjusted = self.calculate_research_time(base, r_year, year, total_bonus)
+            status = "[✓]" if tech_name in unlocked else "[🛠]" if tech_name in in_progress else "[ ]"
+            label = f"{status} {tech_name} ({r_year or 'n/a'}) – {base} → {adjusted} days"
             embed.add_field(name=label, value=desc, inline=False)
 
-        if "child" in node:
-            self.gather_the_children(node["child"], year, embed)
-
-    def create_the_embed(self, sub_branch, year):
-        embed = discord.Embed(title=f"📦 {sub_branch['sub_branch_name']} Sub-Branch", color=discord.Color.gold())
+    def create_the_embed(self, sub_branch, year, unlocked, in_progress, total_bonus, bonus_summary):
+        embed = discord.Embed(
+            title=f"📦 {sub_branch['sub_branch_name']} Sub-Branch",
+            description=f"🔧 Research Speed Modifiers:\n{bonus_summary}",
+            color=discord.Color.gold()
+        )
         starter_name = sub_branch.get("starter_tech")
         base = sub_branch.get("research_time", 0)
         r_year = sub_branch.get("research_year", None)
         desc = sub_branch.get("description", "No description.")
-        calc_time = self.calculate_research_time(base, r_year, year)
-        label = f"**{starter_name} ({r_year or 'n/a'}) – {calc_time} days**"
+        adjusted = self.calculate_research_time(base, r_year, year, total_bonus)
+        status = "[✓]" if starter_name in unlocked else "[🛠]" if starter_name in in_progress else "[ ]"
+        label = f"{status} {starter_name} ({r_year or 'n/a'}) – {base} → {adjusted} days"
         embed.add_field(name=label, value=desc, inline=False)
         if "child" in sub_branch:
-            self.gather_the_children(sub_branch["child"], year, embed)
+            self.gather_the_children(sub_branch["child"], year, embed, unlocked, in_progress, total_bonus)
         return embed
 
     async def autocomplete_branch(self, interaction: discord.Interaction, current: str):
@@ -291,6 +296,18 @@ class SpideyUtils(commands.Cog):
                             results.append(app_commands.Choice(name=sub_branch_name, value=sub_branch_name))
         return results[:25]
 
+    async def autocomplete_my_country(self, interaction: discord.Interaction, current: str):
+        countries = self.cold_war_data.get("countries", {})
+        return [app_commands.Choice(name=c, value=c) for c in countries if current.lower() in c.lower()][:25]
+
+    @app_commands.command(name="alternate_country", description="Switch which of your countries is active.")
+    @app_commands.autocomplete(country=autocomplete_my_country)
+    async def alternate_country(self, interaction: discord.Interaction, country: str):
+        if country not in self.cold_war_data.get("countries", {}):
+            return await interaction.response.send_message("Country not found.", ephemeral=True)
+        self.alternate_country_dict[str(interaction.user.id)] = country
+        await interaction.response.send_message(f"You are now viewing the game as **{country}**.", ephemeral=True)
+
     @app_commands.command(name="view_tech", description="View the Cold War RP tech tree.")
     @app_commands.autocomplete(branch=autocomplete_branch, sub_branch=autocomplete_sub_branch)
     async def view_tech(self, interaction: discord.Interaction, branch: str = None, sub_branch: str = None):
@@ -298,6 +315,32 @@ class SpideyUtils(commands.Cog):
 
         tech_tree = self.cold_war_data.get("tech_tree", {})
         year = self.cold_war_data.get("current_year", "1952")
+
+        # Determine the user's country
+        user_id = str(interaction.user.id)
+        if user_id in self.alternate_country_dict:
+            country_name = self.alternate_country_dict[user_id]
+        else:
+            country_name = None
+            for country_key, details in self.cold_war_data.get("countries", {}).items():
+                if details.get("player_id") == interaction.user.id:
+                    country_name = country_key
+                    break
+        if not country_name:
+            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
+
+        country_data = self.cold_war_data["countries"].get(country_name, {})
+        unlocked = country_data.get("unlocked_techs", [])
+        in_progress = list(country_data.get("in_progress_techs", {}).keys())
+        generic_bonus = country_data.get("research_bonus", {}).get("generic", 0.0)
+
+        # Determine sub-branch specific bonus
+        def calculate_total_bonus(branch_name):
+            bonus = generic_bonus
+            for spirit in country_data.get("national_spirits", []):
+                if "research_bonus" in spirit.get("modifiers", {}):
+                    bonus += spirit["modifiers"]["research_bonus"].get(branch_name, 0.0)
+            return bonus
 
         if not branch and not sub_branch:
             embed = discord.Embed(title="📚 Tech Tree Overview", color=discord.Color.blue())
@@ -315,7 +358,9 @@ class SpideyUtils(commands.Cog):
             for key, sub_data in branch_data.items():
                 if key == "branch" or not isinstance(sub_data, dict):
                     continue
-                embeds.append(self.create_the_embed(sub_data, year))
+                bonus = calculate_total_bonus(branch)
+                bonus_summary = f"+{int(generic_bonus * 100)}% from generic bonus\n+{int((bonus - generic_bonus) * 100)}% from national spirits\n→ Effective bonus: +{int(bonus * 100)}%"
+                embeds.append(self.create_the_embed(sub_data, year, unlocked, in_progress, bonus, bonus_summary))
             return await interaction.followup.send(embeds=embeds[:10])
 
         for branch_name, contents in tech_tree.items():
@@ -323,7 +368,9 @@ class SpideyUtils(commands.Cog):
                 if sb_key == "branch" or not isinstance(sub_data, dict):
                     continue
                 if sub_data.get("sub_branch_name", "").lower() == sub_branch.lower():
-                    embed = self.create_the_embed(sub_data, year)
+                    bonus = calculate_total_bonus(branch_name)
+                    bonus_summary = f"+{int(generic_bonus * 100)}% from generic bonus\n+{int((bonus - generic_bonus) * 100)}% from national spirits\n→ Effective bonus: +{int(bonus * 100)}%"
+                    embed = self.create_the_embed(sub_data, year, unlocked, in_progress, bonus, bonus_summary)
                     return await interaction.followup.send(embed=embed)
 
         await interaction.followup.send("❌ Could not find specified branch or sub-branch.", ephemeral=True)
