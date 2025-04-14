@@ -251,8 +251,16 @@ class SpideyUtils(commands.Cog):
             desc = node.get("description", "No description.")
             adjusted = self.calculate_research_time(base, r_year, year, total_bonus)
             status = "[✓]" if tech_name in unlocked else "[🛠]" if tech_name in in_progress else "[ ]"
-            label = f"{status} {tech_name} ({r_year or 'n/a'}) – {base} → {adjusted} days"
+            if adjusted == base:
+                label = f"{status} {tech_name} ({r_year or 'n/a'}) – {base} days"
+            else:
+                label = f"{status} {tech_name} ({r_year or 'n/a'}) – {base} → {adjusted} days"
             embed.add_field(name=label, value=desc, inline=False)
+
+        if "child" in node:
+            self.gather_the_children(node["child"], year, embed, unlocked, in_progress, total_bonus)
+            if isinstance(node["child"], dict):
+                self.gather_the_children(node["child"], year, embed, unlocked, in_progress, total_bonus)
 
     def create_the_embed(self, sub_branch, year, unlocked, in_progress, total_bonus, bonus_summary):
         embed = discord.Embed(
@@ -316,7 +324,6 @@ class SpideyUtils(commands.Cog):
         tech_tree = self.cold_war_data.get("tech_tree", {})
         year = self.cold_war_data.get("current_year", "1952")
 
-        # Determine the user's country
         user_id = str(interaction.user.id)
         if user_id in self.alternate_country_dict:
             country_name = self.alternate_country_dict[user_id]
@@ -330,16 +337,16 @@ class SpideyUtils(commands.Cog):
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
         country_data = self.cold_war_data["countries"].get(country_name, {})
-        unlocked = country_data.get("unlocked_techs", [])
-        in_progress = list(country_data.get("in_progress_techs", {}).keys())
-        generic_bonus = country_data.get("research_bonus", {}).get("generic", 0.0)
+        unlocked = country_data.get("research", {}).get("unlocked_techs", [])
+        in_progress = list(country_data.get("research", {}).get("in_progress_techs", {}).keys())
+        generic_bonus = country_data.get("research", {}).get("research_bonus")
 
-        # Determine sub-branch specific bonus
         def calculate_total_bonus(branch_name):
             bonus = generic_bonus
             for spirit in country_data.get("national_spirits", []):
                 if "research_bonus" in spirit.get("modifiers", {}):
-                    bonus += spirit["modifiers"]["research_bonus"].get(branch_name, 0.0)
+                    bonus += spirit["modifiers"]["research_bonus"].get(branch_name.upper(), 0.0)
+                    bonus += spirit["modifiers"]["research_bonus"].get("generic", 0.0)
             return bonus
 
         if not branch and not sub_branch:
