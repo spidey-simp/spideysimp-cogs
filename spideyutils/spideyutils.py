@@ -298,7 +298,7 @@ class SpideyUtils(commands.Cog):
 
     async def autocomplete_my_country(self, interaction: discord.Interaction, current: str):
         countries = self.cold_war_data.get("countries", {})
-        return [app_commands.Choice(name=c, value=c) for c in countries if current.lower() in c.lower()][:25]
+        return [app_commands.Choice(name=c, value=c) for c in countries if (current.lower() in c.lower()) and (countries.get(c)("player_id")== interaction.user.id)][:25]
 
     @app_commands.command(name="alternate_country", description="Switch which of your countries is active.")
     @app_commands.autocomplete(country=autocomplete_my_country)
