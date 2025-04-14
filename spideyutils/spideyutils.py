@@ -341,12 +341,11 @@ class SpideyUtils(commands.Cog):
         in_progress = list(country_data.get("research", {}).get("in_progress_techs", {}).keys())
         generic_bonus = country_data.get("research", {}).get("research_bonus")
 
-        def calculate_total_bonus(branch_name, sub_branch_name):
+        def calculate_total_bonus(branch_name):
             bonus = generic_bonus
             for spirit in country_data.get("national_spirits", []):
                 # Check both possible paths
                 bonuses = spirit.get("research_bonus", spirit.get("modifiers", {}).get("research_bonus", {}))
-                bonus += bonuses.get(sub_branch_name, 0.0)
                 bonus += bonuses.get(branch_name.upper(), 0.0)
                 bonus += bonuses.get("generic", 0.0)
             return bonus
