@@ -257,10 +257,10 @@ class SpideyUtils(commands.Cog):
                 label = f"{status} {tech_name} ({r_year or 'n/a'}) – {base} → {adjusted} days"
             embed.add_field(name=label, value=desc, inline=False)
 
-        if "child" in node:
+        # Recurse into children only once
+        if isinstance(node.get("child"), dict):
             self.gather_the_children(node["child"], year, embed, unlocked, in_progress, total_bonus)
-            if isinstance(node["child"], dict):
-                self.gather_the_children(node["child"], year, embed, unlocked, in_progress, total_bonus)
+
 
     def create_the_embed(self, sub_branch, year, unlocked, in_progress, total_bonus, bonus_summary):
         embed = discord.Embed(
@@ -341,12 +341,14 @@ class SpideyUtils(commands.Cog):
         in_progress = list(country_data.get("research", {}).get("in_progress_techs", {}).keys())
         generic_bonus = country_data.get("research", {}).get("research_bonus")
 
-        def calculate_total_bonus(branch_name):
+        def calculate_total_bonus(branch_name, sub_branch_name):
             bonus = generic_bonus
             for spirit in country_data.get("national_spirits", []):
-                if "research_bonus" in spirit.get("modifiers", {}):
-                    bonus += spirit["modifiers"]["research_bonus"].get(branch_name.upper(), 0.0)
-                    bonus += spirit["modifiers"]["research_bonus"].get("generic", 0.0)
+                # Check both possible paths
+                bonuses = spirit.get("research_bonus", spirit.get("modifiers", {}).get("research_bonus", {}))
+                bonus += bonuses.get(sub_branch_name, 0.0)
+                bonus += bonuses.get(branch_name.upper(), 0.0)
+                bonus += bonuses.get("generic", 0.0)
             return bonus
 
         if not branch and not sub_branch:
