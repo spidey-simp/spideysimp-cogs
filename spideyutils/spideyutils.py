@@ -288,6 +288,13 @@ class SpideyUtils(commands.Cog):
         return int(adjusted * (1 - total_bonus))
 
     def gather_the_children(self, node: dict, year: int, embed: discord.Embed, unlocked, in_progress, total_bonus):
+        active_techs = [
+            slot_data["tech"]
+            for slot_data in in_progress.values()
+            if isinstance(slot_data, dict) and "tech" in slot_data
+        ]
+
+        
         if not isinstance(node, dict):
             return
 
@@ -297,7 +304,7 @@ class SpideyUtils(commands.Cog):
             r_year = node.get("research_year", None)
             desc = node.get("description", "No description.")
             adjusted = self.calculate_research_time(base, r_year, year, total_bonus)
-            status = "[✓]" if tech_name in unlocked else "[🛠]" if tech_name in in_progress else "[ ]"
+            status = "[✓]" if tech_name in unlocked else "[🛠]" if tech_name in active_techs else "[ ]"
             if status == "✓":
                 label = f"[✓] {tech_name} ({r_year})"
             elif status == "🛠":
@@ -318,6 +325,12 @@ class SpideyUtils(commands.Cog):
 
 
     def create_the_embed(self, sub_branch, year, unlocked, in_progress, total_bonus, bonus_summary):
+        active_techs = [
+            slot_data["tech"]
+            for slot_data in in_progress.values()
+            if isinstance(slot_data, dict) and "tech" in slot_data
+        ]
+        
         embed = discord.Embed(
             title=f"📦 {sub_branch['sub_branch_name']} Sub-Branch",
             description=f"🔧 Research Speed Modifiers:\n{bonus_summary}",
@@ -328,7 +341,7 @@ class SpideyUtils(commands.Cog):
         r_year = sub_branch.get("research_year", None)
         desc = sub_branch.get("description", "No description.")
         adjusted = self.calculate_research_time(base, r_year, year, total_bonus)
-        status = "[✓]" if starter_name in unlocked else "[🛠]" if starter_name in in_progress else "[ ]"
+        status = "[✓]" if starter_name in unlocked else "[🛠]" if starter_name in active_techs else "[ ]"
         if status == "✓":
             label = f"[✓] {starter_name ({r_year})}"
         elif status == "🛠":
