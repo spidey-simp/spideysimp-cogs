@@ -134,7 +134,12 @@ class ResearchConfirmView(discord.ui.View):
             research["carryover_days"][self.slot] = 0
             msg = f"🛠 `{self.tech_name}` is now being researched in slot {self.slot}.\nEstimated time: {self.remaining_days} days."
 
+        # 🧠 Save changes to disk
+        with open(file_path, "w") as f:
+            json.dump(self.data_ref, f, indent=2)
+
         await interaction.response.edit_message(content=msg, embed=None, view=None)
+
 
     @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
