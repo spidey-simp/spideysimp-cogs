@@ -107,6 +107,38 @@ class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
 
         await interaction.response.send_message("✅ Your roll request has been submitted.", ephemeral=True)
 
+class ResearchConfirmView(discord.ui.View):
+    def __init__(self, interaction, country, slot, tech_name, remaining_days, carry_used, data_ref):
+        super().__init__(timeout=30)
+        self.interaction = interaction
+        self.country = country
+        self.slot = slot
+        self.tech_name = tech_name
+        self.remaining_days = remaining_days
+        self.carry_used = carry_used
+        self.data_ref = data_ref  # Reference to cold_war_data
+
+    @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        research = self.data_ref["countries"][self.country]["research"]
+
+        if self.remaining_days == 0:
+            research["unlocked_techs"].append(self.tech_name)
+            research["carryover_days"][self.slot] = self.carry_used - self.remaining_days
+            msg = f"✅ `{self.tech_name}` was instantly unlocked using {self.carry_used} rollover days! 🎉"
+        else:
+            research["active_slots"][self.slot] = {
+                "tech": self.tech_name,
+                "days_remaining": self.remaining_days
+            }
+            research["carryover_days"][self.slot] = 0
+            msg = f"🛠 `{self.tech_name}` is now being researched in slot {self.slot}.\nEstimated time: {self.remaining_days} days."
+
+        await interaction.response.edit_message(content=msg, embed=None, view=None)
+
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❌ Research canceled.", embed=None, view=None)
 
 
 class SpideyUtils(commands.Cog):
@@ -279,6 +311,11 @@ class SpideyUtils(commands.Cog):
         if "child" in sub_branch:
             self.gather_the_children(sub_branch["child"], year, embed, unlocked, in_progress, total_bonus)
         return embed
+    
+    def format_bonus(self, bonus):
+        sign = "+" if bonus > 0 else ""
+        return f"{sign}{int(bonus * 100)}%"
+
 
     async def autocomplete_branch(self, interaction: discord.Interaction, current: str):
         branches = self.cold_war_data.get("tech_tree", {}).keys()
@@ -307,6 +344,173 @@ class SpideyUtils(commands.Cog):
     async def autocomplete_my_country(self, interaction: discord.Interaction, current: str):
         countries = self.cold_war_data.get("countries", {})
         return [app_commands.Choice(name=c, value=c) for c in countries if (current.lower() in c.lower()) and (countries.get(c, {}).get("player_id")== interaction.user.id)][:25]
+    
+    def get_available_techs(self, branch: str, country_data: dict, tech_tree: dict):
+        unlocked = country_data.get("research", {}).get("unlocked_techs", [])
+        available = []
+
+        branch_data = tech_tree.get(branch, {})
+        branch_starter = branch_data.get("branch", {}).get("starter_tech")
+        if branch_starter and branch_starter not in unlocked:
+            available.append(branch_starter)
+            return available
+
+        for key, sub_branch in branch_data.items():
+            if not isinstance(sub_branch, dict):
+                continue
+
+            starter = sub_branch.get("starter_tech")
+            if starter and starter not in unlocked:
+                available.append(starter)
+                continue
+
+            node = sub_branch.get("child")
+            previous = None
+            while node:
+                tech = node.get("tech")
+                if tech and tech not in unlocked:
+                    parent = sub_branch.get("starter_tech") if previous is None else previous.get("tech")
+                    if parent in unlocked:
+                        available.append(tech)
+                        break
+                previous = node
+                node = node.get("child")
+
+        return available
+    
+    async def autocomplete_available_techs(self, interaction: discord.Interaction, current: str):
+        branch = interaction.namespace.branch
+        country = interaction.namespace.country
+
+        if not branch:
+            return []
+
+        # Determine user’s country if not explicitly passed
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict.get(str(interaction.user.id))
+        elif not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+
+        if not country or country not in self.cold_war_data["countries"]:
+            return []
+
+        country_data = self.cold_war_data["countries"][country]
+        tech_tree = self.cold_war_data.get("tech_tree", {})
+
+        available = self.get_available_techs(branch, country_data, tech_tree)
+        return [
+            app_commands.Choice(name=t, value=t)
+            for t in available if current.lower() in t.lower()
+        ][:25]
+
+        
+
+
+    @app_commands.command(name="research_tech", description="Begin researching a tech.")
+    @app_commands.autocomplete(country=autocomplete_my_country, branch=autocomplete_branch, tech_name=autocomplete_available_techs)
+    async def research_tech(self, interaction: discord.Interaction, branch: str, tech_name: str, country: str = None, slot: int = None):
+        await interaction.response.defer(thinking=True)
+
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict.get(str(interaction.user.id))
+        elif not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
+
+        country_data = self.cold_war_data["countries"][country]
+        research = country_data.get("research", {})
+        unlocked = research.get("unlocked_techs", [])
+        active_slots = research.get("active_slots", {})
+        carryover = research.get("carryover_days", {})
+        year = self.cold_war_data.get("current_year", "1952")
+
+        if slot is None:
+            for k, v in active_slots.items():
+                if v is None:
+                    slot = int(k)
+                    break
+            if slot is None:
+                return await interaction.followup.send("❌ No available research slots found.", ephemeral=True)
+
+        slot = str(slot)
+        if active_slots.get(slot):
+            return await interaction.followup.send(f"❌ Slot {slot} is already occupied.", ephemeral=True)
+
+        # Locate tech from available options
+        tech_tree = self.cold_war_data.get("tech_tree", {})
+        available_techs = self.get_available_techs(branch, country_data, tech_tree)
+
+        if tech_name not in available_techs:
+            return await interaction.followup.send(f"❌ `{tech_name}` is not currently researchable.", ephemeral=True)
+
+        # Get the actual tech node for data lookup
+        def find_tech_node(branch_data, name):
+            for sb in branch_data.values():
+                if not isinstance(sb, dict):
+                    continue
+                if sb.get("starter_tech") == name:
+                    return sb
+                node = sb.get("child")
+                while node:
+                    if node.get("tech") == name:
+                        return node
+                    node = node.get("child")
+            return None
+
+        target = find_tech_node(tech_tree.get(branch, {}), tech_name)
+        if not target:
+            return await interaction.followup.send("❌ Could not find that tech node.", ephemeral=True)
+
+        base_time = target.get("research_time", 0)
+        tech_year = target.get("research_year", int(year))
+
+        # Calculate total bonus
+        def calculate_total_bonus(branch_name: str, country_data: dict):
+            generic_bonus = country_data.get("research", {}).get("research_bonus")
+            bonus = generic_bonus
+            for spirit in country_data.get("national_spirits", []):
+                bonuses = spirit.get("research_bonus", spirit.get("modifiers", {}).get("research_bonus", {}))
+                bonus += bonuses.get(branch_name.upper(), 0.0)
+                bonus += bonuses.get("generic", 0.0)
+            return bonus
+
+        total_bonus = calculate_total_bonus(branch, country_data)
+        adjusted_time = self.calculate_research_time(base_time, tech_year, year, total_bonus)
+        carry_used = carryover.get(slot, 0)
+        remaining_days = max(0, adjusted_time - carry_used)
+
+        # Show confirmation embed and view
+        embed = discord.Embed(
+            title=f"Confirm Research Assignment",
+            description=(
+                f"🧪 **Tech:** `{tech_name}`\n"
+                f"⏳ **Time Required:** {remaining_days} days\n"
+                f"📦 **Slot:** {slot}\n"
+                f"♻️ **Carryover Used:** {carry_used} days"
+            ),
+            color=discord.Color.teal()
+        )
+
+        view = ResearchConfirmView(
+            interaction=interaction,
+            country=country,
+            slot=slot,
+            tech_name=tech_name,
+            remaining_days=remaining_days,
+            carry_used=carry_used,
+            data_ref=self.cold_war_data
+        )
+
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
 
     @app_commands.command(name="alternate_country", description="Switch which of your countries is active.")
     @app_commands.autocomplete(country=autocomplete_my_country)
@@ -345,7 +549,7 @@ class SpideyUtils(commands.Cog):
             bonus = generic_bonus
             for spirit in country_data.get("national_spirits", []):
                 # Check both possible paths
-                bonuses = spirit.get("research_bonus", spirit.get("modifiers", {}).get("research_bonus", {}))
+                bonuses = spirit.get("research_bonus", spirit.get("modifiers", {}).get("research_bonus"))
                 bonus += bonuses.get(branch_name.upper(), 0.0)
                 bonus += bonuses.get("generic", 0.0)
             return bonus
@@ -362,12 +566,46 @@ class SpideyUtils(commands.Cog):
             if not branch_data:
                 return await interaction.followup.send(f"Branch '{branch}' not found.", ephemeral=True)
 
+            branch_info = branch_data.get("branch", {})
+            starter_tech = branch_info.get("starter_tech")
+            starter_desc = branch_info.get("description", "No description.")
+            starter_time = branch_info.get("research_time", 0)
+            starter_year = branch_info.get("research_year", "n/a")
+            bonus = calculate_total_bonus(branch)
+            bonus_summary = (
+                f"{self.format_bonus(generic_bonus)} from generic bonus\n"
+                f"+{self.format_bonus(bonus - generic_bonus)} from national spirits\n"
+                f"→ Effective bonus: +{self.format_bonus(bonus)}%"
+            )
+            adjusted_time = self.calculate_research_time(starter_time, starter_year, year, bonus)
+            status = "✓" if starter_tech in unlocked else "🛠" if starter_tech in in_progress else " "
+            label = (
+                f"[{status}] {starter_tech} ({starter_year}) – {starter_time} → {adjusted_time} days"
+                if adjusted_time != starter_time else
+                f"[{status}] {starter_tech} ({starter_year}) – {starter_time} days"
+            )
+
+            starter_embed = discord.Embed(
+                title=f"{branch_info.get('branch_name', branch)} Tech Tree",
+                description="🔧 Research Speed Modifiers:\n" + bonus_summary,
+                color=discord.Color.blue()
+            )
+            starter_embed.add_field(name=label, value=starter_desc, inline=False)
+
+            if starter_tech not in unlocked:
+                starter_embed.add_field(
+                    name="🔒 Locked Branch",
+                    value="More techs will become available once the branch starter tech is researched.",
+                    inline=False
+                )
+                return await interaction.followup.send(embed=starter_embed)
+
             embeds = []
             for key, sub_data in branch_data.items():
                 if key == "branch" or not isinstance(sub_data, dict):
                     continue
                 bonus = calculate_total_bonus(branch)
-                bonus_summary = f"+{int(generic_bonus * 100)}% from generic bonus\n+{int((bonus - generic_bonus) * 100)}% from national spirits\n→ Effective bonus: +{int(bonus * 100)}%"
+                bonus_summary = f"{self.format_bonus(generic_bonus)} from generic bonus\n+{self.format_bonus(bonus - generic_bonus)}% from national spirits\n→ Effective bonus: +{self.format_bonus(bonus)}%"
                 embeds.append(self.create_the_embed(sub_data, year, unlocked, in_progress, bonus, bonus_summary))
             return await interaction.followup.send(embeds=embeds[:10])
 
@@ -377,7 +615,7 @@ class SpideyUtils(commands.Cog):
                     continue
                 if sub_data.get("sub_branch_name", "").lower() == sub_branch.lower():
                     bonus = calculate_total_bonus(branch_name)
-                    bonus_summary = f"+{int(generic_bonus * 100)}% from generic bonus\n+{int((bonus - generic_bonus) * 100)}% from national spirits\n→ Effective bonus: +{int(bonus * 100)}%"
+                    bonus_summary = f"{self.format_bonus(generic_bonus)} from generic bonus\n+{self.format_bonus(bonus - generic_bonus)}% from national spirits\n→ Effective bonus: +{self.format_bonus(bonus)}%"
                     embed = self.create_the_embed(sub_data, year, unlocked, in_progress, bonus, bonus_summary)
                     return await interaction.followup.send(embed=embed)
 
