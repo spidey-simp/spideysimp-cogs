@@ -283,10 +283,14 @@ class SpideyUtils(commands.Cog):
             desc = node.get("description", "No description.")
             adjusted = self.calculate_research_time(base, r_year, year, total_bonus)
             status = "[✓]" if tech_name in unlocked else "[🛠]" if tech_name in in_progress else "[ ]"
-            if adjusted == base:
-                label = f"{status} {tech_name} ({r_year or 'n/a'}) – {base} days"
+            if status == "✓":
+                label = f"[✓] {tech_name} ({r_year})"
+            elif status == "🛠":
+                days_remaining = in_progress.get(tech_name, {}).get("days_remaining", adjusted)
+                label = f"[🛠] {tech_name} ({r_year}) – {days_remaining} days remaining"
             else:
-                label = f"{status} {tech_name} ({r_year or 'n/a'}) – {base} → {adjusted} days"
+                label = f"[ ] {tech_name} ({r_year}) – {adjusted} days"
+                
             embed.add_field(name=label, value=desc, inline=False)
 
         # Recurse into children only once
@@ -306,7 +310,14 @@ class SpideyUtils(commands.Cog):
         desc = sub_branch.get("description", "No description.")
         adjusted = self.calculate_research_time(base, r_year, year, total_bonus)
         status = "[✓]" if starter_name in unlocked else "[🛠]" if starter_name in in_progress else "[ ]"
-        label = f"{status} {starter_name} ({r_year or 'n/a'}) – {base} → {adjusted} days"
+        if status == "✓":
+            label = f"[✓] {starter_name ({r_year})}"
+        elif status == "🛠":
+            days_remaining = in_progress.get(starter_name, {}).get("days_remaining", adjusted)
+            label = f"[🛠] {starter_name} ({r_year}) – {days_remaining} days remaining"
+        else:
+            label = f"[ ] {starter_name} ({r_year}) – {adjusted} days"
+
         embed.add_field(name=label, value=desc, inline=False)
         if "child" in sub_branch:
             self.gather_the_children(sub_branch["child"], year, embed, unlocked, in_progress, total_bonus)
