@@ -477,7 +477,7 @@ class SpideyUtils(commands.Cog):
             generic_bonus = country_data.get("research", {}).get("research_bonus")
             bonus = generic_bonus
             for spirit in country_data.get("national_spirits", []):
-                bonuses = spirit.get("research_bonus", spirit.get("modifiers", {}).get("research_bonus", {}))
+                bonuses = spirit.get("research_bonus") or spirit.get("modifiers", {}).get("research_bonus", {})
                 bonus += bonuses.get(branch_name.upper(), 0.0)
                 bonus += bonuses.get("generic", 0.0)
             return bonus
@@ -549,7 +549,7 @@ class SpideyUtils(commands.Cog):
             bonus = generic_bonus
             for spirit in country_data.get("national_spirits", []):
                 # Check both possible paths
-                bonuses = spirit.get("research_bonus", spirit.get("modifiers", {}).get("research_bonus"))
+                bonuses = spirit.get("research_bonus") or spirit.get("modifiers", {}).get("research_bonus", {})
                 bonus += bonuses.get(branch_name.upper(), 0.0)
                 bonus += bonuses.get("generic", 0.0)
             return bonus
