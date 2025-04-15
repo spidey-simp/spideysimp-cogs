@@ -290,7 +290,7 @@ class SpideyUtils(commands.Cog):
                 label = f"[🛠] {tech_name} ({r_year}) – {days_remaining} days remaining"
             else:
                 label = f"[ ] {tech_name} ({r_year}) – {adjusted} days"
-                
+
             embed.add_field(name=label, value=desc, inline=False)
 
         # Recurse into children only once
@@ -616,7 +616,7 @@ class SpideyUtils(commands.Cog):
                 if key == "branch" or not isinstance(sub_data, dict):
                     continue
                 bonus = calculate_total_bonus(branch)
-                bonus_summary = f"{self.format_bonus(generic_bonus)} from generic bonus\n+{self.format_bonus(bonus - generic_bonus)}% from national spirits\n→ Effective bonus: +{self.format_bonus(bonus)}%"
+                bonus_summary = f"{self.format_bonus(generic_bonus)} from generic bonus\n{self.format_bonus(bonus - generic_bonus)} from national spirits\n→ Effective bonus: {self.format_bonus(bonus)}"
                 embeds.append(self.create_the_embed(sub_data, year, unlocked, in_progress, bonus, bonus_summary))
             return await interaction.followup.send(embeds=embeds[:10])
 
