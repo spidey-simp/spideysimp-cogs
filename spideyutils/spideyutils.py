@@ -371,11 +371,16 @@ class SpideyUtils(commands.Cog):
     
     def get_available_techs(self, branch: str, country_data: dict, tech_tree: dict):
         unlocked = country_data.get("research", {}).get("unlocked_techs", [])
+        active = [
+            data["tech"]
+            for data in country_data.get("research", {}).get("active_slots", {}).values()
+            if isinstance(data, dict) and "tech" in data
+        ]
         available = []
 
         branch_data = tech_tree.get(branch, {})
         branch_starter = branch_data.get("branch", {}).get("starter_tech")
-        if branch_starter and branch_starter not in unlocked:
+        if branch_starter and branch_starter not in unlocked and branch_starter not in active:
             available.append(branch_starter)
             return available
 
@@ -384,7 +389,7 @@ class SpideyUtils(commands.Cog):
                 continue
 
             starter = sub_branch.get("starter_tech")
-            if starter and starter not in unlocked:
+            if starter and starter not in unlocked and starter not in active:
                 available.append(starter)
                 continue
 
@@ -392,7 +397,7 @@ class SpideyUtils(commands.Cog):
             previous = None
             while node:
                 tech = node.get("tech")
-                if tech and tech not in unlocked:
+                if tech and tech not in unlocked and tech not in active:
                     parent = sub_branch.get("starter_tech") if previous is None else previous.get("tech")
                     if parent in unlocked:
                         available.append(tech)
@@ -401,6 +406,7 @@ class SpideyUtils(commands.Cog):
                 node = node.get("child")
 
         return available
+
     
     async def autocomplete_available_techs(self, interaction: discord.Interaction, current: str):
         branch = interaction.namespace.branch
