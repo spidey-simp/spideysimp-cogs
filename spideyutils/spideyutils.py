@@ -160,6 +160,16 @@ class SpideyUtils(commands.Cog):
                 self.cold_war_data = json.load(f)
         except Exception as e:
             print("Failed to load cold_war.json:", e)
+    
+    def save_data(self):
+        try:
+            with open(file_path, "w") as f:
+                json.dump(self.cold_war_data, f, indent=2)
+        except Exception as e:
+            print("Failed to save the cold_war.json:", e)
+    
+    def cog_unload(self):
+        self.save_data()
 
     async def autocomplete_country(self, interaction: discord.Interaction, current: str):
         return [
