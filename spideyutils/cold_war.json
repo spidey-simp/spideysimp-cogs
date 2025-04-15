@@ -362,7 +362,19 @@
           "Soviet Union": 65,
           "Empire of Japan": 45
         }
-      }
+      },
+      "national_projects": {
+          "nuclear_weapons": {
+            "status": "paused_development",
+            "days_remaining": null,
+            "milestones_completed": [
+              "milestone_1",
+              "milestone_2",
+              "milestone_3"
+            ]
+          },
+          "abilities": ["unlock_nuclear_production"]
+        }
     },
     "Soviet Union": {
       "player_id": 735313620719632425,
@@ -3800,5 +3812,209 @@
         }
       }
     }
+  },
+  "NATIONAL PROJECTS": {
+    "milestones": {
+      "nuclear_weapons": {
+        "milestone_1": {
+          "name": "Theory of Atomic Detonation",
+          "description": "Foundational physics and bomb design theory are compiled from global sources.",
+          "duration_days": 365,
+          "base_success_chance": 0.85,
+          "grants": [],
+          "success_flavor": "Mathematical modeling confirms critical mass is achievable.",
+          "failure_flavor": "Unresolved contradictions delay theoretical consensus."
+        },
+        "milestone_2": {
+          "name": "Underground Test",
+          "description": "A prototype is assembled and tested in a controlled detonation zone.",
+          "duration_days": 420,
+          "base_success_chance": 0.65,
+          "grants": [],
+          "success_flavor": "The ground shook for miles. Radiation detected. The age of the atom has begun.",
+          "failure_flavor": "Core instability causes detonation to fizzle. Investigations ordered."
+        },
+        "milestone_3": {
+          "name": "Mass Production Authorization",
+          "description": "Facility designs and uranium refinement routes are formalized.",
+          "duration_days": 480,
+          "base_success_chance": 0.75,
+          "grants": ["unlock_nuclear_production"],
+          "success_flavor": "Warheads begin rolling out in limited batches. Global power shifts.",
+          "failure_flavor": "Engineering errors and political hesitation stall progress indefinitely."
+        },
+        "milestone_4": {
+          "name": "Hydrogen Bomb Design",
+          "description": "The push for fusion yields a design hundreds of times more powerful than fission bombs.",
+          "duration_days": 540,
+          "base_success_chance": 0.5,
+          "grants": ["unlock_hydrogen_bombs"],
+          "success_flavor": "The heat of the sun — captured in a bomb. Few dare speak of what they've made.",
+          "failure_flavor": "The secondary stage collapses — fusion unachieved. A costly failure."
+        },
+        "milestone_5": {
+          "name": "Submarine Nuclear Deployment",
+          "description": "Retrofits and launch systems allow for strategic underwater nuclear deterrence.",
+          "duration_days": 600,
+          "base_success_chance": 0.6,
+          "grants": ["enable_nuclear_submarines"],
+          "success_flavor": "Beneath the waves, missiles slumber. No city is beyond reach now.",
+          "failure_flavor": "Launch systems fail pressure tests. Safety reviews halt all progress."
+        }
+      },
+      "space_program": {
+        "milestone_1": {
+          "name": "Foundations of Rocket Propulsion",
+          "description": "Scientific groundwork for propulsion systems, fuel ratios, and trajectory planning.",
+          "duration_days": 365,
+          "base_success_chance": 0.85,
+          "grants": [],
+          "success_flavor": "Rocket principles formalized. The sky is no longer the limit.",
+          "failure_flavor": "Calculations falter. A combusted engine halts theoretical progress."
+        },
+        "milestone_2": {
+          "name": "Suborbital Flight Test",
+          "description": "First successful vertical launch and recovery of a suborbital test vehicle.",
+          "duration_days": 420,
+          "base_success_chance": 0.7,
+          "grants": [],
+          "success_flavor": "The capsule touched space — if only for a moment.",
+          "failure_flavor": "Ignition error. The prototype crashes in a remote field."
+        },
+        "milestone_3": {
+          "name": "Orbital Satellite Deployment",
+          "description": "A functioning satellite is launched into Earth’s orbit, transmitting data home.",
+          "duration_days": 480,
+          "base_success_chance": 0.75,
+          "grants": ["unlock_satellite_capabilities"],
+          "success_flavor": "Signal acquired. The satellite circles above, watching.",
+          "failure_flavor": "Trajectory miscalculated. The satellite burns up in the atmosphere."
+        },
+        "milestone_4": {
+          "name": "Animal in Orbit",
+          "description": "A biological lifeform is launched and survives orbital flight.",
+          "duration_days": 400,
+          "base_success_chance": 0.65,
+          "grants": [],
+          "success_flavor": "Telemetry confirms survival. Humanity is one step closer.",
+          "failure_flavor": "The capsule returns lifeless. Engineering is blamed. Quiet mourning follows."
+        },
+        "milestone_5": {
+          "name": "Manned Orbital Flight",
+          "description": "A human astronaut is launched, orbits Earth, and returns safely.",
+          "duration_days": 540,
+          "base_success_chance": 0.65,
+          "grants": ["unlock_manned_spaceflight"],
+          "success_flavor": "He lived. And he saw the world from the stars.",
+          "failure_flavor": "Parachute failure — silence from reentry. Tragedy shakes the program."
+        },
+        "milestone_6": {
+          "name": "EVA Suit Test",
+          "description": "Design and trial of suits capable of surviving direct exposure to space.",
+          "duration_days": 400,
+          "base_success_chance": 0.7,
+          "grants": [],
+          "success_flavor": "The suit held. A figure floated above Earth — tethered only by cable and courage.",
+          "failure_flavor": "Seal breach during vacuum test. Revisions ordered, silence kept."
+        },
+        "milestone_7": {
+          "name": "Lunar Probe Deployment",
+          "description": "A robotic probe reaches the Moon and transmits surface data.",
+          "duration_days": 480,
+          "base_success_chance": 0.6,
+          "grants": ["unlock_moon_targeting"],
+          "success_flavor": "The probe lives. It sees rock and shadow — and speaks across the void.",
+          "failure_flavor": "No response. The Moon remains untouched, indifferent."
+        },
+        "milestone_8": {
+          "name": "Lunar Orbital Test",
+          "description": "A vehicle successfully enters and exits lunar orbit.",
+          "duration_days": 520,
+          "base_success_chance": 0.55,
+          "grants": [],
+          "success_flavor": "Captured by the Moon’s pull, then flung back home. The corridor is real.",
+          "failure_flavor": "Loss of trajectory. The capsule drifts into deep space."
+        },
+        "milestone_9": {
+          "name": "Lunar Landing Initiative",
+          "description": "Landing craft, propulsion, and trajectory models are combined for human deployment.",
+          "duration_days": 600,
+          "base_success_chance": 0.5,
+          "grants": ["unlock_moon_missions"],
+          "success_flavor": "A single boot touches lunar dust. History is etched in silence.",
+          "failure_flavor": "Landing thrusters fail. The crater becomes a tomb."
+        }
+      }
+    },
+    "project_scientists": {
+      "Dr. Enrico Cortez": {
+        "fields": ["nuclear_weapons"],
+        "available_to": ["United States", "Spain", "France"],
+        "efficiency_bonus": 0.10,
+        "intelligence_bonus": 0.05,
+        "flavor_messages": {
+          "start": "Dr. Cortez has accepted the assignment. He warns: 'Keep the politicians away from the math.'",
+          "progress": [
+            "Cortez mutters about uranium purity and screams at interns.",
+            "Progress is steady. 'The numbers are smiling today,' he says."
+          ],
+          "success": "'It worked. God help us.'",
+          "failure": "'I told you the yield was unstable.'"
+        },
+        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361802092611768460/ChatGPT_Image_Apr_15_2025_01_35_07_PM.png?ex=68001487&is=67fec307&hm=e3b64004f411d82bcaccde4eef7b667972fac6ec63bc74e153455d0753f2b3a1&"
+      },
+      "Dr. Ayaka Nomura": {
+        "fields": ["space_program"],
+        "available_to": ["Japan", "United States", "Germany"],
+        "efficiency_bonus": 0.12,
+        "intelligence_bonus": 0.03,
+        "flavor_messages": {
+          "start": "Nomura arrives with her notes and her conditions.",
+          "progress": [
+            "Ayaka reports minimal drift in trajectory simulations.",
+            "'I need better gyros, not better excuses.'"
+          ],
+          "success": "The capsule entered orbit. Nomura doesn’t smile, she nods.",
+          "failure": "'Next time, calculate twice.'"
+        },
+        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361802910857564181/ChatGPT_Image_Apr_15_2025_01_38_02_PM.png?ex=6800154b&is=67fec3cb&hm=90fc776ac217b1c06b60f81a868c65b2a858bb104f5ee4507c5b47c19fb1f9f7&"
+      },
+      "Dr. Klaus Vortmeyer": {
+        "fields": ["space_program", "nuclear_weapons"],
+        "available_to": ["Germany", "Austria", "United Kingdom"],
+        "efficiency_bonus": 0.08,
+        "intelligence_bonus": 0.10,
+        "flavor_messages": {
+          "start": "Vortmeyer arrives in a tailored trench coat. 'Progress is inevitable. Morality is negotiable.'",
+          "progress": [
+            "'This reminds me of Peenemünde — only with less oversight.'",
+            "Klaus laughs alone in the lab, muttering about payload-to-orbit ratios."
+          ],
+          "success": "'It performed exactly as modeled. I was never in doubt.'",
+          "failure": "'Detonation misfire? Then your engineers failed me, not the design.'"
+        },
+        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361808262562840787/ChatGPT_Image_Apr_15_2025_01_59_31_PM.png?ex=68001a46&is=67fec8c6&hm=0ddcae554aeffcbd90a8c36d0f66594f321559fa9cca8bfe6bb954311a50707b&"
+      },
+      "Prof. Isidora Velasquez": {
+        "fields": ["space_program"],
+        "available_to": ["Spain", "Mexico", "United States"],
+        "efficiency_bonus": 0.11,
+        "intelligence_bonus": 0.04,
+        "flavor_messages": {
+          "start": "'I build things to touch the stars. Don’t hand me a wrench without reverence.'",
+          "progress": [
+            "'Telemetry is holding. Trajectory is beautiful. I could cry.'",
+            "Velasquez scribbles equations on the walls again. She's close to something."
+          ],
+          "success": "'There it is. Orbit achieved. I want everyone on this team promoted.'",
+          "failure": "'They blamed me when the stage detached early. But I designed it to *burn*, not *fail*.'"
+        },
+        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361809235226394684/ChatGPT_Image_Apr_15_2025_02_03_32_PM.png?ex=68001b2e&is=67fec9ae&hm=b6502adfbae5add00b2a5c8d3b5e737787798e72fa4994f1ad424c0969639b5d&"
+      }
+
+
+    }
+
+
   }
 }

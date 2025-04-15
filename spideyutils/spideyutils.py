@@ -54,6 +54,79 @@ class RequestRoll(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
+class StartProjectConfirmView(discord.ui.View):
+    def __init__(self, user_id, country, project_name, penalties, data_ref, save_callback):
+        super().__init__(timeout=30)
+        self.user_id = user_id
+        self.country = country
+        self.project_name = project_name
+        self.penalties = penalties
+        self.data_ref = data_ref
+        self.save_callback = save_callback
+
+    @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != str(self.user_id):
+            return await interaction.response.send_message("You're not authorized to confirm this action.", ephemeral=True)
+
+        country_data = self.data_ref["countries"][self.country]
+        research = country_data.get("research", {})
+        np_data = country_data.setdefault("national_projects", {})
+
+        # Determine default milestone logic
+        project_name = self.project_name
+        milestone_defs = self.data_ref.get("NATIONAL PROJECTS", {}).get("milestones", {}).get(project_name, {})
+        milestone_1 = milestone_defs.get("milestone_1", {})
+        duration = milestone_1.get("duration_days", 365)
+
+        # Special case: country already has nukes
+        if project_name == "nuclear_weapons" and research.get("nuclear_arsenal", 0) >= 1:
+            np_data[project_name] = {
+                "status": "paused_development",
+                "days_remaining": None,
+                "milestones_completed": ["milestone_1", "milestone_2", "milestone_3"]
+            }
+            abilities = country_data.setdefault("abilities", [])
+            if "unlock_nuclear_production" not in abilities:
+                abilities.append("unlock_nuclear_production")
+
+            msg = (
+                f"✅ `{project_name}` is now officially tracked.\n"
+                f"🧨 This country has already completed early nuclear development.\n"
+                f"Progress is marked as **paused** at milestone 3.\n"
+                f"Abilities unlocked: `unlock_nuclear_production`."
+            )
+        else:
+            # Standard project start
+            np_data[project_name] = {
+                "status": "milestone_1",
+                "days_remaining": duration,
+                "milestones_completed": []
+            }
+
+            msg = (
+                f"✅ `{project_name}` project has begun in {self.country}.\n"
+                f"🚀 Status: `milestone_1` — `{milestone_1.get('name', 'Unknown')}`\n"
+                f"⏳ Time remaining: {duration} days."
+            )
+
+        # Apply penalties
+        if "research_penalty" in self.penalties:
+            country_data["research"]["research_bonus"] -= self.penalties["research_penalty"]
+        if "espionage_penalty" in self.penalties:
+            country_data["domestic_intel_score"] -= self.penalties["espionage_penalty"]
+        if "factory_penalty" in self.penalties:
+            country_data["industrial_sectors"] = max(0, country_data["industrial_sectors"] - self.penalties["factory_penalty"])
+
+        self.save_callback()
+        await interaction.response.edit_message(content=msg, view=None, embed=None)
+
+
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="❌ Project canceled.", view=None, embed=None)
+
+
 class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
     reason = discord.ui.TextInput(label="Reason for roll", style=discord.TextStyle.paragraph)
     modifier = discord.ui.TextInput(
@@ -728,6 +801,151 @@ class SpideyUtils(commands.Cog):
 
         await interaction.followup.send("❌ Could not find specified branch or sub-branch.", ephemeral=True)
 
+    async def autocomplete_available_projects(self, interaction: discord.Interaction, current: str):
+        country = interaction.namespace.country
+        
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+
+        if not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+
+        if not country or country not in self.cold_war_data["countries"]:
+            return []
+
+        country_data = self.cold_war_data["countries"][country]
+        active_projects = country_data.get("national_projects", {}).keys()
+
+        # Static list of all projects — expand as needed
+        all_projects = ["nuclear_weapons", "space_program"]
+
+        available = [
+            p for p in all_projects
+            if p not in active_projects and current.lower() in p.lower()
+        ]
+
+        return [
+            app_commands.Choice(name=p.replace("_", " ").title(), value=p)
+            for p in available
+        ][:25]
+
+
+    @app_commands.command(name="start_project", description="Begin a high-level national project like nuclear weapons or space exploration.")
+    @app_commands.autocomplete(country=autocomplete_my_country, project_name=autocomplete_available_projects)
+    async def start_project(self, interaction: discord.Interaction, project_name: str, country: str = None):
+        await interaction.response.defer(thinking=True)
+
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        if not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
+
+        country_data = self.cold_war_data["countries"][country]
+        np_data = country_data.setdefault("national_projects", {})
+
+        if project_name in np_data:
+            return await interaction.followup.send(f"❌ `{project_name}` is already in progress or completed.", ephemeral=True)
+
+        # Tradeoff summary
+        tradeoffs = {
+            "nuclear_weapons": {
+                "research_penalty": 0.05,
+                "espionage_penalty": 10,
+                "factory_penalty": 2
+            },
+            "space_program": {
+                "research_penalty": 0.03,
+                "budget_cost": 1,
+                "factory_penalty": 1
+            }
+        }
+
+        costs = tradeoffs.get(project_name, {})
+
+        embed = discord.Embed(
+            title=f"🧪 Start {project_name.replace('_', ' ').title()} Project?",
+            description="Starting this national project will impose the following tradeoffs:",
+            color=discord.Color.red()
+        )
+
+        if "research_penalty" in costs:
+            embed.add_field(name="📉 Research Speed", value=f"-{int(costs['research_penalty'] * 100)}%", inline=False)
+        if "espionage_penalty" in costs:
+            embed.add_field(name="🕵️‍♂️ Domestic Intel Score", value=f"-{costs['espionage_penalty']}", inline=False)
+        if "factory_penalty" in costs:
+            embed.add_field(name="🏭 Industrial Sectors", value=f"-{costs['factory_penalty']}", inline=False)
+        if "budget_cost" in costs:
+            embed.add_field(name="💸 Budget Surplus", value=f"-{costs['budget_cost']} per turn", inline=False)
+
+        embed.set_footer(text="Are you sure you want to begin this project?")
+
+        view = StartProjectConfirmView(
+            user_id=interaction.user.id,
+            country=country,
+            project_name=project_name,
+            penalties=costs,
+            data_ref=self.cold_war_data,
+            save_callback=self.save_data
+        )
+
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+    @app_commands.command(name="view_projects", description="View your active or completed national projects.")
+    @app_commands.autocomplete(country=autocomplete_my_country)
+    async def view_projects(self, interaction: discord.Interaction, country: str = None):
+        await interaction.response.defer(thinking=True)
+
+        # Auto-resolve country
+        countries = self.cold_war_data.get("countries", {})
+        if not country:
+            for c_key, data in countries.items():
+                if data.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+
+        if not country or country not in countries:
+            return await interaction.followup.send("❌ Country not found or not assigned to you.", ephemeral=True)
+
+        data = countries[country]
+        projects = data.get("national_projects", {})
+        all_defs = self.cold_war_data.get("NATIONAL PROJECTS", {}).get("milestones", {})
+
+        embed = discord.Embed(
+            title=f"🔬 {country} – National Projects",
+            description="Progress on major strategic programs:",
+            color=discord.Color.dark_purple()
+        )
+
+        if not projects:
+            embed.description = "*No national projects are currently active or completed.*"
+            return await interaction.followup.send(embed=embed, ephemeral=True)
+
+        for project_key, p_data in projects.items():
+            milestone_defs = all_defs.get(project_key, {})
+            status = p_data.get("status", "unknown")
+            days = p_data.get("days_remaining", "—")
+            completed = p_data.get("milestones_completed", [])
+
+            milestone_title = milestone_defs.get(status, {}).get("name", "Unknown")
+
+            summary = f"📍 **Status:** `{status}` – {milestone_title}\n"
+            if isinstance(days, int):
+                summary += f"⏳ **Days remaining:** {days}\n"
+            summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}"
+
+            name = "🧪 " + project_key.replace("_", " ").title()
+            embed.add_field(name=name, value=summary, inline=False)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     
     def redact_paragraph_weighted(self, text, knowledge):
