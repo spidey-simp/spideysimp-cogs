@@ -930,14 +930,15 @@ class SpideyUtils(commands.Cog):
             return await interaction.followup.send(embed=embed, ephemeral=True)
 
         for project_key, p_data in projects.items():
-            milestone_defs = all_defs.get(project_key, {})
+            milestone_defs = all_defs.get("milestones", {}).get(project_key, {})
             status = p_data.get("status", "unknown")
             days = p_data.get("days_remaining", "—")
             completed = p_data.get("milestones_completed", [])
 
-            milestone_title = milestone_defs.get(status, {}).get("name", "Unknown")
+            milestone_title = milestone_defs.get(status, {}).get("name", status.replace('_', ' ').title())
 
             summary = f"📍 **Status:** `{status}` – {milestone_title}\n"
+            pretty_status = status.replace("_", " ").title() if status not in milestone_defs else f"{status} – {milestone_title}"
             if isinstance(days, int):
                 summary += f"⏳ **Days remaining:** {days}\n"
             summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}"
