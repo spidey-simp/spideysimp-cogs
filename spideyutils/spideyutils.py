@@ -574,8 +574,8 @@ class SpideyUtils(commands.Cog):
             bonus = calculate_total_bonus(branch)
             bonus_summary = (
                 f"{self.format_bonus(generic_bonus)} from generic bonus\n"
-                f"+{self.format_bonus(bonus - generic_bonus)} from national spirits\n"
-                f"→ Effective bonus: +{self.format_bonus(bonus)}%"
+                f"{self.format_bonus(bonus - generic_bonus)} from national spirits\n"
+                f"→ Effective bonus: {self.format_bonus(bonus)}"
             )
             adjusted_time = self.calculate_research_time(starter_time, starter_year, year, bonus)
             status = "✓" if starter_tech in unlocked else "🛠" if starter_tech in in_progress else " "
