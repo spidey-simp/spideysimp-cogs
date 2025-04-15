@@ -343,7 +343,7 @@ class SpideyUtils(commands.Cog):
         adjusted = self.calculate_research_time(base, r_year, year, total_bonus)
         status = "[✓]" if starter_name in unlocked else "[🛠]" if starter_name in active_techs else "[ ]"
         if status == "✓":
-            label = f"[✓] {starter_name ({r_year})}"
+            label = f"[✓] {starter_name} ({r_year})"
         elif status == "🛠":
             days_remaining = next(
                 (slot_data["days_remaining"] for slot_data in in_progress.values()
