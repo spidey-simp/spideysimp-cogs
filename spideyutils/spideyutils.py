@@ -563,6 +563,60 @@ class SpideyUtils(commands.Cog):
         )
 
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+    
+    @app_commands.command(name="view_slots", description="View which techs your country is currently researching.")
+    @app_commands.autocomplete(country=autocomplete_my_country)
+    async def view_slots(self, interaction: discord.Interaction, country: str = None):
+        await interaction.response.defer(thinking=True)
+
+        
+        countries = self.cold_war_data.get("countries", {})
+
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        elif not country:
+            for c_key, details in countries.items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+
+        if not country or country not in countries:
+            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
+
+        data = countries[country]
+        research = data.get("research", {})
+        active_slots = research.get("active_slots", {})
+        carryover = research.get("carryover_days", {})
+        max_slots = research.get("research_slots", 1)
+
+        embed = discord.Embed(
+            title=f"🔬 {country} — Research Slots",
+            description="Here's what you're currently researching.",
+            color=discord.Color.green()
+        )
+
+        for i in range(1, max_slots + 1):
+            slot_key = str(i)
+            slot_data = active_slots.get(slot_key)
+            carry = carryover.get(slot_key, 0)
+
+            if isinstance(slot_data, dict) and "tech" in slot_data:
+                tech = slot_data["tech"]
+                remaining = slot_data.get("days_remaining", "???")
+                embed.add_field(
+                    name=f"📦 Slot {i}",
+                    value=f"**{tech}**\n⏳ {remaining} days remaining\n♻️ {carry} rollover days",
+                    inline=False
+                )
+            else:
+                embed.add_field(
+                    name=f"⚪ Slot {i}",
+                    value=f"*Empty*\n♻️ {carry} rollover days",
+                    inline=False
+                )
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
 
 
     @app_commands.command(name="alternate_country", description="Switch which of your countries is active.")
