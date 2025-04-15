@@ -286,7 +286,11 @@ class SpideyUtils(commands.Cog):
             if status == "✓":
                 label = f"[✓] {tech_name} ({r_year})"
             elif status == "🛠":
-                days_remaining = in_progress.get(tech_name, {}).get("days_remaining", adjusted)
+                days_remaining = next(
+                    (slot_data["days_remaining"] for slot_data in in_progress.values()
+                    if isinstance(slot_data, dict) and slot_data.get("tech") == tech_name),
+                    adjusted
+                )
                 label = f"[🛠] {tech_name} ({r_year}) – {days_remaining} days remaining"
             else:
                 label = f"[ ] {tech_name} ({r_year}) – {adjusted} days"
@@ -313,7 +317,11 @@ class SpideyUtils(commands.Cog):
         if status == "✓":
             label = f"[✓] {starter_name ({r_year})}"
         elif status == "🛠":
-            days_remaining = in_progress.get(starter_name, {}).get("days_remaining", adjusted)
+            days_remaining = next(
+                (slot_data["days_remaining"] for slot_data in in_progress.values()
+                if isinstance(slot_data, dict) and slot_data.get("tech") == starter_name),
+                adjusted
+            )
             label = f"[🛠] {starter_name} ({r_year}) – {days_remaining} days remaining"
         else:
             label = f"[ ] {starter_name} ({r_year}) – {adjusted} days"
@@ -553,7 +561,7 @@ class SpideyUtils(commands.Cog):
 
         country_data = self.cold_war_data["countries"].get(country_name, {})
         unlocked = country_data.get("research", {}).get("unlocked_techs", [])
-        in_progress = list(country_data.get("research", {}).get("in_progress_techs", {}).keys())
+        in_progress = dict(country_data.get("research", {}).get("active_slots"))
         generic_bonus = country_data.get("research", {}).get("research_bonus")
 
         def calculate_total_bonus(branch_name):
