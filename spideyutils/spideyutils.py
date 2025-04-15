@@ -930,7 +930,7 @@ class SpideyUtils(commands.Cog):
             return await interaction.followup.send(embed=embed, ephemeral=True)
 
         for project_key, p_data in projects.items():
-            milestone_defs = all_defs.get("milestones", {}).get(project_key, {})
+            milestone_defs = all_defs.get(project_key, {})
             status = p_data.get("status", "unknown")
             days = p_data.get("days_remaining", "—")
             completed = p_data.get("milestones_completed", [])
