@@ -19,7 +19,8 @@ file_path = os.path.join(os.path.dirname(__file__), "cold_war.json")
 from datetime import datetime
 
 def debug_log(message):
-    with open("debug_output.log", "a") as f:
+    log_path = os.path.expanduser("~/debug_output.log")
+    with open("log_path", "a") as f:
         f.write(f"[{datetime.now()}] {message}\n")
 
 
