@@ -918,7 +918,8 @@ class SpideyUtils(commands.Cog):
 
         data = self.cold_war_data["countries"][country]
         projects = data.get("national_projects", {})
-        all_defs = self.cold_war_data.get("NATIONAL PROJECTS", {}).get("milestones", {})
+        all_defs = self.cold_war_data.get("NATIONAL PROJECTS", {})
+        miles = all_defs.get("milestones", {})
 
         embed = discord.Embed(
             title=f"🔬 {country} – National Projects",
@@ -932,7 +933,7 @@ class SpideyUtils(commands.Cog):
 
         for project_key, p_data in projects.items():
             project_lookup_key = project_key.lower().replace(" ", "_")
-            milestone_defs = all_defs.get(project_lookup_key, {})
+            milestone_defs = miles.get(project_lookup_key, {})
 
             status = p_data.get("status", "unknown")
             days = p_data.get("days_remaining", "—")
@@ -950,6 +951,7 @@ class SpideyUtils(commands.Cog):
                 summary += f"⏳ **Days remaining:** {days}\n"
             summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}\n"
             summary += f"project key: {project_key} and milestone_defs keys: {list(milestone_defs.keys())}\nall_defs keys: {all_defs.keys()}"
+            summary += f"miles keys: {miles.keys()} and all_defs keys: {all_defs.keys()}"
 
             name = "🧪 " + project_key.replace("_", " ").title()
             embed.add_field(name=name, value=summary, inline=False)
