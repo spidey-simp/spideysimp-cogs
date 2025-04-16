@@ -942,11 +942,11 @@ class SpideyUtils(commands.Cog):
                 milestone_title = "Unknown"
 
             pretty_status = status.replace("_", " ").title() if status not in milestone_defs else f"{status} – {milestone_title}"
-            summary = f"📍 **Status:** `{pretty_status}\n"
+            summary = f"📍 **Status:** {pretty_status}\n"
             if isinstance(days, int):
                 summary += f"⏳ **Days remaining:** {days}\n"
             summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}"
-
+            summary += f"\n🛠️ DEBUG: status={status}, lookup_keys={list(milestone_defs.keys())}"
             name = "🧪 " + project_key.replace("_", " ").title()
             embed.add_field(name=name, value=summary, inline=False)
 
