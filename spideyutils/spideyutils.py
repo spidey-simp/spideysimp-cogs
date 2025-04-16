@@ -16,6 +16,11 @@ BASE_DIR = "/mnt/data/rpdata"
 
 file_path = os.path.join(os.path.dirname(__file__), "cold_war.json")
 
+from datetime import datetime
+
+def debug_log(message):
+    with open("debug_output.log", "a") as f:
+        f.write(f"[{datetime.now()}] {message}\n")
 
 
 
@@ -231,6 +236,8 @@ class SpideyUtils(commands.Cog):
         try:
             with open(file_path, "r") as f:
                 self.cold_war_data = json.load(f)
+                
+            debug_log("Loaded top-level keys: " + str(self.cold_war_data.keys()))
         except Exception as e:
             print("Failed to load cold_war.json:", e)
     
