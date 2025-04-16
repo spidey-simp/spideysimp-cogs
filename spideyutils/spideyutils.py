@@ -931,7 +931,9 @@ class SpideyUtils(commands.Cog):
             return await interaction.followup.send(embed=embed, ephemeral=True)
 
         for project_key, p_data in projects.items():
-            milestone_defs = all_defs.get(project_key, {})
+            project_lookup_key = project_key.lower().replace(" ", "_")
+            milestone_defs = all_defs.get(project_lookup_key, {})
+
             status = p_data.get("status", "unknown")
             days = p_data.get("days_remaining", "—")
             completed = p_data.get("milestones_completed", [])
@@ -946,7 +948,7 @@ class SpideyUtils(commands.Cog):
             summary = f"📍 **Status:** {milestone_title} (`{status}`)\n"
             if isinstance(days, int):
                 summary += f"⏳ **Days remaining:** {days}\n"
-            summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}"
+            summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}\n"
             summary += f"project key: {project_key} and milestone_defs keys: {list(milestone_defs.keys())}"
 
             name = "🧪 " + project_key.replace("_", " ").title()
