@@ -120,7 +120,7 @@ class StartProjectConfirmView(discord.ui.View):
         if "research_penalty" in self.penalties:
             country_data["research"]["research_bonus"] -= self.penalties["research_penalty"]
         if "espionage_penalty" in self.penalties:
-            country_data["domestic_intelligence_score"] -= self.penalties["espionage_penalty"]
+            country_data["espionage"]["domestic_intelligence_score"] -= self.penalties["espionage_penalty"]
         if "factory_penalty" in self.penalties:
             country_data["industrial_sectors"] = max(0, country_data["industrial_sectors"] - self.penalties["factory_penalty"])
 
