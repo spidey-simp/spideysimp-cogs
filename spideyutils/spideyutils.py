@@ -943,7 +943,7 @@ class SpideyUtils(commands.Cog):
             elif status == "paused_development":
                 milestone_title = "Development Paused"
 
-            summary = f"📍 **Status:** `{status}` – {milestone_title}\n"
+            summary = f"📍 **Status:** {milestone_title} (`{status}`)\n"
             if isinstance(days, int):
                 summary += f"⏳ **Days remaining:** {days}\n"
             summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}"
