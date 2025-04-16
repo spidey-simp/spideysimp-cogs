@@ -236,10 +236,20 @@ class SpideyUtils(commands.Cog):
     
     def save_data(self):
         try:
+            # Reload the original file to preserve static data
+            with open(file_path, "r") as f:
+                original_data = json.load(f)
+
+            # Preserve static keys like NATIONAL PROJECTS
+            for key in ["NATIONAL PROJECTS", "tech_tree", "DOCTRINES"]:
+                if key in original_data:
+                    self.cold_war_data[key] = original_data[key]
+
             with open(file_path, "w") as f:
                 json.dump(self.cold_war_data, f, indent=2)
         except Exception as e:
             print("Failed to save the cold_war.json:", e)
+
     
     def cog_unload(self):
         self.save_data()
