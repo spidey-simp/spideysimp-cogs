@@ -947,6 +947,7 @@ class SpideyUtils(commands.Cog):
             if isinstance(days, int):
                 summary += f"⏳ **Days remaining:** {days}\n"
             summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}"
+            summary += f"project key: {project_key} and milestone_defs keys: {list(milestone_defs.keys())}"
 
             name = "🧪 " + project_key.replace("_", " ").title()
             embed.add_field(name=name, value=summary, inline=False)
