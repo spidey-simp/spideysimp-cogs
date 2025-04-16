@@ -228,6 +228,7 @@ class SpideyUtils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.cold_war_data = {}
+        debug_log("The logger is active and running!")
         self.load_data()
         self.alternate_country_dict = {}
 
@@ -236,10 +237,10 @@ class SpideyUtils(commands.Cog):
         try:
             with open(file_path, "r") as f:
                 self.cold_war_data = json.load(f)
-                
+
             debug_log("Loaded top-level keys: " + str(self.cold_war_data.keys()))
         except Exception as e:
-            print("Failed to load cold_war.json:", e)
+            debug_log("Failed to load cold_war.json:", e)
     
     def save_data(self):
         try:
