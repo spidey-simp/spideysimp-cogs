@@ -1,0 +1,296 @@
+{
+  "turn": 0,
+  "current_year": 1952,
+  "day": 1,
+  "countries": {
+    "United States": {
+      "player_id": 759677758431035433,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "United Kingdom": 85,
+          "French Republic": 85,
+          "Germany": 80,
+          "Soviet Union": 65,
+          "Empire of Japan": 45
+        }
+      },
+      "national_projects": {
+        "nuclear_weapons": {
+          "status": "paused_development",
+          "days_remaining": null,
+          "milestones_completed": [
+            "milestone_1",
+            "milestone_2",
+            "milestone_3"
+          ]
+        },
+        "abilities": [
+          "unlock_nuclear_production"
+        ]
+      }
+    },
+    "Soviet Union": {
+      "player_id": 735313620719632425,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "Republic of Turkey": 85,
+          "Germany": 80,
+          "United States": 65
+        }
+      }
+    },
+    "United Kingdom": {
+      "player_id": 650814947437182977,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0,
+          "5": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null,
+          "5": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "United States": 85,
+          "French Republic": 85,
+          "Germany": 75,
+          "Soviet Union": 60
+        }
+      }
+    },
+    "Empire of Japan": {
+      "player_id": 721740604199141408,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "Republic of China (KMT)": 60,
+          "Soviet Union": 40,
+          "United States": 20
+        }
+      }
+    },
+    "Republic of China (KMT)": {
+      "player_id": 422159946956931083,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "United States": 50,
+          "Empire of Japan": 60,
+          "Soviet Union": 10
+        }
+      }
+    },
+    "Germany": {
+      "player_id": 751471305894920304,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0,
+          "4": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null,
+          "4": null
+        }
+      },
+      "past_turns": {}
+    },
+    "Kingdom of Spain": {
+      "player_id": 684457913250480143,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "Austrian Empire": 85,
+          "Kingdom of Italy": 65,
+          "France": 45
+        }
+      }
+    },
+    "Austrian Empire": {
+      "player_id": 684457913250480143,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "Kingdom of Spain": 85,
+          "Kingdom of Italy": 60
+        }
+      }
+    },
+    "France": {
+      "player_id": 558327879952498708,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "Germany": 60,
+          "Soviet Union": 50,
+          "United Kingdom": 40
+        }
+      }
+    },
+    "Turkey": {
+      "player_id": 261908926889459713,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "Soviet Union": 30,
+          "United States": 30,
+          "Germany": 30
+        }
+      }
+    },
+    "Kingdom of Italy": {
+      "player_id": 982830901836791839,
+      "research": {
+        "in_progress_techs": {},
+        "carryover_days": {
+          "1": 0,
+          "2": 0,
+          "3": 0
+        },
+        "active_slots": {
+          "1": null,
+          "2": null,
+          "3": null
+        }
+      },
+      "past_turns": {},
+      "espionage": {
+        "spy_networks": {
+          "Kingdom of Spain": 60,
+          "Austrian Empire": 55,
+          "Federation of Balkan Republics": 50
+        }
+      }
+    }
+  }
+}

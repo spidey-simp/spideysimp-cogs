@@ -1,28 +1,49 @@
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import Interaction
 from redbot.core import commands
 import json
 import os
 import random
 import asyncio
-import datetime
+from datetime import datetime
 import re
 from collections import defaultdict
 
 BASE_DIR = "/mnt/data/rpdata"
 
 
-file_path = os.path.join(os.path.dirname(__file__), "cold_war.json")
+file_path = os.path.join(os.path.dirname(__file__), "cold_war_modifiers.json")
 
-from datetime import datetime
 
 def debug_log(message):
     log_path = os.path.expanduser("~/debug_output.log")
     with open(log_path, "a") as f:
         f.write(f"[{datetime.now()}] {message}\n")
 
+
+BACKUP_CHANNEL_ID = 1357944150502412288
+
+async def backup_dynamic_json(self):
+    try:
+        with open("cold_war_modifiers.json", "r") as f:
+            data = json.load(f)
+
+        channel = self.bot.get_channel(BACKUP_CHANNEL_ID)
+        if channel is None:
+            channel = await self.bot.fetch_channel(BACKUP_CHANNEL_ID)
+
+        content = json.dumps(data, indent=2)
+        if len(content) > 1900:
+            # If too big for a single message, send as a file
+            file = discord.File(fp="cold_war_modifiers.json", filename="cold_war_backup.json")
+            await channel.send(content="📦 Cold War dynamic data backup on cog unload:", file=file)
+        else:
+            await channel.send(f"📦 Cold War dynamic data backup on cog unload:\n```json\n{content}\n```")
+
+    except Exception as e:
+        print(f"Failed to backup dynamic JSON: {e}")
 
 
 class RequestRoll(commands.Cog):
@@ -232,36 +253,101 @@ class SpideyUtils(commands.Cog):
         debug_log("The logger is active and running!")
         self.load_data()
         self.alternate_country_dict = {}
+        self.scheduled_backup.start()
 
+    @tasks.loop(hours=24)
+    async def scheduled_backup(self):
+        try:
+            with open("cold_war_modifiers.json", "r") as f:
+                data = json.load(f)
+
+            channel = self.bot.get_channel(BACKUP_CHANNEL_ID)
+            if channel is None:
+                channel = await self.bot.fetch_channel(BACKUP_CHANNEL_ID)
+
+            content = json.dumps(data, indent=2)
+            if len(content) > 1900:
+                file = discord.File(fp="cold_war_modifiers.json", filename="cold_war_daily_backup.json")
+                await channel.send(content="🕐 Daily Cold War backup:", file=file)
+            else:
+                await channel.send(f"🕐 Daily Cold War backup:\n```json\n{content}\n```")
+
+        except Exception as e:
+            print(f"Scheduled backup failed: {e}")
     
     def load_data(self):
-        try:
-            with open(file_path, "r") as f:
-                self.cold_war_data = json.load(f)
+        with open("cold_war.json", "r") as f:
+            self.cold_war_data = json.load(f)
 
-            debug_log("Loaded top-level keys: " + str(self.cold_war_data.keys()))
-        except Exception as e:
-            debug_log("Failed to load cold_war.json:", e)
+        with open("cold_war_modifiers.json", "r") as f:
+            modifiers = json.load(f)
+
+        # Merge top-level keys like turn, day, etc.
+        for key, val in modifiers.items():
+            if key == "countries":
+                continue
+            self.cold_war_data[key] = val
+
+        # Merge country-specific values
+        for country, dyn_data in modifiers.get("countries", {}).items():
+            static_country = self.cold_war_data["countries"].setdefault(country, {})
+
+            for section, dyn_val in dyn_data.items():
+                if isinstance(dyn_val, dict):
+                    static_section = static_country.setdefault(section, {})
+
+                    for subkey, subval in dyn_val.items():
+                        base_val = static_section.get(subkey)
+
+                        # Apply delta for numeric values
+                        if isinstance(base_val, (int, float)) and isinstance(subval, (int, float)):
+                            static_section[subkey] = base_val + subval
+                        else:
+                            static_section[subkey] = subval
+                else:
+                    base_val = static_country.get(section)
+
+                    # Apply delta at top-level numeric fields
+                    if isinstance(base_val, (int, float)) and isinstance(dyn_val, (int, float)):
+                        static_country[section] = base_val + dyn_val
+                    else:
+                        static_country[section] = dyn_val
+
     
     def save_data(self):
         try:
-            # Reload the original file to preserve static data
-            with open(file_path, "r") as f:
-                original_data = json.load(f)
+            dynamic = {}
 
-            # Preserve static keys like NATIONAL PROJECTS
-            for key in ["NATIONAL PROJECTS", "tech_tree", "DOCTRINES"]:
-                if key in original_data:
-                    self.cold_war_data[key] = original_data[key]
+            # Preserve global tick info
+            for k in ["turn", "current_year", "day"]:
+                if k in self.cold_war_data:
+                    dynamic[k] = self.cold_war_data[k]
 
-            with open(file_path, "w") as f:
-                json.dump(self.cold_war_data, f, indent=2)
+            # Per-country delta save
+            dynamic["countries"] = {}
+            for country, cdata in self.cold_war_data.get("countries", {}).items():
+                d = {}
+
+                for key in ["research", "espionage", "national_projects", "abilities", "past_turns", "player_id"]:
+                    if key in cdata:
+                        d[key] = cdata[key]
+
+                if d:
+                    dynamic["countries"][country] = d
+
+            with open("cold_war_modifiers.json", "w") as f:
+                json.dump(dynamic, f, indent=2)
+            
+
         except Exception as e:
-            print("Failed to save the cold_war.json:", e)
+            print("Failed to save cold_war_modifiers.json:", e)
+
 
     
-    def cog_unload(self):
+    async def cog_unload(self):
+        self.scheduled_backup.cancel()
         self.save_data()
+        await backup_dynamic_json()
 
     async def autocomplete_country(self, interaction: discord.Interaction, current: str):
         return [

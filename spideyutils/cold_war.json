@@ -1,8 +1,5 @@
 {
   "name": "Cold War RP",
-  "turn": 0,
-  "current_year": 1952,
-  "period_limitation": false,
   "global_history": {
     "1943": {
       "Sino-Japanese Conflict Ends": {
@@ -181,7 +178,6 @@
   },
   "countries": {
     "United States": {
-      "player_id": 759677758431035433,
       "military": {
         "army_divisions": 60,
         "aviation_wings": 80,
@@ -214,29 +210,13 @@
           "Chemical Weapon Prototyping",
           "Digital Voice Transmission"
         ],
-        "in_progress_techs": {},
-        "research_slots": 5,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null,
-          "4": null,
-          "5": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0,
-          "4": 0,
-          "5": 0
-        }
+        "research_slots": 5
       },
       "country_history": {
         "1945": "United States drops atomic bomb on Berlin, killing Hitler and top Nazi leadership.",
         "1947": "Truman Doctrine announced to counter Soviet expansion through nuclear deterrence.",
         "1952": "United States unveils its 500th nuclear warhead, escalating Cold War tensions."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 95,
         "doctrine_focus": "containment",
@@ -354,30 +334,10 @@
       "espionage": {
         "foreign_intelligence_score": 90,
         "domestic_intelligence_score": 85,
-        "spy_network_score": 80,
-        "spy_networks": {
-          "United Kingdom": 85,
-          "French Republic": 85,
-          "Germany": 80,
-          "Soviet Union": 65,
-          "Empire of Japan": 45
-        }
-      },
-      "national_projects": {
-          "nuclear_weapons": {
-            "status": "paused_development",
-            "days_remaining": null,
-            "milestones_completed": [
-              "milestone_1",
-              "milestone_2",
-              "milestone_3"
-            ]
-          },
-          "abilities": ["unlock_nuclear_production"]
-        }
+        "spy_network_score": 80
+      }
     },
     "Soviet Union": {
-      "player_id": 735313620719632425,
       "military": {
         "army_divisions": 120,
         "aviation_wings": 60,
@@ -409,22 +369,7 @@
           "Wartime Radio & Radar Systems",
           "Postwar Industrial Grid"
         ],
-        "in_progress_techs": {},
-        "research_slots": 5,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null,
-          "4": null,
-          "5": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0,
-          "4": 0,
-          "5": 0
-        }
+        "research_slots": 5
       },
       "country_history": {
         "1946": "Stalin dies unexpectedly. Lavrentiy Beria assumes power amid Kremlin intrigue.",
@@ -434,7 +379,6 @@
           "Beria begins full militarization of Poland"
         ]
       },
-      "past_turns": {},
       "global": {
         "global_influence": 90,
         "doctrine_focus": "revolutionary socialism",
@@ -563,16 +507,10 @@
       "espionage": {
         "foreign_intelligence_score": 85,
         "domestic_intelligence_score": 75,
-        "spy_network_score": 75,
-        "spy_networks": {
-          "Republic of Turkey": 85,
-          "Germany": 80,
-          "United States": 65
-        }
+        "spy_network_score": 75
       }
     },
     "United Kingdom": {
-      "player_id": 650814947437182977,
       "military": {
         "army_divisions": 35,
         "aviation_wings": 40,
@@ -605,29 +543,13 @@
           "Wartime Radio & Radar Systems",
           "Heavy Bomber Retention"
         ],
-        "in_progress_techs": {},
-        "research_slots": 5,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null,
-          "4": null,
-          "5": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0,
-          "4": 0,
-          "5": 0
-        }
+        "research_slots": 5
       },
       "country_history": {
         "1946": "United Kingdom retains full control of India after suppressing independence movements.",
         "1949": "British Empire formalizes new Commonwealth Compact, strengthening colonial bonds.",
         "1951": "Churchill returns to power, pledging to restore imperial prestige."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 85,
         "doctrine_focus": "imperial diplomacy",
@@ -754,17 +676,10 @@
       "espionage": {
         "foreign_intelligence_score": 80,
         "domestic_intelligence_score": 80,
-        "spy_network_score": 70,
-        "spy_networks": {
-          "United States": 85,
-          "French Republic": 85,
-          "Germany": 75,
-          "Soviet Union": 60
-        }
+        "spy_network_score": 70
       }
     },
     "Empire of Japan": {
-      "player_id": 721740604199141408,
       "military": {
         "army_divisions": 85,
         "aviation_wings": 55,
@@ -797,26 +712,12 @@
           "High-Explosive Warheads",
           "Postwar Industrial Grid"
         ],
-        "in_progress_techs": {},
-        "research_slots": 4,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null,
-          "4": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0,
-          "4": 0
-        }
+        "research_slots": 4
       },
       "country_history": {
         "1943": "Japan signs armistice with Chiang Kai-shek, annexing North China.",
         "1950": "Japan declares Greater East Asian Military Mandate, consolidating its empire."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 80,
         "doctrine_focus": "imperial restoration",
@@ -930,16 +831,10 @@
       "espionage": {
         "foreign_intelligence_score": 50,
         "domestic_intelligence_score": 90,
-        "spy_network_score": 65,
-        "spy_networks": {
-          "Republic of China (KMT)": 60,
-          "Soviet Union": 40,
-          "United States": 20
-        }
+        "spy_network_score": 65
       }
     },
     "Republic of China (KMT)": {
-      "player_id": 422159946956931083,
       "military": {
         "army_divisions": 95,
         "aviation_wings": 30,
@@ -971,25 +866,13 @@
           "Postwar Industrial Grid",
           "Protective Mask & Uniform Standards"
         ],
-        "in_progress_techs": {},
-        "research_slots": 3,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0
-        }
+        "research_slots": 3
       },
       "country_history": {
         "1947": "KMT defeats Chinese communists with covert Japanese military aid.",
         "1949": "KMT recognized by the UN as legitimate government of China.",
         "1951": "Warlord uprisings erupt in western provinces, threatening KMT cohesion."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 70,
         "doctrine_focus": "nationalist unity",
@@ -1103,16 +986,10 @@
       "espionage": {
         "foreign_intelligence_score": 55,
         "domestic_intelligence_score": 60,
-        "spy_network_score": 50,
-        "spy_networks": {
-          "United States": 50,
-          "Empire of Japan": 60,
-          "Soviet Union": 10
-        }
+        "spy_network_score": 50
       }
     },
     "Germany": {
-      "player_id": 751471305894920304,
       "military": {
         "army_divisions": 50,
         "aviation_wings": 20,
@@ -1145,20 +1022,7 @@
           "Protective Mask & Uniform Standards",
           "High-Velocity Main Guns"
         ],
-        "in_progress_techs": {},
-        "research_slots": 4,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null,
-          "4": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0,
-          "4": 0
-        }
+        "research_slots": 4
       },
       "country_history": {
         "1945": [
@@ -1174,7 +1038,6 @@
         "1951": "UN Commissioner Sir Gladwyn Jebb is assassinated in Frankfurt. The UN withdraws. A military junta seizes control.",
         "1952": "Armed skirmishes erupt between democratic and communist factions in Frankfurt."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 35,
         "doctrine_focus": "fragmented",
@@ -1321,12 +1184,10 @@
       "espionage": {
         "foreign_intelligence_score": 30,
         "domestic_intelligence_score": 25,
-        "spy_network_score": 20,
-        "spy_networks": {}
+        "spy_network_score": 20
       }
     },
     "Kingdom of Spain": {
-      "player_id": 684457913250480143,
       "military": {
         "army_divisions": 25,
         "aviation_wings": 12,
@@ -1356,25 +1217,13 @@
           "Post-War Field Guns",
           "Postwar Industrial Grid"
         ],
-        "in_progress_techs": {},
-        "research_slots": 3,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0
-        }
+        "research_slots": 3
       },
       "country_history": {
         "1940": "Carlist faction wins Spanish Civil War, establishes traditionalist monarchy.",
         "1947": "Spain signs Concordat with the Vatican, forming ideological backbone of Catholic Pact.",
         "1948": "Spain formally recognizes the Austrian Empire as legitimate successor to Holy Rome."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 55,
         "doctrine_focus": "Catholic traditionalism",
@@ -1480,16 +1329,10 @@
       "espionage": {
         "foreign_intelligence_score": 40,
         "domestic_intelligence_score": 70,
-        "spy_network_score": 45,
-        "spy_networks": {
-          "Austrian Empire": 85,
-          "Kingdom of Italy": 65,
-          "France": 45
-        }
+        "spy_network_score": 45
       }
     },
     "Austrian Empire": {
-      "player_id": 684457913250480143,
       "military": {
         "army_divisions": 18,
         "aviation_wings": 10,
@@ -1520,25 +1363,13 @@
           "Postwar Industrial Grid",
           "Protective Mask & Uniform Standards"
         ],
-        "in_progress_techs": {},
-        "research_slots": 3,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0
-        }
+        "research_slots": 3
       },
       "country_history": {
         "1946": "Otto von Habsburg returns to Austria amid royalist resurgence.",
         "1947": "Austrian Empire is restored by constitutional referendum.",
         "1948": "Austria and Spain establish Catholic Pact for continental diplomacy."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 60,
         "doctrine_focus": "dynastic legitimacy",
@@ -1653,15 +1484,10 @@
       "espionage": {
         "foreign_intelligence_score": 35,
         "domestic_intelligence_score": 65,
-        "spy_network_score": 40,
-        "spy_networks": {
-          "Kingdom of Spain": 85,
-          "Kingdom of Italy": 60
-        }
+        "spy_network_score": 40
       }
     },
     "France": {
-      "player_id": 558327879952498708,
       "military": {
         "army_divisions": 25,
         "aviation_wings": 20,
@@ -1693,18 +1519,7 @@
           "Wartime Radio & Radar Systems",
           "Postwar Industrial Grid"
         ],
-        "in_progress_techs": {},
-        "research_slots": 3,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0
-        }
+        "research_slots": 3
       },
       "country_history": {
         "1945": "French provisional government re-established following Nazi occupation.",
@@ -1713,7 +1528,6 @@
         "1950": "French forces suppress uprising in Algiers, reinforcing their grip on Algeria, Morocco, and Madagascar.",
         "1952": "Internal political gridlock intensifies between Gaullists, republicans, and left-wing coalitions."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 60,
         "doctrine_focus": "protectionism",
@@ -1812,16 +1626,10 @@
       "espionage": {
         "domestic_intelligence_score": 50,
         "foreign_intelligence_score": 60,
-        "spy_network_score": 40,
-        "spy_networks": {
-          "Germany": 60,
-          "Soviet Union": 50,
-          "United Kingdom": 40
-        }
+        "spy_network_score": 40
       }
     },
     "Turkey": {
-      "player_id": 261908926889459713,
       "military": {
         "army_divisions": 18,
         "aviation_wings": 10,
@@ -1851,18 +1659,7 @@
           "Post-War Field Guns",
           "Postwar Industrial Grid"
         ],
-        "in_progress_techs": {},
-        "research_slots": 3,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0
-        }
+        "research_slots": 3
       },
       "country_history": {
         "1945": "Turkey maintains neutrality through the final phase of World War II.",
@@ -1871,7 +1668,6 @@
         "1951": "Naval buildup begins in the Aegean to counter Soviet Black Sea activity.",
         "1952": "Political debate erupts over whether Turkey should join a Western alliance."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 50,
         "doctrine_focus": "traditionalism",
@@ -1969,16 +1765,10 @@
       "espionage": {
         "domestic_intelligence_score": 40,
         "foreign_intelligence_score": 30,
-        "spy_network_score": 30,
-        "spy_networks": {
-          "Soviet Union": 30,
-          "United States": 30,
-          "Germany": 30
-        }
+        "spy_network_score": 30
       }
     },
     "Kingdom of Italy": {
-      "player_id": 982830901836791839,
       "military": {
         "army_divisions": 22,
         "aviation_wings": 16,
@@ -2009,25 +1799,13 @@
           "Wartime Radio & Radar Systems",
           "Postwar Industrial Grid"
         ],
-        "in_progress_techs": {},
-        "research_slots": 3,
-        "active_slots": {
-          "1": null,
-          "2": null,
-          "3": null
-        },
-        "carryover_days": {
-          "1": 0,
-          "2": 0,
-          "3": 0
-        }
+        "research_slots": 3
       },
       "country_history": {
         "1945": "Italy avoids direct involvement in WWII and begins expanding influence in the Balkans through diplomacy.",
         "1947": "Annexes Dalmatia peacefully and establishes a royal protectorate over Albania under King Umberto II.",
         "1951": "Stability is maintained, but observers note the resurgence of ultranationalist elements within the officer corps."
       },
-      "past_turns": {},
       "global": {
         "global_influence": 58,
         "doctrine_focus": "combined_arms",
@@ -2116,12 +1894,7 @@
       "espionage": {
         "domestic_intelligence_score": 50,
         "foreign_intelligence_score": 40,
-        "spy_network_score": 35,
-        "spy_networks": {
-          "Kingdom of Spain": 60,
-          "Austrian Empire": 55,
-          "Federation of Balkan Republics": 50
-        }
+        "spy_network_score": 35
       }
     }
   },
@@ -3839,7 +3612,9 @@
           "description": "Facility designs and uranium refinement routes are formalized.",
           "duration_days": 480,
           "base_success_chance": 0.75,
-          "grants": ["unlock_nuclear_production"],
+          "grants": [
+            "unlock_nuclear_production"
+          ],
           "success_flavor": "Warheads begin rolling out in limited batches. Global power shifts.",
           "failure_flavor": "Engineering errors and political hesitation stall progress indefinitely."
         },
@@ -3848,16 +3623,20 @@
           "description": "The push for fusion yields a design hundreds of times more powerful than fission bombs.",
           "duration_days": 540,
           "base_success_chance": 0.5,
-          "grants": ["unlock_hydrogen_bombs"],
-          "success_flavor": "The heat of the sun — captured in a bomb. Few dare speak of what they've made.",
-          "failure_flavor": "The secondary stage collapses — fusion unachieved. A costly failure."
+          "grants": [
+            "unlock_hydrogen_bombs"
+          ],
+          "success_flavor": "The heat of the sun \u2014 captured in a bomb. Few dare speak of what they've made.",
+          "failure_flavor": "The secondary stage collapses \u2014 fusion unachieved. A costly failure."
         },
         "milestone_5": {
           "name": "Submarine Nuclear Deployment",
           "description": "Retrofits and launch systems allow for strategic underwater nuclear deterrence.",
           "duration_days": 600,
           "base_success_chance": 0.6,
-          "grants": ["enable_nuclear_submarines"],
+          "grants": [
+            "enable_nuclear_submarines"
+          ],
           "success_flavor": "Beneath the waves, missiles slumber. No city is beyond reach now.",
           "failure_flavor": "Launch systems fail pressure tests. Safety reviews halt all progress."
         }
@@ -3878,15 +3657,17 @@
           "duration_days": 420,
           "base_success_chance": 0.7,
           "grants": [],
-          "success_flavor": "The capsule touched space — if only for a moment.",
+          "success_flavor": "The capsule touched space \u2014 if only for a moment.",
           "failure_flavor": "Ignition error. The prototype crashes in a remote field."
         },
         "milestone_3": {
           "name": "Orbital Satellite Deployment",
-          "description": "A functioning satellite is launched into Earth’s orbit, transmitting data home.",
+          "description": "A functioning satellite is launched into Earth\u2019s orbit, transmitting data home.",
           "duration_days": 480,
           "base_success_chance": 0.75,
-          "grants": ["unlock_satellite_capabilities"],
+          "grants": [
+            "unlock_satellite_capabilities"
+          ],
           "success_flavor": "Signal acquired. The satellite circles above, watching.",
           "failure_flavor": "Trajectory miscalculated. The satellite burns up in the atmosphere."
         },
@@ -3904,9 +3685,11 @@
           "description": "A human astronaut is launched, orbits Earth, and returns safely.",
           "duration_days": 540,
           "base_success_chance": 0.65,
-          "grants": ["unlock_manned_spaceflight"],
+          "grants": [
+            "unlock_manned_spaceflight"
+          ],
           "success_flavor": "He lived. And he saw the world from the stars.",
-          "failure_flavor": "Parachute failure — silence from reentry. Tragedy shakes the program."
+          "failure_flavor": "Parachute failure \u2014 silence from reentry. Tragedy shakes the program."
         },
         "milestone_6": {
           "name": "EVA Suit Test",
@@ -3914,7 +3697,7 @@
           "duration_days": 400,
           "base_success_chance": 0.7,
           "grants": [],
-          "success_flavor": "The suit held. A figure floated above Earth — tethered only by cable and courage.",
+          "success_flavor": "The suit held. A figure floated above Earth \u2014 tethered only by cable and courage.",
           "failure_flavor": "Seal breach during vacuum test. Revisions ordered, silence kept."
         },
         "milestone_7": {
@@ -3922,8 +3705,10 @@
           "description": "A robotic probe reaches the Moon and transmits surface data.",
           "duration_days": 480,
           "base_success_chance": 0.6,
-          "grants": ["unlock_moon_targeting"],
-          "success_flavor": "The probe lives. It sees rock and shadow — and speaks across the void.",
+          "grants": [
+            "unlock_moon_targeting"
+          ],
+          "success_flavor": "The probe lives. It sees rock and shadow \u2014 and speaks across the void.",
           "failure_flavor": "No response. The Moon remains untouched, indifferent."
         },
         "milestone_8": {
@@ -3932,7 +3717,7 @@
           "duration_days": 520,
           "base_success_chance": 0.55,
           "grants": [],
-          "success_flavor": "Captured by the Moon’s pull, then flung back home. The corridor is real.",
+          "success_flavor": "Captured by the Moon\u2019s pull, then flung back home. The corridor is real.",
           "failure_flavor": "Loss of trajectory. The capsule drifts into deep space."
         },
         "milestone_9": {
@@ -3940,7 +3725,9 @@
           "description": "Landing craft, propulsion, and trajectory models are combined for human deployment.",
           "duration_days": 600,
           "base_success_chance": 0.5,
-          "grants": ["unlock_moon_missions"],
+          "grants": [
+            "unlock_moon_missions"
+          ],
           "success_flavor": "A single boot touches lunar dust. History is etched in silence.",
           "failure_flavor": "Landing thrusters fail. The crater becomes a tomb."
         }
@@ -3948,9 +3735,15 @@
     },
     "project_scientists": {
       "Dr. Enrico Cortez": {
-        "fields": ["nuclear_weapons"],
-        "available_to": ["United States", "Spain", "France"],
-        "efficiency_bonus": 0.10,
+        "fields": [
+          "nuclear_weapons"
+        ],
+        "available_to": [
+          "United States",
+          "Spain",
+          "France"
+        ],
+        "efficiency_bonus": 0.1,
         "intelligence_bonus": 0.05,
         "flavor_messages": {
           "start": "Dr. Cortez has accepted the assignment. He warns: 'Keep the politicians away from the math.'",
@@ -3964,8 +3757,14 @@
         "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361802092611768460/ChatGPT_Image_Apr_15_2025_01_35_07_PM.png?ex=68001487&is=67fec307&hm=e3b64004f411d82bcaccde4eef7b667972fac6ec63bc74e153455d0753f2b3a1&"
       },
       "Dr. Ayaka Nomura": {
-        "fields": ["space_program"],
-        "available_to": ["Japan", "United States", "Germany"],
+        "fields": [
+          "space_program"
+        ],
+        "available_to": [
+          "Japan",
+          "United States",
+          "Germany"
+        ],
         "efficiency_bonus": 0.12,
         "intelligence_bonus": 0.03,
         "flavor_messages": {
@@ -3974,20 +3773,27 @@
             "Ayaka reports minimal drift in trajectory simulations.",
             "'I need better gyros, not better excuses.'"
           ],
-          "success": "The capsule entered orbit. Nomura doesn’t smile, she nods.",
+          "success": "The capsule entered orbit. Nomura doesn\u2019t smile, she nods.",
           "failure": "'Next time, calculate twice.'"
         },
         "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361802910857564181/ChatGPT_Image_Apr_15_2025_01_38_02_PM.png?ex=6800154b&is=67fec3cb&hm=90fc776ac217b1c06b60f81a868c65b2a858bb104f5ee4507c5b47c19fb1f9f7&"
       },
       "Dr. Klaus Vortmeyer": {
-        "fields": ["space_program", "nuclear_weapons"],
-        "available_to": ["Germany", "Austria", "United Kingdom"],
+        "fields": [
+          "space_program",
+          "nuclear_weapons"
+        ],
+        "available_to": [
+          "Germany",
+          "Austria",
+          "United Kingdom"
+        ],
         "efficiency_bonus": 0.08,
-        "intelligence_bonus": 0.10,
+        "intelligence_bonus": 0.1,
         "flavor_messages": {
           "start": "Vortmeyer arrives in a tailored trench coat. 'Progress is inevitable. Morality is negotiable.'",
           "progress": [
-            "'This reminds me of Peenemünde — only with less oversight.'",
+            "'This reminds me of Peenem\u00fcnde \u2014 only with less oversight.'",
             "Klaus laughs alone in the lab, muttering about payload-to-orbit ratios."
           ],
           "success": "'It performed exactly as modeled. I was never in doubt.'",
@@ -3996,12 +3802,18 @@
         "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361808262562840787/ChatGPT_Image_Apr_15_2025_01_59_31_PM.png?ex=68001a46&is=67fec8c6&hm=0ddcae554aeffcbd90a8c36d0f66594f321559fa9cca8bfe6bb954311a50707b&"
       },
       "Prof. Isidora Velasquez": {
-        "fields": ["space_program"],
-        "available_to": ["Spain", "Mexico", "United States"],
+        "fields": [
+          "space_program"
+        ],
+        "available_to": [
+          "Spain",
+          "Mexico",
+          "United States"
+        ],
         "efficiency_bonus": 0.11,
         "intelligence_bonus": 0.04,
         "flavor_messages": {
-          "start": "'I build things to touch the stars. Don’t hand me a wrench without reverence.'",
+          "start": "'I build things to touch the stars. Don\u2019t hand me a wrench without reverence.'",
           "progress": [
             "'Telemetry is holding. Trajectory is beautiful. I could cry.'",
             "Velasquez scribbles equations on the walls again. She's close to something."
@@ -4011,10 +3823,6 @@
         },
         "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361809235226394684/ChatGPT_Image_Apr_15_2025_02_03_32_PM.png?ex=68001b2e&is=67fec9ae&hm=b6502adfbae5add00b2a5c8d3b5e737787798e72fa4994f1ad424c0969639b5d&"
       }
-
-
     }
-
-
   }
 }
