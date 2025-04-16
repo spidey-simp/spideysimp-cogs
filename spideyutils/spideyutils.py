@@ -11,10 +11,10 @@ from datetime import datetime
 import re
 from collections import defaultdict
 
-BASE_DIR = "/mnt/data/rpdata"
+BASE_DIR = os.path.dirname(__file__)
 
-
-file_path = os.path.join(os.path.dirname(__file__), "cold_war_modifiers.json")
+static_path = os.path.join(BASE_DIR, "cold_war.json")
+dynamic_path = os.path.join(BASE_DIR, "cold_war_modifiers.json")
 
 
 def debug_log(message):
@@ -27,7 +27,7 @@ BACKUP_CHANNEL_ID = 1357944150502412288
 
 async def backup_dynamic_json(self):
     try:
-        with open("cold_war_modifiers.json", "r") as f:
+        with open(dynamic_path, "r") as f:
             data = json.load(f)
 
         channel = self.bot.get_channel(BACKUP_CHANNEL_ID)
@@ -37,7 +37,7 @@ async def backup_dynamic_json(self):
         content = json.dumps(data, indent=2)
         if len(content) > 1900:
             # If too big for a single message, send as a file
-            file = discord.File(fp="cold_war_modifiers.json", filename="cold_war_backup.json")
+            file = discord.File(fp=dynamic_path, filename="cold_war_backup.json")
             await channel.send(content="📦 Cold War dynamic data backup on cog unload:", file=file)
         else:
             await channel.send(f"📦 Cold War dynamic data backup on cog unload:\n```json\n{content}\n```")
@@ -235,7 +235,7 @@ class ResearchConfirmView(discord.ui.View):
             msg = f"🛠 `{self.tech_name}` is now being researched in slot {self.slot}.\nEstimated time: {self.remaining_days} days."
 
         # 🧠 Save changes to disk
-        with open(file_path, "w") as f:
+        with open(dynamic_path, "w") as f:
             json.dump(self.data_ref, f, indent=2)
 
         await interaction.response.edit_message(content=msg, embed=None, view=None)
@@ -258,7 +258,7 @@ class SpideyUtils(commands.Cog):
     @tasks.loop(hours=24)
     async def scheduled_backup(self):
         try:
-            with open("cold_war_modifiers.json", "r") as f:
+            with open(dynamic_path, "r") as f:
                 data = json.load(f)
 
             channel = self.bot.get_channel(BACKUP_CHANNEL_ID)
@@ -267,7 +267,7 @@ class SpideyUtils(commands.Cog):
 
             content = json.dumps(data, indent=2)
             if len(content) > 1900:
-                file = discord.File(fp="cold_war_modifiers.json", filename="cold_war_daily_backup.json")
+                file = discord.File(fp=dynamic_path, filename="cold_war_daily_backup.json")
                 await channel.send(content="🕐 Daily Cold War backup:", file=file)
             else:
                 await channel.send(f"🕐 Daily Cold War backup:\n```json\n{content}\n```")
@@ -276,10 +276,10 @@ class SpideyUtils(commands.Cog):
             print(f"Scheduled backup failed: {e}")
     
     def load_data(self):
-        with open("cold_war.json", "r") as f:
+        with open(static_path, "r") as f:
             self.cold_war_data = json.load(f)
 
-        with open("cold_war_modifiers.json", "r") as f:
+        with open(dynamic_path, "r") as f:
             modifiers = json.load(f)
 
         # Merge top-level keys like turn, day, etc.
@@ -335,7 +335,7 @@ class SpideyUtils(commands.Cog):
                 if d:
                     dynamic["countries"][country] = d
 
-            with open("cold_war_modifiers.json", "w") as f:
+            with open(dynamic_path, "w") as f:
                 json.dump(dynamic, f, indent=2)
             
 
