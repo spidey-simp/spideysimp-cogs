@@ -899,34 +899,35 @@ class SpideyUtils(commands.Cog):
 
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-    @app_commands.command(name="view_projects", description="View your active or completed national projects.")
+    @app_commands.command(name="view_projects", description="View the status of your nation's strategic development projects.")
     @app_commands.autocomplete(country=autocomplete_my_country)
     async def view_projects(self, interaction: discord.Interaction, country: str = None):
         await interaction.response.defer(thinking=True)
 
-        # Auto-resolve country
-        countries = self.cold_war_data.get("countries", {})
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+
         if not country:
-            for c_key, data in countries.items():
-                if data.get("player_id") == interaction.user.id:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
 
-        if not country or country not in countries:
-            return await interaction.followup.send("❌ Country not found or not assigned to you.", ephemeral=True)
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
-        data = countries[country]
+        data = self.cold_war_data["countries"][country]
         projects = data.get("national_projects", {})
         all_defs = self.cold_war_data.get("NATIONAL PROJECTS", {}).get("milestones", {})
 
         embed = discord.Embed(
             title=f"🔬 {country} – National Projects",
             description="Progress on major strategic programs:",
-            color=discord.Color.dark_purple()
+            color=discord.Color.purple()
         )
 
         if not projects:
-            embed.description = "*No national projects are currently active or completed.*"
+            embed.description += "\n\n❌ No active or paused national projects."
             return await interaction.followup.send(embed=embed, ephemeral=True)
 
         for project_key, p_data in projects.items():
@@ -935,22 +936,23 @@ class SpideyUtils(commands.Cog):
             days = p_data.get("days_remaining", "—")
             completed = p_data.get("milestones_completed", [])
 
-            milestone_data = milestone_defs.get(status)
-            if milestone_data:
-                milestone_title = milestone_data.get("name", "Unnamed Milestone")
-            else:
-                milestone_title = "Unknown"
+            # Convert milestone key to title
+            milestone_title = "—"
+            if status in milestone_defs:
+                milestone_title = milestone_defs[status].get("name", "—")
+            elif status == "paused_development":
+                milestone_title = "Development Paused"
 
-            pretty_status = status.replace("_", " ").title() if status not in milestone_defs else f"{status} – {milestone_title}"
-            summary = f"📍 **Status:** {pretty_status}\n"
+            summary = f"📍 **Status:** `{status}` – {milestone_title}\n"
             if isinstance(days, int):
                 summary += f"⏳ **Days remaining:** {days}\n"
             summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}"
-            summary += f"\n🛠️ DEBUG: status={status}, lookup_keys={list(milestone_defs.keys())}"
+
             name = "🧪 " + project_key.replace("_", " ").title()
             embed.add_field(name=name, value=summary, inline=False)
 
         await interaction.followup.send(embed=embed, ephemeral=True)
+
 
     
     def redact_paragraph_weighted(self, text, knowledge):
