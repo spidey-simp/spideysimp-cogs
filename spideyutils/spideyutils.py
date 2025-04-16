@@ -935,10 +935,14 @@ class SpideyUtils(commands.Cog):
             days = p_data.get("days_remaining", "—")
             completed = p_data.get("milestones_completed", [])
 
-            milestone_title = milestone_defs.get(status, {}).get("name", status.replace('_', ' ').title())
+            milestone_data = milestone_defs.get(status)
+            if milestone_data:
+                milestone_title = milestone_data.get("name", "Unnamed Milestone")
+            else:
+                milestone_title = "Unknown"
 
-            summary = f"📍 **Status:** `{status}` – {milestone_title}\n"
             pretty_status = status.replace("_", " ").title() if status not in milestone_defs else f"{status} – {milestone_title}"
+            summary = f"📍 **Status:** `{pretty_status}\n"
             if isinstance(days, int):
                 summary += f"⏳ **Days remaining:** {days}\n"
             summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}"
