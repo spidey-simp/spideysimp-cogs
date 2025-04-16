@@ -20,7 +20,7 @@ from datetime import datetime
 
 def debug_log(message):
     log_path = os.path.expanduser("~/debug_output.log")
-    with open("log_path", "a") as f:
+    with open(log_path, "a") as f:
         f.write(f"[{datetime.now()}] {message}\n")
 
 
