@@ -1541,7 +1541,7 @@ class SpideyUtils(commands.Cog):
     async def spy_hq(self, interaction: discord.Interaction, country: str = None):
         await interaction.response.defer(ephemeral=True)
 
-        # Determine player country
+        # Resolve country
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
@@ -1561,13 +1561,16 @@ class SpideyUtils(commands.Cog):
 
         op_defs = self.cold_war_data.get("ESPIONAGE", {}).get("operations", {})
 
-        embed = discord.Embed(
+        embeds = []
+
+        # 🕵️ Headquarters Overview Embed
+        main_embed = discord.Embed(
             title="🕵️ Espionage Headquarters",
             description="`// CONFIDENTIAL - DO NOT COPY //`\n`// FOR EYES ONLY //`",
             color=discord.Color.dark_purple()
         )
-        embed.add_field(name="Total Field Operatives", value=str(total_ops))
-        embed.add_field(name="Unassigned Operatives", value=str(available_ops), inline=True)
+        main_embed.add_field(name="Total Field Operatives", value=str(total_ops))
+        main_embed.add_field(name="Unassigned Operatives", value=str(available_ops), inline=True)
 
         available_assignments = []
         for op_key, op in op_defs.items():
@@ -1577,18 +1580,25 @@ class SpideyUtils(commands.Cog):
                 available_assignments.append(f"• {op_key.replace('_', ' ').title()} — requires {req}+ network")
 
         if available_assignments:
-            embed.add_field(name="Available Assignments", value="\n".join(available_assignments), inline=False)
+            main_embed.add_field(name="Available Assignments", value="\n".join(available_assignments), inline=False)
 
+        embeds.append(main_embed)
+
+        # 🎯 Per-Country Intelligence Briefings
         tracked_targets = set(spy_networks.keys()) | set(assigned_ops.keys())
-        sorted_targets = sorted(tracked_targets, key=lambda c: spy_networks.get(c, 0), reverse=True)[:6]
+        sorted_targets = sorted(tracked_targets, key=lambda c: spy_networks.get(c, 0), reverse=True)
 
         for t in sorted_targets:
             net = spy_networks.get(t, 0)
             ops = assigned_ops.get(t, {})
-            field_title = f"🇺🇳 {t}"
-            field_body = "`// CONFIDENTIAL - DO NOT COPY //`\n`// CLASSIFIED INTELLIGENCE - FOR EYES ONLY //`\n"
-            field_body += f"Spy Network: **{net}**\n"
+            per_embed = discord.Embed(
+                title=f"🇺🇳 {t}",
+                description="`// CONFIDENTIAL - DO NOT COPY //`\n`// CLASSIFIED INTELLIGENCE - FOR EYES ONLY //`",
+                color=discord.Color.blurple()
+            )
+            per_embed.add_field(name="Spy Network", value=str(net), inline=True)
 
+            # Active missions
             if ops:
                 lines = []
                 for name, val in ops.items():
@@ -1597,20 +1607,22 @@ class SpideyUtils(commands.Cog):
                         lines.append(f"• {name} ({param_str})")
                     else:
                         lines.append(f"• {name}")
-                field_body += "Active Missions:\n" + "\n".join(lines)
+                per_embed.add_field(name="Active Missions", value="\n".join(lines), inline=False)
             else:
-                field_body += "Active Missions: *None*\n"
+                per_embed.add_field(name="Active Missions", value="*None*", inline=False)
 
+            # Eligible ops
             eligible_ops = []
             for key, op in op_defs.items():
                 if available_ops >= op.get("required_operatives", 1) and net >= op.get("network_requirement", 0):
                     eligible_ops.append(f"• {key.replace('_', ' ').title()} – {op['description'][:80]}...")
+
             if eligible_ops:
-                field_body += "\nEligible Operations:\n" + "\n".join(eligible_ops)
+                per_embed.add_field(name="Eligible Operations", value="\n".join(eligible_ops), inline=False)
 
-            embed.add_field(name=field_title, value=field_body[:1024], inline=False)
+            embeds.append(per_embed)
 
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embeds=embeds)
 
     
     @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
