@@ -53,29 +53,44 @@ class ConfirmSpyAssignView(discord.ui.View):
         self.target = target
         self.operation = operation
         self.op_data = op_data
-        self.params = params  # {"ideology": ..., "project": ...}
+        self.params = params
 
     @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: Interaction, button: discord.ui.Button):
-        # re‑resolve actor_data & checks (in case state changed in the meantime)
+        # ensure our data is initialized
         self.cog.init_spy_data(self.country)
         actor = self.cog.cold_war_data["countries"][self.country]["espionage"]
 
-        # deduct
-        actor["operatives_available"] -= self.op_data.get("required_operatives", 1)
+        # recompute free = total – sum(already assigned)
+        total = actor.get("total_operatives", 0)
+        assigned = actor.get("assigned_ops", {})
+        used = sum(
+            self.cog.cold_war_data["ESPIONAGE"]["operations"][op]["required_operatives"]
+            for tgt, ops in assigned.items()
+            for op in ops
+        )
+        free = total - used
 
-        # log assignment
-        assigned = actor["assigned_ops"].setdefault(self.target, {})
-        assigned[self.operation] = self.params or True
+        req = self.op_data.get("required_operatives", 1)
+        if free < req:
+            return await interaction.response.edit_message(
+                content=f"❌ Only {free} operatives free now — cannot assign {req}.",
+                embed=None, view=None
+            )
 
-        # save
+        # log the assignment
+        assigned.setdefault(self.target, {})[self.operation] = self.params or True
+
+        # optionally keep operatives_available in sync
+        actor["operatives_available"] = free - req
+
         self.cog.save_data()
 
         await interaction.response.edit_message(
             content=(
-                f"✅ **{self.country}** has launched `{self.operation.replace('_',' ').title()}` "
-                f"against **{self.target}**!\n"
-                f"🕵️ Operatives remaining: `{actor['operatives_available']}`"
+                f"✅ **{self.country}** has launched "
+                f"`{self.operation.replace('_',' ').title()}` against **{self.target}**!\n"
+                f"🕵️ Operatives remaining: `{free - req}`"
             ),
             embed=None,
             view=None
@@ -85,9 +100,9 @@ class ConfirmSpyAssignView(discord.ui.View):
     async def cancel(self, interaction: Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(
             content="❌ Operation canceled.",
-            embed=None,
-            view=None
+            embed=None, view=None
         )
+
 
 class RequestRoll(commands.Cog):
     def __init__(self, bot):
@@ -1529,17 +1544,19 @@ class SpideyUtils(commands.Cog):
         project="(If required) Project to monitor"
     )
     @app_commands.autocomplete(country=autocomplete_my_country, target=autocomplete_country, operation=autocomplete_espionage_actions)
-    @app_commands.choices(ideology=[
-        app_commands.Choice(name="Democratic", value="democratic"),
-        app_commands.Choice(name="Fascist", value="fascist"),
-        app_commands.Choice(name="Communist", value="communist"),
-        app_commands.Choice(name="Authoritarian", value="authoritarian"),
-        app_commands.Choice(name="Monarchic", value="monarchic")
-    ],
-    project=[
-        app_commands.Choice(name="Nuclear Weapons", value="nuclear_weapons"),
-        app_commands.Choice(name="Space Program", value="space_program")
-    ])
+    @app_commands.choices(
+        ideology=[
+            app_commands.Choice(name="Democratic", value="democratic"),
+            app_commands.Choice(name="Fascist",    value="fascist"),
+            app_commands.Choice(name="Communist",  value="communist"),
+            app_commands.Choice(name="Authoritarian", value="authoritarian"),
+            app_commands.Choice(name="Monarchic",  value="monarchic")
+        ],
+        project=[
+            app_commands.Choice(name="Nuclear Weapons", value="nuclear_weapons"),
+            app_commands.Choice(name="Space Program",    value="space_program")
+        ]
+    )
     async def assign_spy(
         self,
         interaction: Interaction,
@@ -1575,29 +1592,18 @@ class SpideyUtils(commands.Cog):
             if p == "ideology" and not ideology: missing.append("ideology")
             if p == "project"  and not project:  missing.append("project")
         if missing:
-            return await interaction.followup.send(f"❌ Missing required parameter(s): {', '.join(missing)}", ephemeral=True)
-
-        # ── Init & availability ──
-        self.init_spy_data(country)
-        actor = self.cold_war_data["countries"][country]["espionage"]
-        free = actor.get("operatives_available", 0)
-        req_ops = op_data.get("required_operatives", 1)
-        if free < req_ops:
-            return await interaction.followup.send(f"❌ You need at least {req_ops} available operatives.", ephemeral=True)
-        net = actor.get("spy_networks", {}).get(target, 0)
-        if net < op_data["network_requirement"]:
             return await interaction.followup.send(
-                f"❌ Network too weak in **{target}** (need {op_data['network_requirement']}, have {net}).",
+                f"❌ Missing required parameter(s): {', '.join(missing)}",
                 ephemeral=True
             )
 
-        # ── Build confirmation embed ──
+        # ── Prepare confirmation ──
         leader = self.cold_war_data["countries"][target].get("leader", {}).get("name", "<leader>")
         desc = op_data["description"].format(
             country=target,
             leader=leader,
-            ideology=ideology or "<ideology>",
-            project=project  or "<project>"
+            ideology=ideology  or "<ideology>",
+            project=project   or "<project>"
         )
         embed = Embed(
             title="🕵️ Confirm Espionage Operation",
@@ -1606,7 +1612,8 @@ class SpideyUtils(commands.Cog):
                 f"**Target:** {target}\n"
                 f"**Operation:** {operation.replace('_',' ').title()}\n\n"
                 f"**Details:** {desc}\n\n"
-                f"**Requires:** {req_ops} operatives, network ≥ {op_data['network_requirement']}"
+                f"**Requires:** {op_data.get('required_operatives',1)} operatives, "
+                f"network ≥ {op_data['network_requirement']}"
             ),
             color=discord.Color.dark_purple()
         )
