@@ -1581,14 +1581,10 @@ class SpideyUtils(commands.Cog):
 
     @app_commands.command(name="spy_hq", description="View your espionage headquarters and operational status.")
     @app_commands.autocomplete(country=autocomplete_my_country)
-    async def spy_hq(
-        self,
-        interaction: discord.Interaction,
-        country: str = None
-    ):
+    async def spy_hq(self, interaction: discord.Interaction, country: str = None):
         await interaction.response.defer(ephemeral=True)
 
-        # figure out which country you're playing as
+        # Resolve country
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
@@ -1597,16 +1593,13 @@ class SpideyUtils(commands.Cog):
                     country = c_key
                     break
         if not country or country not in self.cold_war_data["countries"]:
-            return await interaction.followup.send(
-                "❌ Could not determine your country.", ephemeral=True
-            )
+            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
-        # ensure we have the basic espionage fields
+        # Init and pull data
         self.init_spy_data(country)
         esp = self.cold_war_data["countries"][country]["espionage"]
-        op_defs = self.cold_war_data.get("ESPIONAGE", {}).get("operations", {})
-
         total_ops = esp.get("total_operatives", 0)
+        free_ops = esp.get("operatives_available", 0)
         assigned = esp.get("assigned_ops", {})
         # recompute “used” operatives from assignments
         used_ops = sum(
@@ -1616,66 +1609,87 @@ class SpideyUtils(commands.Cog):
         )
         free_ops = max(0, total_ops - used_ops)
         spy_nets = esp.get("spy_networks", {})
+        op_defs = self.cold_war_data.get("ESPIONAGE", {}).get("operations", {})
 
         embeds = []
 
-        # ——— HQ overview ———
-        hq = discord.Embed(
-            title=f"🕵️ Espionage Headquarters — {country}",
+        # 🕵️ Headquarters Overview
+        main = discord.Embed(
+            title="🕵️ Espionage Headquarters",
             description="`// CONFIDENTIAL - DO NOT COPY //`\n`// FOR EYES ONLY //`",
             color=discord.Color.dark_purple()
         )
-        hq.add_field(name="Total Field Operatives", value=str(total_ops), inline=False)
-        hq.add_field(name="Unassigned Operatives", value=str(free_ops), inline=False)
-
-        # what ops could you launch right now?
-        lines = []
+        main.add_field(name="Total Field Operatives", value=str(total_ops))
+        main.add_field(name="Unassigned Operatives", value=str(free_ops), inline=True)
+        # list assignments you could launch right now
+        avail = []
         for key, op in op_defs.items():
             req_net = op.get("network_requirement", 0)
             req_ops = op.get("required_operatives", 1)
             if free_ops >= req_ops:
-                lines.append(f"• {key.replace('_',' ').title()} — network ≥ {req_net}")
-        hq.add_field(name="Available Assignments", value="\n".join(lines) or "*None*", inline=False)
+                avail.append(f"• {key.replace('_',' ').title()} — network ≥ {req_net}")
+        if avail:
+            main.add_field(name="Available Assignments", value="\n".join(avail), inline=False)
 
-        embeds.append(hq)
+        embeds.append(main)
 
-        # ——— per‐target briefs ———
-        # show only targets you have a network or an assignment in, sorted by network
+        # 🎯 Per-country briefs
         tracked = set(spy_nets) | set(assigned)
         for tgt in sorted(tracked, key=lambda c: spy_nets.get(c, 0), reverse=True):
             net = spy_nets.get(tgt, 0)
             ops = assigned.get(tgt, {})
 
-            brief = discord.Embed(
+            e = discord.Embed(
                 title=f"🎯 {tgt}",
                 description="`// CONFIDENTIAL - DO NOT COPY //`\n`// CLASSIFIED INTELLIGENCE - FOR EYES ONLY //`",
                 color=discord.Color.blurple()
             )
-            brief.add_field(name="Spy Network", value=str(net), inline=False)
+            e.add_field(name="Spy Network", value=str(net), inline=True)
 
-            # Active Missions
+            # Active missions
             if ops:
-                active = []
+                lines = []
                 for name, params in ops.items():
                     if isinstance(params, dict):
-                        param_str = ", ".join(f"{k}:{v}" for k,v in params.items())
-                        active.append(f"• {name.replace('_',' ').title()} ({param_str})")
+                        pstr = ", ".join(f"{k}: {v}" for k,v in params.items())
+                        lines.append(f"• {name.replace('_',' ').title()} ({pstr})")
                     else:
-                        active.append(f"• {name.replace('_',' ').title()}")
-                brief.add_field(name="Active Missions", value="\n".join(active), inline=False)
+                        lines.append(f"• {name.replace('_',' ').title()}")
+                e.add_field(name="Active Missions", value="\n".join(lines), inline=False)
             else:
-                brief.add_field(name="Active Missions", value="*None*", inline=False)
+                e.add_field(name="Active Missions", value="*None*", inline=False)
 
-            # Eligible next ops
-            elig = []
+            # Eligible Operations with real leader names
+            eligible = []
             for key, op in op_defs.items():
-                if free_ops >= op.get("required_operatives",1) and net >= op.get("network_requirement",0):
-                    elig.append(f"• {key.replace('_',' ').title()} — {op['description']}")
-            brief.add_field(name="Eligible Operations", value="\n".join(elig) or "*None*", inline=False)
+                req_net = op.get("network_requirement", 0)
+                req_ops = op.get("required_operatives", 1)
+                if free_ops >= req_ops and net >= req_net:
+                    # fetch real leader for this target
+                    leader_name = (
+                        self.cold_war_data["countries"]
+                            .get(tgt, {})
+                            .get("leader", {})
+                            .get("name", "<leader>")
+                    )
+                    desc = op["description"].format(
+                        country=tgt,
+                        project="<project>",
+                        ideology="<ideology>",
+                        leader=leader_name
+                    )
+                    eligible.append(f"• {key.replace('_',' ').title()} — {desc}")
 
-            embeds.append(brief)
+            e.add_field(
+                name="Eligible Operations",
+                value="\n".join(eligible) or "*None*",
+                inline=False
+            )
+
+            embeds.append(e)
 
         await interaction.followup.send(embeds=embeds, ephemeral=True)
+
 
 
     
