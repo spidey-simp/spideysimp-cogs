@@ -286,71 +286,111 @@ class SpideyUtils(commands.Cog):
             print(f"Scheduled backup failed: {e}")
     
     def load_data(self):
-        with open(static_path, "r") as f:
-            self.cold_war_data = json.load(f)
+         # 1) load the static + dynamic JSON
+            with open(static_path, "r") as f:
+                self.cold_war_data = json.load(f)
+            with open(dynamic_path, "r") as f:
+                modifiers = json.load(f)
 
-        with open(dynamic_path, "r") as f:
-            modifiers = json.load(f)
+            # 2) merge top‐level tick info
+            for k in ("turn", "current_year", "day"):
+                if k in modifiers:
+                    self.cold_war_data[k] = modifiers[k]
 
-        # Merge top-level keys like turn, day, etc.
-        for key, val in modifiers.items():
-            if key == "countries":
-                continue
-            self.cold_war_data[key] = val
+            # 3) merge per‐country dynamic changes
+            for country, dyn_data in modifiers.get("countries", {}).items():
+                static_country = self.cold_war_data["countries"].setdefault(country, {})
 
-        # Merge country-specific values
-        for country, dyn_data in modifiers.get("countries", {}).items():
-            static_country = self.cold_war_data["countries"].setdefault(country, {})
+                # ——— espionage gets an overwrite of exactly these three keys ———
+                if "espionage" in dyn_data:
+                    esp = static_country.setdefault("espionage", {})
+                    esp.update({
+                        "spy_networks": dyn_data["espionage"].get("spy_networks", {}),
+                        "assigned_ops": dyn_data["espionage"].get("assigned_ops", {}),
+                        "operatives_available": dyn_data["espionage"].get("operatives_available", 0),
+                    })
 
-            for section, dyn_val in dyn_data.items():
-                if isinstance(dyn_val, dict):
-                    static_section = static_country.setdefault(section, {})
+                # ——— everything else still merges as base + delta ———
+                for section in ("research", "national_projects", "abilities", "past_turns", "player_id"):
+                    if section in dyn_data:
+                        dyn_val = dyn_data[section]
+                        base_section = static_country.setdefault(section, {} if isinstance(dyn_val, dict) else None)
 
-                    for subkey, subval in dyn_val.items():
-                        base_val = static_section.get(subkey)
-
-                        # Apply delta for numeric values
-                        if isinstance(base_val, (int, float)) and isinstance(subval, (int, float)):
-                            static_section[subkey] = base_val + subval
+                        # dict => merge subkeys
+                        if isinstance(dyn_val, dict):
+                            for subkey, subval in dyn_val.items():
+                                base_val = base_section.get(subkey)
+                                if isinstance(base_val, (int, float)) and isinstance(subval, (int, float)):
+                                    base_section[subkey] = base_val + subval
+                                else:
+                                    base_section[subkey] = subval
                         else:
-                            static_section[subkey] = subval
-                else:
-                    base_val = static_country.get(section)
+                            # non‐dict (e.g. player_id): overwrite
+                            static_country[section] = dyn_val
 
-                    # Apply delta at top-level numeric fields
-                    if isinstance(base_val, (int, float)) and isinstance(dyn_val, (int, float)):
-                        static_country[section] = base_val + dyn_val
-                    else:
-                        static_country[section] = dyn_val
-
-    
     def save_data(self):
         try:
+            # 1) load the original static file so we know the base values
+            with open(static_path, "r") as f:
+                static = json.load(f)
+
             dynamic = {}
 
-            # Preserve global tick info
-            for k in ["turn", "current_year", "day"]:
+            # 2) preserve your top‑level turn info
+            for k in ("turn", "current_year", "day"):
                 if k in self.cold_war_data:
                     dynamic[k] = self.cold_war_data[k]
 
-            # Per-country delta save
             dynamic["countries"] = {}
-            for country, cdata in self.cold_war_data.get("countries", {}).items():
-                d = {}
 
-                for key in ["research", "espionage", "national_projects", "abilities", "past_turns", "player_id"]:
-                    if key in cdata:
-                        d[key] = cdata[key]
+            for country, cdata in self.cold_war_data.get("countries", {}).items():
+                static_country = static.get("countries", {}).get(country, {})
+                d: dict = {}
+
+                # --- RESEARCH SECTION ---
+                if "research" in cdata:
+                    static_research = static_country.get("research", {})
+                    current_research = cdata["research"]
+                    dyn_research: dict = {}
+                    for key, val in current_research.items():
+                        base = static_research.get(key)
+                        # if both base and current are numbers, write the delta
+                        if isinstance(val, (int, float)) and isinstance(base, (int, float)):
+                            dyn_research[key] = val - base
+                        else:
+                            # otherwise just copy it (lists, dicts, nested dicts...)
+                            dyn_research[key] = val
+                    d["research"] = dyn_research
+
+                # --- ESPIONAGE SECTION ---
+                if "espionage" in cdata:
+                    static_esp = static_country.get("espionage", {})
+                    current_esp = cdata["espionage"]
+                    dyn_esp: dict = {}
+                    for key, val in current_esp.items():
+                        base = static_esp.get(key)
+                        if isinstance(val, (int, float)) and isinstance(base, (int, float)):
+                            dyn_esp[key] = val - base
+                        else:
+                            dyn_esp[key] = val
+                    d["espionage"] = dyn_esp
+
+                # --- NATIONAL PROJECTS, ABILITIES, PAST_TURNS, PLAYER_ID ---
+                # these you always want to overwrite in full
+                for section in ("national_projects", "abilities", "past_turns", "player_id"):
+                    if section in cdata:
+                        d[section] = cdata[section]
 
                 if d:
                     dynamic["countries"][country] = d
 
+            # 3) write out only the deltas
             with open(dynamic_path, "w") as f:
                 json.dump(dynamic, f, indent=2)
-            
 
         except Exception as e:
             print("Failed to save cold_war_modifiers.json:", e)
+
 
 
     
