@@ -332,6 +332,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 6,
         "foreign_intelligence_score": 90,
         "domestic_intelligence_score": 85,
         "spy_network_score": 80
@@ -505,6 +506,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 6,
         "foreign_intelligence_score": 85,
         "domestic_intelligence_score": 75,
         "spy_network_score": 75
@@ -674,6 +676,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 5,
         "foreign_intelligence_score": 80,
         "domestic_intelligence_score": 80,
         "spy_network_score": 70
@@ -829,6 +832,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 4,
         "foreign_intelligence_score": 50,
         "domestic_intelligence_score": 90,
         "spy_network_score": 65
@@ -984,6 +988,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 3,
         "foreign_intelligence_score": 55,
         "domestic_intelligence_score": 60,
         "spy_network_score": 50
@@ -1182,6 +1187,7 @@
         }
       ],
       "espionage": {
+        "total_operatives":3,
         "foreign_intelligence_score": 30,
         "domestic_intelligence_score": 25,
         "spy_network_score": 20
@@ -1327,6 +1333,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 3,
         "foreign_intelligence_score": 40,
         "domestic_intelligence_score": 70,
         "spy_network_score": 45
@@ -1482,6 +1489,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 3,
         "foreign_intelligence_score": 35,
         "domestic_intelligence_score": 65,
         "spy_network_score": 40
@@ -1624,6 +1632,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 3,
         "domestic_intelligence_score": 50,
         "foreign_intelligence_score": 60,
         "spy_network_score": 40
@@ -1763,6 +1772,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 3,
         "domestic_intelligence_score": 40,
         "foreign_intelligence_score": 30,
         "spy_network_score": 30
@@ -1892,6 +1902,7 @@
         }
       ],
       "espionage": {
+        "total_operatives": 3,
         "domestic_intelligence_score": 50,
         "foreign_intelligence_score": 40,
         "spy_network_score": 35
@@ -3824,5 +3835,126 @@
         "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361809235226394684/ChatGPT_Image_Apr_15_2025_02_03_32_PM.png?ex=68001b2e&is=67fec9ae&hm=b6502adfbae5add00b2a5c8d3b5e737787798e72fa4994f1ad424c0969639b5d&"
       }
     }
+  },
+  "ESPIONAGE": {
+      "operations": {
+        "expand_network": {
+          "network_requirement": 0,
+          "base_success_rate": 1.0,
+          "base_caught_or_kill_rate": 0.0,
+          "description": "Deploy operatives to expand your spy network in {country}.",
+          "actor_effects": [
+            {
+              "type": "add",
+              "path": "espionage.spy_networks.{target}",
+              "value": 10
+            }
+          ],
+          "target_effects": [],
+          "parameters": [],
+          "opp_knowledge": false,
+          "gm_knowledge": true,
+          "global_event": false,
+          "required_operatives": 1
+        },
+        "monitor_project": {
+          "network_requirement": 30,
+          "base_success_rate": 0.8,
+          "base_caught_or_kill_rate": 0.05,
+          "description": "Uncover the current national project activity in {country}, focusing on {project}.",
+          "actor_effects": [],
+          "target_effects": [],
+          "parameters": [
+            "project"
+          ],
+          "opp_knowledge": true,
+          "gm_knowledge": true,
+          "global_event": false,
+          "required_operatives": 1
+        },
+        "sabotage_industry": {
+          "network_requirement": 50,
+          "base_success_rate": 0.3,
+          "base_caught_or_kill_rate": 0.15,
+          "description": "Disrupt {country}'s industrial sectors to hamper their growth.",
+          "actor_effects": [],
+          "target_effects": [
+            {
+              "type": "add",
+              "path": "economic.industrial_sectors",
+              "value": -2
+            }
+          ],
+          "parameters": [],
+          "opp_knowledge": true,
+          "gm_knowledge": true,
+          "global_event": false,
+          "required_operatives": 1
+        },
+        "sway_ideology": {
+          "network_requirement": 45,
+          "base_success_rate": 0.25,
+          "base_caught_or_kill_rate": 0.1,
+          "description": "Promote {ideology} ideals within {country} through covert influence.",
+          "actor_effects": [],
+          "target_effects": [
+            {
+              "type": "add",
+              "path": "ideology.{ideology}",
+              "value": 5
+            }
+          ],
+          "parameters": [
+            "ideology"
+          ],
+          "opp_knowledge": true,
+          "gm_knowledge": true,
+          "global_event": false,
+          "required_operatives": 1
+        },
+        "incite_unrest": {
+          "network_requirement": 60,
+          "base_success_rate": 0.2,
+          "base_caught_or_kill_rate": 0.2,
+          "description": "Trigger unrest within {country} to destabilize their government.",
+          "actor_effects": [],
+          "target_effects": [
+            {
+              "type": "add",
+              "path": "political.civil_unrest_level",
+              "value": 15
+            }
+          ],
+          "parameters": [],
+          "opp_knowledge": true,
+          "gm_knowledge": true,
+          "global_event": true,
+          "required_operatives": 1
+        },
+        "assassination": {
+          "network_requirement": 75,
+          "base_success_rate": 0.05,
+          "base_caught_or_kill_rate": 0.3,
+          "description": "Dispense with {leader} immediately! Their influence cannot be allowed to persist in {country}!",
+          "actor_effects": [],
+          "target_effects": [
+            {
+              "type": "set",
+              "path": "leader",
+              "value": "vacant"
+            },
+            {
+              "type": "add",
+              "path": "political.civil_unrest_level",
+              "value": 40
+            }
+          ],
+          "parameters": [],
+          "opp_knowledge": true,
+          "gm_knowledge": true,
+          "global_event": true,
+          "required_operatives": 2
+        }
+      }
+    }
   }
-}

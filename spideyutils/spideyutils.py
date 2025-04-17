@@ -143,7 +143,7 @@ class StartProjectConfirmView(discord.ui.View):
         if "espionage_penalty" in self.penalties:
             country_data["espionage"]["domestic_intelligence_score"] -= self.penalties["espionage_penalty"]
         if "factory_penalty" in self.penalties:
-            country_data["industrial_sectors"] = max(0, country_data["industrial_sectors"] - self.penalties["factory_penalty"])
+            country_data["economic"]["industrial_sectors"] = max(0, country_data["industrial_sectors"] - self.penalties["factory_penalty"])
 
         self.save_callback()
         await interaction.response.edit_message(content=msg, view=None, embed=None)
@@ -254,6 +254,16 @@ class SpideyUtils(commands.Cog):
         self.load_data()
         self.alternate_country_dict = {}
         self.scheduled_backup.start()
+    
+    async def run_turn_tick(self):
+        await self.resolve_spy_ops()
+
+        # future:
+        # await self.process_turn_queue()
+        # self.regenerate_surplus()
+        # self.tick_research_slots()
+        # self.increment_unrest()
+
 
     @tasks.loop(hours=24)
     async def scheduled_backup(self):
@@ -349,13 +359,106 @@ class SpideyUtils(commands.Cog):
         self.save_data()
         await backup_dynamic_json()
 
+    def init_spy_data(self, country: str):
+        """
+        Initializes espionage-related dynamic fields for the given country
+        in self.cold_war_data if they aren't already set.
+        """
+        esp = self.cold_war_data["countries"].setdefault(country, {}).setdefault("espionage", {})
+
+        # Initialize operatives_available only if not set
+        if "operatives_available" not in esp:
+            esp["operatives_available"] = esp.get("operatives_total", 0)
+
+        # Always ensure these are present
+        esp.setdefault("assigned_ops", {})
+        esp.setdefault("spy_networks", {})
+    
+    
+    async def resolve_spy_ops(self):
+        espionage_defs = self.cold_war_data.get("ESPIONAGE", {}).get("operations", {})
+        global_log = []
+        spy_results = {}
+
+        for country, data in self.cold_war_data.get("countries", {}).items():
+            espionage = data.get("espionage", {})
+            assigned = espionage.get("assigned_ops", {})
+            total_ops = espionage.get("operatives_total", 0)
+
+            for target, ops in assigned.items():
+                for op_name, params in ops.items():
+                    op_def = espionage_defs.get(op_name)
+                    if not op_def:
+                        continue
+
+                    # Base values
+                    base_success = op_def["base_success_rate"]
+                    base_caught = op_def["base_caught_or_kill_rate"]
+                    required_network = op_def["network_requirement"]
+
+                    # Actor vs. Target intel scores
+                    actor_score = espionage.get("foreign_intelligence_score", 0)
+                    target_score = self.cold_war_data["countries"].get(target, {}).get("espionage", {}).get("domestic_intelligence_score", 0)
+                    network = espionage.get("spy_networks", {}).get(target, 0)
+
+                    # Calculate success
+                    network_boost = max((network - required_network) / 100 + 1, 0.5)
+                    intel_boost = max((actor_score - target_score) / 100 + 1, 0.5)
+
+                    final_success = base_success * network_boost * intel_boost
+                    caught_chance = base_caught * (1 - (network_boost - 1)) * (1 - (intel_boost - 1))
+
+                    import random
+                    success = random.random() < final_success
+                    caught = not success and random.random() < caught_chance
+
+                    # Build result message
+                    actor_display = f"**{country}** attempted `{op_name}` in **{target}**"
+                    result_msg = f"{actor_display} → {'✅ SUCCESS' if success else '❌ FAILURE'}"
+                    if caught:
+                        result_msg += " — 🛑 AGENTS CAUGHT"
+                        espionage["operatives_total"] = max(0, espionage["operatives_total"] - 1)
+
+                    # Apply effects if successful
+                    if success:
+                        for effect in op_def.get("actor_effects", []):
+                            self.apply_espionage_effect(country, effect, target, params)
+                        for effect in op_def.get("target_effects", []):
+                            self.apply_espionage_effect(target, effect, target, params)
+
+                    # Store result for player or GM notification
+                    spy_results.setdefault(country, []).append(result_msg)
+                    if op_def.get("opp_knowledge", False) and caught:
+                        spy_results.setdefault(target, []).append(f"🔎 {actor_display} → Spies detected!")
+
+                    # Add to global log if global event
+                    if success and op_def.get("global_event", False):
+                        global_log.append(
+                            f"🌍 Global Event Triggered: **{country}** succeeded with `{op_name}` in **{target}**.\n<@684457913250480143> — consider posting a global RP event."
+                        )
+
+            # Reset turn data
+            espionage["operatives_available"] = total_ops
+            espionage["assigned_ops"] = {}
+
+        self.save_data()
+
+        # Send global log to backup log channel
+        if global_log:
+            channel = self.bot.get_channel(1357944150502412288)
+            if channel is None:
+                channel = await self.bot.fetch_channel(1357944150502412288)
+            await channel.send("🕵️ **Espionage - Global Event Alerts**\n" + "\n".join(global_log))
+
+
+
     async def autocomplete_country(self, interaction: discord.Interaction, current: str):
         return [
             app_commands.Choice(name=country, value=country)
             for country in self.cold_war_data.get("countries", {}).keys()
             if current.lower() in country.lower()
-        ][:25]
-    
+            ][:25]
+        
     def get_all_event_years(self, data):
         global_years = list(data.get("global_history", {}).keys())
         country_years = set()
@@ -366,10 +469,10 @@ class SpideyUtils(commands.Cog):
     async def autocomplete_year(self, interaction: discord.Interaction, current: str):
         data = self.bot.get_cog("SpideyUtils").cold_war_data
         return [
-            app_commands.Choice(name=yr, value=yr)
-            for yr in self.get_all_event_years(data)
-            if current in yr
-        ][:25]
+                app_commands.Choice(name=yr, value=yr)
+                for yr in self.get_all_event_years(data)
+                if current in yr
+            ][:25]
 
     @app_commands.command(name="view_history", description="View historical events for a specific country or globally.")
     @app_commands.describe(country="Optional country name to filter history.", global_view="Set to true to view global history.", year="Filter by a specific year")
@@ -1054,9 +1157,7 @@ class SpideyUtils(commands.Cog):
             summary = f"📍 **Status:** {milestone_title} (`{status}`)\n"
             if isinstance(days, int):
                 summary += f"⏳ **Days remaining:** {days}\n"
-            summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}\n"
-            summary += f"project key: {project_key} and milestone_defs keys: {list(milestone_defs.keys())} all_defs keys: {all_defs.keys()}\n"
-            summary += f"miles keys: {miles.keys()} and all_defs keys: {all_defs.keys()} and top-level keys: {self.cold_war_data.keys()}"
+            summary += f"✅ **Completed:** {', '.join(completed) if completed else 'None'}"
 
             name = "🧪 " + project_key.replace("_", " ").title()
             embed.add_field(name=name, value=summary, inline=False)
@@ -1326,7 +1427,114 @@ class SpideyUtils(commands.Cog):
 
         await interaction.followup.send(embeds=embeds, ephemeral=True)
 
+    async def autocomplete_espionage_actions(self, interaction: discord.Interaction, current:str):
+        return [
+            app_commands.Choice(name=operation.replace('_', ' ').title(), value=operation)
+            for operation in self.cold_war_data.get("ESPIONAGE").get("operations").keys()
+        ][:25]
+    
 
+    @app_commands.command(name="assign_spy", description="Assign a spy operation to a target country.")
+    @app_commands.describe(
+        country="Your country",
+        target="Target country to spy on",
+        operation="Espionage operation to assign",
+        ideology="(If required) Ideology to sway toward",
+        project="(If required) Project to monitor"
+    )
+    @app_commands.autocomplete(country=autocomplete_my_country, target=autocomplete_country, operation=autocomplete_espionage_actions)
+    @app_commands.choices(ideology=[
+        app_commands.Choice(name="Democratic", value="democratic"),
+        app_commands.Choice(name="Fascist", value="fascist"),
+        app_commands.Choice(name="Communist", value="communist"),
+        app_commands.Choice(name="Authoritarian", value="authoritarian"),
+        app_commands.Choice(name="Monarchic", value="monarchic")
+    ],
+    project=[
+        app_commands.Choice(name="Nuclear Weapons", value="nuclear_weapons"),
+        app_commands.Choice(name="Space Program", value="space_program")
+    ])
+    async def assign_spy(
+        self,
+        interaction: discord.Interaction,
+        target: str,
+        operation: str,
+        country: str = None,
+        ideology: str = None,
+        project: str = None
+    ):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        # Resolve acting country
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        if not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
+
+        if target not in self.cold_war_data["countries"]:
+            return await interaction.followup.send("❌ Target country not found.", ephemeral=True)
+
+        # Validate operation
+        op_data = self.cold_war_data.get("ESPIONAGE", {}).get("operations", {}).get(operation)
+        if not op_data:
+            return await interaction.followup.send("❌ Unknown espionage operation.", ephemeral=True)
+
+        # Handle parameter checks
+        missing_params = []
+        if "ideology" in op_data.get("parameters", []) and not ideology:
+            missing_params.append("ideology")
+        if "project" in op_data.get("parameters", []) and not project:
+            missing_params.append("project")
+        if missing_params:
+            return await interaction.followup.send(
+                f"❌ Missing required parameter(s): {', '.join(missing_params)}",
+                ephemeral=True
+            )
+
+        # Initialize espionage structures
+        self.init_spy_data(country)
+        actor_data = self.cold_war_data["countries"][country]["espionage"]
+        operatives_available = actor_data.get("operatives_available", 0)
+
+        if operatives_available < op_data.get("required_operatives", 1):
+            return await interaction.followup.send(
+                f"❌ You need at least {op_data['required_operatives']} available operatives to perform this action.",
+                ephemeral=True
+            )
+
+        # Spy network check
+        network_strength = actor_data.get("spy_networks", {}).get(target, 0)
+        if network_strength < op_data["network_requirement"]:
+            return await interaction.followup.send(
+                f"❌ Your spy network in **{target}** is too weak (required: {op_data['network_requirement']}, current: {network_strength}).",
+                ephemeral=True
+            )
+
+        # Deduct operatives
+        actor_data["operatives_available"] -= op_data["required_operatives"]
+
+        # Log assignment
+        assigned = actor_data["assigned_ops"].setdefault(target, {})
+        assignment_data = {}
+        if ideology:
+            assignment_data["ideology"] = ideology
+        if project:
+            assignment_data["project"] = project
+        assigned[operation] = assignment_data or True
+
+        # Save
+        self.save_data()
+
+        await interaction.followup.send(
+            f"✅ Assigned `{operation}` operation to **{target}**.\n"
+            f"🕵️ Remaining operatives: `{actor_data['operatives_available']}`.",
+            ephemeral=True
+        )
 
     
     @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
@@ -1398,15 +1606,27 @@ class SpideyUtils(commands.Cog):
 
 
     
-    @app_commands.command(name="setturn", description="Set the current in-game turn and year.")
-    async def setturn(self, interaction: discord.Interaction, turn: int, year: str):
+    @app_commands.command(name="setturn", description="Set the current in-game turn, year, and day.")
+    @app_commands.describe(turn="The current turn number", year="The in-game year", day="The sub-division of the year (1–2 or 1–3)")
+    async def setturn(self, interaction: discord.Interaction, turn: int, year: str, day: int):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
 
-        data = {"turn": turn, "year": year}
-        with open("current_turn.json", "w") as f:
-            json.dump(data, f)
-        await interaction.response.send_message(f"🕰️ Turn updated to Turn {turn}, Year {year}.", ephemeral=True)
+        # Set values in modifiers
+        self.cold_war_data["turn"] = turn
+        self.cold_war_data["current_year"] = year
+        self.cold_war_data["day"] = day
+
+        # Run all background systems (espionage resolution, regen, etc.)
+        await self.run_turn_tick()
+
+        self.save_data()
+
+        await interaction.response.send_message(
+            f"🕰️ Turn updated to Turn {turn}, Year {year}, Day {day}. Background actions processed.",
+        ephemeral=True
+        )
+
 
 
     @commands.command()
