@@ -1581,10 +1581,14 @@ class SpideyUtils(commands.Cog):
 
     @app_commands.command(name="spy_hq", description="View your espionage headquarters and operational status.")
     @app_commands.autocomplete(country=autocomplete_my_country)
-    async def spy_hq(self, interaction: discord.Interaction, country: str = None):
+    async def spy_hq(
+        self,
+        interaction: discord.Interaction,
+        country: str = None
+    ):
         await interaction.response.defer(ephemeral=True)
 
-        # Resolve country
+        # figure out which country you're playing as
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
@@ -1593,79 +1597,86 @@ class SpideyUtils(commands.Cog):
                     country = c_key
                     break
         if not country or country not in self.cold_war_data["countries"]:
-            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
+            return await interaction.followup.send(
+                "❌ Could not determine your country.", ephemeral=True
+            )
 
+        # ensure we have the basic espionage fields
         self.init_spy_data(country)
-        espionage = self.cold_war_data["countries"][country]["espionage"]
-        total_ops = espionage.get("total_operatives", 0)
-        available_ops = espionage.get("operatives_available", 0)
-        assigned_ops = espionage.get("assigned_ops", {})
-        spy_networks = espionage.get("spy_networks", {})
-
+        esp = self.cold_war_data["countries"][country]["espionage"]
         op_defs = self.cold_war_data.get("ESPIONAGE", {}).get("operations", {})
+
+        total_ops = esp.get("total_operatives", 0)
+        assigned = esp.get("assigned_ops", {})
+        # recompute “used” operatives from assignments
+        used_ops = sum(
+            op_defs.get(op_name, {}).get("required_operatives", 1)
+            for tgt, ops in assigned.items()
+            for op_name in ops
+        )
+        free_ops = max(0, total_ops - used_ops)
+        spy_nets = esp.get("spy_networks", {})
 
         embeds = []
 
-        # 🕵️ Headquarters Overview Embed
-        main_embed = discord.Embed(
-            title="🕵️ Espionage Headquarters",
+        # ——— HQ overview ———
+        hq = discord.Embed(
+            title=f"🕵️ Espionage Headquarters — {country}",
             description="`// CONFIDENTIAL - DO NOT COPY //`\n`// FOR EYES ONLY //`",
             color=discord.Color.dark_purple()
         )
-        main_embed.add_field(name="Total Field Operatives", value=str(total_ops))
-        main_embed.add_field(name="Unassigned Operatives", value=str(available_ops), inline=True)
+        hq.add_field(name="Total Field Operatives", value=str(total_ops), inline=False)
+        hq.add_field(name="Unassigned Operatives", value=str(free_ops), inline=False)
 
-        available_assignments = []
-        for op_key, op in op_defs.items():
-            req = op.get("network_requirement", 0)
+        # what ops could you launch right now?
+        lines = []
+        for key, op in op_defs.items():
+            req_net = op.get("network_requirement", 0)
             req_ops = op.get("required_operatives", 1)
-            if available_ops >= req_ops:
-                available_assignments.append(f"• {op_key.replace('_', ' ').title()} — requires {req}+ network")
+            if free_ops >= req_ops:
+                lines.append(f"• {key.replace('_',' ').title()} — network ≥ {req_net}")
+        hq.add_field(name="Available Assignments", value="\n".join(lines) or "*None*", inline=False)
 
-        if available_assignments:
-            main_embed.add_field(name="Available Assignments", value="\n".join(available_assignments), inline=False)
+        embeds.append(hq)
 
-        embeds.append(main_embed)
+        # ——— per‐target briefs ———
+        # show only targets you have a network or an assignment in, sorted by network
+        tracked = set(spy_nets) | set(assigned)
+        for tgt in sorted(tracked, key=lambda c: spy_nets.get(c, 0), reverse=True):
+            net = spy_nets.get(tgt, 0)
+            ops = assigned.get(tgt, {})
 
-        # 🎯 Per-Country Intelligence Briefings
-        tracked_targets = set(spy_networks.keys()) | set(assigned_ops.keys())
-        sorted_targets = sorted(tracked_targets, key=lambda c: spy_networks.get(c, 0), reverse=True)
-
-        for t in sorted_targets:
-            net = spy_networks.get(t, 0)
-            ops = assigned_ops.get(t, {})
-            per_embed = discord.Embed(
-                title=f"{t}",
+            brief = discord.Embed(
+                title=f"🎯 {tgt}",
                 description="`// CONFIDENTIAL - DO NOT COPY //`\n`// CLASSIFIED INTELLIGENCE - FOR EYES ONLY //`",
                 color=discord.Color.blurple()
             )
-            per_embed.add_field(name="Spy Network", value=str(net), inline=True)
+            brief.add_field(name="Spy Network", value=str(net), inline=False)
 
-            # Active missions
+            # Active Missions
             if ops:
-                lines = []
-                for name, val in ops.items():
-                    if isinstance(val, dict):
-                        param_str = ", ".join([f"{k}: {v}" for k, v in val.items()])
-                        lines.append(f"• {name} ({param_str})")
+                active = []
+                for name, params in ops.items():
+                    if isinstance(params, dict):
+                        param_str = ", ".join(f"{k}:{v}" for k,v in params.items())
+                        active.append(f"• {name.replace('_',' ').title()} ({param_str})")
                     else:
-                        lines.append(f"• {name}")
-                per_embed.add_field(name="Active Missions", value="\n".join(lines), inline=False)
+                        active.append(f"• {name.replace('_',' ').title()}")
+                brief.add_field(name="Active Missions", value="\n".join(active), inline=False)
             else:
-                per_embed.add_field(name="Active Missions", value="*None*", inline=False)
+                brief.add_field(name="Active Missions", value="*None*", inline=False)
 
-            # Eligible ops
-            eligible_ops = []
+            # Eligible next ops
+            elig = []
             for key, op in op_defs.items():
-                if available_ops >= op.get("required_operatives", 1) and net >= op.get("network_requirement", 0):
-                    eligible_ops.append(f"• {key.replace('_', ' ').title()} – {op['description'][:80]}...")
+                if free_ops >= op.get("required_operatives",1) and net >= op.get("network_requirement",0):
+                    elig.append(f"• {key.replace('_',' ').title()} — {op['description']}")
+            brief.add_field(name="Eligible Operations", value="\n".join(elig) or "*None*", inline=False)
 
-            if eligible_ops:
-                per_embed.add_field(name="Eligible Operations", value="\n".join(eligible_ops), inline=False)
+            embeds.append(brief)
 
-            embeds.append(per_embed)
+        await interaction.followup.send(embeds=embeds, ephemeral=True)
 
-        await interaction.followup.send(embeds=embeds)
 
     
     @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
