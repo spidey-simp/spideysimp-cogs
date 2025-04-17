@@ -1,7 +1,6 @@
 import discord
-from discord import app_commands
+from discord import app_commands, Interaction, Embed
 from discord.ext import commands, tasks
-from discord import Interaction
 from redbot.core import commands
 import json
 import os
@@ -45,6 +44,50 @@ async def backup_dynamic_json(self):
     except Exception as e:
         print(f"Failed to backup dynamic JSON: {e}")
 
+
+class ConfirmSpyAssignView(discord.ui.View):
+    def __init__(self, cog: "SpideyUtils", country: str, target: str, operation: str, op_data: dict, params: dict):
+        super().__init__(timeout=30)
+        self.cog = cog
+        self.country = country
+        self.target = target
+        self.operation = operation
+        self.op_data = op_data
+        self.params = params  # {"ideology": ..., "project": ...}
+
+    @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.success)
+    async def confirm(self, interaction: Interaction, button: discord.ui.Button):
+        # re‑resolve actor_data & checks (in case state changed in the meantime)
+        self.cog.init_spy_data(self.country)
+        actor = self.cog.cold_war_data["countries"][self.country]["espionage"]
+
+        # deduct
+        actor["operatives_available"] -= self.op_data.get("required_operatives", 1)
+
+        # log assignment
+        assigned = actor["assigned_ops"].setdefault(self.target, {})
+        assigned[self.operation] = self.params or True
+
+        # save
+        self.cog.save_data()
+
+        await interaction.response.edit_message(
+            content=(
+                f"✅ **{self.country}** has launched `{self.operation.replace('_',' ').title()}` "
+                f"against **{self.target}**!\n"
+                f"🕵️ Operatives remaining: `{actor['operatives_available']}`"
+            ),
+            embed=None,
+            view=None
+        )
+
+    @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
+    async def cancel(self, interaction: Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(
+            content="❌ Operation canceled.",
+            embed=None,
+            view=None
+        )
 
 class RequestRoll(commands.Cog):
     def __init__(self, bot):
@@ -1499,7 +1542,7 @@ class SpideyUtils(commands.Cog):
     ])
     async def assign_spy(
         self,
-        interaction: discord.Interaction,
+        interaction: Interaction,
         target: str,
         operation: str,
         country: str = None,
@@ -1508,76 +1551,72 @@ class SpideyUtils(commands.Cog):
     ):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
-        # Resolve acting country
+        # ── Resolve acting country ──
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
-            for c_key, details in self.cold_war_data["countries"].items():
-                if details.get("player_id") == interaction.user.id:
+            for c_key, det in self.cold_war_data["countries"].items():
+                if det.get("player_id") == interaction.user.id:
                     country = c_key
                     break
         if not country or country not in self.cold_war_data["countries"]:
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
+        # ── Validate target & operation ──
         if target not in self.cold_war_data["countries"]:
             return await interaction.followup.send("❌ Target country not found.", ephemeral=True)
-
-        # Validate operation
         op_data = self.cold_war_data.get("ESPIONAGE", {}).get("operations", {}).get(operation)
         if not op_data:
             return await interaction.followup.send("❌ Unknown espionage operation.", ephemeral=True)
 
-        # Handle parameter checks
-        missing_params = []
-        if "ideology" in op_data.get("parameters", []) and not ideology:
-            missing_params.append("ideology")
-        if "project" in op_data.get("parameters", []) and not project:
-            missing_params.append("project")
-        if missing_params:
-            return await interaction.followup.send(
-                f"❌ Missing required parameter(s): {', '.join(missing_params)}",
-                ephemeral=True
-            )
+        # ── Parameter checks ──
+        missing = []
+        for p in op_data.get("parameters", []):
+            if p == "ideology" and not ideology: missing.append("ideology")
+            if p == "project"  and not project:  missing.append("project")
+        if missing:
+            return await interaction.followup.send(f"❌ Missing required parameter(s): {', '.join(missing)}", ephemeral=True)
 
-        # Initialize espionage structures
+        # ── Init & availability ──
         self.init_spy_data(country)
-        actor_data = self.cold_war_data["countries"][country]["espionage"]
-        operatives_available = actor_data.get("operatives_available", 0)
-
-        if operatives_available < op_data.get("required_operatives", 1):
+        actor = self.cold_war_data["countries"][country]["espionage"]
+        free = actor.get("operatives_available", 0)
+        req_ops = op_data.get("required_operatives", 1)
+        if free < req_ops:
+            return await interaction.followup.send(f"❌ You need at least {req_ops} available operatives.", ephemeral=True)
+        net = actor.get("spy_networks", {}).get(target, 0)
+        if net < op_data["network_requirement"]:
             return await interaction.followup.send(
-                f"❌ You need at least {op_data['required_operatives']} available operatives to perform this action.",
+                f"❌ Network too weak in **{target}** (need {op_data['network_requirement']}, have {net}).",
                 ephemeral=True
             )
 
-        # Spy network check
-        network_strength = actor_data.get("spy_networks", {}).get(target, 0)
-        if network_strength < op_data["network_requirement"]:
-            return await interaction.followup.send(
-                f"❌ Your spy network in **{target}** is too weak (required: {op_data['network_requirement']}, current: {network_strength}).",
-                ephemeral=True
-            )
-
-        # Deduct operatives
-        actor_data["operatives_available"] -= op_data["required_operatives"]
-
-        # Log assignment
-        assigned = actor_data["assigned_ops"].setdefault(target, {})
-        assignment_data = {}
-        if ideology:
-            assignment_data["ideology"] = ideology
-        if project:
-            assignment_data["project"] = project
-        assigned[operation] = assignment_data or True
-
-        # Save
-        self.save_data()
-
-        await interaction.followup.send(
-            f"✅ Assigned `{operation}` operation to **{target}**.\n"
-            f"🕵️ Remaining operatives: `{actor_data['operatives_available']}`.",
-            ephemeral=True
+        # ── Build confirmation embed ──
+        leader = self.cold_war_data["countries"][target].get("leader", {}).get("name", "<leader>")
+        desc = op_data["description"].format(
+            country=target,
+            leader=leader,
+            ideology=ideology or "<ideology>",
+            project=project  or "<project>"
         )
+        embed = Embed(
+            title="🕵️ Confirm Espionage Operation",
+            description=(
+                f"**Operator:** {country}\n"
+                f"**Target:** {target}\n"
+                f"**Operation:** {operation.replace('_',' ').title()}\n\n"
+                f"**Details:** {desc}\n\n"
+                f"**Requires:** {req_ops} operatives, network ≥ {op_data['network_requirement']}"
+            ),
+            color=discord.Color.dark_purple()
+        )
+
+        params = {}
+        if ideology: params["ideology"] = ideology
+        if project:  params["project"]  = project
+
+        view = ConfirmSpyAssignView(self, country, target, operation, op_data, params)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
     @app_commands.command(name="spy_hq", description="View your espionage headquarters and operational status.")
     @app_commands.autocomplete(country=autocomplete_my_country)
@@ -1631,7 +1670,7 @@ class SpideyUtils(commands.Cog):
         if avail:
             main.add_field(name="Available Assignments", value="\n".join(avail), inline=False)
 
-        main.set_footer(text=f"***Product of the Intelligence Agency of {country}.\nInternal Use Only!***")
+        main.set_footer(text=f"---\nProduct of the Intelligence Agency of {country}.\nInternal Use Only!\n---")
         embeds.append(main)
 
         # 🎯 Per-country briefs
@@ -1686,7 +1725,7 @@ class SpideyUtils(commands.Cog):
                 value="\n".join(eligible) or "*None*",
                 inline=False
             )
-            e.set_footer(text=f"***Product of the Intelligence Agency of {country}.\nInternal Use Only!***")
+            e.set_footer(text=f"---\nProduct of the Intelligence Agency of {country}.\nInternal Use Only\n---")
 
             embeds.append(e)
 
