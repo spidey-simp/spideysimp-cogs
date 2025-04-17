@@ -368,7 +368,7 @@ class SpideyUtils(commands.Cog):
 
         # Initialize operatives_available only if not set
         if "operatives_available" not in esp:
-            esp["operatives_available"] = esp.get("operatives_total", 0)
+            esp["operatives_available"] = esp.get("total_operatives", 0)
 
         # Always ensure these are present
         esp.setdefault("assigned_ops", {})
@@ -383,7 +383,7 @@ class SpideyUtils(commands.Cog):
         for country, data in self.cold_war_data.get("countries", {}).items():
             espionage = data.get("espionage", {})
             assigned = espionage.get("assigned_ops", {})
-            total_ops = espionage.get("operatives_total", 0)
+            total_ops = espionage.get("total_operatives", 0)
 
             for target, ops in assigned.items():
                 for op_name, params in ops.items():
@@ -417,7 +417,7 @@ class SpideyUtils(commands.Cog):
                     result_msg = f"{actor_display} → {'✅ SUCCESS' if success else '❌ FAILURE'}"
                     if caught:
                         result_msg += " — 🛑 AGENTS CAUGHT"
-                        espionage["operatives_total"] = max(0, espionage["operatives_total"] - 1)
+                        espionage["total_operatives"] = max(0, espionage["total_operatives"] - 1)
 
                     # Apply effects if successful
                     if success:
@@ -1554,7 +1554,7 @@ class SpideyUtils(commands.Cog):
 
         self.init_spy_data(country)
         espionage = self.cold_war_data["countries"][country]["espionage"]
-        total_ops = espionage.get("operatives_total", 0)
+        total_ops = espionage.get("total_operatives", 0)
         available_ops = espionage.get("operatives_available", 0)
         assigned_ops = espionage.get("assigned_ops", {})
         spy_networks = espionage.get("spy_networks", {})
@@ -1592,7 +1592,7 @@ class SpideyUtils(commands.Cog):
             net = spy_networks.get(t, 0)
             ops = assigned_ops.get(t, {})
             per_embed = discord.Embed(
-                title=f"🇺🇳 {t}",
+                title=f"{t}",
                 description="`// CONFIDENTIAL - DO NOT COPY //`\n`// CLASSIFIED INTELLIGENCE - FOR EYES ONLY //`",
                 color=discord.Color.blurple()
             )
