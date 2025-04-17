@@ -1536,6 +1536,82 @@ class SpideyUtils(commands.Cog):
             ephemeral=True
         )
 
+    @app_commands.command(name="spy_hq", description="View your espionage headquarters and operational status.")
+    @app_commands.autocomplete(country=autocomplete_my_country)
+    async def spy_hq(self, interaction: discord.Interaction, country: str = None):
+        await interaction.response.defer(ephemeral=True)
+
+        # Determine player country
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        if not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
+
+        self.init_spy_data(country)
+        espionage = self.cold_war_data["countries"][country]["espionage"]
+        total_ops = espionage.get("operatives_total", 0)
+        available_ops = espionage.get("operatives_available", 0)
+        assigned_ops = espionage.get("assigned_ops", {})
+        spy_networks = espionage.get("spy_networks", {})
+
+        op_defs = self.cold_war_data.get("ESPIONAGE", {}).get("operations", {})
+
+        embed = discord.Embed(
+            title="🕵️ Espionage Headquarters",
+            description="`// CONFIDENTIAL - DO NOT COPY //`\n`// FOR EYES ONLY //`",
+            color=discord.Color.dark_purple()
+        )
+        embed.add_field(name="Total Field Operatives", value=str(total_ops))
+        embed.add_field(name="Unassigned Operatives", value=str(available_ops), inline=True)
+
+        available_assignments = []
+        for op_key, op in op_defs.items():
+            req = op.get("network_requirement", 0)
+            req_ops = op.get("required_operatives", 1)
+            if available_ops >= req_ops:
+                available_assignments.append(f"• {op_key.replace('_', ' ').title()} — requires {req}+ network")
+
+        if available_assignments:
+            embed.add_field(name="Available Assignments", value="\n".join(available_assignments), inline=False)
+
+        tracked_targets = set(spy_networks.keys()) | set(assigned_ops.keys())
+        sorted_targets = sorted(tracked_targets, key=lambda c: spy_networks.get(c, 0), reverse=True)[:6]
+
+        for t in sorted_targets:
+            net = spy_networks.get(t, 0)
+            ops = assigned_ops.get(t, {})
+            field_title = f"🇺🇳 {t}"
+            field_body = "`// CONFIDENTIAL - DO NOT COPY //`\n`// CLASSIFIED INTELLIGENCE - FOR EYES ONLY //`\n"
+            field_body += f"Spy Network: **{net}**\n"
+
+            if ops:
+                lines = []
+                for name, val in ops.items():
+                    if isinstance(val, dict):
+                        param_str = ", ".join([f"{k}: {v}" for k, v in val.items()])
+                        lines.append(f"• {name} ({param_str})")
+                    else:
+                        lines.append(f"• {name}")
+                field_body += "Active Missions:\n" + "\n".join(lines)
+            else:
+                field_body += "Active Missions: *None*\n"
+
+            eligible_ops = []
+            for key, op in op_defs.items():
+                if available_ops >= op.get("required_operatives", 1) and net >= op.get("network_requirement", 0):
+                    eligible_ops.append(f"• {key.replace('_', ' ').title()} – {op['description'][:80]}...")
+            if eligible_ops:
+                field_body += "\nEligible Operations:\n" + "\n".join(eligible_ops)
+
+            embed.add_field(name=field_title, value=field_body[:1024], inline=False)
+
+        await interaction.followup.send(embed=embed)
+
     
     @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
     @app_commands.autocomplete(country=autocomplete_country)
