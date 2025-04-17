@@ -550,6 +550,46 @@ class SpideyUtils(commands.Cog):
             if channel is None:
                 channel = await self.bot.fetch_channel(1357944150502412288)
             await channel.send("🕵️ **Espionage - Global Event Alerts**\n" + "\n".join(global_log))
+ 
+    
+    def apply_espionage_effect(self, country: str, effect: dict, target: str, params: dict):
+        """
+        Apply a single espionage effect (one entry from actor_effects or target_effects)
+        to the given country's data in self.cold_war_data.
+        """
+        # 1) Resolve value (allow formatting with {ideology}, {project}, {country}, etc.)
+        raw = effect["value"]
+        if isinstance(raw, str):
+            # so e.g. "{country}" or "{ideology}"
+            raw = raw.format(country=target, **params)
+            # if it was numeric in string form, cast to int
+            try:
+                raw = int(raw)
+            except:
+                try:
+                    raw = float(raw)
+                except:
+                    pass
+
+        # 2) Navigate to the field
+        #    e.g. path = "political.civil_unrest_level"
+        path = effect["path"].split(".")
+        node = self.cold_war_data["countries"][country]
+        for key in path[:-1]:
+            node = node.setdefault(key, {})
+
+        field = path[-1]
+
+        # 3) Perform the operation
+        if effect["type"] == "add":
+            # default missing fields to 0
+            node[field] = node.get(field, 0) + raw
+        elif effect["type"] == "set":
+            node[field] = raw
+        else:
+            # you can expand for other types ("mul", "max", etc.)
+            raise ValueError(f"Unknown espionage effect type: {effect['type']}")
+
 
 
 
