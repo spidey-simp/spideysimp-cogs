@@ -1641,7 +1641,8 @@ class SpideyUtils(commands.Cog):
         # ── Prepare confirmation ──
         leader = self.cold_war_data["countries"][target].get("leader", {}).get("name", "<leader>")
         desc = op_data["description"].format(
-            country=target,
+            country=country,
+            target=target,
             leader=leader,
             ideology=ideology  or "<ideology>",
             project=project   or "<project>"
