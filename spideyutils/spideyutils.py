@@ -302,13 +302,16 @@ class SpideyUtils(commands.Cog):
                 static_country = self.cold_war_data["countries"].setdefault(country, {})
 
                 # ——— espionage gets an overwrite of exactly these three keys ———
-                if "espionage" in dyn_data:
-                    esp = static_country.setdefault("espionage", {})
-                    esp.update({
-                        "spy_networks": dyn_data["espionage"].get("spy_networks", {}),
-                        "assigned_ops": dyn_data["espionage"].get("assigned_ops", {}),
-                        "operatives_available": dyn_data["espionage"].get("operatives_available", 0),
-                    })
+                esp = static_country.setdefault("espionage", {})
+                # always merge networks and assigned_ops
+                if "spy_networks" in dyn_data["espionage"]:
+                    esp["spy_networks"] = dyn_data["espionage"]["spy_networks"]
+                if "assigned_ops" in dyn_data["espionage"]:
+                    esp["assigned_ops"] = dyn_data["espionage"]["assigned_ops"]
+                # only overwrite operatives_available if it's explicitly in the dynamic file;
+                # otherwise leave the static total_operatives → operatives_available
+                if "operatives_available" in dyn_data["espionage"]:
+                    esp["operatives_available"] = dyn_data["espionage"]["operatives_available"]
 
                 # ——— everything else still merges as base + delta ———
                 for section in ("research", "national_projects", "abilities", "past_turns", "player_id"):
