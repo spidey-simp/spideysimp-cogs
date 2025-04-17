@@ -1631,6 +1631,7 @@ class SpideyUtils(commands.Cog):
         if avail:
             main.add_field(name="Available Assignments", value="\n".join(avail), inline=False)
 
+        main.set_footer(f"***Product of the Intelligence Agency of {country}.\nInternal Use Only!***")
         embeds.append(main)
 
         # 🎯 Per-country briefs
@@ -1685,6 +1686,7 @@ class SpideyUtils(commands.Cog):
                 value="\n".join(eligible) or "*None*",
                 inline=False
             )
+            e.set_footer(f"***Product of the Intelligence Agency of {country}.\nInternal Use Only!***")
 
             embeds.append(e)
 
