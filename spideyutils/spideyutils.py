@@ -1873,6 +1873,40 @@ class SpideyUtils(commands.Cog):
         ephemeral=True
         )
 
+    @app_commands.command(name="reset_data", description="(Owner only) Reset turn/year and scrub stray {target} entry from Spain.")
+    @commands.is_owner()
+    async def reset_data(self, interaction: Interaction):
+        """Resets turn to 0, year to 1952, day to 1, and removes '{target}' from Spain's spy_networks."""
+        # load the existing dynamic file
+        try:
+            with open(dynamic_path, "r") as f:
+                dyn = json.load(f)
+        except FileNotFoundError:
+            return await interaction.response.send_message("❌ No modifiers file found.", ephemeral=True)
+
+        # reset turn counters
+        dyn["turn"] = 0
+        dyn["current_year"] = 1952
+        dyn["day"] = 1
+
+        # remove the bad key under Spain
+        spain = dyn.get("countries", {}).get("Kingdom of Spain", {})
+        spy_nets = spain.get("espionage", {}).get("spy_networks", {})
+        if "{target}" in spy_nets:
+            spy_nets.pop("{target}")
+
+        # write it back out
+        with open(dynamic_path, "w") as f:
+            json.dump(dyn, f, indent=2)
+
+        # reload into memory
+        self.load_data()
+
+        await interaction.response.send_message(
+            "✅ Data reset: turn=0, year=1952, day=1, stray `{target}` removed.",
+            ephemeral=True
+        )
+
 
 
     @commands.command()
