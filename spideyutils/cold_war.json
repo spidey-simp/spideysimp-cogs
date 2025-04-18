@@ -3846,7 +3846,7 @@
           "actor_effects": [
             {
               "type": "add",
-              "path": "espionage.spy_networks.{target}",
+              "path": "espionage.spy_networks.target",
               "value": 10
             }
           ],
