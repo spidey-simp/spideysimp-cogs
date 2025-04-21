@@ -1020,15 +1020,16 @@ class SpideyUtils(commands.Cog):
         # Persist
         self.save_data()
 
+        display_name = category.replace('_', ' ').title()
         # Build feedback
         summary = [
-            f"✅ `{FACTORY_TYPES[category]}` set to {new_abs} ({new_pct * 100:.0f}% of {total_civ})."
+            f"✅ `{display_name}` set to {new_abs} ({new_pct * 100:.0f}% of {total_civ})."
         ]
         for k, d in changes.items():
             if k == "unassigned":
                 summary.append(f"– Freed up {d} factories as unassigned.")
             else:
-                name = FACTORY_TYPES.get(k, k.replace('_', ' ').title())
+                name = k.replace('_', ' ').title()
                 summary.append(
                     f"– `{name}` {'–' if d<0 else '+'}{abs(d)} → now {assigned[k]}."
                 )
