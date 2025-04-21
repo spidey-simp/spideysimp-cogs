@@ -9,6 +9,7 @@ import asyncio
 from datetime import datetime
 import re
 from collections import defaultdict
+import math
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -201,7 +202,13 @@ class StartProjectConfirmView(discord.ui.View):
         if "espionage_penalty" in self.penalties:
             country_data["espionage"]["domestic_intelligence_score"] -= self.penalties["espionage_penalty"]
         if "factory_penalty" in self.penalties:
-            country_data["economic"]["industrial_sectors"] = max(0, country_data["industrial_sectors"] - self.penalties["factory_penalty"])
+            econ = country_data["economic"]
+            # subtract from civilian factories instead of the non‑existent industrial_sectors field
+            econ["factories"]["civilian_factories"] = max(
+                0,
+                econ["factories"].get("civilian_factories", 0)
+                - self.penalties["factory_penalty"]
+                )
 
         self.save_callback()
         await interaction.response.edit_message(content=msg, view=None, embed=None)
@@ -354,6 +361,8 @@ class SpideyUtils(commands.Cog):
             for k in ("turn", "current_year", "day"):
                 if k in modifiers:
                     self.cold_war_data[k] = modifiers[k]
+            
+
 
             # 3) merge per‐country dynamic changes
             for country, dyn_data in modifiers.get("countries", {}).items():
@@ -388,6 +397,36 @@ class SpideyUtils(commands.Cog):
                         else:
                             # non‐dict (e.g. player_id): overwrite
                             static_country[section] = dyn_val
+            
+            for country, data in self.cold_war_data["countries"].items():
+                econ = data.get("economic", {}).get("factories", {})
+                prod = data.setdefault("production", {})
+                assigned = prod.setdefault("assigned_factories", {})
+                stock    = prod.setdefault("stockpiles", {})
+
+                # Only fill in defaults if missing
+                if "civilian_factory" not in assigned:
+                    civ = econ.get("civilian_factories", 0)
+                    assigned["civilian_factory"] = civ * 50 // 100
+                    assigned["military_factory"] = civ * 30 // 100
+                    assigned["naval_dockyard"]   = civ * 10 // 100
+                    assigned["airbase"]          = civ * 10 // 100
+
+                if "rifle" not in assigned:
+                    assigned["rifle"] = econ.get("military_factories", 0)
+
+                if "task_group" not in assigned:
+                    assigned["task_group"] = econ.get("naval_dockyards", 0)
+
+                if "air_wing" not in assigned:
+                    assigned["air_wing"] = econ.get("airbases", 0)
+
+                if "nuke" not in assigned:
+                    assigned["nuke"] = econ.get("nuclear_facilities", 0)
+
+                # Initialize stockpiles for any new entries
+                for item in assigned:
+                    stock.setdefault(item, 0)
 
     def save_data(self):
         try:
@@ -883,6 +922,46 @@ class SpideyUtils(commands.Cog):
         ][:25]
 
         
+    @app_commands.command(name="view_factories", description="View your nation's factory assignments and stockpiles.")
+    @app_commands.autocomplete(country=autocomplete_my_country)
+    async def view_factories(self, interaction: discord.Interaction, country: str = None):
+        """
+        Show how many factories of each type are assigned and current production stock.
+        """
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        # Resolve country like other commands
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        if not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
+
+        data = self.cold_war_data["countries"][country]
+        prod = data.get("production", {})
+        assigned = prod.get("assigned_factories", {})
+        stock = prod.get("stockpiles", {})
+
+        embed = discord.Embed(
+            title=f"🏭 {country} — Factory Assignments", 
+            description="Here's how your factories are allocated and current stockpiles:",
+            color=discord.Color.blue()
+        )
+
+        # Display assignments
+        for fac, num in assigned.items():
+            embed.add_field(name=f"Assigned to {fac.replace('_', ' ').title()}", value=str(num), inline=True)
+
+        # Display stockpiles
+        embed.add_field(name="––––––––––––––––––––––––––––––", value="––––––––––––––––––––––––––––––", inline=False)
+        for item, qty in stock.items():
+            embed.add_field(name=f"{item.replace('_', ' ').title()} Stockpile", value=str(qty), inline=True)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
     @app_commands.command(name="research_tech", description="Begin researching a tech.")

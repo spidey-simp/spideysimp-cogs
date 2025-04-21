@@ -189,7 +189,13 @@
       },
       "economic": {
         "budget_surplus": 20,
-        "industrial_sectors": 45,
+        "factories": {
+          "civilian_factories": 70,
+          "military_factories": 30,
+          "naval_dockyards": 20,
+          "airbases": 16,
+          "nuclear_facilities": 10
+        },
         "oil_reserves": 30,
         "infrastructure_rating": 5
       },
@@ -264,7 +270,10 @@
           "public": true,
           "modifiers": {
             "naval_combat_bonus": 15,
-            "amphibious_invasion_modifier": 10
+            "amphibious_invasion_modifier": 10,
+            "factory_output_bonus": {
+              "naval_dockyard": 0.20
+            }
           }
         },
         {
@@ -274,7 +283,10 @@
           "public": true,
           "modifiers": {
             "nuclear_intimidation": 25,
-            "diplomatic_pressure_in_conflicts": 10
+            "diplomatic_pressure_in_conflicts": 10,
+            "factory_output_bonus":{
+              "nuclear_facility": 0.10
+            }
           }
         },
         {
@@ -327,6 +339,9 @@
           "modifiers": {
             "research_bonus": {
               "Industry": 0.15
+            },
+            "factory_output_bonus": {
+              "civilian_factory": 0.15
             }
           }
         }
@@ -350,7 +365,13 @@
       },
       "economic": {
         "budget_surplus": -15,
-        "industrial_sectors": 35,
+        "factories": {
+          "civilian_factories": 50,
+          "military_factories": 25,
+          "naval_dockyards": 10,
+          "airbases": 12,
+          "nuclear_facilities": 0
+        },
         "oil_reserves": 25,
         "infrastructure_rating": 2
       },
@@ -429,6 +450,9 @@
             "research_bonus": {
               "Electronics": 0.1,
               "WMD": 0.05
+            },
+            "factory_output_bonus": {
+              "civilian_factory": 0.10
             }
           }
         },
@@ -447,7 +471,10 @@
           "type": "political",
           "modifiers": {
             "air_superiority_penalty": -15,
-            "strategic_bombing_penalty": -10
+            "strategic_bombing_penalty": -10,
+            "factory_output_bonus": {
+              "airbase": -0.15
+            }
           },
           "research_bonus": {
             "Aerial": -0.2
@@ -459,7 +486,10 @@
           "type": "military",
           "modifiers": {
             "naval_combat_penalty": -20,
-            "blockade_resistance": -10
+            "blockade_resistance": -10,
+            "factory_output_bonus":{
+              "naval_dockyard": -0.20
+            }
           },
           "research_bonus": {
             "Naval": -0.15
@@ -480,7 +510,10 @@
           "type": "military",
           "modifiers": {
             "infantry_breakthrough_bonus": 10,
-            "militia_spam_resistance": 15
+            "militia_spam_resistance": 15,
+            "factory_output_bonus":{
+              "military_factory": 0.05
+            }
           },
           "research_bonus": {
             "Industry": 0.05
@@ -524,7 +557,13 @@
       },
       "economic": {
         "budget_surplus": 5,
-        "industrial_sectors": 28,
+        "factories": {
+          "civilian_factories": 40,
+          "military_factories": 20,
+          "naval_dockyards": 25, 
+          "airbases": 16, 
+          "nuclear_facilities": 0 
+        },
         "oil_reserves": 15,
         "infrastructure_rating": 4
       },
@@ -589,7 +628,10 @@
           "public": true,
           "modifiers": {
             "colonial_administration_bonus": 15,
-            "diplomatic_stability_rolls": 20
+            "diplomatic_stability_rolls": 20,
+            "factory_output_bonus":{
+              "civilian_factory": 0.10
+            }
           },
           "research_bonus": {
             "Infantry": -0.05,
@@ -608,6 +650,9 @@
               "Infantry": 0.05,
               "Artillery": 0.05,
               "Industry": 0.05
+            },
+            "factory_output_bonus":{
+              "military_factory": 0.05
             }
           }
         },
@@ -640,7 +685,10 @@
           "public": true,
           "modifiers": {
             "naval_combat_bonus": 20,
-            "naval_blockade_modifier": 10
+            "naval_blockade_modifier": 10,
+            "factory_output_bonus": {
+              "naval_dockyard": 0.25
+            }
           },
           "research_bonus": {
             "Naval": 0.15
@@ -694,7 +742,13 @@
       },
       "economic": {
         "budget_surplus": 10,
-        "industrial_sectors": 30,
+        "factories": {
+          "civilian_factories": 30,
+          "military_factories": 25,
+          "naval_dockyards": 18,
+          "airbases": 22,
+          "nuclear_facilities": 0
+        },
         "oil_reserves": 10,
         "infrastructure_rating": 3
       },
@@ -757,7 +811,10 @@
           "type": "military",
           "modifiers": {
             "naval_combat_bonus": 20,
-            "power_projection_from_fleets": 10
+            "power_projection_from_fleets": 10,
+            "factory_output_bonus":{
+              "naval_dockyard": 0.15
+            }
           }
         },
         {
@@ -767,7 +824,10 @@
           "public": true,
           "modifiers": {
             "militarist_policy_adoption_chance": 15,
-            "resistance_to_foreign_diplomatic_pressure": 10
+            "resistance_to_foreign_diplomatic_pressure": 10,
+            "factory_output_bonus":{
+              "military_factory": 0.05
+            }
           },
           "research_bonus": {
             "generic": -0.05
@@ -827,7 +887,10 @@
           "type": "political",
           "modifiers": {
             "resistance_to_internal_dissent": 10,
-            "civilian_loyalty_bonus": 10
+            "civilian_loyalty_bonus": 10,
+            "factory_output_bonus":{
+              "civilian_factory": 0.10
+            }
           }
         }
       ],
@@ -850,7 +913,13 @@
       },
       "economic": {
         "budget_surplus": -10,
-        "industrial_sectors": 20,
+        "factories": {
+          "civilian_factories": 25,
+          "military_factories": 15,
+          "naval_dockyards": 5,
+          "airbases": 8,
+          "nuclear_facilities": 0
+        },
         "oil_reserves": 5,
         "infrastructure_rating": 2
       },
@@ -931,7 +1000,10 @@
           "type": "economic",
           "modifiers": {
             "economic_influence_penalty_from_guangxi": -10,
-            "military_supply_efficiency_penalty": -10
+            "military_supply_efficiency_penalty": -10,
+            "factory_output_bonus":{
+              "civilian_factory": 0.10
+            }
           }
         },
         {
@@ -967,7 +1039,10 @@
           "type": "military",
           "modifiers": {
             "naval_projection_penalty": -20,
-            "amphibious_support_efficiency": -10
+            "amphibious_support_efficiency": -10,
+            "factory_output_bonus":{
+              "naval_dockyard": 0.10
+            }
           },
           "research_bonus": {
             "Naval": -0.1
@@ -983,6 +1058,9 @@
               "Industry": 0.05,
               "Artillery": 0.05,
               "Infantry": 0.05
+            },
+            "factory_output_bonus":{
+              "military_factory": 0.05
             }
           }
         }
@@ -1006,7 +1084,13 @@
       },
       "economic": {
         "budget_surplus": -20,
-        "industrial_sectors": 18,
+        "factories": {
+          "civilian_factories": 20,
+          "military_factories": 10,
+          "naval_dockyards": 2,
+          "airbases": 4,
+          "nuclear_facilities": 0
+        },
         "oil_reserves": 3,
         "infrastructure_rating": 1
       },
@@ -1146,7 +1230,10 @@
           "public": true,
           "modifiers": {
             "armor_combat_bonus": 20,
-            "mechanized_logistics_bonus": 10
+            "mechanized_logistics_bonus": 10,
+            "division_cost": {
+              "armor_division": -0.10
+            }
           },
           "research_bonus": {
             "Armor": 0.15
@@ -1167,7 +1254,10 @@
           "type": "military",
           "modifiers": {
             "air_superiority_bonus": 10,
-            "fighter_production_efficiency": 10
+            "fighter_production_efficiency": 10,
+            "factory_output_bonus":{
+              "airbase": 0.10
+            }
           },
           "research_bonus": {
             "Aerial": 0.1
@@ -1179,7 +1269,10 @@
           "type": "military",
           "modifiers": {
             "submarine_warfare_bonus": 10,
-            "naval_construction_modifier": 10
+            "naval_construction_modifier": 10,
+            "factory_output_bonus":{
+              "naval_dockyard": 0.10
+            }
           },
           "research_bonus": {
             "Naval": 0.1
@@ -1205,7 +1298,13 @@
       },
       "economic": {
         "budget_surplus": -5,
-        "industrial_sectors": 12,
+        "factories": {
+          "civilian_factories": 15,
+          "military_factories": 8,
+          "naval_dockyards": 3,
+          "airbases": 4,
+          "nuclear_facilities": 0
+        },
         "oil_reserves": 3,
         "infrastructure_rating": 3
       },
@@ -1267,7 +1366,10 @@
           "public": true,
           "modifiers": {
             "reactionary_policy_bonus": 15,
-            "resistance_to_social_reforms": 10
+            "resistance_to_social_reforms": 10,
+            "factory_output_bonus": {
+              "civilian_factory": 0.10
+            }
           }
         },
         {
@@ -1300,7 +1402,11 @@
           "public": true,
           "modifiers": {
             "alliance_cohesion_with_austria": 20,
-            "monarchic_propaganda_bonus": 15
+            "monarchic_propaganda_bonus": 15,
+            "factory_output_bonus": {
+              "military_factory": 0.10,
+              "airbase": 0.05
+            }
           },
           "research_bonus": {
             "Industry": 0.05,
@@ -1351,7 +1457,13 @@
       },
       "economic": {
         "budget_surplus": 5,
-        "industrial_sectors": 16,
+        "factories": {
+          "civilian_factories": 10,
+          "military_factories": 6,
+          "naval_dockyards": 0,
+          "airbases": 2,
+          "nuclear_facilities": 0
+        },
         "oil_reserves": 1,
         "infrastructure_rating": 4
       },
@@ -1414,11 +1526,14 @@
           "public": true,
           "modifiers": {
             "monarchic_legitimacy_bonus": 20,
-            "resistance_to_republican_influence": 10
+            "resistance_to_republican_influence": 10,
+            "factory_output_bonus":{
+              "civilian_factory": 0.10
+            }
           }
         },
         {
-          "name": "Hearts of Europe",
+          "name": "Heart of Europe",
           "description": "Despite being smaller than its former self, Austria\u2019s role as a diplomatic, cultural, and intellectual hub continues to thrive. Ideas flow through its embassies as easily as wine through its courts.",
           "type": "research",
           "public": true,
@@ -1426,6 +1541,9 @@
             "research_bonus": {
               "Industry": 0.05,
               "Infantry": 0.05
+            },
+            "factory_output_bonus":{
+              "military_factory": 0.05
             }
           }
         },
@@ -1507,7 +1625,13 @@
       },
       "economic": {
         "budget_surplus": -5,
-        "industrial_sectors": 22,
+        "factories": {
+          "civilian_factories": 25,
+          "military_factories": 15,
+          "naval_dockyards": 6,
+          "airbases": 8,
+          "nuclear_facilities": 0
+        },
         "oil_reserves": 5,
         "infrastructure_rating": 3
       },
@@ -1571,7 +1695,10 @@
           "public": true,
           "modifiers": {
             "infrastructure_repair_bonus": 15,
-            "economic_growth_modifier": 10
+            "economic_growth_modifier": 10,
+            "factory_output_bonus":{
+              "civilian_factory": 0.10
+            }
           },
           "research_bonus": {
             "Industry": 0.05
@@ -1605,7 +1732,10 @@
           "public": true,
           "modifiers": {
             "national_unity_bonus": 10,
-            "resilience_against_foreign_pressure": 10
+            "resilience_against_foreign_pressure": 10,
+            "factory_output_bonus":{
+              "military_factory": 0.05
+            }
           }
         },
         {
@@ -1614,7 +1744,11 @@
           "type": "political",
           "modifiers": {
             "political_initiative_penalty": -15,
-            "legislation_success_rate": -10
+            "legislation_success_rate": -10,
+            "factory_output_bonus":{
+              "civilian_factory": -0.05,
+              "military_factory": -0.05
+            }
           },
           "research_bonus": {
             "Electronics": -0.05,
@@ -1650,7 +1784,13 @@
       },
       "economic": {
         "budget_surplus": -3,
-        "industrial_sectors": 12,
+        "factories": {
+          "civilian_factories": 12,
+          "military_factories": 6,
+          "naval_dockyards": 2,
+          "airbases": 4,
+          "nuclear_facilities": 0
+        },
         "oil_reserves": 7,
         "infrastructure_rating": 2
       },
@@ -1725,7 +1865,10 @@
           "public": true,
           "modifiers": {
             "naval_blockade_power_in_black_sea": 20,
-            "diplomatic_leverage_in_regional_conflicts": 10
+            "diplomatic_leverage_in_regional_conflicts": 10,
+            "factory_output_bonus":{
+              "naval_dockyard": 0.10
+            }
           }
         },
         {
@@ -1734,7 +1877,10 @@
           "type": "political",
           "modifiers": {
             "influence_in_balkan_nations": 15,
-            "justification_speed_in_balkans": 10
+            "justification_speed_in_balkans": 10,
+            "factory_output_bonus":{
+              "military_factory":0.05
+            }
           }
         },
         {
@@ -1790,7 +1936,13 @@
       },
       "economic": {
         "budget_surplus": -2,
-        "industrial_sectors": 18,
+        "factories": {
+          "civilian_factories": 30,
+          "military_factories": 18,
+          "naval_dockyards": 6,
+          "airbases": 5,
+          "nuclear_facilities": 0
+        },
         "oil_reserves": 4,
         "infrastructure_rating": 3
       },
@@ -1851,7 +2003,10 @@
           "public": true,
           "modifiers": {
             "monarchic_support_bonus": 10,
-            "resistance_to_ideological_shifts": 10
+            "resistance_to_ideological_shifts": 10,
+            "factory_output_bonus":{
+              "civilian_factory": 0.10
+            }
           }
         },
         {
@@ -1860,7 +2015,10 @@
           "type": "economic",
           "modifiers": {
             "infrastructure_development_penalty_in_south": -10,
-            "industrial_growth_rate": 5
+            "industrial_growth_rate": 5,
+            "factory_output_bonus":{
+              "military_factory":-0.05
+            }
           },
           "research_bonus": {
             "Industry": -0.05
@@ -1873,7 +2031,10 @@
           "public": true,
           "modifiers": {
             "naval_combat_bonus": 10,
-            "coastal_patrol_bonus": 10
+            "coastal_patrol_bonus": 10,
+            "factory_output_bonus":{
+              "naval_dockyard": 0.15
+            }
           }
         },
         {
@@ -1882,7 +2043,10 @@
           "type": "political",
           "modifiers": {
             "influence_in_balkans": 15,
-            "territorial_claim_justification_bonus": 10
+            "territorial_claim_justification_bonus": 10,
+            "factory_output_bonus":{
+              "airbase": 0.10
+            }
           },
           "research_bonus": {
             "Naval": 0.1
@@ -1894,7 +2058,10 @@
           "type": "military",
           "modifiers": {
             "garrison_effectiveness": 10,
-            "occupied_territory_stability": 5
+            "occupied_territory_stability": 5,
+            "factory_output_bonus":{
+              "military_factory": 0.05
+            }
           },
           "research_bonus": {
             "Infantry": 0.05
@@ -3956,5 +4123,49 @@
           "required_operatives": 2
         }
       }
+    },
+  "PRODUCTION": {
+    "division_costs": {
+      "infantry_division":   100,
+      "armor_division":      500,
+      "artillery_division":  200
+    },
+    "unit_costs": {
+      "rifle":      100,
+      "tank":       300,
+      "howitzer":   200,
+      "fighter":    200,
+      "cas":        300,
+      "bomber":     400,
+      "destroyer":  300,
+      "submarine":  250,
+      "cruiser":    600,
+      "carrier":   1000,
+      "nukes":      500
+    },
+    "formation_templates": {
+      "air_wing": {
+        "fighter": 0.7,
+        "cas":     0.2,
+        "bomber":  0.1
+      },
+      "task_group": {
+        "destroyer":  0.50,
+        "submarine":  0.30,
+        "cruiser":    0.15,
+        "carrier":    0.05
+      }
+    },
+    "formation_costs": {
+      "air_wing":   240,
+      "task_group": 365
+    },
+    "factory_outputs": {
+      "civilian_factory": 20,
+      "military_factory": 20,
+      "naval_dockyard":   15,
+      "airbase":          15,
+      "nuclear_facility":  5
     }
   }
+}
