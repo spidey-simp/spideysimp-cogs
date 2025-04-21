@@ -932,9 +932,8 @@ class SpideyUtils(commands.Cog):
     
     async def autocomplete_factory_type(self, interaction: Interaction, current: str):
         return [
-            app_commands.Choice(name=name, value=key)
-            for key, name in FACTORY_TYPES.items()
-            if current.lower() in name.lower()
+            app_commands.Choice(name=type.replace('_', ' ').title(), value=type)
+            for type in FACTORY_TYPES
         ][:25]
     
     @app_commands.command(
