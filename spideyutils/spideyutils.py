@@ -21,6 +21,15 @@ def debug_log(message):
     log_path = os.path.expanduser("~/debug_output.log")
     with open(log_path, "a") as f:
         f.write(f"[{datetime.now()}] {message}\n")
+    
+FACTORY_TYPES = [
+    "civilian_factories",
+    "military_factories",
+    "naval_dockyards",
+    "airbases",
+    "nuclear_facilities",
+]
+
 
 
 BACKUP_CHANNEL_ID = 1357944150502412288
@@ -920,6 +929,112 @@ class SpideyUtils(commands.Cog):
             app_commands.Choice(name=t, value=t)
             for t in available if current.lower() in t.lower()
         ][:25]
+    
+    async def autocomplete_factory_type(self, interaction: Interaction, current: str):
+        return [
+            app_commands.Choice(name=name, value=key)
+            for key, name in FACTORY_TYPES.items()
+            if current.lower() in name.lower()
+        ][:25]
+    
+    @app_commands.command(
+        name="set_factory_pct",
+        description="Set percentage of civilian factories to produce a given factory type."
+    )
+    @app_commands.describe(
+        category="Type of factory to allocate civilian output to",
+        pct="Percentage to assign (e.g. 60%)",
+        country="Override your country"
+    )
+    @app_commands.autocomplete(category=autocomplete_factory_type)
+    async def set_factory_pct(
+        self,
+        interaction: Interaction,
+        category: str,
+        pct: str,
+        country: str = None
+    ):
+        # Resolve country as in other commands
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        if not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.response.send_message("❌ Could not determine your country.", ephemeral=True)
+
+        data = self.cold_war_data["countries"][country]
+        econ = data.get("economic", {}).get("factories", {})
+        total_civ = econ.get("civilian_factories", 0)
+
+        # Only allow building new nuclear facilities if you already have one
+        if category == "nuclear_facility" and econ.get("nuclear_facilities", 0) == 0:
+            return await interaction.response.send_message(
+                "❌ You must have at least one existing Nuclear Facility to build more.",
+                ephemeral=True
+            )
+
+        # Parse percentage
+        try:
+            new_pct = float(pct.rstrip("%")) / 100.0
+        except ValueError:
+            return await interaction.response.send_message(
+                "❌ Invalid percentage format. Use e.g. `60%` or `60`.", ephemeral=True
+            )
+        # Bound
+        new_pct = max(0, min(new_pct, 1))
+
+        assigned = data.setdefault("production", {}).setdefault("assigned_factories", {})
+
+        # Compute new absolute allocation of civilian factories
+        new_abs = round(total_civ * new_pct)
+        old_abs = assigned.get(category, 0)
+        delta = new_abs - old_abs
+
+        # For civilian-driven rebalancing: pull from these three buckets
+        others = ["military_factory", "naval_dockyard", "airbase"]
+        sum_others = sum(assigned.get(o, 0) for o in others)
+
+        changes = {}
+        if delta > 0 and sum_others > 0:
+            # Proportional reduction
+            for o in others:
+                curr = assigned.get(o, 0)
+                take = round(delta * (curr / sum_others))
+                assigned[o] = max(0, curr - take)
+                changes[o] = -take
+            # Fix rounding drift
+            drift = delta - sum(abs(c) for c in changes.values())
+            if drift != 0:
+                # adjust largest
+                o_max = max(changes, key=lambda k: abs(changes[k]))
+                assigned[o_max] = max(0, assigned[o_max] - drift)
+                changes[o_max] -= drift
+        elif delta < 0:
+            # Freed factories remain unassigned until user reallocates
+            changes["unassigned"] = -delta
+
+        assigned[category] = new_abs
+
+        # Persist
+        self.save_data()
+
+        # Build feedback
+        summary = [
+            f"✅ `{FACTORY_TYPES[category]}` set to {new_abs} ({new_pct * 100:.0f}% of {total_civ})."
+        ]
+        for k, d in changes.items():
+            if k == "unassigned":
+                summary.append(f"– Freed up {d} factories as unassigned.")
+            else:
+                name = FACTORY_TYPES.get(k, k.replace('_', ' ').title())
+                summary.append(
+                    f"– `{name}` {'–' if d<0 else '+'}{abs(d)} → now {assigned[k]}."
+                )
+
+        await interaction.response.send_message("\n".join(summary), ephemeral=True)
 
         
     @app_commands.command(name="view_factories", description="View your nation's factory assignments and stockpiles.")
