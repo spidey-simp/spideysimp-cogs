@@ -23,11 +23,11 @@ def debug_log(message):
         f.write(f"[{datetime.now()}] {message}\n")
     
 FACTORY_TYPES = [
-    "civilian_factories",
-    "military_factories",
-    "naval_dockyards",
-    "airbases",
-    "nuclear_facilities",
+    "civilian_factory",
+    "military_factory",
+    "naval_dockyard",
+    "airbase",
+    "nuclear_facility",
 ]
 
 
@@ -937,104 +937,155 @@ class SpideyUtils(commands.Cog):
         ][:25]
     
     @app_commands.command(
-        name="set_factory_pct",
-        description="Set percentage of civilian factories to produce a given factory type."
+        name="set_factory",
+        description="Allocate civilian factories by percentage or absolute number."
     )
     @app_commands.describe(
-        category="Type of factory to allocate civilian output to",
-        pct="Percentage to assign (e.g. 60%)",
-        country="Override your country"
+        category="Which factory slot to set",
+        value="Either a percentage (e.g. 60%) or an absolute integer (e.g. 5)",
+        at_least_one="Ensure no other slot is driven to zero"
     )
     @app_commands.autocomplete(category=autocomplete_factory_type)
-    async def set_factory_pct(
+    async def set_factory(
         self,
         interaction: Interaction,
         category: str,
-        pct: str,
+        value: str,
+        at_least_one: bool = False,
         country: str = None
     ):
-        # Resolve country as in other commands
-        if not country and str(interaction.user.id) in self.alternate_country_dict:
-            country = self.alternate_country_dict[str(interaction.user.id)]
-        if not country:
-            for c_key, details in self.cold_war_data["countries"].items():
-                if details.get("player_id") == interaction.user.id:
-                    country = c_key
-                    break
-        if not country or country not in self.cold_war_data["countries"]:
-            return await interaction.response.send_message("❌ Could not determine your country.", ephemeral=True)
+        # ── resolve country exactly as you did ──
+        # … your existing country‐resolution code …
 
         data = self.cold_war_data["countries"][country]
-        econ = data.get("economic", {}).get("factories", {})
+
+        # ── pull out econ + total civ ──
+        econ = data["economic"]["factories"]
         total_civ = econ.get("civilian_factories", 0)
 
-        # Only allow building new nuclear facilities if you already have one
+        # ── initialize your production‡assigned dict exactly as in load_data() ──
+        prod     = data.setdefault("production", {})
+        assigned = prod.setdefault("assigned_factories", {})
+
+        # ── the nuclear‐facility check remains the same ──
         if category == "nuclear_facility" and econ.get("nuclear_facilities", 0) == 0:
             return await interaction.response.send_message(
                 "❌ You must have at least one existing Nuclear Facility to build more.",
                 ephemeral=True
             )
 
-        # Parse percentage
-        try:
-            new_pct = float(pct.rstrip("%")) / 100.0
-        except ValueError:
-            return await interaction.response.send_message(
-                "❌ Invalid percentage format. Use e.g. `60%` or `60`.", ephemeral=True
-            )
-        # Bound
-        new_pct = max(0, min(new_pct, 1))
+        # ── parse percent vs absolute ──
+        if value.endswith("%"):
+            pct     = float(value.rstrip("%")) / 100.0
+            new_abs = round(total_civ * pct)
+        else:
+            try:
+                new_abs = int(value)
+            except ValueError:
+                return await interaction.response.send_message(
+                    "❌ Value must be either a percent (e.g. 60%) or an integer (e.g. 5).",
+                    ephemeral=True
+                )
+        new_abs = max(0, min(new_abs, total_civ))
 
-        assigned = data.setdefault("production", {}).setdefault("assigned_factories", {})
-
-        # Compute new absolute allocation of civilian factories
-        new_abs = round(total_civ * new_pct)
         old_abs = assigned.get(category, 0)
-        delta = new_abs - old_abs
+        delta   = new_abs - old_abs
 
-        # For civilian-driven rebalancing: pull from these three buckets
-        others = ["military_factory", "naval_dockyard", "airbase"]
+        # ── define your four slots ──
+        slots     = ["civilian_factory","military_factory","naval_dockyard","airbase"]
+        others    = [s for s in slots if s != category]
         sum_others = sum(assigned.get(o, 0) for o in others)
 
         changes = {}
+
         if delta > 0 and sum_others > 0:
-            # Proportional reduction
+            # proportional drain
             for o in others:
                 curr = assigned.get(o, 0)
                 take = round(delta * (curr / sum_others))
                 assigned[o] = max(0, curr - take)
                 changes[o] = -take
-            # Fix rounding drift
+
+            # ensure at_least_one
+            if at_least_one:
+                for o in others:
+                    if assigned[o] == 0 and old_abs != 0 and assigned[category] > 1:
+                        assigned[category] -= 1
+                        assigned[o] = 1
+                        changes[category] = changes.get(category, 0) - 1
+                        changes[o] = changes.get(o, 0) + 1
+
+            # fix any rounding drift
             drift = delta - sum(abs(c) for c in changes.values())
-            if drift != 0:
-                # adjust largest
+            if drift:
                 o_max = max(changes, key=lambda k: abs(changes[k]))
                 assigned[o_max] = max(0, assigned[o_max] - drift)
                 changes[o_max] -= drift
+
         elif delta < 0:
-            # Freed factories remain unassigned until user reallocates
+            # freed factories → unassigned pool
             changes["unassigned"] = -delta
 
+        # finally set the target
         assigned[category] = new_abs
 
-        # Persist
+        # persist
         self.save_data()
 
-        display_name = category.replace('_', ' ').title()
-        # Build feedback
-        summary = [
-            f"✅ `{display_name}` set to {new_abs} ({new_pct * 100:.0f}% of {total_civ})."
-        ]
-        for k, d in changes.items():
-            if k == "unassigned":
-                summary.append(f"– Freed up {d} factories as unassigned.")
+        # build feedback
+        lines = [f"✅ `{category}` set to {new_abs}."]
+        for slot, d in changes.items():
+            if slot == "unassigned":
+                lines.append(f"– Freed {d} factories into the unassigned pool.")
             else:
-                name = k.replace('_', ' ').title()
-                summary.append(
-                    f"– `{name}` {'–' if d<0 else '+'}{abs(d)} → now {assigned[k]}."
-                )
+                name = slot.replace("_"," ").title()
+                lines.append(f"– `{name}` {'–' if d<0 else '+'}{abs(d)} → now {assigned[slot]}.")
 
-        await interaction.response.send_message("\n".join(summary), ephemeral=True)
+        await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
+    @app_commands.command(
+        name="reset_factory_defaults",
+        description="(One‑time) reset your factory assignments back to the default proportions."
+    )
+    @app_commands.autocomplete(country=autocomplete_my_country)
+    async def reset_factory_defaults(self, interaction: Interaction, country: str = None):
+        # ── resolve country just like in your other commands ──
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        if not country:
+            for c, d in self.cold_war_data["countries"].items():
+                if d.get("player_id") == interaction.user.id:
+                    country = c
+                    break
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.response.send_message("❌ Could not determine your country.", ephemeral=True)
+
+        data = self.cold_war_data["countries"][country]
+        econ = data["economic"]["factories"]
+        prod = data.setdefault("production", {})
+        assigned = prod.setdefault("assigned_factories", {})
+        stock    = prod.setdefault("stockpiles", {})
+
+        # same defaults you use in load_data()
+        civ = econ.get("civilian_factories", 0)
+        assigned["civilian_factory"] = civ * 50 // 100
+        assigned["military_factory"] = civ * 30 // 100
+        assigned["naval_dockyard"]   = civ * 10 // 100
+        assigned["airbase"]          = civ * 10 // 100
+
+        assigned["rifle"]      = econ.get("military_factories", 0)
+        assigned["task_group"] = econ.get("naval_dockyards", 0)
+        assigned["air_wing"]   = econ.get("airbases", 0)
+        assigned["nuke"]       = econ.get("nuclear_facilities", 0)
+
+        # zero out all stockpiles
+        for k in assigned:
+            stock[k] = 0
+
+        self.save_data()
+        await interaction.response.send_message(
+            "✅ Factory assignments and stockpiles have been reset to defaults.", ephemeral=True
+        )
 
         
     @app_commands.command(name="view_factories", description="View your nation's factory assignments and stockpiles.")
