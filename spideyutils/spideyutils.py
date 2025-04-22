@@ -407,6 +407,12 @@ class SpideyUtils(commands.Cog):
                             # non‐dict (e.g. player_id): overwrite
                             static_country[section] = dyn_val
             
+                # ── ensure UN data structures exist ──
+            un = self.cold_war_data.setdefault("UN", {})
+            un.setdefault("sg_nominations", {})   # for nominate_sg / view_sg_noms
+            un.setdefault("votes", {})            # for vote_sc / view_vote
+
+            
             for country, data in self.cold_war_data["countries"].items():
                 econ = data.get("economic", {}).get("factories", {})
                 prod = data.setdefault("production", {})
@@ -492,6 +498,9 @@ class SpideyUtils(commands.Cog):
 
                 if d:
                     dynamic["countries"][country] = d
+            
+            if "UN" in self.cold_war_data:
+                dynamic["UN"] = self.cold_war_data["UN"]
 
             # 3) write out only the deltas
             with open(dynamic_path, "w") as f:
