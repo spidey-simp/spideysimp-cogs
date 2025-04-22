@@ -4167,5 +4167,27 @@
       "airbase":          15,
       "nuclear_facility":  5
     }
+  },
+  "UN": {
+    "members": [
+      "United States",
+      "Soviet Union",
+      "United Kingdom",
+      "France",
+      "Empire of Japan",
+      "Republic of China (KMT)",
+      "Germany",
+      "Kingdom of Spain",
+      "Austrian Empire",
+      "Republic of Turkey",
+      "Kingdom of Italy"
+    ],
+    "permanent_security_council": [
+      "United States",
+      "Soviet Union",
+      "United Kingdom",
+      "France",
+      "Republic of China (KMT)"
+    ]
   }
 }

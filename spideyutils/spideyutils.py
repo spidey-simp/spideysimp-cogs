@@ -1520,6 +1520,170 @@ class SpideyUtils(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
+    async def autocomplete_sc_choice1(self, interaction: Interaction, current: str):
+        un = self.cold_war_data["UN"]
+        nonperm = [m for m in un["members"] if m not in un["permanent_security_council"]]
+        return [
+            app_commands.Choice(name=c, value=c)
+            for c in nonperm
+            if current.lower() in c.lower()
+        ][:25]
+
+    async def autocomplete_sc_choice2(self, interaction: Interaction, current: str):
+        un = self.cold_war_data["UN"]
+        nonperm = [m for m in un["members"] if m not in un["permanent_security_council"]]
+        first = getattr(interaction.namespace, "choice1", None)
+        return [
+            app_commands.Choice(name=c, value=c)
+            for c in nonperm
+            if c != first and current.lower() in c.lower()
+        ][:25]
+
+    async def autocomplete_sc_choice3(self, interaction: Interaction, current: str):
+        un = self.cold_war_data["UN"]
+        nonperm = [m for m in un["members"] if m not in un["permanent_security_council"]]
+        first = getattr(interaction.namespace, "choice1", None)
+        second = getattr(interaction.namespace, "choice2", None)
+        return [
+            app_commands.Choice(name=c, value=c)
+            for c in nonperm
+            if c not in {first, second} and current.lower() in c.lower()
+        ][:25]
+
+    @app_commands.command(
+        name="vote_sc",
+        description="Vote for up to 3 non‑permanent Security Council seats"
+    )
+    @app_commands.describe(
+        choice1="Your first choice",
+        choice2="Your second choice (optional)",
+        choice3="Your third choice (optional)"
+    )
+    @app_commands.autocomplete(
+        choice1=autocomplete_sc_choice1,
+        choice2=autocomplete_sc_choice2,
+        choice3=autocomplete_sc_choice3
+    )
+    async def vote_sc(
+        self,
+        interaction: Interaction,
+        choice1: str,
+        choice2: str | None = None,
+        choice3: str | None = None,
+    ):
+        # 1) resolve country
+        country = None
+        if str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        else:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+        if not country:
+            return await interaction.response.send_message("❌ Could not determine your country.", ephemeral=True)
+
+        # 2) build term key
+        year = self.cold_war_data.get("current_year", 0)
+        term = f"{year}-{year+2}"
+
+        # 3) locate votes dict
+        un = self.cold_war_data.setdefault("UN", {})
+        votes = un.setdefault("votes", {}) \
+                   .setdefault("security_membership", {}) \
+                   .setdefault(term, {})
+
+        # 4) one‑vote per country
+        if country in votes:
+            return await interaction.response.send_message(
+                "❌ You have already voted for this term.", ephemeral=True
+            )
+
+        # 5) record your votes (allow fewer than 3)
+        picks = [c for c in (choice1, choice2, choice3) if c]
+        votes[country] = picks
+
+        # 6) persist
+        self.save_data()
+
+        # 7) confirm
+        e = Embed(
+            title="🗳️ Security Council Vote Recorded",
+            description=(
+                f"**Term:** {term}\n"
+                f"**Your choices:** {', '.join(picks)}"
+            ),
+            color=0x00FF00
+        )
+        await interaction.response.send_message(embed=e, ephemeral=True)
+
+    @app_commands.command(
+        name="nominate_sg",
+        description="Nominate a UN member for Secretary‑General."
+    )
+    @app_commands.describe(
+        candidate="Which country you nominate"
+    )
+    @app_commands.autocomplete(candidate=autocomplete_country)  # reuse your UN.members list
+    async def nominate_sg(
+        self,
+        interaction: Interaction,
+        candidate: str
+    ):
+        # 1) resolve your country (as in vote_sc)
+        country = None
+        if str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        else:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+        if not country:
+            return await interaction.response.send_message("❌ Could not determine your country.", ephemeral=True) 
+
+        term = f"{self.cold_war_data['current_year']}-" \
+               f"{self.cold_war_data['current_year']+2}"
+        un = self.cold_war_data.setdefault("UN", {})
+        noms = un.setdefault("sg_nominations", {}).setdefault(term, [])
+
+        # 2) must be UN member
+        if candidate not in un["members"]:
+            return await interaction.response.send_message(
+                "❌ That country isn’t a UN member.", ephemeral=True
+            )
+        # 3) no duplicates
+        if candidate in noms:
+            return await interaction.response.send_message(
+                f"❌ {candidate} is already nominated.", ephemeral=True
+            )
+        # 4) record
+        noms.append(candidate)
+        self.save_data()
+
+        await interaction.response.send_message(
+            f"✅ You’ve nominated **{candidate}** for SG for {term}.",
+            ephemeral=True
+        )
+    
+
+    @app_commands.command(
+        name="view_sg_noms",
+        description="See current Secretary‑General nominations."
+    )
+    async def view_sg_noms(self, interaction: Interaction):
+        term = f"{self.cold_war_data['current_year']}-" \
+               f"{self.cold_war_data['current_year']+2}"
+        noms = self.cold_war_data["UN"]["sg_nominations"].get(term, [])
+        embed = Embed(
+            title=f"📝 SG Nominations ({term})",
+            description="\n".join(f"• {c}" for c in noms) or "No nominations yet.",
+            color=0x00AAFF
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+
     
     def redact_paragraph_weighted(self, text, knowledge):
         words = text.split()
