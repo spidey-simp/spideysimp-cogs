@@ -1680,9 +1680,77 @@ class SpideyUtils(commands.Cog):
             description="\n".join(f"• {c}" for c in noms) or "No nominations yet.",
             color=0x00AAFF
         )
+        await interaction.response.send_message(embed=embed)
+
+    async def autocomplete_un_votes(self, interaction, current: str):
+        return [
+            app_commands.Choice(name=k, value=k)
+            for k in self.cold_war_data.get("UN", {}).get("votes", {}).keys()
+            if current.lower() in k.lower()
+        ][:25]
+
+    async def autocomplete_un_terms(self, interaction, current: str):
+        # Grab all the term‐strings under each vote
+        votes = self.cold_war_data.get("UN", {}).get("votes", {})
+        terms = {term for sub in votes.values() for term in sub.keys()}
+        return [
+            app_commands.Choice(name=t, value=t)
+            for t in sorted(terms)
+            if current in t
+        ][:25]
+
+
+
+    @app_commands.command(
+        name="view_vote",
+        description="See which UN members have already voted in a given UN election."
+    )
+    @app_commands.describe(
+        vote="Which vote to inspect (e.g. security_membership, sg_rcv)",
+        term="Which term to view (e.g. 1952-1954). Defaults to current term."
+    )
+    @app_commands.autocomplete(vote=autocomplete_un_votes, term=autocomplete_un_terms)
+    async def view_vote(
+        self,
+        interaction: Interaction,
+        vote: str,
+        term: str | None = None
+    ):
+        un = self.cold_war_data.get("UN", {})
+        votes_block = un.get("votes", {})
+        if vote not in votes_block:
+            return await interaction.response.send_message(
+                f"❌ Unknown vote “{vote}”.", ephemeral=True
+            )
+
+        # default to current term if not specified
+        current = self.cold_war_data["current_year"]
+        default_term = f"{current}-{current+2}"
+        term = term or default_term
+
+        vote_data = votes_block[vote].get(term)
+        if vote_data is None:
+            return await interaction.response.send_message(
+                f"❌ No `{vote}` running for term {term}.", ephemeral=True
+            )
+
+        cast = list(vote_data.keys())
+        total = len(un.get("members", []))
+        embed = Embed(
+            title=f"🗳️ {vote.replace('_',' ').title()} — {term}",
+            description=f"**{len(cast)}/{total}** members have voted so far.",
+            color=0x3498db
+        )
+        if cast:
+            embed.add_field(
+                name="Members Who Voted",
+                value="\n".join(f"• {c}" for c in cast),
+                inline=False
+            )
+        else:
+            embed.add_field(name="Nobody has voted yet", value="—", inline=False)
+
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
-
 
     
     def redact_paragraph_weighted(self, text, knowledge):
