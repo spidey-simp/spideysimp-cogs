@@ -407,8 +407,15 @@ class SpideyUtils(commands.Cog):
                             # non‐dict (e.g. player_id): overwrite
                             static_country[section] = dyn_val
             
+            if "UN" in modifiers:
+                # fully overwrite the static UN block with your dynamic one
+                self.cold_war_data["UN"] = modifiers["UN"]
+            else:
+                # ensure at least the structure exists
+                self.cold_war_data.setdefault("UN", {})
+
                 # ── ensure UN data structures exist ──
-            un = self.cold_war_data.setdefault("UN", {})
+            un = self.cold_war_data["UN"]
             un.setdefault("sg_nominations", {})   # for nominate_sg / view_sg_noms
             un.setdefault("votes", {})            # for vote_sc / view_vote
 
@@ -499,8 +506,8 @@ class SpideyUtils(commands.Cog):
                 if d:
                     dynamic["countries"][country] = d
             
-            if "UN" in self.cold_war_data:
-                dynamic["UN"] = self.cold_war_data["UN"]
+            
+            dynamic["UN"] = self.cold_war_data.get("UN", {})
 
             # 3) write out only the deltas
             with open(dynamic_path, "w") as f:
