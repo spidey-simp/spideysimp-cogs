@@ -954,8 +954,19 @@ class SpideyUtils(commands.Cog):
         at_least_one: bool = False,
         country: str = None
     ):
-        # ── resolve country exactly as you did ──
-        # … your existing country‐resolution code …
+        # ── resolve country exactly as you do elsewhere ──
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        if not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.response.send_message(
+                "❌ Could not determine your country.", ephemeral=True
+            )
+
 
         data = self.cold_war_data["countries"][country]
 
@@ -1043,49 +1054,6 @@ class SpideyUtils(commands.Cog):
 
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
-    @app_commands.command(
-        name="reset_factory_defaults",
-        description="(One‑time) reset your factory assignments back to the default proportions."
-    )
-    @app_commands.autocomplete(country=autocomplete_my_country)
-    async def reset_factory_defaults(self, interaction: Interaction, country: str = None):
-        # ── resolve country just like in your other commands ──
-        if not country and str(interaction.user.id) in self.alternate_country_dict:
-            country = self.alternate_country_dict[str(interaction.user.id)]
-        if not country:
-            for c, d in self.cold_war_data["countries"].items():
-                if d.get("player_id") == interaction.user.id:
-                    country = c
-                    break
-        if not country or country not in self.cold_war_data["countries"]:
-            return await interaction.response.send_message("❌ Could not determine your country.", ephemeral=True)
-
-        data = self.cold_war_data["countries"][country]
-        econ = data["economic"]["factories"]
-        prod = data.setdefault("production", {})
-        assigned = prod.setdefault("assigned_factories", {})
-        stock    = prod.setdefault("stockpiles", {})
-
-        # same defaults you use in load_data()
-        civ = econ.get("civilian_factories", 0)
-        assigned["civilian_factory"] = civ * 50 // 100
-        assigned["military_factory"] = civ * 30 // 100
-        assigned["naval_dockyard"]   = civ * 10 // 100
-        assigned["airbase"]          = civ * 10 // 100
-
-        assigned["rifle"]      = econ.get("military_factories", 0)
-        assigned["task_group"] = econ.get("naval_dockyards", 0)
-        assigned["air_wing"]   = econ.get("airbases", 0)
-        assigned["nuke"]       = econ.get("nuclear_facilities", 0)
-
-        # zero out all stockpiles
-        for k in assigned:
-            stock[k] = 0
-
-        self.save_data()
-        await interaction.response.send_message(
-            "✅ Factory assignments and stockpiles have been reset to defaults.", ephemeral=True
-        )
 
         
     @app_commands.command(name="view_factories", description="View your nation's factory assignments and stockpiles.")
