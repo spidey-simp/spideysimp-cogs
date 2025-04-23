@@ -1774,7 +1774,7 @@ class SpideyUtils(commands.Cog):
         un_dict = self.cold_war_data.get("UN", {})
         secretary_general = un_dict.get("secretary_general", "Vacant")
 
-        embed = discord.Embed(title="United Nations Members", color=0x5B92E5)
+        embed = discord.Embed(title="🇺🇳 United Nations Members", color=0x5B92E5)
 
         embed.add_field(name="Secretary-General", value=secretary_general, inline=False)
 
@@ -1785,7 +1785,7 @@ class SpideyUtils(commands.Cog):
         else:
             embed.add_field(name="Members", value="No UN members currently registered.", inline=False)
 
-        await interaction.response.send_message(embed)
+        await interaction.response.send_message(embed=embed)
 
 
     @app_commands.command(
