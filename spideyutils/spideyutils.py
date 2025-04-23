@@ -1769,6 +1769,69 @@ class SpideyUtils(commands.Cog):
             embed.add_field(name="Nobody has voted yet", value="—", inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(
+        name="view_current_un_results",
+        description="Show all current UN vote results."
+    )
+    async def view_current_un_results(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        un = self.cold_war_data.get("UN", {})
+        votes_block = un.get("votes", {})
+
+        if not votes_block:
+            return await interaction.followup.send(
+                "❌ No UN votes have been started yet.", 
+                ephemeral=True
+            )
+
+        embed = discord.Embed(
+            title="🗳️ Current UN Vote Results",
+            color=discord.Color.blue()
+        )
+
+        country = None
+        if str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        else:
+            for c, data in self.cold_war_data["countries"].items():
+                if data.get("player_id") == interaction.user.id:
+                    country = c
+                    break
+        
+        sg = self.cold_war_data["UN"]["secretary_general", "Vacant"]
+        if country == sg or interaction.user.guild_permissions.administrator:
+            view_conf = True
+        
+        at_least_1_conf = 0
+
+        for vote_key, vote in votes_block.items():
+            is_conf = vote.get("confidential", False)
+
+            if is_conf:
+                at_least_1_conf += 1
+            casts = vote.get("casts", {})
+
+            
+            if is_conf and not view_conf:
+                value = f"• {len(casts)} votes cast by: " + ", ".join(casts.keys())
+            else:
+                lines = [f"• **{c}**: `{ballot}`" for c, ballot in casts.items()]
+                value = "\n".join(lines) if lines else "No votes cast yet."
+            
+
+            embed.add_field(
+                name=vote_key.replace("_", " ").title(),
+                value=value,
+                inline=False
+            )
+
+        if view_conf and at_least_1_conf > 0:
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        else:
+            await interaction.followup.send(embed=embed, ephemeral=False)
+
     
     @app_commands.command(name="un_membership", description="Show all the UN members. Though it's kind of obvious.")
     async def un_membership(self, interaction: Interaction):
@@ -1908,6 +1971,7 @@ class SpideyUtils(commands.Cog):
         use_nominees: bool = False,
         # only used when use_nominees=False
         vote_type: Literal["Y/N/A", "RCV"] = "Y/N/A",
+        confidential: bool = False
     ):
         # 1) Permissions as before…
         if not interaction.user.guild_permissions.administrator:
@@ -1936,7 +2000,8 @@ class SpideyUtils(commands.Cog):
         votes[vote_key] = {
             "type": vt,
             "options": opts,    # empty = yes/no/abstain
-            "casts": {}
+            "casts": {},
+            "confidential": confidential
         }
         self.save_data()
 
