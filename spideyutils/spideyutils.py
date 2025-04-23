@@ -1788,16 +1788,6 @@ class SpideyUtils(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    async def autocomplete_vote_key(
-        self, interaction: Interaction, current: str
-    ) -> list[Choice[str]]:
-        """Suggest keys for all active votes."""
-        votes = self.cold_war_data.get("UN", {}).get("votes", {})
-        return [
-            Choice(name=k, value=k)
-            for k in votes.keys()
-            if current.lower() in k.lower()
-        ][:25]
 
     async def autocomplete_vote_choice(
         self, interaction: Interaction, current: str
@@ -1831,7 +1821,7 @@ class SpideyUtils(commands.Cog):
         choice2="Second pick (RCV only)",
         choice3="Third pick (RCV only)"
     )
-    @app_commands.autocomplete(vote_key=autocomplete_vote_key, choice1=autocomplete_vote_choice, choice2=autocomplete_vote_choice, choice3=autocomplete_vote_choice)
+    @app_commands.autocomplete(vote_key=autocomplete_un_votes, choice1=autocomplete_vote_choice, choice2=autocomplete_vote_choice, choice3=autocomplete_vote_choice)
     async def cast_vote(
         self,
         interaction: Interaction,
@@ -1841,12 +1831,14 @@ class SpideyUtils(commands.Cog):
         choice3: str | None = None,
     ):
         # 1) locate the vote
-        un_votes = self.cold_war_data.setdefault("UN", {}).setdefault("votes", {})
-        vote = un_votes.get(vote_key)
+        un    = self.cold_war_data.get("UN", {})
+        votes = un.get("votes", {})
+        vote  = votes.get(vote_key)
         if not vote:
             return await interaction.response.send_message(
                 f"❌ No vote found with key `{vote_key}`.", ephemeral=True
             )
+
 
         # 2) resolve voter’s country
         country = None
