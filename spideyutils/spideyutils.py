@@ -10,6 +10,7 @@ from datetime import datetime
 import re
 from collections import defaultdict
 import math
+from typing import Literal
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -1767,6 +1768,91 @@ class SpideyUtils(commands.Cog):
             embed.add_field(name="Nobody has voted yet", value="—", inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @app_commands.command(name="un_membership", description="Show all the UN members. Though it's kind of obvious.")
+    async def un_membership(self, interaction: Interaction):
+        un_dict = self.cold_war_data.get("UN", {})
+        secretary_general = un_dict.get("secretary_general", "Vacant")
+
+        embed = discord.Embed(title="United Nations Members", color=0x5B92E5)
+
+        embed.add_field(name="Secretary-General", value=secretary_general, inline=False)
+
+        member_list = un_dict.get("members", [])
+        if member_list:
+            member_lines = "\n".join(f"• {m}" for m in member_list)
+            embed.add_field(name="Members", value=member_lines, inline=False)
+        else:
+            embed.add_field(name="Members", value="No UN members currently registered.", inline=False)
+
+        await interaction.response.send_message(embed)
+
+
+    @app_commands.command(
+        name="start_vote",
+        description="Launch a new vote—either a simple Y/N/A poll or an RCV among current SG nominees."
+    )
+    @app_commands.describe(
+        title="What are we voting on?",
+        use_nominees="If true, this RCV will automatically include all SG nominees."
+    )
+    async def start_vote(
+        self,
+        interaction: Interaction,
+        title: str,
+        use_nominees: bool = False,
+        # only used when use_nominees=False
+        vote_type: Literal["Y/N/A", "RCV"] = "Y/N/A",
+    ):
+        # 1) Permissions as before…
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("You are not allowed to start votes!", ephemeral=True)
+        
+        # 2) Build vote_key from title…
+        vote_key = title.lower().replace(" ", "_")
+        un = self.cold_war_data.setdefault("UN", {})
+        votes = un.setdefault("votes", {})
+
+        # 3) Determine options
+        if use_nominees:
+            # pull from SG nominations
+            term = f"{self.cold_war_data['current_year']}-{self.cold_war_data['current_year']+2}"
+            opts = self.cold_war_data["UN"]["sg_nominations"].get(term, [])
+            if not opts:
+                return await interaction.response.send_message(
+                    "❌ No SG nominees to vote on.", ephemeral=True
+                )
+            vt = "RCV"
+        else:
+            opts = []
+            vt = vote_type
+
+        # 4) Initialize the vote record
+        votes[vote_key] = {
+            "type": vt,
+            "options": opts,    # empty = yes/no/abstain
+            "casts": {}
+        }
+        self.save_data()
+
+        # 5) Announce
+        desc = (
+            "**Type:** RCV (SG nominees)\n"
+            f"**Choices:** {', '.join(opts)}"
+        ) if use_nominees else (
+            f"**Type:** {vt}\n"
+            "Choices: Yes / No / Abstain"
+            if vt == "Y/N/A"
+            else "**Type:** RCV (custom)"
+        )
+        embed = Embed(
+            title=f"🗳️ New Vote: {title}",
+            description=desc,
+            color=0x00AAFF
+        )
+        embed.set_footer(text="Use /cast_vote to cast your ballot.")
+        await interaction.response.send_message(embed=embed)
+
 
     
     def redact_paragraph_weighted(self, text, knowledge):
