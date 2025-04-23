@@ -1787,6 +1787,84 @@ class SpideyUtils(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(
+        name="cast_vote",
+        description="Cast your ballot in an ongoing vote (Y/N/A or RCV)."
+    )
+    @app_commands.describe(
+        vote_key="The internal key of the vote (e.g. some_resolution_name)",
+        choice1="Yes/No/Abstain or your first RCV pick",
+        choice2="Second pick (RCV only)",
+        choice3="Third pick (RCV only)"
+    )
+    async def cast_vote(
+        self,
+        interaction: Interaction,
+        vote_key: str,
+        choice1: str,
+        choice2: str | None = None,
+        choice3: str | None = None,
+    ):
+        # 1) locate the vote
+        un_votes = self.cold_war_data.setdefault("UN", {}).setdefault("votes", {})
+        vote = un_votes.get(vote_key)
+        if not vote:
+            return await interaction.response.send_message(
+                f"❌ No vote found with key `{vote_key}`.", ephemeral=True
+            )
+
+        # 2) resolve voter’s country
+        country = None
+        if str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        else:
+            for c, data in self.cold_war_data["countries"].items():
+                if data.get("player_id") == interaction.user.id:
+                    country = c
+                    break
+        if not country:
+            return await interaction.response.send_message(
+                "❌ Could not determine your country for voting.", ephemeral=True
+            )
+
+        # 3) prevent double-voting
+        casts = vote.setdefault("casts", {})
+        if country in casts:
+            return await interaction.response.send_message(
+                "❌ You’ve already voted in this poll.", ephemeral=True
+            )
+
+        vt = vote.get("type", "Y/N/A")
+        # 4a) simple Y/N/A
+        if vt == "Y/N/A":
+            choice = choice1.strip().lower()
+            if choice not in ("yes", "no", "abstain"):
+                return await interaction.response.send_message(
+                    "❌ For Y/N/A votes you must pick exactly `Yes`, `No`, or `Abstain`.", ephemeral=True
+                )
+            casts[country] = choice.title()
+
+        # 4b) RCV
+        else:
+            # assemble ranking and validate
+            ranking = [c.strip() for c in (choice1, choice2, choice3) if c]
+            allowed = vote.get("options", [])
+            if not ranking:
+                return await interaction.response.send_message(
+                    "❌ RCV ballots need at least one choice.", ephemeral=True
+                )
+            # ensure each pick is valid and no duplicates
+            if len(set(ranking)) != len(ranking) or any(r not in allowed for r in ranking):
+                return await interaction.response.send_message(
+                    f"❌ Invalid ranking. Choices must be unique and from {allowed}.", ephemeral=True
+                )
+            casts[country] = ranking
+
+        # 5) persist & confirm
+        self.save_data()
+        await interaction.response.send_message(
+            f"✅ {country}’s vote recorded: `{casts[country]}`", ephemeral=False
+        )
 
     @app_commands.command(
         name="start_vote",
