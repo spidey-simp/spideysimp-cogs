@@ -1953,7 +1953,7 @@ class SpideyUtils(commands.Cog):
         # 5) persist & confirm
         self.save_data()
         await interaction.response.send_message(
-            f"✅ {country}’s vote recorded: `{casts[country]}`", ephemeral=False
+            f"✅ {country}’s vote recorded: `{casts[country]}`", ephemeral=True
         )
 
     @app_commands.command(
