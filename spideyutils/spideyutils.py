@@ -1788,7 +1788,7 @@ class SpideyUtils(commands.Cog):
 
         embed = discord.Embed(
             title="🗳️ Current UN Vote Results",
-            color=discord.Color.blue()
+            color=0x5B92E5
         )
 
         country = None
@@ -1800,25 +1800,26 @@ class SpideyUtils(commands.Cog):
                     country = c
                     break
         
-        sg = self.cold_war_data["UN"]["secretary_general", "Vacant"]
-        if country == sg or interaction.user.guild_permissions.administrator:
-            view_conf = True
+        sg = un.get("secretary_general", "Vacant")
+        is_admin = interaction.user.guild_permissions.administrator
+        is_sg = (country == sg)
+        view_conf = is_admin or is_sg
         
-        at_least_1_conf = 0
+        at_least_1_conf = any(v.get("confidential", False) for v in votes_block.values())
 
         for vote_key, vote in votes_block.items():
             is_conf = vote.get("confidential", False)
-
-            if is_conf:
-                at_least_1_conf += 1
             casts = vote.get("casts", {})
 
             
             if is_conf and not view_conf:
                 value = f"• {len(casts)} votes cast by: " + ", ".join(casts.keys())
             else:
-                lines = [f"• **{c}**: `{ballot}`" for c, ballot in casts.items()]
-                value = "\n".join(lines) if lines else "No votes cast yet."
+                if casts:
+                    lines = [f"• **{c}**: `{ballot}`" for c, ballot in casts.items()]
+                    value = "\n".join(lines)
+                else:
+                    value = "No votes cast yet."
             
 
             embed.add_field(
@@ -1827,10 +1828,9 @@ class SpideyUtils(commands.Cog):
                 inline=False
             )
 
-        if view_conf and at_least_1_conf > 0:
-            await interaction.followup.send(embed=embed, ephemeral=True)
-        else:
-            await interaction.followup.send(embed=embed, ephemeral=False)
+        final_ephemeral = at_least_1_conf and view_conf
+
+        await interaction.followup.send(embed=embed, ephemeral=final_ephemeral)
 
     
     @app_commands.command(name="un_membership", description="Show all the UN members. Though it's kind of obvious.")
