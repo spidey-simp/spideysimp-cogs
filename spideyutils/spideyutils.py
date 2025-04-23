@@ -11,6 +11,7 @@ import re
 from collections import defaultdict
 import math
 from typing import Literal
+from discord.app_commands import Choice
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -1787,6 +1788,39 @@ class SpideyUtils(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
+    async def autocomplete_vote_key(
+        self, interaction: Interaction, current: str
+    ) -> list[Choice[str]]:
+        """Suggest keys for all active votes."""
+        votes = self.cold_war_data.get("UN", {}).get("votes", {})
+        return [
+            Choice(name=k, value=k)
+            for k in votes.keys()
+            if current.lower() in k.lower()
+        ][:25]
+
+    async def autocomplete_vote_choice(
+        self, interaction: Interaction, current: str
+    ) -> list[Choice[str]]:
+        """Suggest ballot options based on the vote’s type."""
+        vote_key = interaction.namespace.vote_key
+        vote = (
+            self.cold_war_data
+            .get("UN", {})
+            .get("votes", {})
+            .get(vote_key, {})
+        )
+        vt = vote.get("type", "Y/N/A")
+        if vt == "Y/N/A":
+            options = ["Yes", "No", "Abstain"]
+        else:  # RCV
+            options = vote.get("options", [])
+        return [
+            Choice(name=o, value=o)
+            for o in options
+            if current.lower() in o.lower()
+        ][:25]
+
     @app_commands.command(
         name="cast_vote",
         description="Cast your ballot in an ongoing vote (Y/N/A or RCV)."
@@ -1797,6 +1831,7 @@ class SpideyUtils(commands.Cog):
         choice2="Second pick (RCV only)",
         choice3="Third pick (RCV only)"
     )
+    @app_commands.autocomplete(vote_key=autocomplete_vote_key, choice1=autocomplete_vote_choice, choice2=autocomplete_vote_choice, choice3=autocomplete_vote_choice)
     async def cast_vote(
         self,
         interaction: Interaction,
