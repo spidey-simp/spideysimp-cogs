@@ -12,6 +12,7 @@ from collections import defaultdict
 import math
 from typing import Literal
 from discord.app_commands import Choice
+import copy
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -35,6 +36,47 @@ FACTORY_TYPES = [
 
 
 BACKUP_CHANNEL_ID = 1357944150502412288
+
+
+def normalize_keys(obj):
+    if isinstance(obj, dict):
+        new = {}
+        for k, v in obj.items():
+            nk = re.sub(r'\W+', '_', k.strip()).lower()
+            new[nk] = normalize_keys(v)
+        return new
+    if isinstance(obj, list):
+        return [normalize_keys(i) for i in obj]
+    return obj
+
+def deep_merge(base: dict, overlay: dict) -> dict:
+    """
+    Overlay `overlay` onto `base` with “additive” merge semantics:
+     - dicts  ⇒ recurse
+     - numbers ⇒ base + overlay
+     - lists   ⇒ extend base by any items in overlay not already present
+     - everything else ⇒ replace
+    """
+    for k, v in overlay.items():
+        if k in base and isinstance(base[k], dict) and isinstance(v, dict):
+            deep_merge(base[k], v)
+
+        elif k in base and isinstance(base[k], (int, float)) and isinstance(v, (int, float)):
+            # numeric delta
+            base[k] = base[k] + v
+
+        elif k in base and isinstance(base[k], list) and isinstance(v, list):
+            # union-merge lists of primitives
+            for item in v:
+                if item not in base[k]:
+                    base[k].append(item)
+
+        else:
+            # strings, bools, None, or mismatched types → override
+            base[k] = v
+
+    return base
+
 
 async def backup_dynamic_json(self):
     try:
@@ -89,20 +131,42 @@ class ConfirmSpyAssignView(discord.ui.View):
                 content=f"❌ Only {free} operatives free now — cannot assign {req}.",
                 embed=None, view=None
             )
+        
+        await self.cog.save_delta(
+            dict_path=[
+                "countries",
+                self.country,
+                "espionage",
+                "assigned_ops"
+            ],
+            dict_delta={
+                self.target: { self.operation: self.params or True}
+            }
+        )
 
-        # log the assignment
-        assigned.setdefault(self.target, {})[self.operation] = self.params or True
 
-        # optionally keep operatives_available in sync
-        actor["operatives_available"] = free - req
+        new_free = free - req
 
-        self.cog.save_data()
+        await self.cog.save_delta(
+            dict_path=[
+                "countries",
+                self.country,
+                "espionage",
+                "operatives_available"
+                ], 
+                int_delta=new_free - self.cog.dynamic_data
+                                        .get("countries", {})
+                                        .get(self.country, {})
+                                        .get("espionage", {})
+                                        .get("operatives_available", 0)
+                                        )
+
 
         await interaction.response.edit_message(
             content=(
                 f"✅ **{self.country}** has launched "
                 f"`{self.operation.replace('_',' ').title()}` against **{self.target}**!\n"
-                f"🕵️ Operatives remaining: `{free - req}`"
+                f"🕵️ Operatives remaining: `{new_free}`"
             ),
             embed=None,
             view=None
@@ -152,82 +216,110 @@ class RequestRoll(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class StartProjectConfirmView(discord.ui.View):
-    def __init__(self, user_id, country, project_name, penalties, data_ref, save_callback):
+    def __init__(
+        self,
+        cog: "SpideyUtils",
+        user_id: int,
+        country: str,
+        project_name: str,
+        penalties: dict,
+        data_ref: dict,
+    ):
         super().__init__(timeout=30)
+        self.cog = cog
         self.user_id = user_id
         self.country = country
         self.project_name = project_name
         self.penalties = penalties
         self.data_ref = data_ref
-        self.save_callback = save_callback
 
     @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 0) Authorization
         if str(interaction.user.id) != str(self.user_id):
-            return await interaction.response.send_message("You're not authorized to confirm this action.", ephemeral=True)
-
-        country_data = self.data_ref["countries"][self.country]
-        research = country_data.get("research", {})
-        np_data = country_data.setdefault("national_projects", {})
-
-        # Determine default milestone logic
-        project_name = self.project_name
-        milestone_defs = self.data_ref.get("NATIONAL PROJECTS", {}).get("milestones", {}).get(project_name, {})
-        milestone_1 = milestone_defs.get("milestone_1", {})
-        duration = milestone_1.get("duration_days", 365)
-
-        # Special case: country already has nukes
-        if project_name == "nuclear_weapons" and research.get("nuclear_arsenal", 0) >= 1:
-            np_data[project_name] = {
-                "status": "paused_development",
-                "days_remaining": None,
-                "milestones_completed": ["milestone_1", "milestone_2", "milestone_3"]
-            }
-            abilities = country_data.setdefault("abilities", [])
-            if "unlock_nuclear_production" not in abilities:
-                abilities.append("unlock_nuclear_production")
-
-            msg = (
-                f"✅ `{project_name}` is now officially tracked.\n"
-                f"🧨 This country has already completed early nuclear development.\n"
-                f"Progress is marked as **paused** at milestone 3.\n"
-                f"Abilities unlocked: `unlock_nuclear_production`."
+            return await interaction.response.send_message(
+                "❌ You’re not authorized to confirm this.", ephemeral=True
             )
-        else:
-            # Standard project start
-            np_data[project_name] = {
+
+        # 1) Compute your project defaults
+        defs = self.data_ref.get("national_projects", {}) \
+                            .get("milestones", {}) \
+                            .get(self.project_name, {})
+        dur = defs.get("milestone_1", {}).get("duration_days", 365)
+
+        # 2) Create / overwrite the project entry
+        path_proj = [
+            "countries",
+            self.country,
+            "national_projects",
+            self.project_name
+        ]
+        await self.cog.save_delta(
+            dict_path=path_proj,
+            dict_delta={
                 "status": "milestone_1",
-                "days_remaining": duration,
+                "days_remaining": dur,
                 "milestones_completed": []
             }
+        )
 
-            msg = (
-                f"✅ `{project_name}` project has begun in {self.country}.\n"
-                f"🚀 Status: `milestone_1` — `{milestone_1.get('name', 'Unknown')}`\n"
-                f"⏳ Time remaining: {duration} days."
+        # 3) Apply each penalty as a negative delta
+        # — research_penalty →
+        rp = self.penalties.get("research_penalty")
+        if rp is not None:
+            path_rp = ["countries", self.country, "research", "research_bonus"]
+            await self.cog.save_delta(
+                dict_path=path_rp,
+                int_delta=-rp
             )
 
-        # Apply penalties
-        if "research_penalty" in self.penalties:
-            country_data["research"]["research_bonus"] -= self.penalties["research_penalty"]
-        if "espionage_penalty" in self.penalties:
-            country_data["espionage"]["domestic_intelligence_score"] -= self.penalties["espionage_penalty"]
-        if "factory_penalty" in self.penalties:
-            econ = country_data["economic"]
-            # subtract from civilian factories instead of the non‑existent industrial_sectors field
-            econ["factories"]["civilian_factories"] = max(
-                0,
-                econ["factories"].get("civilian_factories", 0)
-                - self.penalties["factory_penalty"]
-                )
+        # — espionage_penalty →
+        ep = self.penalties.get("espionage_penalty")
+        if ep is not None:
+            path_ep = [
+                "countries",
+                self.country,
+                "espionage",
+                "domestic_intelligence_score"
+            ]
+            await self.cog.save_delta(
+                dict_path=path_ep,
+                int_delta=-ep
+            )
 
-        self.save_callback()
+        # — factory_penalty →
+        fp = self.penalties.get("factory_penalty")
+        if fp is not None:
+            # figure out old & new
+            old = self.cog.dynamic_data["countries"][self.country] \
+                        ["economic"]["factories"]["civilian_factories"]
+            new = max(0, old - fp)
+            path_fp = [
+                "countries",
+                self.country,
+                "economic",
+                "factories",
+                "civilian_factories"
+            ]
+            await self.cog.save_delta(
+                dict_path=path_fp,
+                int_delta=new - old  # negative or zero
+            )
+
+        # 4) Finally, respond
+        msg = (
+            f"✅ `{self.project_name}` has begun in **{self.country}**.\n"
+            f"🚀 Status: `milestone_1` — `{defs.get('milestone_1', {}).get('name','Unknown')}`\n"
+            f"⏳ Time remaining: {dur} days."
+        )
         await interaction.response.edit_message(content=msg, view=None, embed=None)
-
 
     @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != str(self.data_ref["countries"][self.country]["player_id"]):
+            return await interaction.response.send_message("Nice try buddy. This ain't your command.", ephemeral=True)
         await interaction.response.edit_message(content="❌ Project canceled.", view=None, embed=None)
+
 
 
 class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
@@ -237,6 +329,9 @@ class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
         placeholder="examples: +10 for advantage, -5 for disadvantage, etc.",
         required=False
     )
+
+    def __init__(self, cog: "SpideyUtils"):
+        self.cog = cog
 
 
     async def on_submit(self, interaction:discord.Interaction):
@@ -256,7 +351,7 @@ class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
             "modifier": self.modifier.value if self.modifier.value else "No suggestion",
             "status": "need_gm_evaluation",
             "channel": interaction.channel.name,
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "game_turn": game_turn,
             "game_year": game_year
         }
@@ -284,49 +379,92 @@ class RequestRollModal(discord.ui.Modal, title="Request a GM Roll"):
         await interaction.response.send_message("✅ Your roll request has been submitted.", ephemeral=True)
 
 class ResearchConfirmView(discord.ui.View):
-    def __init__(self, interaction, country, slot, tech_name, remaining_days, carry_used, data_ref):
+    def __init__(
+        self,
+        cog: "SpideyUtils",
+        interaction: discord.Interaction,
+        country: str,
+        slot: str,
+        tech_name: str,
+        remaining_days: int,
+        carry_used: int,
+        data_ref: dict
+    ):
         super().__init__(timeout=30)
+        self.cog = cog
         self.interaction = interaction
         self.country = country
-        self.slot = slot
+        self.slot = slot  # already a string
         self.tech_name = tech_name
         self.remaining_days = remaining_days
         self.carry_used = carry_used
-        self.data_ref = data_ref  # Reference to cold_war_data
+        self.data_ref = data_ref
 
     @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        research = self.data_ref["countries"][self.country]["research"]
-
+        # Unlock instantly if carry-over covers it
+        if str(interaction.user.id) != str(self.data_ref["countries"][self.country]["player_id"]):
+            return await interaction.response.send_message("Nice try buddy. This ain't your command.", ephemeral=True)
         if self.remaining_days == 0:
-            research["unlocked_techs"].append(self.tech_name)
-            research["carryover_days"][self.slot] = self.carry_used - self.remaining_days
-            msg = f"✅ `{self.tech_name}` was instantly unlocked using {self.carry_used} rollover days! 🎉"
-        else:
-            research["active_slots"][self.slot] = {
-                "tech": self.tech_name,
-                "days_remaining": self.remaining_days
-            }
-            research["carryover_days"][self.slot] = 0
-            msg = f"🛠 `{self.tech_name}` is now being researched in slot {self.slot}.\nEstimated time: {self.remaining_days} days."
+            # 1) Add to unlocked_techs list
+            path_unlock = ["countries", self.country, "research", "unlocked_techs"]
+            await self.cog.save_delta(
+                dict_path=path_unlock,
+                list_delta=[self.tech_name]
+            )
 
-        # 🧠 Save changes to disk
-        with open(dynamic_path, "w") as f:
-            json.dump(self.data_ref, f, indent=2)
+            # 2) Set carryover_days[slot] = carry_used
+            old = self.data_ref["countries"][self.country]["research"]["carryover_days"].get(self.slot, 0)
+            new_val = self.carry_used
+            path_carry = ["countries", self.country, "research", "carryover_days", self.slot]
+            await self.cog.save_delta(
+                dict_path=path_carry,
+                int_delta=new_val - old
+            )
+
+            msg = f"✅ `{self.tech_name}` instantly unlocked using {self.carry_used} rollover days! 🎉"
+
+        else:
+            # 1) Place it into active_slots
+            path_active = ["countries", self.country, "research", "active_slots", self.slot]
+            await self.cog.save_delta(
+                dict_path=path_active,
+                dict_delta={
+                    "tech": self.tech_name,
+                    "days_remaining": self.remaining_days
+                }
+            )
+
+            # 2) Zero out carryover_days[slot]
+            old = self.data_ref["countries"][self.country]["research"]["carryover_days"].get(self.slot, 0)
+            path_carry = ["countries", self.country, "research", "carryover_days", self.slot]
+            await self.cog.save_delta(
+                dict_path=path_carry,
+                int_delta=-old
+            )
+
+            msg = (
+                f"🛠 `{self.tech_name}` is now being researched in slot {self.slot}.\n"
+                f"Estimated time: {self.remaining_days} days."
+            )
 
         await interaction.response.edit_message(content=msg, embed=None, view=None)
 
 
+
     @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if str(interaction.user.id) != str(self.data_ref["countries"][self.country]["player_id"]):
+            return await interaction.response.send_message("Nice try buddy. This ain't your command.", ephemeral=True)
         await interaction.response.edit_message(content="❌ Research canceled.", embed=None, view=None)
 
 
 class SpideyUtils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.static_data = {}
+        self.dynamic_data = {}
         self.cold_war_data = {}
-        debug_log("The logger is active and running!")
         self.load_data()
         self.alternate_country_dict = {}
         self.scheduled_backup.start()
@@ -364,159 +502,29 @@ class SpideyUtils(commands.Cog):
     def load_data(self):
          # 1) load the static + dynamic JSON
             with open(static_path, "r") as f:
-                self.cold_war_data = json.load(f)
-            with open(dynamic_path, "r") as f:
-                modifiers = json.load(f)
-
-            # 2) merge top‐level tick info
-            for k in ("turn", "current_year", "day"):
-                if k in modifiers:
-                    self.cold_war_data[k] = modifiers[k]
+                raw_static = json.load(f)
+            self.static_data = normalize_keys(raw_static)
             
-
-
-            # 3) merge per‐country dynamic changes
-            for country, dyn_data in modifiers.get("countries", {}).items():
-                static_country = self.cold_war_data["countries"].setdefault(country, {})
-
-                # ——— espionage gets an overwrite of exactly these three keys ———
-                esp = static_country.setdefault("espionage", {})
-                # always merge networks and assigned_ops
-                if "spy_networks" in dyn_data["espionage"]:
-                    esp["spy_networks"] = dyn_data["espionage"]["spy_networks"]
-                if "assigned_ops" in dyn_data["espionage"]:
-                    esp["assigned_ops"] = dyn_data["espionage"]["assigned_ops"]
-                # only overwrite operatives_available if it's explicitly in the dynamic file;
-                # otherwise leave the static total_operatives → operatives_available
-                if "operatives_available" in dyn_data["espionage"]:
-                    esp["operatives_available"] = dyn_data["espionage"]["operatives_available"]
-
-                # ——— everything else still merges as base + delta ———
-                for section in ("research", "national_projects", "abilities", "past_turns", "player_id"):
-                    if section in dyn_data:
-                        dyn_val = dyn_data[section]
-                        base_section = static_country.setdefault(section, {} if isinstance(dyn_val, dict) else None)
-
-                        # dict => merge subkeys
-                        if isinstance(dyn_val, dict):
-                            for subkey, subval in dyn_val.items():
-                                base_val = base_section.get(subkey)
-                                if isinstance(base_val, (int, float)) and isinstance(subval, (int, float)):
-                                    base_section[subkey] = base_val + subval
-                                else:
-                                    base_section[subkey] = subval
-                        else:
-                            # non‐dict (e.g. player_id): overwrite
-                            static_country[section] = dyn_val
             
-            if "UN" in modifiers:
-                # fully overwrite the static UN block with your dynamic one
-                self.cold_war_data["UN"] = modifiers["UN"]
+            if os.path.exists(dynamic_path):
+                with open(dynamic_path, "r") as f:
+                    self.dynamic_data = json.load(f)
             else:
-                # ensure at least the structure exists
-                self.cold_war_data.setdefault("UN", {})
+                self.dynamic_data = {
+                    "turn": 0,
+                    "current_year": None,
+                    "day": None,
+                    "countries": {},
+                    "un": {},
+                    "global_history": {}
+                }
 
-                # ── ensure UN data structures exist ──
-            un = self.cold_war_data["UN"]
-            un.setdefault("sg_nominations", {})   # for nominate_sg / view_sg_noms
-            un.setdefault("votes", {})            # for vote_sc / view_vote
-
-            
-            for country, data in self.cold_war_data["countries"].items():
-                econ = data.get("economic", {}).get("factories", {})
-                prod = data.setdefault("production", {})
-                assigned = prod.setdefault("assigned_factories", {})
-                stock    = prod.setdefault("stockpiles", {})
-
-                # Only fill in defaults if missing
-                if "civilian_factory" not in assigned:
-                    civ = econ.get("civilian_factories", 0)
-                    assigned["civilian_factory"] = civ * 50 // 100
-                    assigned["military_factory"] = civ * 30 // 100
-                    assigned["naval_dockyard"]   = civ * 10 // 100
-                    assigned["airbase"]          = civ * 10 // 100
-
-                if "rifle" not in assigned:
-                    assigned["rifle"] = econ.get("military_factories", 0)
-
-                if "task_group" not in assigned:
-                    assigned["task_group"] = econ.get("naval_dockyards", 0)
-
-                if "air_wing" not in assigned:
-                    assigned["air_wing"] = econ.get("airbases", 0)
-
-                if "nuke" not in assigned:
-                    assigned["nuke"] = econ.get("nuclear_facilities", 0)
-
-                # Initialize stockpiles for any new entries
-                for item in assigned:
-                    stock.setdefault(item, 0)
+            merged = copy.deepcopy(self.static_data)
+            self.cold_war_data = deep_merge(merged, self.dynamic_data)
 
     def save_data(self):
-        try:
-            # 1) load the original static file so we know the base values
-            with open(static_path, "r") as f:
-                static = json.load(f)
-
-            dynamic = {}
-
-            # 2) preserve your top‑level turn info
-            for k in ("turn", "current_year", "day"):
-                if k in self.cold_war_data:
-                    dynamic[k] = self.cold_war_data[k]
-
-            dynamic["countries"] = {}
-
-            for country, cdata in self.cold_war_data.get("countries", {}).items():
-                static_country = static.get("countries", {}).get(country, {})
-                d: dict = {}
-
-                # --- RESEARCH SECTION ---
-                if "research" in cdata:
-                    static_research = static_country.get("research", {})
-                    current_research = cdata["research"]
-                    dyn_research: dict = {}
-                    for key, val in current_research.items():
-                        base = static_research.get(key)
-                        # if both base and current are numbers, write the delta
-                        if isinstance(val, (int, float)) and isinstance(base, (int, float)):
-                            dyn_research[key] = val - base
-                        else:
-                            # otherwise just copy it (lists, dicts, nested dicts...)
-                            dyn_research[key] = val
-                    d["research"] = dyn_research
-
-                # --- ESPIONAGE SECTION ---
-                if "espionage" in cdata:
-                    static_esp = static_country.get("espionage", {})
-                    current_esp = cdata["espionage"]
-                    dyn_esp: dict = {}
-                    for key, val in current_esp.items():
-                        base = static_esp.get(key)
-                        if isinstance(val, (int, float)) and isinstance(base, (int, float)):
-                            dyn_esp[key] = val - base
-                        else:
-                            dyn_esp[key] = val
-                    d["espionage"] = dyn_esp
-
-                # --- NATIONAL PROJECTS, ABILITIES, PAST_TURNS, PLAYER_ID ---
-                # these you always want to overwrite in full
-                for section in ("national_projects", "abilities", "past_turns", "player_id"):
-                    if section in cdata:
-                        d[section] = cdata[section]
-
-                if d:
-                    dynamic["countries"][country] = d
-            
-            
-            dynamic["UN"] = self.cold_war_data.get("UN", {})
-
-            # 3) write out only the deltas
-            with open(dynamic_path, "w") as f:
-                json.dump(dynamic, f, indent=2)
-
-        except Exception as e:
-            print("Failed to save cold_war_modifiers.json:", e)
+        with open(dynamic_path, "w") as f:
+            json.dump(self.dynamic_data, f, indent=2)
 
 
 
@@ -524,7 +532,72 @@ class SpideyUtils(commands.Cog):
     async def cog_unload(self):
         self.scheduled_backup.cancel()
         self.save_data()
-        await backup_dynamic_json()
+        await backup_dynamic_json(self)
+
+    
+    async def save_delta(
+        self,
+        dict_path: list[str],
+        int_delta: int = None,
+        str_val: str = None,
+        dict_delta: dict = None,
+        list_delta: list = None,
+        bool_val: bool = None
+    ):
+        """
+        Apply exactly one of the provided deltas at the given path in self.dynamic_data,
+        save the modifiers JSON, *and* merge the same change into self.cold_war_data.
+        dict_path should be something like ['countries', 'Germany', 'research', 'research_bonus'].
+        """
+        # 1) Drill down to the parent node in dynamic_data
+        node = self.dynamic_data
+        for key in dict_path[:-1]:
+            node = node.setdefault(key, {})
+
+        leaf = dict_path[-1]
+        # 2) Apply whichever delta was provided
+        if int_delta is not None:
+            node[leaf] = node.get(leaf, 0) + int_delta
+        elif str_val is not None:
+            node[leaf] = str_val
+        elif bool_val is not None:
+            node[leaf] = bool_val
+        elif dict_delta is not None:
+            existing = node.get(leaf, {})
+            node[leaf] = deep_merge(existing, dict_delta)
+        elif list_delta is not None:
+            existing = node.get(leaf, [])
+            # union-merge
+            for item in list_delta:
+                if item not in existing:
+                    existing.append(item)
+            node[leaf] = existing
+        else:
+            raise ValueError("Must provide exactly one of int_delta, str_val, bool_val, dict_delta, or list_delta")
+
+        # 3) Persist the modifiers JSON
+        self.save_data()
+
+        # 4) Build a tiny “overlay” dict to patch self.cold_war_data in-place
+        overlay = {}
+        d = overlay
+        for key in dict_path[:-1]:
+            d = d.setdefault(key, {})
+        # now d is the parent; set the same leaf value
+        if int_delta is not None:
+            # use additive semantics
+            d[leaf] = int_delta
+        elif str_val is not None:
+            d[leaf] = str_val
+        elif bool_val is not None:
+            d[leaf] = bool_val
+        elif dict_delta is not None:
+            d[leaf] = dict_delta
+        else:  # list_delta
+            d[leaf] = list_delta
+
+        # 5) Deep-merge that overlay into cold_war_data
+        deep_merge(self.cold_war_data, overlay)
 
     def init_spy_data(self, country: str):
         """
@@ -558,103 +631,125 @@ class SpideyUtils(commands.Cog):
                     if not op_def:
                         continue
 
-                    # Base values
+                    # Base rates
                     base_success = op_def["base_success_rate"]
                     base_caught = op_def["base_caught_or_kill_rate"]
-                    required_network = op_def["network_requirement"]
+                    req_net = op_def["network_requirement"]
 
-                    # Actor vs. Target intel scores
+                    # Scores
                     actor_score = espionage.get("foreign_intelligence_score", 0)
-                    target_score = self.cold_war_data["countries"].get(target, {}).get("espionage", {}).get("domestic_intelligence_score", 0)
+                    target_score = (
+                        self.cold_war_data["countries"]
+                             .get(target, {})
+                             .get("espionage", {})
+                             .get("domestic_intelligence_score", 0)
+                    )
                     network = espionage.get("spy_networks", {}).get(target, 0)
 
-                    # Calculate success
-                    network_boost = max((network - required_network) / 100 + 1, 0.5)
-                    intel_boost = max((actor_score - target_score) / 100 + 1, 0.5)
+                    # Compute boosts
+                    network_boost = max((network - req_net) / 100 + 1, 0.5)
+                    intel_boost   = max((actor_score - target_score) / 100 + 1, 0.5)
 
                     final_success = base_success * network_boost * intel_boost
                     caught_chance = base_caught * (1 - (network_boost - 1)) * (1 - (intel_boost - 1))
 
-                    import random
                     success = random.random() < final_success
-                    caught = not success and random.random() < caught_chance
+                    caught  = not success and random.random() < caught_chance
 
-                    # Build result message
+                    # Message
                     actor_display = f"**{country}** attempted `{op_name}` in **{target}**"
-                    result_msg = f"{actor_display} → {'✅ SUCCESS' if success else '❌ FAILURE'}"
+                    result_msg    = f"{actor_display} → {'✅ SUCCESS' if success else '❌ FAILURE'}"
+
                     if caught:
                         result_msg += " — 🛑 AGENTS CAUGHT"
-                        espionage["total_operatives"] = max(0, espionage["total_operatives"] - 1)
-
-                    # Apply effects if successful
-                    if success:
-                        for effect in op_def.get("actor_effects", []):
-                            self.apply_espionage_effect(country, effect, target, params)
-                        for effect in op_def.get("target_effects", []):
-                            self.apply_espionage_effect(target, effect, target, params)
-
-                    # Store result for player or GM notification
-                    spy_results.setdefault(country, []).append(result_msg)
-                    if op_def.get("opp_knowledge", False) and caught:
-                        spy_results.setdefault(target, []).append(f"🔎 {actor_display} → Spies detected!")
-
-                    # Add to global log if global event
-                    if success and op_def.get("global_event", False):
-                        global_log.append(
-                            f"🌍 Global Event Triggered: **{country}** succeeded with `{op_name}` in **{target}**.\n<@684457913250480143> — consider posting a global RP event."
+                        # deduct one operative
+                        await self.save_delta(
+                            dict_path=["countries", country, "espionage", "total_operatives"],
+                            int_delta=-1
                         )
 
-            # Reset turn data
-            espionage["operatives_available"] = total_ops
-            espionage["assigned_ops"] = {}
+                    # apply on‐success effects
+                    if success:
+                        for effect in op_def.get("actor_effects", []):
+                            await self.apply_espionage_effect(country, effect, target, params)
+                        for effect in op_def.get("target_effects", []):
+                            await self.apply_espionage_effect(target, effect, target, params)
 
-        self.save_data()
+                    # stash results for PM or GM
+                    spy_results.setdefault(country, []).append(result_msg)
+                    if op_def.get("opp_knowledge", False) and caught:
+                        spy_results.setdefault(target, []).append(
+                            f"🔎 {actor_display} → Spies detected!"
+                        )
 
-        # Send global log to backup log channel
+                    # global event?
+                    if success and op_def.get("global_event", False):
+                        global_log.append(
+                            f"🌍 Global Event: **{country}** succeeded with `{op_name}` in **{target}**. "
+                            "<@684457913250480143> — consider a world RP update."
+                        )
+
+            # reset per‐turn pools
+            # operatives_available ← total_ops
+            await self.save_delta(
+                dict_path=["countries", country, "espionage", "operatives_available"],
+                int_delta=(total_ops - espionage.get("operatives_available", 0))
+            )
+            # clear assigned_ops
+            await self.save_delta(
+                dict_path=["countries", country, "espionage", "assigned_ops"],
+                dict_delta={}
+            )
+
+        # broadcast any global‐event alerts
         if global_log:
-            channel = self.bot.get_channel(1357944150502412288)
-            if channel is None:
-                channel = await self.bot.fetch_channel(1357944150502412288)
-            await channel.send("🕵️ **Espionage - Global Event Alerts**\n" + "\n".join(global_log))
+            channel = (
+                self.bot.get_channel(BACKUP_CHANNEL_ID)
+                or await self.bot.fetch_channel(BACKUP_CHANNEL_ID)
+            )
+            await channel.send(
+                "🕵️ **Espionage - Global Event Alerts**\n" +
+                "\n".join(global_log)
+            )
 
 
-    def apply_espionage_effect(self, country: str, effect: dict, target: str, params: dict):
+    async def apply_espionage_effect(self, country: str, effect: dict, target: str, params: dict):
         """
-        Apply one actor_effect or target_effect to `country` in self.cold_war_data.
-        If the path ends in 'target', we replace it with the real target country name.
+        Apply one actor_effect or target_effect via save_delta so it persists.
         """
-        # — resolve the raw value (with .format for any {ideology}, {project}, etc.)
+        # resolve raw value (with .format and casting)
         raw = effect["value"]
         if isinstance(raw, str):
             raw = raw.format(country=target, **params)
-            # try to cast to number
-            for cast in (int, float):
+            for caster in (int, float):
                 try:
-                    raw = cast(raw)
+                    raw = caster(raw)
                     break
                 except:
                     continue
 
-        # — split path and substitute any "target" segment with the actual target
+        # build dict_path from the dot‐path, substituting "target"
         segments = [
             (target if seg == "target" else seg)
             for seg in effect["path"].split(".")
         ]
+        dict_path = ["countries", country] + segments
 
-        # — drill down to the penultimate node
-        node = self.cold_war_data["countries"][country]
-        for seg in segments[:-1]:
-            node = node.setdefault(seg, {})
-
-        final_key = segments[-1]
-
-        # — perform the operation
         if effect["type"] == "add":
-            node[final_key] = node.get(final_key, 0) + raw
+            # additive
+            await self.save_delta(dict_path=dict_path, int_delta=raw)
+
         elif effect["type"] == "set":
-            node[final_key] = raw
+            # compute old to send correct delta
+            node = self.cold_war_data["countries"][country]
+            for seg in segments:
+                node = node.get(seg, 0)
+            old = node if isinstance(node, (int, float)) else 0
+            await self.save_delta(dict_path=dict_path, int_delta=(raw - old))
+
         else:
             raise ValueError(f"Unknown espionage effect type: {effect['type']}")
+
 
 
 
@@ -972,7 +1067,7 @@ class SpideyUtils(commands.Cog):
         at_least_one: bool = False,
         country: str = None
     ):
-        # ── resolve country exactly as you do elsewhere ──
+        # ── resolve country ──
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
@@ -985,25 +1080,22 @@ class SpideyUtils(commands.Cog):
                 "❌ Could not determine your country.", ephemeral=True
             )
 
-
         data = self.cold_war_data["countries"][country]
-
-        # ── pull out econ + total civ ──
         econ = data["economic"]["factories"]
         total_civ = econ.get("civilian_factories", 0)
 
-        # ── initialize your production‡assigned dict exactly as in load_data() ──
+        # ── initialize production/assigned ──
         prod     = data.setdefault("production", {})
         assigned = prod.setdefault("assigned_factories", {})
 
-        # ── the nuclear‐facility check remains the same ──
+        # ── nuclear-facility guard ──
         if category == "nuclear_facility" and econ.get("nuclear_facilities", 0) == 0:
             return await interaction.response.send_message(
                 "❌ You must have at least one existing Nuclear Facility to build more.",
                 ephemeral=True
             )
 
-        # ── parse percent vs absolute ──
+        # ── parse the new absolute assignment ──
         if value.endswith("%"):
             pct     = float(value.rstrip("%")) / 100.0
             new_abs = round(total_civ * pct)
@@ -1012,65 +1104,70 @@ class SpideyUtils(commands.Cog):
                 new_abs = int(value)
             except ValueError:
                 return await interaction.response.send_message(
-                    "❌ Value must be either a percent (e.g. 60%) or an integer (e.g. 5).",
+                    "❌ Value must be either a percent (e.g. 60%) or an integer (e.g. 5).",
                     ephemeral=True
                 )
         new_abs = max(0, min(new_abs, total_civ))
 
-        old_abs = assigned.get(category, 0)
-        delta   = new_abs - old_abs
+        # ── build deltas ──
+        old_abs    = assigned.get(category, 0)
+        delta_main = new_abs - old_abs
 
-        # ── define your four slots ──
         slots     = ["civilian_factory","military_factory","naval_dockyard","airbase"]
         others    = [s for s in slots if s != category]
         sum_others = sum(assigned.get(o, 0) for o in others)
 
         changes = {}
 
-        if delta > 0 and sum_others > 0:
+        if delta_main > 0 and sum_others > 0:
             # proportional drain
             for o in others:
                 curr = assigned.get(o, 0)
-                take = round(delta * (curr / sum_others))
-                assigned[o] = max(0, curr - take)
+                take = round(delta_main * (curr / sum_others))
                 changes[o] = -take
 
             # ensure at_least_one
             if at_least_one:
                 for o in others:
-                    if assigned[o] == 0 and old_abs != 0 and assigned[category] > 1:
-                        assigned[category] -= 1
-                        assigned[o] = 1
-                        changes[category] = changes.get(category, 0) - 1
-                        changes[o] = changes.get(o, 0) + 1
+                    if assigned.get(o, 0) + changes[o] == 0 and old_abs != 0 and new_abs > 1:
+                        # take one from main and give one back to slot o
+                        changes[o]      = changes[o] + 1
+                        delta_main      = delta_main - 1
 
-            # fix any rounding drift
-            drift = delta - sum(abs(c) for c in changes.values())
+            # fix rounding drift
+            drift = delta_main - sum(-d for d in changes.values())
             if drift:
+                # find the slot we drained most heavily
                 o_max = max(changes, key=lambda k: abs(changes[k]))
-                assigned[o_max] = max(0, assigned[o_max] - drift)
                 changes[o_max] -= drift
 
-        elif delta < 0:
+        elif delta_main < 0:
             # freed factories → unassigned pool
-            changes["unassigned"] = -delta
+            changes["unassigned"] = -delta_main
 
-        # finally set the target
-        assigned[category] = new_abs
+        # always include the main slot change
+        changes[category] = delta_main
 
-        # persist
-        self.save_data()
+        # ── apply all deltas via save_delta ──
+        for slot_name, delta in changes.items():
+            await self.save_delta(
+                dict_path=["countries", country, "production", "assigned_factories", slot_name],
+                int_delta=delta
+            )
 
-        # build feedback
+        # ── send feedback ──
         lines = [f"✅ `{category}` set to {new_abs}."]
-        for slot, d in changes.items():
-            if slot == "unassigned":
+        for slot_name, d in changes.items():
+            if slot_name == "unassigned":
                 lines.append(f"– Freed {d} factories into the unassigned pool.")
             else:
-                name = slot.replace("_"," ").title()
-                lines.append(f"– `{name}` {'–' if d<0 else '+'}{abs(d)} → now {assigned[slot]}.")
+                current_val = self.cold_war_data["countries"][country]["production"]["assigned_factories"][slot_name]
+                pretty = slot_name.replace("_"," ").title()
+                sign = "-" if d<0 else "+"
+                lines.append(f"– `{pretty}` {sign}{abs(d)} → now {current_val}.")
 
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
+
 
 
         
@@ -1208,6 +1305,7 @@ class SpideyUtils(commands.Cog):
 
         view = ResearchConfirmView(
             interaction=interaction,
+            cog=self,
             country=country,
             slot=slot,
             tech_name=tech_name,
@@ -1376,7 +1474,7 @@ class SpideyUtils(commands.Cog):
                     continue
                 if sub_data.get("sub_branch_name", "").lower() == sub_branch.lower():
                     bonus = calculate_total_bonus(branch_name)
-                    bonus_summary = f"{self.format_bonus(generic_bonus)} from generic bonus\n+{self.format_bonus(bonus - generic_bonus)}% from national spirits\n→ Effective bonus: +{self.format_bonus(bonus)}%"
+                    bonus_summary = f"{self.format_bonus(generic_bonus)} from generic bonus\n{self.format_bonus(bonus - generic_bonus)}% from national spirits\n→ Effective bonus: {self.format_bonus(bonus)}%"
                     embed = self.create_the_embed(sub_data, year, unlocked, in_progress, bonus, bonus_summary)
                     return await interaction.followup.send(embed=embed)
 
@@ -1463,19 +1561,19 @@ class SpideyUtils(commands.Cog):
         if "espionage_penalty" in costs:
             embed.add_field(name="🕵️‍♂️ Domestic Intel Score", value=f"-{costs['espionage_penalty']}", inline=False)
         if "factory_penalty" in costs:
-            embed.add_field(name="🏭 Industrial Sectors", value=f"-{costs['factory_penalty']}", inline=False)
+            embed.add_field(name="🏭 Civilian Factories", value=f"-{costs['factory_penalty']}", inline=False)
         if "budget_cost" in costs:
             embed.add_field(name="💸 Budget Surplus", value=f"-{costs['budget_cost']} per turn", inline=False)
 
         embed.set_footer(text="Are you sure you want to begin this project?")
 
         view = StartProjectConfirmView(
+            cog=self,
             user_id=interaction.user.id,
             country=country,
             project_name=project_name,
             penalties=costs,
             data_ref=self.cold_war_data,
-            save_callback=self.save_data
         )
 
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
@@ -1499,7 +1597,7 @@ class SpideyUtils(commands.Cog):
 
         data = self.cold_war_data["countries"][country]
         projects = data.get("national_projects", {})
-        all_defs = self.cold_war_data.get("NATIONAL PROJECTS", {})
+        all_defs = self.cold_war_data.get("national_projects", {})
         miles = all_defs.get("milestones", {})
 
         embed = discord.Embed(
@@ -1539,7 +1637,7 @@ class SpideyUtils(commands.Cog):
 
 
     async def autocomplete_sc_choice1(self, interaction: Interaction, current: str):
-        un = self.cold_war_data["UN"]
+        un = self.cold_war_data["un"]
         nonperm = [m for m in un["members"] if m not in un["permanent_security_council"]]
         return [
             app_commands.Choice(name=c, value=c)
@@ -1548,7 +1646,7 @@ class SpideyUtils(commands.Cog):
         ][:25]
 
     async def autocomplete_sc_choice2(self, interaction: Interaction, current: str):
-        un = self.cold_war_data["UN"]
+        un = self.cold_war_data["un"]
         nonperm = [m for m in un["members"] if m not in un["permanent_security_council"]]
         first = getattr(interaction.namespace, "choice1", None)
         return [
@@ -1558,7 +1656,7 @@ class SpideyUtils(commands.Cog):
         ][:25]
 
     async def autocomplete_sc_choice3(self, interaction: Interaction, current: str):
-        un = self.cold_war_data["UN"]
+        un = self.cold_war_data["un"]
         nonperm = [m for m in un["members"] if m not in un["permanent_security_council"]]
         first = getattr(interaction.namespace, "choice1", None)
         second = getattr(interaction.namespace, "choice2", None)
@@ -1606,7 +1704,7 @@ class SpideyUtils(commands.Cog):
         term = f"{year}-{year+2}"
 
         # 3) locate votes dict
-        un = self.cold_war_data.setdefault("UN", {})
+        un = self.cold_war_data.setdefault("un", {})
         votes = un.setdefault("votes", {}) \
                    .setdefault("security_membership", {}) \
                    .setdefault(term, {})
@@ -1619,10 +1717,11 @@ class SpideyUtils(commands.Cog):
 
         # 5) record your votes (allow fewer than 3)
         picks = [c for c in (choice1, choice2, choice3) if c]
-        votes[country] = picks
-
-        # 6) persist
-        self.save_data()
+        
+        await self.save_delta(
+            dict_path=["un", "votes", "security_membership", term, country],
+            list_delta=picks
+        )
 
         # 7) confirm
         e = Embed(
@@ -1662,7 +1761,7 @@ class SpideyUtils(commands.Cog):
 
         term = f"{self.cold_war_data['current_year']}-" \
                f"{self.cold_war_data['current_year']+2}"
-        un = self.cold_war_data.setdefault("UN", {})
+        un = self.cold_war_data.setdefault("un", {})
         noms = un.setdefault("sg_nominations", {}).setdefault(term, [])
 
         # 2) must be UN member
@@ -1676,8 +1775,11 @@ class SpideyUtils(commands.Cog):
                 f"❌ {candidate} is already nominated.", ephemeral=True
             )
         # 4) record
-        noms.append(candidate)
-        self.save_data()
+        await self.save_delta(
+            dict_path=["un","sg_nominations", term],
+            list_delta=[candidate]
+        )
+
 
         await interaction.response.send_message(
             f"✅ You’ve nominated **{candidate}** for SG for {term}.",
@@ -1692,7 +1794,7 @@ class SpideyUtils(commands.Cog):
     async def view_sg_noms(self, interaction: Interaction):
         term = f"{self.cold_war_data['current_year']}-" \
                f"{self.cold_war_data['current_year']+2}"
-        noms = self.cold_war_data["UN"]["sg_nominations"].get(term, [])
+        noms = self.cold_war_data["un"]["sg_nominations"].get(term, [])
         embed = Embed(
             title=f"📝 SG Nominations ({term})",
             description="\n".join(f"• {c}" for c in noms) or "No nominations yet.",
@@ -1703,13 +1805,13 @@ class SpideyUtils(commands.Cog):
     async def autocomplete_un_votes(self, interaction, current: str):
         return [
             app_commands.Choice(name=k, value=k)
-            for k in self.cold_war_data.get("UN", {}).get("votes", {}).keys()
+            for k in self.cold_war_data.get("un", {}).get("votes", {}).keys()
             if current.lower() in k.lower()
         ][:25]
 
     async def autocomplete_un_terms(self, interaction, current: str):
         # Grab all the term‐strings under each vote
-        votes = self.cold_war_data.get("UN", {}).get("votes", {})
+        votes = self.cold_war_data.get("un", {}).get("votes", {})
         terms = {term for sub in votes.values() for term in sub.keys()}
         return [
             app_commands.Choice(name=t, value=t)
@@ -1734,7 +1836,7 @@ class SpideyUtils(commands.Cog):
         vote: str,
         term: str | None = None
     ):
-        un = self.cold_war_data.get("UN", {})
+        un = self.cold_war_data.get("un", {})
         votes_block = un.get("votes", {})
         if vote not in votes_block:
             return await interaction.response.send_message(
@@ -1777,12 +1879,13 @@ class SpideyUtils(commands.Cog):
     async def view_current_un_results(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
-        un = self.cold_war_data.get("UN", {})
-        votes_block = un.get("votes", {})
+        # 1) Grab the UN block (lowercase key) and its votes
+        un_block    = self.cold_war_data.get("un", {})
+        votes_block = un_block.get("votes", {})
 
         if not votes_block:
             return await interaction.followup.send(
-                "❌ No UN votes have been started yet.", 
+                "❌ No UN votes have been started yet.",
                 ephemeral=True
             )
 
@@ -1791,51 +1894,70 @@ class SpideyUtils(commands.Cog):
             color=0x5B92E5
         )
 
-        country = None
+        # 2) Figure out your privileges
+        user_country = None
         if str(interaction.user.id) in self.alternate_country_dict:
-            country = self.alternate_country_dict[str(interaction.user.id)]
+            user_country = self.alternate_country_dict[str(interaction.user.id)]
         else:
-            for c, data in self.cold_war_data["countries"].items():
-                if data.get("player_id") == interaction.user.id:
-                    country = c
+            for c, d in self.cold_war_data["countries"].items():
+                if d.get("player_id") == interaction.user.id:
+                    user_country = c
                     break
-        
-        sg = un.get("secretary_general", "Vacant")
-        is_admin = interaction.user.guild_permissions.administrator
-        is_sg = (country == sg)
+
+        sg_key    = un_block.get("secretary_general", "Vacant")
+        is_admin  = interaction.user.guild_permissions.administrator
+        is_sg     = (user_country == sg_key)
         view_conf = is_admin or is_sg
-        
-        at_least_1_conf = any(v.get("confidential", False) for v in votes_block.values())
 
+        # 3) Render each vote
         for vote_key, vote in votes_block.items():
-            is_conf = vote.get("confidential", False)
-            casts = vote.get("casts", {})
 
-            
+            # ── Special case: security council is nested by term ──
+            if vote_key == "security_membership":
+                for term, term_votes in vote.items():
+                    # term_votes is { country: [choices], … }
+                    field_name = f"Security Council Vote ({term})"
+                    if term_votes:
+                        lines = [
+                            f"• **{country}**: `{', '.join(choices)}`"
+                            for country, choices in term_votes.items()
+                        ]
+                        field_value = "\n".join(lines)
+                    else:
+                        field_value = "No votes cast yet."
+                    embed.add_field(name=field_name, value=field_value, inline=False)
+                continue
+
+            # ── All other votes follow the usual shape ──
+            is_conf = vote.get("confidential", False)
+            casts   = vote.get("casts", {})
+
             if is_conf and not view_conf:
-                value = f"• {len(casts)} votes cast by: " + ", ".join(casts.keys())
+                # show only counts + who voted
+                field_value = (
+                    f"• {len(casts)} votes cast by: "
+                    + ", ".join(casts.keys())
+                )
             else:
                 if casts:
                     lines = [f"• **{c}**: `{ballot}`" for c, ballot in casts.items()]
-                    value = "\n".join(lines)
+                    field_value = "\n".join(lines)
                 else:
-                    value = "No votes cast yet."
-            
+                    field_value = "No votes cast yet."
 
             embed.add_field(
                 name=vote_key.replace("_", " ").title(),
-                value=value,
+                value=field_value,
                 inline=False
             )
 
-        final_ephemeral = at_least_1_conf and view_conf
+        await interaction.followup.send(embed=embed, ephemeral=False)
 
-        await interaction.followup.send(embed=embed, ephemeral=final_ephemeral)
 
     
     @app_commands.command(name="un_membership", description="Show all the UN members. Though it's kind of obvious.")
     async def un_membership(self, interaction: Interaction):
-        un_dict = self.cold_war_data.get("UN", {})
+        un_dict = self.cold_war_data.get("un", {})
         secretary_general = un_dict.get("secretary_general", "Vacant")
 
         embed = discord.Embed(title="🇺🇳 United Nations Members", color=0x5B92E5)
@@ -1859,7 +1981,7 @@ class SpideyUtils(commands.Cog):
         vote_key = interaction.namespace.vote_key
         vote = (
             self.cold_war_data
-            .get("UN", {})
+            .get("un", {})
             .get("votes", {})
             .get(vote_key, {})
         )
@@ -1894,7 +2016,7 @@ class SpideyUtils(commands.Cog):
         choice3: str | None = None,
     ):
         # 1) locate the vote
-        un    = self.cold_war_data.get("UN", {})
+        un    = self.cold_war_data.get("un", {})
         votes = un.get("votes", {})
         vote  = votes.get(vote_key)
         if not vote:
@@ -1933,6 +2055,11 @@ class SpideyUtils(commands.Cog):
                     "❌ For Y/N/A votes you must pick exactly `Yes`, `No`, or `Abstain`.", ephemeral=True
                 )
             casts[country] = choice.title()
+            await self.save_delta(
+                dict_path=["un","votes",vote_key,"casts",country],
+                str_val=choice.title()        # or list_delta=<ranking> for RCV
+            )
+
 
         # 4b) RCV
         else:
@@ -1948,10 +2075,12 @@ class SpideyUtils(commands.Cog):
                 return await interaction.response.send_message(
                     f"❌ Invalid ranking. Choices must be unique and from {allowed}.", ephemeral=True
                 )
-            casts[country] = ranking
+            await self.save_delta(
+                dict_path=["un","votes",vote_key,"casts",country],
+                list_delta=ranking         # or list_delta=<ranking> for RCV
+            )
 
-        # 5) persist & confirm
-        self.save_data()
+
         await interaction.response.send_message(
             f"✅ {country}’s vote recorded: `{casts[country]}`", ephemeral=True
         )
@@ -1979,14 +2108,14 @@ class SpideyUtils(commands.Cog):
         
         # 2) Build vote_key from title…
         vote_key = title.lower().replace(" ", "_")
-        un = self.cold_war_data.setdefault("UN", {})
+        un = self.cold_war_data.setdefault("un", {})
         votes = un.setdefault("votes", {})
 
         # 3) Determine options
         if use_nominees:
             # pull from SG nominations
             term = f"{self.cold_war_data['current_year']}-{self.cold_war_data['current_year']+2}"
-            opts = self.cold_war_data["UN"]["sg_nominations"].get(term, [])
+            opts = self.cold_war_data["un"]["sg_nominations"].get(term, [])
             if not opts:
                 return await interaction.response.send_message(
                     "❌ No SG nominees to vote on.", ephemeral=True
@@ -1997,13 +2126,16 @@ class SpideyUtils(commands.Cog):
             vt = vote_type
 
         # 4) Initialize the vote record
-        votes[vote_key] = {
-            "type": vt,
-            "options": opts,    # empty = yes/no/abstain
-            "casts": {},
-            "confidential": confidential
-        }
-        self.save_data()
+        await self.save_delta(
+            dict_path=["UN","votes",vote_key],
+            dict_delta={
+                "type": vt,
+                "options": opts,
+                "casts": {},
+                "confidential": confidential
+            }
+        )
+
 
         # 5) Announce
         desc = (
@@ -2220,7 +2352,7 @@ class SpideyUtils(commands.Cog):
         econ = target.get("economic", {})
         eco = discord.Embed(title="💰 Economic Overview", color=discord.Color.green())
         for k, label in [("budget_surplus", "Budget Surplus"),
-                         ("industrial_sectors", "Industrial Sectors"),
+                         ("civilian_factories", "Civilian Factories"),
                          ("oil_reserves", "Oil Reserves"),
                          ("infrastructure_rating", "Infrastructure")]:
             eco.add_field(name=label, value=self.ranged_value(econ.get(k, 0), knowledge))
@@ -2383,6 +2515,17 @@ class SpideyUtils(commands.Cog):
 
         view = ConfirmSpyAssignView(self, country, target, operation, op_data, params)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+
+    @commands.command(name="reset_modifiers")
+    @commands.is_owner()
+    async def reset_modifiers(self, ctx):
+        # delete the file if it exists
+        if os.path.exists(dynamic_path):
+            os.remove(dynamic_path)
+        # reload to regenerate dynamic_data from scratch
+        self.load_data()
+        await ctx.send("✅ cold_war_modifiers.json has been reset to a clean state.")
+
 
     @app_commands.command(name="spy_hq", description="View your espionage headquarters and operational status.")
     @app_commands.autocomplete(country=autocomplete_my_country)

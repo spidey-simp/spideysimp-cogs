@@ -1,10 +1,10 @@
 {
-  "name": "Cold War RP",
-  "global_history": {
+  "NAME": "Cold War RP",
+  "GLOBAL_HISTORY": {
     "1943": {
       "Sino-Japanese Conflict Ends": {
         "description": "Armistice signed between Imperial Japan and the Republic of China, ending the Pacific Front.",
-        "image": "https://s3.amazonaws.com/s3.timetoast.com/public/uploads/photos/6545179/4749_KorJ_Treaty.1965.jpg",
+        "IMAGE": "https://s3.amazonaws.com/s3.timetoast.com/public/uploads/photos/6545179/4749_KorJ_Treaty.1965.jpg",
         "byline": "Filed by UN Military Observer Corps",
         "quote": "\"Peace is merely the absence of open fire.\""
       }
@@ -12,7 +12,7 @@
     "1945": {
       "Berlin Reduced to Ashes by U.S. Nuclear Strike!": {
         "description": "United States drops the atomic bomb on Berlin, with Hitler and Nazi leadership presumed dead.",
-        "image": "https://imgur.com/berlin-ruins-during-aftermath-of-second-world-war-1945-3264x2448-9oXOjYa",
+        "IMAGE": "https://imgur.com/berlin-ruins-during-aftermath-of-second-world-war-1945-3264x2448-9oXOjYa",
         "byline": "By Anatoly Petrov, Pravda Correspondent",
         "quote": "\"We cannot rebuild what has been atomized.\"",
         "tags": [
@@ -23,7 +23,7 @@
       },
       "U.N. Declares End to World War: No Victors, Only Survivors": {
         "description": "World War II ends without a formal victor as major powers collapse or retreat into isolation.",
-        "image": "https://www.thenation.com/wp-content/uploads/2015/06/un_charter_flickr_img1.jpg",
+        "IMAGE": "https://www.thenation.com/wp-content/uploads/2015/06/un_charter_flickr_img1.jpg",
         "byline": "By Hugo Varela, El Mundo Internacional",
         "quote": "\"We honor the dead of the war and hope that their sacrifices lead to a lasting peace.\""
       }
@@ -31,19 +31,19 @@
     "1946": {
       "Stalin Dead at 67! Kremlin Power Vacuum Begins": {
         "description": "Lavrentiy Beria rises to power in the Soviet Union following Stalin\u2019s death.",
-        "image": "http://www.orlandofiges.info/section16_Khrushchev/images/Mourning_Stalins_death.png",
+        "IMAGE": "http://www.orlandofiges.info/section16_Khrushchev/images/Mourning_Stalins_death.png",
         "byline": "Special Dispatch \u2013 Global Intelligence Press",
         "quote": "\"The stress of the war was simply too much to bear.\""
       },
       "Otto von Habsburg Returns to Vienna, Calls for Restoration": {
         "description": "Otto von Habsburg returns to Austria, initiating monarchist restoration talks.",
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359405939907891260/ChatGPT_Image_Apr_8_2025_10_52_04_PM.png?ex=67f75cf0&is=67f60b70&hm=39836f4c62e2015bb9b478b68d5845b7307977ff992bbb075db600c6d0355855&",
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1359405939907891260/ChatGPT_Image_Apr_8_2025_10_52_04_PM.png?ex=67f75cf0&is=67f60b70&hm=39836f4c62e2015bb9b478b68d5845b7307977ff992bbb075db600c6d0355855&",
         "byline": "By Clara Bennett, Associated Press",
         "quote": "\"Could crowns be making their reappearance into the Western World?\""
       },
       "UN Appoints Jebb as German High Commissioner": {
         "description": "The United Nations names British diplomat Sir Gladwyn Jebb as Provisional High Commissioner of Germany, establishing international civilian oversight following the nuclear strike on Berlin.",
-        "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Sr._Gladwyn_Jebb.jpg/423px-Sr._Gladwyn_Jebb.jpg",
+        "IMAGE": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Sr._Gladwyn_Jebb.jpg/423px-Sr._Gladwyn_Jebb.jpg",
         "byline": "Reuters Foreign Desk",
         "quote": "\"If people can't govern themselves, they'll find the world does it for them.\"",
         "tags": [
@@ -56,7 +56,7 @@
     "1947": {
       "French Colonial Empire Cracks Under Global Pressure": {
         "description": "Widespread decolonization movements begin to fracture European empires in Asia and Africa.",
-        "image": "https://www.ourhistory.org.uk/wp-content/uploads/decolonisation-of-Africa.jpeg",
+        "IMAGE": "https://www.ourhistory.org.uk/wp-content/uploads/decolonisation-of-Africa.jpeg",
         "byline": "By Miho Takeda, Tokyo Press Network",
         "quote": "\"The downfall of Western Influence betrays the colonies they've failed to pull into the future.\"",
         "tags": [
@@ -67,14 +67,14 @@
       },
       "Germany Begins Construction of New Capital": {
         "description": "With U.S. funding, the German provisional government breaks ground on a new capital to replace Berlin, symbolizing cautious international reintegration.",
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359416880804135034/ChatGPT_Image_Apr_8_2025_11_34_57_PM.png?ex=67f76721&is=67f615a1&hm=476e35a1b0b53a9c226f9df912579cf3522419e303ef8fd4820c459db8654206&",
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1359416880804135034/ChatGPT_Image_Apr_8_2025_11_34_57_PM.png?ex=67f76721&is=67f615a1&hm=476e35a1b0b53a9c226f9df912579cf3522419e303ef8fd4820c459db8654206&",
         "dateline": "Berlin",
         "byline": "By Clara Bennett, Associated Press",
         "quote": "\"Can a Germany shrouded in the shadow of war truly rebuild the former industrial powerhouse?\""
       },
       "Chinese Civil War Ends in Nationalist Victory": {
         "description": "Chiang Kai-shek's Kuomintang forces officially declare victory as the last communist strongholds fall. The Republic of China tightens control over the mainland amid regional instability.",
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359568147790692553/ChatGPT_Image_Apr_9_2025_09_38_12_AM.png?ex=67f7f401&is=67f6a281&hm=235c7bf8ddde54cc6376bbf069151d04f78a3ef624200e5bc3d922fc13a80565&",
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1359568147790692553/ChatGPT_Image_Apr_9_2025_09_38_12_AM.png?ex=67f7f401&is=67f6a281&hm=235c7bf8ddde54cc6376bbf069151d04f78a3ef624200e5bc3d922fc13a80565&",
         "byline": "Reuters Foreign Desk",
         "quote": "\"The East seems safe. For now.\"",
         "tags": [
@@ -87,7 +87,7 @@
     "1948": {
       "Pope Pius XIII Elected After Sudden Death of Pius XII": {
         "description": "Pope Pius XIII elected following sudden death of Pius XII, heralding a conservative Catholic resurgence.",
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359411309371723806/ChatGPT_Image_Apr_8_2025_11_14_30_PM.png?ex=67f761f0&is=67f61070&hm=8ea1e1a5bbfba232fd747faea56c10c2e53adc2636672d5e86897c1a08f92d48&",
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1359411309371723806/ChatGPT_Image_Apr_8_2025_11_14_30_PM.png?ex=67f761f0&is=67f61070&hm=8ea1e1a5bbfba232fd747faea56c10c2e53adc2636672d5e86897c1a08f92d48&",
         "byline": "By Anatoly Petrov, Pravda Correspondent",
         "quote": "\"Is Catholicism making a resurrgence?\"",
         "tags": [
@@ -98,7 +98,7 @@
       },
       "Catholic Pact Takes Root in Austria and Spain": {
         "description": "Austria and Spain, backed by the Vatican, lay the groundwork for a pan-Catholic alliance in response to communist expansion.",
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359438625992872026/ChatGPT_Image_Apr_9_2025_01_02_50_AM.png?ex=67f77b61&is=67f629e1&hm=6a302a33da7bc70f5800369fefb1aba1c0b8046385f06ea38efce80489a3a1ce&",
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1359438625992872026/ChatGPT_Image_Apr_9_2025_01_02_50_AM.png?ex=67f77b61&is=67f629e1&hm=6a302a33da7bc70f5800369fefb1aba1c0b8046385f06ea38efce80489a3a1ce&",
         "dateline": "Rome",
         "byline": "Special Dispatch \u2013 Global Intelligence Press",
         "quote": "\"Religious alliances were once the norm of the 1600s. Are they coming back in this modern world?\"",
@@ -112,7 +112,7 @@
     "1949": {
       "Soviets Locked Out of Nuclear Oversight Talks": {
         "description": "UN Security Council votes to exclude the Soviet Union from nuclear oversight talks.",
-        "image": "https://nsarchive2.gwu.edu/NSAEBB/NSAEBB472/IMAGE%20NO%201.jpg",
+        "IMAGE": "https://nsarchive2.gwu.edu/NSAEBB/NSAEBB472/IMAGE%20NO%201.jpg",
         "byline": "By Hugo Varela, El Mundo Internacional",
         "quote": "\"Beria reportedly was furious at the decision according to an anonymous informant.\"",
         "tags": [
@@ -123,7 +123,7 @@
       },
       "UN Mediation Fails to Reconcile German Factions": {
         "description": "After years of international mediation, negotiations between monarchist, democratic, and communist cells in Germany break down entirely.",
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359444393781887099/ChatGPT_Image_Apr_9_2025_01_26_10_AM.png?ex=67f780c0&is=67f62f40&hm=c95c6c9452efeab6a26c6cedec5dcb91b238bd8466fc592d92c8261cdbcce8a0&",
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1359444393781887099/ChatGPT_Image_Apr_9_2025_01_26_10_AM.png?ex=67f780c0&is=67f62f40&hm=c95c6c9452efeab6a26c6cedec5dcb91b238bd8466fc592d92c8261cdbcce8a0&",
         "byline": "By Miho Takeda, Tokyo Press Network",
         "quote": "\"Diplomacy has always been reliant on empathy. One might think empathy was devoid from Germany.\""
       }
@@ -131,7 +131,7 @@
     "1950": {
       "Japan Declares 'Greater East Asian Mandate'": {
         "description": "Japan declares full economic and military dominance over East Asia through the Greater Mandate.",
-        "image": "https://www.worldwar2facts.org/wp-content/uploads/2021/03/Hideki-Tojo-Japan-World-War-2.jpg",
+        "IMAGE": "https://www.worldwar2facts.org/wp-content/uploads/2021/03/Hideki-Tojo-Japan-World-War-2.jpg",
         "byline": "Filed by UN Military Observer Corps",
         "quote": "\"He who controls history controls the future.\""
       }
@@ -139,7 +139,7 @@
     "1951": {
       "Geneva Summit Fails to Cool U.S.\u2013USSR Tensions": {
         "description": "International summit in Geneva fails to prevent Cold War escalation between U.S. and USSR.",
-        "image": "https://www.enemyinmirror.com/wp-content/uploads/2021/11/1955_Geneva_Big_4_Summit.jpg",
+        "IMAGE": "https://www.enemyinmirror.com/wp-content/uploads/2021/11/1955_Geneva_Big_4_Summit.jpg",
         "dateline": "Geneva",
         "byline": "Reuters Foreign Desk",
         "quote": "\"The sparks of war can often be avoided with one conversation.\"",
@@ -151,7 +151,7 @@
       },
       "UN Commissioner Assassinated in Frankfurt!": {
         "description": "Sir Gladwyn Jebb is assassinated under mysterious circumstances. UN withdraws civilian oversight from Germany. His death signals the collapse of the provisional civil government, paving the way for a full military junta takeover.",
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359446693547872368/ChatGPT_Image_Apr_9_2025_01_35_10_AM.png?ex=67f782e5&is=67f63165&hm=032dc7e6124857c4fbb4e0fd5189beffadf45b0d5306e5dce1a0acad0ec09fe6&",
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1359446693547872368/ChatGPT_Image_Apr_9_2025_01_35_10_AM.png?ex=67f782e5&is=67f63165&hm=032dc7e6124857c4fbb4e0fd5189beffadf45b0d5306e5dce1a0acad0ec09fe6&",
         "dateline": "Frankfurt",
         "byline": "Special Dispatch \u2013 Global Intelligence Press",
         "quote": "\"His death will surely bring about a factional war.\"",
@@ -165,7 +165,7 @@
     "1952": {
       "U.S. Confirms 500 Nuclear Warheads in Arsenal": {
         "description": "Global arms race accelerates as United States announces deployment of 500th nuclear warhead.",
-        "image": "https://minutemanmissile.com/images/MinutemanIIIMK12B.jpg",
+        "IMAGE": "https://minutemanmissile.com/images/MinutemanIIIMK12B.jpg",
         "byline": "By Hugo Varela, El Mundo Internacional",
         "quote": "\"When do they have enough weapons?\"",
         "tags": [
@@ -176,9 +176,9 @@
       }
     }
   },
-  "countries": {
+  "COUNTRIES": {
     "United States": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 60,
         "aviation_wings": 80,
         "fleet_task_groups": 12,
@@ -187,7 +187,7 @@
         "military_readiness": "partial",
         "nuclear_arsenal": 500
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": 20,
         "factories": {
           "civilian_factories": 70,
@@ -199,13 +199,13 @@
         "oil_reserves": 30,
         "infrastructure_rating": 5
       },
-      "political": {
+      "POLITICAL": {
         "population": 160000000,
         "recruitable_manpower": 30000000,
         "public_support_score": 70,
         "civil_unrest_level": 10
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.2,
         "unlocked_techs": [
           "Frequency-Hopping Radios",
@@ -218,25 +218,25 @@
         ],
         "research_slots": 5
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1945": "United States drops atomic bomb on Berlin, killing Hitler and top Nazi leadership.",
         "1947": "Truman Doctrine announced to counter Soviet expansion through nuclear deterrence.",
         "1952": "United States unveils its 500th nuclear warhead, escalating Cold War tensions."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 95,
-        "doctrine_focus": "containment",
-        "conscription_policy": "selective service"
+        "DOCTRINE_FOCUS": "containment",
+        "CONSCRIPTION_POLICY": "selective service"
       },
-      "leader": {
+      "LEADER": {
         "name": "Harry S. Truman",
         "description": "Thrust into leadership after Roosevelt\u2019s death, Truman ended the war with a devastating nuclear strike on Berlin, a decision that defines both his legacy and America's role in the world. Now nearing the end of his presidency, Truman walks a tightrope between containment abroad and stability at home. He is a man of directness and resolve, with no appetite for idealism, only results.",
-        "image": "https://hips.hearstapps.com/hmg-prod/images/president-harry-s-truman-seated-at-his-desk-holding-a-pencil-getty.jpg?resize=1200:*"
+        "IMAGE": "https://hips.hearstapps.com/hmg-prod/images/president-harry-s-truman-seated-at-his-desk-holding-a-pencil-getty.jpg?resize=1200:*"
       },
-      "details": "Without any major battles attributed to it in WWII, the United States asserts global power not through battlefield triumphs, but through overwhelming nuclear dominance. With traditional military prestige diminished, America relies on deterrence, diplomacy, and containment to secure its place in a rapidly polarizing world.",
-      "public_desc": "The United States stands as a global superpower, championing democracy and nuclear deterrence in the face of ideological conflict.",
-      "chief_of_staff": "General Omar Bradley",
-      "ideology": {
+      "DETAILS": "Without any major battles attributed to it in WWII, the United States asserts global power not through battlefield triumphs, but through overwhelming nuclear dominance. With traditional military prestige diminished, America relies on deterrence, diplomacy, and containment to secure its place in a rapidly polarizing world.",
+      "PUBLIC_DESC": "The United States stands as a global superpower, championing democracy and nuclear deterrence in the face of ideological conflict.",
+      "CHIEF_OF_STAFF": "General Omar Bradley",
+      "IDEOLOGY": {
         "leading_ideology": "democratic",
         "democratic": 80,
         "fascist": 2,
@@ -244,15 +244,15 @@
         "authoritarian": 10,
         "monarchic": 3
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Strengthen NATO alternatives",
         "Expand nuclear deterrence",
         "Contain communism"
       ],
-      "doctrine_focus": "brinkmanship",
-      "conscription_policy": "selective_service",
-      "image": "https://1.bp.blogspot.com/-4pbDn_qn35Q/YI63UTYpftI/AAAAAAAB-rA/-db-xMvD9Xk4ERvyUY4qTOZYYfBAp3RFQCLcBGAsYHQ/s1920/xehmaQFN.jpeg",
-      "national_spirits": [
+      "DOCTRINE_FOCUS": "brinkmanship",
+      "CONSCRIPTION_POLICY": "selective_service",
+      "IMAGE": "https://1.bp.blogspot.com/-4pbDn_qn35Q/YI63UTYpftI/AAAAAAAB-rA/-db-xMvD9Xk4ERvyUY4qTOZYYfBAp3RFQCLcBGAsYHQ/s1920/xehmaQFN.jpeg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "Future of Democracy",
           "description": "The United States has positioned itself as the global standard-bearer of democratic governance. Whether by diplomacy or deterrence, Washington claims to protect the ideals of liberty and republicanism wherever they are threatened.",
@@ -346,7 +346,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 6,
         "foreign_intelligence_score": 90,
         "domestic_intelligence_score": 85,
@@ -354,7 +354,7 @@
       }
     },
     "Soviet Union": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 120,
         "aviation_wings": 60,
         "fleet_task_groups": 5,
@@ -363,7 +363,7 @@
         "military_readiness": "war",
         "nuclear_arsenal": 0
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": -15,
         "factories": {
           "civilian_factories": 50,
@@ -375,13 +375,13 @@
         "oil_reserves": 25,
         "infrastructure_rating": 2
       },
-      "political": {
+      "POLITICAL": {
         "population": 190000000,
         "recruitable_manpower": 40000000,
         "public_support_score": 50,
         "civil_unrest_level": 20
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.1,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -393,7 +393,7 @@
         ],
         "research_slots": 5
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1946": "Stalin dies unexpectedly. Lavrentiy Beria assumes power amid Kremlin intrigue.",
         "1948": "The Soviet Union announces the Eastern Bloc but most European nations seem hesitant to join. Still communism is beginning to take hold in the Baltic.",
         "1950": [
@@ -401,20 +401,20 @@
           "Beria begins full militarization of Poland"
         ]
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 90,
-        "doctrine_focus": "revolutionary socialism",
-        "conscription_policy": "universal conscription"
+        "DOCTRINE_FOCUS": "revolutionary socialism",
+        "CONSCRIPTION_POLICY": "universal conscription"
       },
-      "leader": {
+      "LEADER": {
         "name": "Lavrentiy Beria",
         "description": "The shadow behind the throne for decades, Beria seized control of the Soviet Union following Stalin\u2019s sudden death. A master of political purges and secret files, Beria rules not with ideology but with control, wielding fear like a scalpel. Under his leadership, the USSR is colder, more calculated, and more dangerous than ever before.",
-        "image": "https://everipedia-storage.s3.amazonaws.com/ProfilePicture/en/Lavrentiy_Beria__e749ef/Lavrentiy_Beria_%2528close-up%2529.jpg__07954.jpeg"
+        "IMAGE": "https://everipedia-storage.s3.amazonaws.com/ProfilePicture/en/Lavrentiy_Beria__e749ef/Lavrentiy_Beria_%2528close-up%2529.jpg__07954.jpeg"
       },
-      "details": "Reeling from internal purges and the devastation of prolonged war, the USSR is now ruled by Beria\u2019s iron grip. Lacking nuclear weapons, the Soviet Union pushes outward with ideology and occupation, desperate to hold its sphere against encroaching Western influence.",
-      "public_desc": "Following the death of Stalin, the Soviet Union remains a staunch bastion of communism, asserting influence across Eastern Europe and Asia.",
-      "chief_of_staff": "Marshal Aleksandr Vasilevsky",
-      "ideology": {
+      "DETAILS": "Reeling from internal purges and the devastation of prolonged war, the USSR is now ruled by Beria\u2019s iron grip. Lacking nuclear weapons, the Soviet Union pushes outward with ideology and occupation, desperate to hold its sphere against encroaching Western influence.",
+      "PUBLIC_DESC": "Following the death of Stalin, the Soviet Union remains a staunch bastion of communism, asserting influence across Eastern Europe and Asia.",
+      "CHIEF_OF_STAFF": "Marshal Aleksandr Vasilevsky",
+      "IDEOLOGY": {
         "leading_ideology": "communist",
         "democratic": 5,
         "fascist": 0,
@@ -422,15 +422,15 @@
         "authoritarian": 10,
         "monarchic": 0
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Consolidate Eastern Europe",
         "Develop nuclear weapons",
         "Suppress dissent"
       ],
-      "doctrine_focus": "expansionism",
-      "conscription_policy": "universal_conscription",
-      "image": "https://russiatrek.org/blog/wp-content/uploads/2017/03/stalin-soviet-union-moscow-1953-1954-26.jpg",
-      "national_spirits": [
+      "DOCTRINE_FOCUS": "expansionism",
+      "CONSCRIPTION_POLICY": "universal_conscription",
+      "IMAGE": "https://russiatrek.org/blog/wp-content/uploads/2017/03/stalin-soviet-union-moscow-1953-1954-26.jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "Bastion of Communism",
           "description": "As the first state to declare itself a worker\u2019s republic, the USSR remains the ideological anchor of global communism. Its influence spreads not just through tanks or treaties, but through revolution and resistance.",
@@ -538,7 +538,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 6,
         "foreign_intelligence_score": 85,
         "domestic_intelligence_score": 75,
@@ -546,7 +546,7 @@
       }
     },
     "United Kingdom": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 35,
         "aviation_wings": 40,
         "fleet_task_groups": 7,
@@ -555,7 +555,7 @@
         "military_readiness": "partial",
         "nuclear_arsenal": 5
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": 5,
         "factories": {
           "civilian_factories": 40,
@@ -567,13 +567,13 @@
         "oil_reserves": 15,
         "infrastructure_rating": 4
       },
-      "political": {
+      "POLITICAL": {
         "population": 50000000,
         "recruitable_manpower": 8000000,
         "public_support_score": 65,
         "civil_unrest_level": 15
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.14,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -586,25 +586,25 @@
         ],
         "research_slots": 5
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1946": "United Kingdom retains full control of India after suppressing independence movements.",
         "1949": "British Empire formalizes new Commonwealth Compact, strengthening colonial bonds.",
         "1951": "Churchill returns to power, pledging to restore imperial prestige."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 85,
-        "doctrine_focus": "imperial diplomacy",
-        "conscription_policy": "reserve conscription"
+        "DOCTRINE_FOCUS": "imperial diplomacy",
+        "CONSCRIPTION_POLICY": "reserve conscription"
       },
-      "leader": {
+      "LEADER": {
         "name": "Winston Churchill",
         "description": "Having returned to power in a Britain still clinging to imperial relevance, Churchill faces the postwar world with vintage defiance. He sees the Cold War not as a conflict of arms, but of will, one where rhetoric is as sharp as any blade. Though age and austerity press upon him, he remains the lion of the empire, roaring even as the sun sets on its glory.",
-        "image": "https://66.media.tumblr.com/430c3bdb76c003e0f54264f0d3c1aa95/tumblr_mnxhp2bYYe1suudv8o1_1280.jpg"
+        "IMAGE": "https://66.media.tumblr.com/430c3bdb76c003e0f54264f0d3c1aa95/tumblr_mnxhp2bYYe1suudv8o1_1280.jpg"
       },
-      "details": "Emerging from WWII relatively intact, Britain remains a cornerstone of the global order. Its influence endures through colonial ties, the Commonwealth, and royal symbolism, even as economic strain and global unrest challenge its imperial legacy.",
-      "public_desc": "The United Kingdom retains its global naval reach and monarchic pride, while adapting to a changing world order post-war.",
-      "chief_of_staff": "Field Marshal Alan Brooke",
-      "ideology": {
+      "DETAILS": "Emerging from WWII relatively intact, Britain remains a cornerstone of the global order. Its influence endures through colonial ties, the Commonwealth, and royal symbolism, even as economic strain and global unrest challenge its imperial legacy.",
+      "PUBLIC_DESC": "The United Kingdom retains its global naval reach and monarchic pride, while adapting to a changing world order post-war.",
+      "CHIEF_OF_STAFF": "Field Marshal Alan Brooke",
+      "IDEOLOGY": {
         "leading_ideology": "monarchic",
         "democratic": 45,
         "fascist": 5,
@@ -612,15 +612,15 @@
         "authoritarian": 5,
         "monarchic": 40
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Reassert colonial control",
         "Counter Soviet influence",
         "Stabilize Commonwealth"
       ],
-      "doctrine_focus": "liberal_internationalism",
-      "conscription_policy": "reserve_conscription",
-      "image": "https://4.bp.blogspot.com/-tgMhVFEyupo/UrGjkmRe_dI/AAAAAAAAXBA/Tauk62HIUuc/s1600/England+in+the+1950's+(8).jpg",
-      "national_spirits": [
+      "DOCTRINE_FOCUS": "liberal_internationalism",
+      "CONSCRIPTION_POLICY": "reserve_conscription",
+      "IMAGE": "https://4.bp.blogspot.com/-tgMhVFEyupo/UrGjkmRe_dI/AAAAAAAAXBA/Tauk62HIUuc/s1600/England+in+the+1950's+(8).jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "Pax Britannica",
           "description": "Though her empire wanes, the mythos of Britain as a stabilizing force endures. With deep-rooted diplomatic ties, financial institutions, and overseas garrisons, Britain still casts a long imperial shadow.",
@@ -723,7 +723,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 5,
         "foreign_intelligence_score": 80,
         "domestic_intelligence_score": 80,
@@ -731,7 +731,7 @@
       }
     },
     "Empire of Japan": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 85,
         "aviation_wings": 55,
         "fleet_task_groups": 10,
@@ -740,7 +740,7 @@
         "military_readiness": "war",
         "nuclear_arsenal": 0
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": 10,
         "factories": {
           "civilian_factories": 30,
@@ -752,13 +752,13 @@
         "oil_reserves": 10,
         "infrastructure_rating": 3
       },
-      "political": {
+      "POLITICAL": {
         "population": 90000000,
         "recruitable_manpower": 20000000,
         "public_support_score": 60,
         "civil_unrest_level": 25
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.12,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -771,24 +771,24 @@
         ],
         "research_slots": 4
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1943": "Japan signs armistice with Chiang Kai-shek, annexing North China.",
         "1950": "Japan declares Greater East Asian Military Mandate, consolidating its empire."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 80,
-        "doctrine_focus": "imperial restoration",
-        "conscription_policy": "mandatory for all able-bodied males"
+        "DOCTRINE_FOCUS": "imperial restoration",
+        "CONSCRIPTION_POLICY": "mandatory for all able-bodied males"
       },
-      "leader": {
+      "LEADER": {
         "name": "Hideki Tojo",
         "description": "Restored to prominence in Japan\u2019s militarist revival, Tojo is both statesman and sword: unflinching, imperial, and vengeful. He presides over an empire re-forged through steel and fire, projecting dominance across East Asia. Tojo does not merely seek victory. He seeks a rebirth of divine order, with Japan as its shining center.",
-        "image": "https://s.hdnux.com/photos/10/73/20/2339885/8/1200x0.jpg"
+        "IMAGE": "https://s.hdnux.com/photos/10/73/20/2339885/8/1200x0.jpg"
       },
-      "details": "Isolationist during WWII, Japan consolidated its grip over East Asia and emerged as a ruthless modern empire. Ruled by hardline militarists and a restored divine monarchy, it now dominates China\u2019s coast and the Pacific through industrial might and sheer force.",
-      "public_desc": "Though shrouded in secrecy, Japan presents itself as a stabilizing force in East Asia, committed to independence from Western interference.",
-      "chief_of_staff": "General Tomoyuki Yamashita",
-      "ideology": {
+      "DETAILS": "Isolationist during WWII, Japan consolidated its grip over East Asia and emerged as a ruthless modern empire. Ruled by hardline militarists and a restored divine monarchy, it now dominates China\u2019s coast and the Pacific through industrial might and sheer force.",
+      "PUBLIC_DESC": "Though shrouded in secrecy, Japan presents itself as a stabilizing force in East Asia, committed to independence from Western interference.",
+      "CHIEF_OF_STAFF": "General Tomoyuki Yamashita",
+      "IDEOLOGY": {
         "leading_ideology": "fascist",
         "democratic": 5,
         "fascist": 70,
@@ -796,15 +796,15 @@
         "authoritarian": 15,
         "monarchic": 5
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Pacify China",
         "Secure oil in SE Asia",
         "Restore imperial glory"
       ],
-      "doctrine_focus": "expansionism",
-      "conscription_policy": "extensive_conscription",
-      "image": "https://1.bp.blogspot.com/-SPo1ooPjw-I/X43b7pFH1NI/AAAAAAAD53Y/klDf3QeuBcs_NCNxPNcrkQEoeitHTh97gCLcBGAsYHQ/s2048/mid-1950s-japan-2.jpg",
-      "national_spirits": [
+      "DOCTRINE_FOCUS": "expansionism",
+      "CONSCRIPTION_POLICY": "extensive_conscription",
+      "IMAGE": "https://1.bp.blogspot.com/-SPo1ooPjw-I/X43b7pFH1NI/AAAAAAAD53Y/klDf3QeuBcs_NCNxPNcrkQEoeitHTh97gCLcBGAsYHQ/s2048/mid-1950s-japan-2.jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "Imperial Navy",
           "description": "Though damaged by years of isolation, Japan\u2019s Imperial Navy remains one of the most advanced and well-organized maritime forces in the Pacific. It serves both as a projection of power and as a pillar of domestic pride.",
@@ -894,7 +894,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 4,
         "foreign_intelligence_score": 50,
         "domestic_intelligence_score": 90,
@@ -902,7 +902,7 @@
       }
     },
     "Republic of China (KMT)": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 95,
         "aviation_wings": 30,
         "fleet_task_groups": 3,
@@ -911,7 +911,7 @@
         "military_readiness": "war",
         "nuclear_arsenal": 0
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": -10,
         "factories": {
           "civilian_factories": 25,
@@ -923,13 +923,13 @@
         "oil_reserves": 5,
         "infrastructure_rating": 2
       },
-      "political": {
+      "POLITICAL": {
         "population": 450000000,
         "recruitable_manpower": 60000000,
         "public_support_score": 45,
         "civil_unrest_level": 35
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.1,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -941,25 +941,25 @@
         ],
         "research_slots": 3
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1947": "KMT defeats Chinese communists with covert Japanese military aid.",
         "1949": "KMT recognized by the UN as legitimate government of China.",
         "1951": "Warlord uprisings erupt in western provinces, threatening KMT cohesion."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 70,
-        "doctrine_focus": "nationalist unity",
-        "conscription_policy": "regional quotas"
+        "DOCTRINE_FOCUS": "nationalist unity",
+        "CONSCRIPTION_POLICY": "regional quotas"
       },
-      "leader": {
+      "LEADER": {
         "name": "Chiang Kai-shek",
         "description": "Victorious over the communists but weakened by war, Chiang rules a China that is united in name but fractured in spirit. Beneath his stoic exterior lies a man driven by destiny: to rebuild, to modernize, and to keep the revolution at bay. Surrounded by warlords, advisors, and ghosts, Chiang balances on a knife\u2019s edge between order and collapse.",
-        "image": "https://www.debate.com.mx/__export/1743930869899/sites/debate/img/2025/04/06/6_abril.jpg_242310155.jpg"
+        "IMAGE": "https://www.debate.com.mx/__export/1743930869899/sites/debate/img/2025/04/06/6_abril.jpg_242310155.jpg"
       },
-      "details": "Victorious in the civil war but fractured from within, the KMT clings to control of a vast, divided China. Propped up by Western recognition but burdened by regional warlords, corruption, and unrest, it remains a powder keg barely held together by nationalist will.",
-      "public_desc": "The Kuomintang government proclaims national unity following victory in the Chinese Civil War, yet internal tensions remain.",
-      "chief_of_staff": "General Bai Chongxi",
-      "ideology": {
+      "DETAILS": "Victorious in the civil war but fractured from within, the KMT clings to control of a vast, divided China. Propped up by Western recognition but burdened by regional warlords, corruption, and unrest, it remains a powder keg barely held together by nationalist will.",
+      "PUBLIC_DESC": "The Kuomintang government proclaims national unity following victory in the Chinese Civil War, yet internal tensions remain.",
+      "CHIEF_OF_STAFF": "General Bai Chongxi",
+      "IDEOLOGY": {
         "leading_ideology": "authoritarian",
         "democratic": 20,
         "fascist": 5,
@@ -967,15 +967,15 @@
         "authoritarian": 40,
         "monarchic": 10
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Eliminate communist remnants",
         "Modernize army",
         "Secure foreign recognition"
       ],
-      "doctrine_focus": "nationalist_unity",
-      "conscription_policy": "limited_conscription",
-      "image": "https://i.pinimg.com/originals/f1/13/30/f11330e9d7f7fd3eb5f7e56f7b5449fa.jpg",
-      "national_spirits": [
+      "DOCTRINE_FOCUS": "nationalist_unity",
+      "CONSCRIPTION_POLICY": "limited_conscription",
+      "IMAGE": "https://i.pinimg.com/originals/f1/13/30/f11330e9d7f7fd3eb5f7e56f7b5449fa.jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "The Dragon with No Fire",
           "description": "Though the Kuomintang claims control over all of China, it rules a land fractured by warlords, ideology, and exhaustion. Unity exists only on paper, not in strength.",
@@ -1065,7 +1065,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 3,
         "foreign_intelligence_score": 55,
         "domestic_intelligence_score": 60,
@@ -1073,7 +1073,7 @@
       }
     },
     "Germany": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 50,
         "aviation_wings": 20,
         "fleet_task_groups": 1,
@@ -1082,7 +1082,7 @@
         "military_readiness": "war",
         "nuclear_arsenal": 0
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": -20,
         "factories": {
           "civilian_factories": 20,
@@ -1094,13 +1094,13 @@
         "oil_reserves": 3,
         "infrastructure_rating": 1
       },
-      "political": {
+      "POLITICAL": {
         "population": 65000000,
         "recruitable_manpower": 9000000,
         "public_support_score": 35,
         "civil_unrest_level": 40
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.11,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -1113,7 +1113,7 @@
         ],
         "research_slots": 4
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1945": [
           "Berlin is obliterated by U.S. atomic bomb, ending Nazi leadership.",
           "Hitler presumed dead: no remains recovered. UN declares official death to stabilize postwar order."
@@ -1127,20 +1127,20 @@
         "1951": "UN Commissioner Sir Gladwyn Jebb is assassinated in Frankfurt. The UN withdraws. A military junta seizes control.",
         "1952": "Armed skirmishes erupt between democratic and communist factions in Frankfurt."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 35,
-        "doctrine_focus": "fragmented",
-        "conscription_policy": "factional"
+        "DOCTRINE_FOCUS": "fragmented",
+        "CONSCRIPTION_POLICY": "factional"
       },
-      "leader": {
+      "LEADER": {
         "name": "Military Junta",
         "description": "A fragile coalition of Germany's surviving military leadership, unified only by hatred of foreign control and the belief that Germany must be ruled by Germans.",
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1359376014525857872/IMG_0316.png?ex=67f74111&is=67f5ef91&hm=a5532157d927e39db79b23abc66b0fc11d550501350111f3bc2db5eb8ac62260&"
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1359376014525857872/IMG_0316.png?ex=67f74111&is=67f5ef91&hm=a5532157d927e39db79b23abc66b0fc11d550501350111f3bc2db5eb8ac62260&"
       },
-      "details": "Nuked, leaderless, and torn into rival factions, Germany has become the second great battleground of the Cold War. Its future is a prize contested by monarchists, communists, democrats, and fascist remnants, each backed by a different foreign power. Though the world believes Hitler died in the atomic fire, rumors persist among extremist cells that he survived, hidden, waiting for the rise of a Fourth Reich.",
-      "public_desc": "Germany remains fractured and under international scrutiny following its atomic devastation. Its future remains uncertain.",
-      "chief_of_staff": "Field Marshal Heinz Guderian",
-      "ideology": {
+      "DETAILS": "Nuked, leaderless, and torn into rival factions, Germany has become the second great battleground of the Cold War. Its future is a prize contested by monarchists, communists, democrats, and fascist remnants, each backed by a different foreign power. Though the world believes Hitler died in the atomic fire, rumors persist among extremist cells that he survived, hidden, waiting for the rise of a Fourth Reich.",
+      "PUBLIC_DESC": "Germany remains fractured and under international scrutiny following its atomic devastation. Its future remains uncertain.",
+      "CHIEF_OF_STAFF": "Field Marshal Heinz Guderian",
+      "IDEOLOGY": {
         "leading_ideology": "authoritarian",
         "democratic": 25,
         "fascist": 25,
@@ -1148,13 +1148,13 @@
         "authoritarian": 15,
         "monarchic": 10
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Unify factions",
         "Purge communist elements",
         "End foreign occupation"
       ],
-      "image": "https://1.bp.blogspot.com/-UU_Dd8X7bh8/V8WCsVRuVyI/AAAAAAAAgYo/vm-mPDNBLpcKnh4u9B0vytj8t172r0rpQCLcB/s640/Germany%2Bduring%2Bthe%2B1950s%2B%25288%2529.jpg",
-      "national_spirits": [
+      "IMAGE": "https://1.bp.blogspot.com/-UU_Dd8X7bh8/V8WCsVRuVyI/AAAAAAAAgYo/vm-mPDNBLpcKnh4u9B0vytj8t172r0rpQCLcB/s640/Germany%2Bduring%2Bthe%2B1950s%2B%25288%2529.jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "Site of the First Atomic Detonation",
           "description": "The obliteration of Berlin lingers in both memory and mutation. Germany was not only the first victim of atomic warfare, it is a living monument to what happens when ambition meets annihilation.",
@@ -1279,7 +1279,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives":3,
         "foreign_intelligence_score": 30,
         "domestic_intelligence_score": 25,
@@ -1287,7 +1287,7 @@
       }
     },
     "Kingdom of Spain": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 25,
         "aviation_wings": 12,
         "fleet_task_groups": 2,
@@ -1296,7 +1296,7 @@
         "military_readiness": "partial",
         "nuclear_arsenal": 0
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": -5,
         "factories": {
           "civilian_factories": 15,
@@ -1308,13 +1308,13 @@
         "oil_reserves": 3,
         "infrastructure_rating": 3
       },
-      "political": {
+      "POLITICAL": {
         "population": 28000000,
         "recruitable_manpower": 4000000,
         "public_support_score": 60,
         "civil_unrest_level": 25
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.07,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -1324,25 +1324,25 @@
         ],
         "research_slots": 3
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1940": "Carlist faction wins Spanish Civil War, establishes traditionalist monarchy.",
         "1947": "Spain signs Concordat with the Vatican, forming ideological backbone of Catholic Pact.",
         "1948": "Spain formally recognizes the Austrian Empire as legitimate successor to Holy Rome."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 55,
-        "doctrine_focus": "Catholic traditionalism",
-        "conscription_policy": "volunteer corps with noble officer class"
+        "DOCTRINE_FOCUS": "Catholic traditionalism",
+        "CONSCRIPTION_POLICY": "volunteer corps with noble officer class"
       },
-      "leader": {
+      "LEADER": {
         "name": "Juan, Count of Barcelona",
         "description": "Exiled for years and passed over once already, Juan now rules a Spain where monarchy and religion are inseparable. Though lacking his father's iron charisma, he carries the weight of restoration with quiet discipline. In a land shaped by crusade and civil war, Juan\u2019s rule is seen not as a beginning, but a return to divine order.",
-        "image": "https://alchetron.com/cdn/infante-juan-count-of-barcelona-98c7662c-77ea-49b1-83ea-3ccb3d5572b-resize-750.jpeg"
+        "IMAGE": "https://alchetron.com/cdn/infante-juan-count-of-barcelona-98c7662c-77ea-49b1-83ea-3ccb3d5572b-resize-750.jpeg"
       },
-      "details": "Ruled by a Carlist monarch with divine mandate, Spain is the ideological vanguard of the Catholic Pact. While stable at home, it yearns for a renewed role in Europe and looks to Austria and the Church to expand its moral and political authority.",
-      "public_desc": "Spain emerges from the shadows of civil war under a resurgent conservative Catholic order aligned with Austria and the Vatican.",
-      "chief_of_staff": "General Gonzalo Queipo de Llano",
-      "ideology": {
+      "DETAILS": "Ruled by a Carlist monarch with divine mandate, Spain is the ideological vanguard of the Catholic Pact. While stable at home, it yearns for a renewed role in Europe and looks to Austria and the Church to expand its moral and political authority.",
+      "PUBLIC_DESC": "Spain emerges from the shadows of civil war under a resurgent conservative Catholic order aligned with Austria and the Vatican.",
+      "CHIEF_OF_STAFF": "General Gonzalo Queipo de Llano",
+      "IDEOLOGY": {
         "leading_ideology": "monarchic",
         "democratic": 10,
         "fascist": 20,
@@ -1350,15 +1350,15 @@
         "authoritarian": 15,
         "monarchic": 50
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Suppress regionalism",
         "Build Catholic alliance",
         "Expand military"
       ],
-      "doctrine_focus": "traditionalism",
-      "conscription_policy": "volunteer_only",
-      "image": "https://1.bp.blogspot.com/-UNNUQ2hxZ0w/Xjt5cJbyyKI/AAAAAAACPdY/83f7_p_af6U2On2zV4ClrWzzPbGyzeI_gCLcBGAsYHQ/s640/spain-1950s-15.jpg",
-      "national_spirits": [
+      "DOCTRINE_FOCUS": "traditionalism",
+      "CONSCRIPTION_POLICY": "volunteer_only",
+      "IMAGE": "https://1.bp.blogspot.com/-UNNUQ2hxZ0w/Xjt5cJbyyKI/AAAAAAACPdY/83f7_p_af6U2On2zV4ClrWzzPbGyzeI_gCLcBGAsYHQ/s640/spain-1950s-15.jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "History of the Spanish",
           "description": "From the Reconquista to the Empire, Spain's soul has always been entwined with tradition, honor, and faith. The past is not forgotten, it is restored.",
@@ -1438,7 +1438,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 3,
         "foreign_intelligence_score": 40,
         "domestic_intelligence_score": 70,
@@ -1446,7 +1446,7 @@
       }
     },
     "Austrian Empire": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 18,
         "aviation_wings": 10,
         "fleet_task_groups": 0,
@@ -1455,7 +1455,7 @@
         "military_readiness": "peace",
         "nuclear_arsenal": 0
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": 5,
         "factories": {
           "civilian_factories": 10,
@@ -1467,13 +1467,13 @@
         "oil_reserves": 1,
         "infrastructure_rating": 4
       },
-      "political": {
+      "POLITICAL": {
         "population": 12000000,
         "recruitable_manpower": 1800000,
         "public_support_score": 70,
         "civil_unrest_level": 10
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.09,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -1484,25 +1484,25 @@
         ],
         "research_slots": 3
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1946": "Otto von Habsburg returns to Austria amid royalist resurgence.",
         "1947": "Austrian Empire is restored by constitutional referendum.",
         "1948": "Austria and Spain establish Catholic Pact for continental diplomacy."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 60,
-        "doctrine_focus": "dynastic legitimacy",
-        "conscription_policy": "voluntary officer academies"
+        "DOCTRINE_FOCUS": "dynastic legitimacy",
+        "CONSCRIPTION_POLICY": "voluntary officer academies"
       },
-      "leader": {
+      "LEADER": {
         "name": "Otto von Habsburg",
         "description": "Raised in exile and educated across Europe, Otto returns not as a conqueror but as a philosopher-king. His vision for Austria is equal parts legacy and modernity and a new Holy Roman ideal for a fractured continent. Charismatic yet cautious, Otto rules by principle, hoping to rebuild an empire not through force, but through faith, diplomacy, and law.",
-        "image": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhvRLDBqltGVdmwVyaLCa4PGvkaHH3h4HpObgJ2cT_BcbOlMGUKcUxiOwJV_BP-JJ8L64w_d0BINSxKPn6Rrrxpn1D_AJn5jc_GlkySpSDV08VpKZcBgkI9sSdxkyJcdjselSGjA0yxYA0r0OZoFL7dwMg6AnOYGc1RKWUaP_T6dS34-yA_v24QOl547V4/s1233/Otto%20Von%20Habsburg.jpg"
+        "IMAGE": "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhvRLDBqltGVdmwVyaLCa4PGvkaHH3h4HpObgJ2cT_BcbOlMGUKcUxiOwJV_BP-JJ8L64w_d0BINSxKPn6Rrrxpn1D_AJn5jc_GlkySpSDV08VpKZcBgkI9sSdxkyJcdjselSGjA0yxYA0r0OZoFL7dwMg6AnOYGc1RKWUaP_T6dS34-yA_v24QOl547V4/s1233/Otto%20Von%20Habsburg.jpg"
       },
-      "details": "Restored under the Habsburgs, Austria is both symbol and spearhead of dynastic legitimacy. Though small in stature, its alliances, heritage, and unified vision make it the spiritual core of the monarchist bloc in a divided Europe.",
-      "public_desc": "Restored under Otto von Habsburg, Austria pursues a vision of monarchy-driven unity for Catholic Europe.",
-      "chief_of_staff": "General Rudolf von Habsburg",
-      "ideology": {
+      "DETAILS": "Restored under the Habsburgs, Austria is both symbol and spearhead of dynastic legitimacy. Though small in stature, its alliances, heritage, and unified vision make it the spiritual core of the monarchist bloc in a divided Europe.",
+      "PUBLIC_DESC": "Restored under Otto von Habsburg, Austria pursues a vision of monarchy-driven unity for Catholic Europe.",
+      "CHIEF_OF_STAFF": "General Rudolf von Habsburg",
+      "IDEOLOGY": {
         "leading_ideology": "monarchic",
         "democratic": 20,
         "fascist": 5,
@@ -1510,15 +1510,15 @@
         "authoritarian": 10,
         "monarchic": 60
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Restore Habsburg prestige",
         "Forge Catholic pact",
         "Claim Central Europe"
       ],
-      "doctrine_focus": "traditionalism",
-      "conscription_policy": "voluntary_officer_academies",
-      "image": "https://2.bp.blogspot.com/_q_WGHXnqn-Q/TTYBy_At8hI/AAAAAAAABq8/yPUrYhTbZWg/s1600/Innsbruck+tram+1950s.jpg",
-      "national_spirits": [
+      "DOCTRINE_FOCUS": "traditionalism",
+      "CONSCRIPTION_POLICY": "voluntary_officer_academies",
+      "IMAGE": "https://2.bp.blogspot.com/_q_WGHXnqn-Q/TTYBy_At8hI/AAAAAAAABq8/yPUrYhTbZWg/s1600/Innsbruck+tram+1950s.jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "Legacy of the Habsburg Crown",
           "description": "The return of Otto von Habsburg has reignited imperial pride. Though the empire may be small, its crown weighs heavy with history and hope.",
@@ -1606,7 +1606,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 3,
         "foreign_intelligence_score": 35,
         "domestic_intelligence_score": 65,
@@ -1614,7 +1614,7 @@
       }
     },
     "France": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 25,
         "aviation_wings": 20,
         "fleet_task_groups": 4,
@@ -1623,7 +1623,7 @@
         "military_readiness": "partial",
         "nuclear_arsenal": 0
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": -5,
         "factories": {
           "civilian_factories": 25,
@@ -1635,13 +1635,13 @@
         "oil_reserves": 5,
         "infrastructure_rating": 3
       },
-      "political": {
+      "POLITICAL": {
         "population": 45000000,
         "recruitable_manpower": 6000000,
         "public_support_score": 55,
         "civil_unrest_level": 25
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.1,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -1653,27 +1653,27 @@
         ],
         "research_slots": 3
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1945": "French provisional government re-established following Nazi occupation.",
         "1947": "France formally cedes Indochina to the Kingdom of Siam to avoid large-scale rebellion.",
         "1948": "Faced with economic collapse, France transfers most West and Central African colonies to British administrative control.",
         "1950": "French forces suppress uprising in Algiers, reinforcing their grip on Algeria, Morocco, and Madagascar.",
         "1952": "Internal political gridlock intensifies between Gaullists, republicans, and left-wing coalitions."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 60,
-        "doctrine_focus": "protectionism",
-        "conscription_policy": "limited_conscription"
+        "DOCTRINE_FOCUS": "protectionism",
+        "CONSCRIPTION_POLICY": "limited_conscription"
       },
-      "leader": {
+      "LEADER": {
         "name": "Ren\u00e9 Pleven",
         "description": "A pragmatic leader presiding over a fragile postwar republic, Pleven struggles to maintain unity in the face of ideological fracture and colonial collapse.",
-        "image": "https://www.biografiasyvidas.com/biografia/p/fotos/pleven.jpg"
+        "IMAGE": "https://www.biografiasyvidas.com/biografia/p/fotos/pleven.jpg"
       },
-      "details": "France stands at a crossroads. Once a dominant empire, it now clings to its fading influence, divided by internal ideologies and scarred by war. Though its military and economy are recovering, the soul of the Republic remains uncertain.",
-      "public_desc": "Still reeling from wartime occupation and colonial losses, France attempts to reassert its place in Europe through reconstruction.",
-      "chief_of_staff": "General Jean de Lattre de Tassigny",
-      "ideology": {
+      "DETAILS": "France stands at a crossroads. Once a dominant empire, it now clings to its fading influence, divided by internal ideologies and scarred by war. Though its military and economy are recovering, the soul of the Republic remains uncertain.",
+      "PUBLIC_DESC": "Still reeling from wartime occupation and colonial losses, France attempts to reassert its place in Europe through reconstruction.",
+      "CHIEF_OF_STAFF": "General Jean de Lattre de Tassigny",
+      "IDEOLOGY": {
         "leading_ideology": "democratic",
         "democratic": 65,
         "fascist": 5,
@@ -1681,13 +1681,13 @@
         "authoritarian": 5,
         "monarchic": 5
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Reclaim colonial prestige",
         "Unify republican factions",
         "Counter communist influence in Paris"
       ],
-      "image": "https://1.bp.blogspot.com/-W7xdNbvUoAA/V-qmoVpZYTI/AAAAAAACYtE/OF3TojHIvTYSqFnIwpRPgu3sHywAb0zGwCLcB/s1600/Paris-1952-2.jpg",
-      "national_spirits": [
+      "IMAGE": "https://1.bp.blogspot.com/-W7xdNbvUoAA/V-qmoVpZYTI/AAAAAAACYtE/OF3TojHIvTYSqFnIwpRPgu3sHywAb0zGwCLcB/s1600/Paris-1952-2.jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "Le Reconstruction",
           "description": "Though ravaged by war and drained by retreat, France rebuilds brick by brick. The road is slow, but each step forward echoes with determination.",
@@ -1765,7 +1765,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 3,
         "domestic_intelligence_score": 50,
         "foreign_intelligence_score": 60,
@@ -1773,7 +1773,7 @@
       }
     },
     "Turkey": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 18,
         "aviation_wings": 10,
         "fleet_task_groups": 2,
@@ -1782,7 +1782,7 @@
         "military_readiness": "partial",
         "nuclear_arsenal": 0
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": -3,
         "factories": {
           "civilian_factories": 12,
@@ -1794,13 +1794,13 @@
         "oil_reserves": 7,
         "infrastructure_rating": 2
       },
-      "political": {
+      "POLITICAL": {
         "population": 21000000,
         "recruitable_manpower": 3000000,
         "public_support_score": 60,
         "civil_unrest_level": 20
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.08,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -1810,27 +1810,27 @@
         ],
         "research_slots": 3
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1945": "Turkey maintains neutrality through the final phase of World War II.",
         "1947": "Major political reforms shift power toward Cel\u00e2l Bayar\u2019s Democratic Party.",
         "1949": "Anti-communist crackdowns intensify along the eastern border.",
         "1951": "Naval buildup begins in the Aegean to counter Soviet Black Sea activity.",
         "1952": "Political debate erupts over whether Turkey should join a Western alliance."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 50,
-        "doctrine_focus": "traditionalism",
-        "conscription_policy": "limited_conscription"
+        "DOCTRINE_FOCUS": "traditionalism",
+        "CONSCRIPTION_POLICY": "limited_conscription"
       },
-      "leader": {
+      "LEADER": {
         "name": "Cel\u00e2l Bayar",
         "description": "The conservative president of a transitioning Turkey, Bayar champions political reform while maintaining a careful distance from both Cold War blocs.",
-        "image": "https://isteataturk.com/gorseller/1508353850_ataturk.jpg"
+        "IMAGE": "https://isteataturk.com/gorseller/1508353850_ataturk.jpg"
       },
-      "details": "With its Ottoman past lingering and its republic under strain, Turkey remains an unpredictable force. As Europe and Asia polarize, Ankara may choose alignment or carve its own path as a new regional hegemon.",
-      "public_desc": "Straddling continents and ideologies, Turkey maintains its independence while guarding the Black Sea under Atat\u00fcrk\u2019s legacy.",
-      "chief_of_staff": "General Nuri Yamut",
-      "ideology": {
+      "DETAILS": "With its Ottoman past lingering and its republic under strain, Turkey remains an unpredictable force. As Europe and Asia polarize, Ankara may choose alignment or carve its own path as a new regional hegemon.",
+      "PUBLIC_DESC": "Straddling continents and ideologies, Turkey maintains its independence while guarding the Black Sea under Atat\u00fcrk\u2019s legacy.",
+      "CHIEF_OF_STAFF": "General Nuri Yamut",
+      "IDEOLOGY": {
         "leading_ideology": "authoritarian",
         "democratic": 20,
         "fascist": 5,
@@ -1838,13 +1838,13 @@
         "authoritarian": 60,
         "monarchic": 5
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Secure Black Sea dominance",
         "Expand Middle Eastern influence",
         "Suppress Kurdish separatism"
       ],
-      "image": "https://i.pinimg.com/originals/83/be/0e/83be0ea260b3b4ad3ab3af954ef0b9b2.jpg",
-      "national_spirits": [
+      "IMAGE": "https://i.pinimg.com/originals/83/be/0e/83be0ea260b3b4ad3ab3af954ef0b9b2.jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "Legacy of Atat\u00fcrk",
           "description": "Though a decade has passed since his death, the presence of Mustafa Kemal Atat\u00fcrk still defines the Republic. His vision of secularism, reform, and Western alignment guides the faithful and haunts the ambitious.",
@@ -1917,7 +1917,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 3,
         "domestic_intelligence_score": 40,
         "foreign_intelligence_score": 30,
@@ -1925,7 +1925,7 @@
       }
     },
     "Kingdom of Italy": {
-      "military": {
+      "MILITARY": {
         "army_divisions": 22,
         "aviation_wings": 16,
         "fleet_task_groups": 4,
@@ -1934,7 +1934,7 @@
         "military_readiness": "partial",
         "nuclear_arsenal": 0
       },
-      "economic": {
+      "ECONOMIC": {
         "budget_surplus": -2,
         "factories": {
           "civilian_factories": 30,
@@ -1946,13 +1946,13 @@
         "oil_reserves": 4,
         "infrastructure_rating": 3
       },
-      "political": {
+      "POLITICAL": {
         "population": 46000000,
         "recruitable_manpower": 7000000,
         "public_support_score": 60,
         "civil_unrest_level": 15
       },
-      "research": {
+      "RESEARCH": {
         "research_bonus": 0.09,
         "unlocked_techs": [
           "World War II Era Firearms",
@@ -1963,25 +1963,25 @@
         ],
         "research_slots": 3
       },
-      "country_history": {
+      "COUNTRY_HISTORY": {
         "1945": "Italy avoids direct involvement in WWII and begins expanding influence in the Balkans through diplomacy.",
         "1947": "Annexes Dalmatia peacefully and establishes a royal protectorate over Albania under King Umberto II.",
         "1951": "Stability is maintained, but observers note the resurgence of ultranationalist elements within the officer corps."
       },
-      "global": {
+      "GLOBAL": {
         "global_influence": 58,
-        "doctrine_focus": "combined_arms",
-        "conscription_policy": "selective_service"
+        "DOCTRINE_FOCUS": "combined_arms",
+        "CONSCRIPTION_POLICY": "selective_service"
       },
-      "leader": {
+      "LEADER": {
         "name": "Umberto II",
         "description": "Having ascended to the throne through cautious diplomacy and a refusal to join the global war, Umberto II rules a kingdom carefully balancing modernization and monarchy. His reserved demeanor hides a shrewd understanding of Italy's precarious position between Catholic monarchies and rising ideological blocs.",
-        "image": "https://farm4.staticflickr.com/3377/4641849242_ff3bb19a9c_o.jpg"
+        "IMAGE": "https://farm4.staticflickr.com/3377/4641849242_ff3bb19a9c_o.jpg"
       },
-      "details": "Italy has emerged from the war relatively unscathed, choosing negotiation over aggression. With territorial expansion achieved through diplomacy rather than conquest, it now eyes internal modernization and regional influence under the cautious guidance of its monarchy.",
-      "public_desc": "Under the House of Savoy, Italy maintains a fragile neutrality backed by regional influence and postwar industrial growth.",
-      "chief_of_staff": "Field Marshal Giovanni Messe",
-      "ideology": {
+      "DETAILS": "Italy has emerged from the war relatively unscathed, choosing negotiation over aggression. With territorial expansion achieved through diplomacy rather than conquest, it now eyes internal modernization and regional influence under the cautious guidance of its monarchy.",
+      "PUBLIC_DESC": "Under the House of Savoy, Italy maintains a fragile neutrality backed by regional influence and postwar industrial growth.",
+      "CHIEF_OF_STAFF": "Field Marshal Giovanni Messe",
+      "IDEOLOGY": {
         "leading_ideology": "monarchic",
         "democratic": 20,
         "fascist": 10,
@@ -1989,13 +1989,13 @@
         "authoritarian": 20,
         "monarchic": 45
       },
-      "starter_goals": [
+      "STARTER_GOALS": [
         "Modernize industrial sector",
         "Strengthen Mediterranean fleet",
         "Deepen ties with Austria and Spain"
       ],
-      "image": "https://1.bp.blogspot.com/-ERmCtVdLfmQ/UatYYVKPLVI/AAAAAAAADx8/cPuMteq8oOk/s1600/Life+in+Italy,+1950s+(3).jpg",
-      "national_spirits": [
+      "IMAGE": "https://1.bp.blogspot.com/-ERmCtVdLfmQ/UatYYVKPLVI/AAAAAAAADx8/cPuMteq8oOk/s1600/Life+in+Italy,+1950s+(3).jpg",
+      "NATIONAL_SPIRITS": [
         {
           "name": "Savoyard Continuity",
           "description": "While other monarchies fell to war and revolution, Italy's crown endures. This continuity brings prestige, but also the burden of history.",
@@ -2068,7 +2068,7 @@
           }
         }
       ],
-      "espionage": {
+      "ESPIONAGE": {
         "total_operatives": 3,
         "domestic_intelligence_score": 50,
         "foreign_intelligence_score": 40,
@@ -2076,7 +2076,7 @@
       }
     }
   },
-  "alliances": {
+  "ALLIANCES": {
     "Catholic Pact": {
       "members": [
         "Kingdom of Spain",
@@ -2084,7 +2084,7 @@
       ]
     }
   },
-  "tech_tree": {
+  "TECH_TREE": {
     "INFANTRY": {
       "branch": {
         "branch_name": "Infantry & Support",
@@ -3932,7 +3932,7 @@
           "success": "'It worked. God help us.'",
           "failure": "'I told you the yield was unstable.'"
         },
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361802092611768460/ChatGPT_Image_Apr_15_2025_01_35_07_PM.png?ex=68001487&is=67fec307&hm=e3b64004f411d82bcaccde4eef7b667972fac6ec63bc74e153455d0753f2b3a1&"
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1361802092611768460/ChatGPT_Image_Apr_15_2025_01_35_07_PM.png?ex=68001487&is=67fec307&hm=e3b64004f411d82bcaccde4eef7b667972fac6ec63bc74e153455d0753f2b3a1&"
       },
       "Dr. Ayaka Nomura": {
         "fields": [
@@ -3954,7 +3954,7 @@
           "success": "The capsule entered orbit. Nomura doesn\u2019t smile, she nods.",
           "failure": "'Next time, calculate twice.'"
         },
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361802910857564181/ChatGPT_Image_Apr_15_2025_01_38_02_PM.png?ex=6800154b&is=67fec3cb&hm=90fc776ac217b1c06b60f81a868c65b2a858bb104f5ee4507c5b47c19fb1f9f7&"
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1361802910857564181/ChatGPT_Image_Apr_15_2025_01_38_02_PM.png?ex=6800154b&is=67fec3cb&hm=90fc776ac217b1c06b60f81a868c65b2a858bb104f5ee4507c5b47c19fb1f9f7&"
       },
       "Dr. Klaus Vortmeyer": {
         "fields": [
@@ -3977,7 +3977,7 @@
           "success": "'It performed exactly as modeled. I was never in doubt.'",
           "failure": "'Detonation misfire? Then your engineers failed me, not the design.'"
         },
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361808262562840787/ChatGPT_Image_Apr_15_2025_01_59_31_PM.png?ex=68001a46&is=67fec8c6&hm=0ddcae554aeffcbd90a8c36d0f66594f321559fa9cca8bfe6bb954311a50707b&"
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1361808262562840787/ChatGPT_Image_Apr_15_2025_01_59_31_PM.png?ex=68001a46&is=67fec8c6&hm=0ddcae554aeffcbd90a8c36d0f66594f321559fa9cca8bfe6bb954311a50707b&"
       },
       "Prof. Isidora Velasquez": {
         "fields": [
@@ -3999,7 +3999,7 @@
           "success": "'There it is. Orbit achieved. I want everyone on this team promoted.'",
           "failure": "'They blamed me when the stage detached early. But I designed it to *burn*, not *fail*.'"
         },
-        "image": "https://cdn.discordapp.com/attachments/1293001455992836130/1361809235226394684/ChatGPT_Image_Apr_15_2025_02_03_32_PM.png?ex=68001b2e&is=67fec9ae&hm=b6502adfbae5add00b2a5c8d3b5e737787798e72fa4994f1ad424c0969639b5d&"
+        "IMAGE": "https://cdn.discordapp.com/attachments/1293001455992836130/1361809235226394684/ChatGPT_Image_Apr_15_2025_02_03_32_PM.png?ex=68001b2e&is=67fec9ae&hm=b6502adfbae5add00b2a5c8d3b5e737787798e72fa4994f1ad424c0969639b5d&"
       }
     }
   },
@@ -4168,7 +4168,7 @@
       "nuclear_facility":  5
     }
   },
-  "UN": {
+  "un": {
     "members": [
       "United States",
       "Soviet Union",
