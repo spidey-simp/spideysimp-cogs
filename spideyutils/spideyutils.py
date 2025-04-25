@@ -2517,7 +2517,36 @@ class SpideyUtils(commands.Cog):
         view = ConfirmSpyAssignView(self, country, target, operation, op_data, params)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-    import shutil
+    @app_commands.command(
+        name="reset_all_slots",
+        description="Reset research slots for every country back to the default."
+    )
+    async def reset_all_slots(self, interaction: discord.Interaction):
+        updates = []
+        for country, static_country in self.static_data["countries"].items():
+            default = static_country["research"]["research_slots"]
+            current = (
+                self.dynamic_data
+                    .get("countries", {})
+                    .get(country, {})
+                    .get("research", {})
+                    .get("research_slots", 0)
+            )
+            delta = default - current
+            if delta:
+                await self.save_delta(
+                    dict_path=["countries", country, "research", "research_slots"],
+                    int_delta=delta
+                )
+                updates.append(f"• {country}: {current} → {default}")
+
+        if not updates:
+            msg = "🔄 All research slots were already at their default values."
+        else:
+            msg = "✅ Research slots reset for:\n" + "\n".join(updates)
+
+        await interaction.response.send_message(msg, ephemeral=True)
+
 
 
     @commands.command(name="restore_modifiers")
