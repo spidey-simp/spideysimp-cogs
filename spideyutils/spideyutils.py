@@ -13,6 +13,7 @@ import math
 from typing import Literal
 from discord.app_commands import Choice
 import copy
+import shutil
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -2516,15 +2517,25 @@ class SpideyUtils(commands.Cog):
         view = ConfirmSpyAssignView(self, country, target, operation, op_data, params)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-    @commands.command(name="reset_modifiers")
+    import shutil
+
+
+    @commands.command(name="restore_modifiers")
     @commands.is_owner()
-    async def reset_modifiers(self, ctx):
-        # delete the file if it exists
-        if os.path.exists(dynamic_path):
-            os.remove(dynamic_path)
-        # reload to regenerate dynamic_data from scratch
-        self.load_data()
-        await ctx.send("✅ cold_war_modifiers.json has been reset to a clean state.")
+    async def restore_modifiers(self, ctx):
+        """
+        Wipe out dynamic state and restore the 
+        version-controlled template file back to active.
+        """
+        template = os.path.join(BASE_DIR, "cold_war_modifiers.default.json")
+        try:
+            shutil.copy(template, dynamic_path)
+            # re-load into memory
+            self.load_data()
+            await ctx.send("✅ `cold_war_modifiers.json` has been restored from the template.")
+        except Exception as e:
+            await ctx.send(f"❌ Failed to restore modifiers: {e}")
+
 
 
     @app_commands.command(name="spy_hq", description="View your espionage headquarters and operational status.")
