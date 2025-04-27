@@ -2178,6 +2178,21 @@ class SpideyUtils(commands.Cog):
         embed.set_footer(text="Use /cast_vote to cast your ballot.")
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(name="country_view", description="See all countries and their players")
+    async def country_view(self, interaction: Interaction):
+        countries = self.cold_war_data["countries"]
+        embed = Embed(
+            title="🌐 Cold War Countries & Players",
+            description="Click a name to DM the player.",
+            color=discord.Color.blurple()
+        )
+        for name, data in countries.items():
+            pid = data.get("player_id")
+            mention = f"<@{pid}>" if pid else "—"
+            embed.add_field(name=name, value=mention, inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 
     
     def redact_paragraph_weighted(self, text, knowledge):
