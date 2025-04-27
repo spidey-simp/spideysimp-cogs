@@ -544,6 +544,16 @@ class SpideyUtils(commands.Cog):
             json.dump(self.dynamic_data, f, indent=2)
 
 
+    rp = app_commands.Group(name="rp", description="Cold War RP commands")
+    research = app_commands.Group(name="research", description="All your research commands", parent=rp)
+    industry = app_commands.Group(name="industry", description="Factory & production commands", parent=rp)
+    projects = app_commands.Group(name="projects", description="National project commands", parent=rp)
+    diplomacy = app_commands.Group(name="diplomacy", description="Diplomatic actions", parent=rp)
+    espionage = app_commands.Group(name="espionage", description="Spy network operations", parent=rp)
+    history = app_commands.Group(name="history", description="The global history of the RP.", parent=rp)
+    un = app_commands.Group(name="un", description="Commands to interact with the UN", parent=rp)
+    utils = app_commands.Group(name="utils", description="Commands designed to make the rp easier", parent=rp)
+
 
     
     async def cog_unload(self):
@@ -800,7 +810,7 @@ class SpideyUtils(commands.Cog):
                 if current in yr
             ][:25]
 
-    @app_commands.command(name="view_history", description="View historical events for a specific country or globally.")
+    @history.command(name="view", description="View historical events for a specific country or globally.")
     @app_commands.describe(country="Optional country name to filter history.", global_view="Set to true to view global history.", year="Filter by a specific year")
     @app_commands.autocomplete(year=autocomplete_year)
     async def view_history(self, interaction: discord.Interaction, country: str = None, global_view: bool = False, year: str = None):
@@ -1072,9 +1082,9 @@ class SpideyUtils(commands.Cog):
             for type in FACTORY_TYPES
         ][:25]
     
-    @app_commands.command(
-        name="set_factory",
-        description="Allocate civilian factories by percentage or absolute number."
+    @industry.command(
+        name="assign",
+        description="Allocate factories by percentage or absolute number."
     )
     @app_commands.describe(
         category="Which factory slot to set",
@@ -1194,7 +1204,7 @@ class SpideyUtils(commands.Cog):
 
 
         
-    @app_commands.command(name="view_factories", description="View your nation's factory assignments and stockpiles.")
+    @industry.command(name="view", description="View your nation's factory assignments and stockpiles.")
     @app_commands.autocomplete(country=autocomplete_my_country)
     async def view_factories(self, interaction: discord.Interaction, country: str = None):
         """
@@ -1236,7 +1246,7 @@ class SpideyUtils(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
-    @app_commands.command(name="research_tech", description="Begin researching a tech.")
+    @research.command(name="tech", description="Begin researching a tech.")
     @app_commands.autocomplete(country=autocomplete_my_country, branch=autocomplete_branch, tech_name=autocomplete_available_techs)
     async def research_tech(self, interaction: discord.Interaction, branch: str, tech_name: str, country: str = None, slot: int = None):
         await interaction.response.defer(thinking=True)
@@ -1339,7 +1349,7 @@ class SpideyUtils(commands.Cog):
 
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
     
-    @app_commands.command(name="view_slots", description="View which techs your country is currently researching.")
+    @research.command(name="slots", description="View which techs your country is currently researching.")
     @app_commands.autocomplete(country=autocomplete_my_country)
     async def view_slots(self, interaction: discord.Interaction, country: str = None):
         await interaction.response.defer(thinking=True)
@@ -1394,7 +1404,7 @@ class SpideyUtils(commands.Cog):
 
 
 
-    @app_commands.command(name="alternate_country", description="Switch which of your countries is active.")
+    @utils.command(name="alternate_country", description="Switch which of your countries is active.")
     @app_commands.autocomplete(country=autocomplete_my_country)
     async def alternate_country(self, interaction: discord.Interaction, country: str):
         if country not in self.cold_war_data.get("countries", {}):
@@ -1402,7 +1412,7 @@ class SpideyUtils(commands.Cog):
         self.alternate_country_dict[str(interaction.user.id)] = country
         await interaction.response.send_message(f"You are now viewing the game as **{country}**.", ephemeral=True)
 
-    @app_commands.command(name="view_tech", description="View the Cold War RP tech tree.")
+    @research.command(name="tree", description="View the Cold War RP tech tree.")
     @app_commands.autocomplete(branch=autocomplete_branch, sub_branch=autocomplete_sub_branch)
     async def view_tech(self, interaction: discord.Interaction, branch: str = None, sub_branch: str = None):
         await interaction.response.defer(thinking=True)
@@ -1535,7 +1545,7 @@ class SpideyUtils(commands.Cog):
         ][:25]
 
 
-    @app_commands.command(name="start_project", description="Begin a high-level national project like nuclear weapons or space exploration.")
+    @projects.command(name="start", description="Begin a high-level national project like nuclear weapons or space exploration.")
     @app_commands.autocomplete(country=autocomplete_my_country, project_name=autocomplete_available_projects)
     async def start_project(self, interaction: discord.Interaction, project_name: str, country: str = None):
         await interaction.response.defer(thinking=True)
@@ -1601,7 +1611,7 @@ class SpideyUtils(commands.Cog):
 
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-    @app_commands.command(name="view_projects", description="View the status of your nation's strategic development projects.")
+    @projects.command(name="view", description="View the status of your nation's strategic development projects.")
     @app_commands.autocomplete(country=autocomplete_my_country)
     async def view_projects(self, interaction: discord.Interaction, country: str = None):
         await interaction.response.defer(thinking=True)
@@ -1689,7 +1699,7 @@ class SpideyUtils(commands.Cog):
             if c not in {first, second} and current.lower() in c.lower()
         ][:25]
 
-    @app_commands.command(
+    @un.command(
         name="vote_sc",
         description="Vote for up to 3 non‑permanent Security Council seats"
     )
@@ -1757,7 +1767,7 @@ class SpideyUtils(commands.Cog):
         )
         await interaction.response.send_message(embed=e, ephemeral=True)
 
-    @app_commands.command(
+    @un.command(
         name="nominate_sg",
         description="Nominate a UN member for Secretary‑General."
     )
@@ -1810,7 +1820,7 @@ class SpideyUtils(commands.Cog):
         )
     
 
-    @app_commands.command(
+    @un.command(
         name="view_sg_noms",
         description="See current Secretary‑General nominations."
     )
@@ -1844,7 +1854,7 @@ class SpideyUtils(commands.Cog):
 
 
 
-    @app_commands.command(
+    @un.command(
         name="view_vote",
         description="See which UN members have already voted in a given UN election."
     )
@@ -1895,8 +1905,8 @@ class SpideyUtils(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(
-        name="view_current_un_results",
+    @un.command(
+        name="view_current_results",
         description="Show all current UN vote results."
     )
     async def view_current_un_results(self, interaction: discord.Interaction):
@@ -1978,7 +1988,7 @@ class SpideyUtils(commands.Cog):
 
 
     
-    @app_commands.command(name="un_membership", description="Show all the UN members. Though it's kind of obvious.")
+    @un.command(name="membership", description="Show all the UN members. Though it's kind of obvious.")
     async def un_membership(self, interaction: Interaction):
         un_dict = self.cold_war_data.get("un", {})
         secretary_general = un_dict.get("secretary_general", "Vacant")
@@ -2019,7 +2029,7 @@ class SpideyUtils(commands.Cog):
             if current.lower() in o.lower()
         ][:25]
 
-    @app_commands.command(
+    @un.command(
         name="cast_vote",
         description="Cast your ballot in an ongoing vote (Y/N/A or RCV)."
     )
@@ -2108,7 +2118,7 @@ class SpideyUtils(commands.Cog):
             f"✅ {country}’s vote recorded: `{casts[country]}`", ephemeral=True
         )
 
-    @app_commands.command(
+    @un.command(
         name="start_vote",
         description="Launch a new vote—either a simple Y/N/A poll or an RCV among current SG nominees."
     )
@@ -2178,7 +2188,7 @@ class SpideyUtils(commands.Cog):
         embed.set_footer(text="Use /cast_vote to cast your ballot.")
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="country_view", description="See all countries and their players")
+    @diplomacy.command(name="country_view", description="See all countries and their players")
     async def country_view(self, interaction: Interaction):
         countries = self.cold_war_data["countries"]
         embed = Embed(
@@ -2190,7 +2200,7 @@ class SpideyUtils(commands.Cog):
             pid = data.get("player_id")
             mention = f"<@{pid}>" if pid else "—"
             embed.add_field(name=name, value=mention, inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
 
 
@@ -2308,7 +2318,7 @@ class SpideyUtils(commands.Cog):
         else:
             return f"{round_mil(low):.1f}-{round_mil(high):.1f} million"
 
-    @app_commands.command(name="view_country_info_detailed", description="View detailed info for a Cold War RP country.")
+    @diplomacy.command(name="country_info_detailed", description="View detailed info for a Cold War RP country.")
     @app_commands.autocomplete(country= autocomplete_country)
     async def view_country_info_detailed(self, interaction: discord.Interaction, country: str):
         await interaction.response.defer(thinking=True, ephemeral=True)
@@ -2463,7 +2473,7 @@ class SpideyUtils(commands.Cog):
         ][:25]
     
 
-    @app_commands.command(name="assign_spy", description="Assign a spy operation to a target country.")
+    @espionage.command(name="assign", description="Assign a spy operation to a target country.")
     @app_commands.describe(
         country="Your country",
         target="Target country to spy on",
@@ -2554,36 +2564,6 @@ class SpideyUtils(commands.Cog):
         view = ConfirmSpyAssignView(self, country, target, operation, op_data, params)
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
 
-    @app_commands.command(
-        name="reset_all_slots",
-        description="Reset research slots for every country back to the default."
-    )
-    async def reset_all_slots(self, interaction: discord.Interaction):
-        updates = []
-        for country, static_country in self.static_data["countries"].items():
-            default = static_country["research"]["research_slots"]
-            current = (
-                self.dynamic_data
-                    .get("countries", {})
-                    .get(country, {})
-                    .get("research", {})
-                    .get("research_slots", 0)
-            )
-            delta = default - current
-            if delta:
-                await self.save_delta(
-                    dict_path=["countries", country, "research", "research_slots"],
-                    int_delta=delta
-                )
-                updates.append(f"• {country}: {current} → {default}")
-
-        if not updates:
-            msg = "🔄 All research slots were already at their default values."
-        else:
-            msg = "✅ Research slots reset for:\n" + "\n".join(updates)
-
-        await interaction.response.send_message(msg, ephemeral=True)
-
 
 
     @commands.command(name="restore_modifiers")
@@ -2604,7 +2584,7 @@ class SpideyUtils(commands.Cog):
 
 
 
-    @app_commands.command(name="spy_hq", description="View your espionage headquarters and operational status.")
+    @espionage.command(name="hq", description="View your espionage headquarters and operational status.")
     @app_commands.autocomplete(country=autocomplete_my_country)
     async def spy_hq(self, interaction: discord.Interaction, country: str = None):
         await interaction.response.defer(ephemeral=True)
@@ -2720,7 +2700,7 @@ class SpideyUtils(commands.Cog):
 
 
     
-    @app_commands.command(name="view_country_info", description="View basic public information about a Cold War RP country.")
+    @diplomacy.command(name="country_info", description="View basic public information about a Cold War RP country.")
     @app_commands.autocomplete(country=autocomplete_country)
     async def view_country_info(self, interaction: discord.Interaction, country: str):
         await interaction.response.defer(thinking=True,ephemeral=False)
@@ -2789,7 +2769,7 @@ class SpideyUtils(commands.Cog):
 
 
     
-    @app_commands.command(name="setturn", description="Set the current in-game turn, year, and day.")
+    @app_commands.command(name="set_turn", description="Set the current in-game turn, year, and day.")
     @app_commands.describe(turn="The current turn number", year="The in-game year", day="The sub-division of the year (1–2 or 1–3)")
     async def setturn(self, interaction: discord.Interaction, turn: int, year: str, day: int):
         if not interaction.user.guild_permissions.administrator:
@@ -2810,39 +2790,6 @@ class SpideyUtils(commands.Cog):
         ephemeral=True
         )
 
-    @app_commands.command(name="reset_data", description="(Owner only) Reset turn/year and scrub stray {target} entry from Spain.")
-    @commands.is_owner()
-    async def reset_data(self, interaction: Interaction):
-        """Resets turn to 0, year to 1952, day to 1, and removes '{target}' from Spain's spy_networks."""
-        # load the existing dynamic file
-        try:
-            with open(dynamic_path, "r") as f:
-                dyn = json.load(f)
-        except FileNotFoundError:
-            return await interaction.response.send_message("❌ No modifiers file found.", ephemeral=True)
-
-        # reset turn counters
-        dyn["turn"] = 0
-        dyn["current_year"] = 1952
-        dyn["day"] = 1
-
-        # remove the bad key under Spain
-        spain = dyn.get("countries", {}).get("Kingdom of Spain", {})
-        spy_nets = spain.get("espionage", {}).get("spy_networks", {})
-        if "{target}" in spy_nets:
-            spy_nets.pop("{target}")
-
-        # write it back out
-        with open(dynamic_path, "w") as f:
-            json.dump(dyn, f, indent=2)
-
-        # reload into memory
-        self.load_data()
-
-        await interaction.response.send_message(
-            "✅ Data reset: turn=0, year=1952, day=1, stray `{target}` removed.",
-            ephemeral=True
-        )
 
 
 
@@ -2996,7 +2943,7 @@ class SpideyUtils(commands.Cog):
     
     
     
-    @app_commands.command(name="viewrequests", description="View all roll requests categorized by status.")
+    @utils.command(name="roll_requests", description="View all roll requests categorized by status.")
     async def viewrequests(self, interaction: discord.Interaction):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
