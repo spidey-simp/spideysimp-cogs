@@ -39,16 +39,25 @@ FACTORY_TYPES = [
 BACKUP_CHANNEL_ID = 1357944150502412288
 
 
-def normalize_keys(obj):
+def normalize_keys_except_countries(obj, in_countries=False):
     if isinstance(obj, dict):
         new = {}
         for k, v in obj.items():
-            nk = re.sub(r'\W+', '_', k.strip()).lower()
-            new[nk] = normalize_keys(v)
+            if not in_countries and k == "COUNTRIES":
+                # copy raw country‐block without normalizing the country‐names
+                new_countries = {}
+                for country_name, country_data in v.items():
+                    # but still normalize the **inside** of each country node:
+                    new_countries[country_name] = normalize_keys_except_countries(country_data, in_countries=True)
+                new["countries"] = new_countries
+            else:
+                nk = re.sub(r'\W+', '_', k.strip()).lower()
+                new[nk] = normalize_keys_except_countries(v, in_countries=in_countries)
         return new
     if isinstance(obj, list):
-        return [normalize_keys(i) for i in obj]
+        return [normalize_keys_except_countries(i, in_countries=in_countries) for i in obj]
     return obj
+
 
 def deep_merge(base: dict, overlay: dict) -> dict:
     """
@@ -504,13 +513,13 @@ class SpideyUtils(commands.Cog):
          # 1) load the static + dynamic JSON
             with open(static_path, "r") as f:
                 raw_static = json.load(f)
-            self.static_data = normalize_keys(raw_static)
+            self.static_data = normalize_keys_except_countries(raw_static)
             
             
             if os.path.exists(dynamic_path):
                 with open(dynamic_path, "r") as f:
                     raw_dynamic = json.load(f)
-                self.dynamic_data = normalize_keys(raw_dynamic)
+                self.dynamic_data = normalize_keys_except_countries(raw_dynamic)
             else:
                 self.dynamic_data = {
                     "turn": 0,
