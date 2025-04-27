@@ -39,26 +39,6 @@ FACTORY_TYPES = [
 BACKUP_CHANNEL_ID = 1357944150502412288
 
 
-def normalize_keys_except_countries(obj, in_countries=False):
-    if isinstance(obj, dict):
-        new = {}
-        for k, v in obj.items():
-            if not in_countries and k == "countries":
-                # copy raw country‐block without normalizing the country‐names
-                new_countries = {}
-                for country_name, country_data in v.items():
-                    # but still normalize the **inside** of each country node:
-                    new_countries[country_name] = normalize_keys_except_countries(country_data, in_countries=True)
-                new["countries"] = new_countries
-            else:
-                nk = re.sub(r'\W+', '_', k.strip()).lower()
-                new[nk] = normalize_keys_except_countries(v, in_countries=in_countries)
-        return new
-    if isinstance(obj, list):
-        return [normalize_keys_except_countries(i, in_countries=in_countries) for i in obj]
-    return obj
-
-
 def deep_merge(base: dict, overlay: dict) -> dict:
     """
     Overlay `overlay` onto `base` with “additive” merge semantics:
@@ -600,7 +580,9 @@ class SpideyUtils(commands.Cog):
         elif bool_val is not None:
             node[leaf] = bool_val
         elif dict_delta is not None:
-            existing = node.get(leaf, {})
+            existing = node.get(leaf)
+            if not isinstance(existing, dict):
+                existing = {}
             node[leaf] = deep_merge(existing, dict_delta)
         elif list_delta is not None:
             existing = node.get(leaf, [])
