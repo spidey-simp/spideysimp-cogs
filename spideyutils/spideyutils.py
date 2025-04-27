@@ -43,7 +43,7 @@ def normalize_keys_except_countries(obj, in_countries=False):
     if isinstance(obj, dict):
         new = {}
         for k, v in obj.items():
-            if not in_countries and k == "COUNTRIES":
+            if not in_countries and k == "countries":
                 # copy raw country‐block without normalizing the country‐names
                 new_countries = {}
                 for country_name, country_data in v.items():
@@ -107,6 +107,33 @@ async def backup_dynamic_json(self):
 
     except Exception as e:
         print(f"Failed to backup dynamic JSON: {e}")
+
+def normalize_static(obj, in_countries=False):
+    """
+    - At the very top level, when we see the raw "COUNTRIES" dict, we
+      copy its keys verbatim into lowercase "countries" without slugifying them.
+    - Everywhere else, we slugify keys as before.
+    """
+    if isinstance(obj, dict):
+        new = {}
+        for k, v in obj.items():
+            # catch the raw COUNTRIES block, before it gets slugified
+            if not in_countries and k.lower() == "countries":
+                # copy raw country-names → data, but normalize _inside_ each country
+                raw_c = {}
+                for country_name, country_data in v.items():
+                    raw_c[country_name] = normalize_static(country_data, in_countries=True)
+                new["countries"] = raw_c
+            else:
+                # slugify everything else
+                nk = re.sub(r'\W+', '_', k.strip()).lower()
+                new[nk] = normalize_static(v, in_countries=in_countries)
+        return new
+
+    if isinstance(obj, list):
+        return [normalize_static(i, in_countries=in_countries) for i in obj]
+
+    return obj
 
 
 class ConfirmSpyAssignView(discord.ui.View):
@@ -513,7 +540,7 @@ class SpideyUtils(commands.Cog):
          # 1) load the static + dynamic JSON
             with open(static_path, "r") as f:
                 raw_static = json.load(f)
-            self.static_data = normalize_keys_except_countries(raw_static)
+            self.static_data = normalize_static(raw_static)
             
             
             if os.path.exists(dynamic_path):
