@@ -546,7 +546,7 @@ class SpideyUtils(commands.Cog):
             if os.path.exists(dynamic_path):
                 with open(dynamic_path, "r") as f:
                     raw_dynamic = json.load(f)
-                self.dynamic_data = normalize_keys_except_countries(raw_dynamic)
+                self.dynamic_data = normalize_static(raw_dynamic)
             else:
                 self.dynamic_data = {
                     "turn": 0,
