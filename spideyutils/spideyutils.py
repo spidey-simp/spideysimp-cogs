@@ -581,9 +581,27 @@ class SpideyUtils(commands.Cog):
             node[leaf] = bool_val
         elif dict_delta is not None:
             existing = node.get(leaf)
+            # we only ever deep-merge dicts; non-dict existing values get replaced
             if not isinstance(existing, dict):
                 existing = {}
-            node[leaf] = deep_merge(existing, dict_delta)
+
+            for k, v in dict_delta.items():
+                if isinstance(v, (int, float)):
+                    # override numeric keys rather than add
+                    existing[k] = v
+                elif k in existing and isinstance(existing[k], dict) and isinstance(v, dict):
+                    # recurse on sub-dicts
+                    existing[k] = deep_merge(existing[k], v)
+                elif isinstance(v, list) and isinstance(existing.get(k), list):
+                    # union-merge lists
+                    for item in v:
+                        if item not in existing[k]:
+                            existing[k].append(item)
+                else:
+                    # strings, bools, new keys, or mismatched types → override
+                    existing[k] = v
+
+            node[leaf] = existing
         elif list_delta is not None:
             existing = node.get(leaf, [])
             # union-merge
