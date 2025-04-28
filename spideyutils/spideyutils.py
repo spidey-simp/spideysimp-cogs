@@ -3528,7 +3528,7 @@ class SpideyUtils(commands.Cog):
     @app_commands.describe(alliance="Optional alliance name to view summary or leave blank for all.")
     @app_commands.autocomplete(alliance=autocomplete_alliance)
     async def view(self, interaction: Interaction, alliance: str = None):
-        alliances = self.cold_war_data.get("ALLIANCES", {})
+        alliances = self.cold_war_data.get("diplomacy", {}).get("alliances")
         # Show all alliances
         if alliance is None:
             embed = Embed(title="🌐 Alliances", color=discord.Color.blurple())
