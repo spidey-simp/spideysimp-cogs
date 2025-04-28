@@ -3478,39 +3478,61 @@ class SpideyUtils(commands.Cog):
         await interaction.response.send_message(msg, ephemeral=True)
 
 
-    @alliances.command(
-        name="view",
-        description="See all alliances, their leaders, and members"
-    )
-    async def alliance_view(self, interaction: discord.Interaction):
-        """List every alliance, show who leads it and who’s in it."""
-        dyn = self.dynamic_data.get("diplomacy", {}).get("alliances", {})
-        if not dyn:
-            return await interaction.response.send_message(
-                "❌ No alliances exist yet.", ephemeral=True
+    @alliances.command(name="view", description="View all alliances or summary for one")
+    @app_commands.describe(alliance="Optional alliance name to view summary or leave blank for all.")
+    async def view(self, interaction: Interaction, alliance: str = None):
+        alliances = self.cold_war_data.get("ALLIANCES", {})
+        # Show all alliances
+        if alliance is None:
+            embed = Embed(title="🌐 Alliances", color=discord.Color.blurple())
+            if not alliances:
+                embed.description = "No alliances currently exist."
+            else:
+                for name, info in alliances.items():
+                    leader = info.get("leader", "Unknown")
+                    members = info.get("members", [])
+                    count = len(members)
+                    year = info.get("created_year", "Unknown")
+                    embed.add_field(
+                        name=name,
+                        value=f"Leader: **{leader}** • Members: **{count}** • Founded: **{year}**",
+                        inline=False
+                    )
+            await interaction.response.send_message(embed=embed)
+        # Show detailed info for one alliance
+        else:
+            info = alliances.get(alliance)
+            if not info:
+                return await interaction.response.send_message(
+                    f"❌ Alliance `{alliance}` not found.", ephemeral=True
+                )
+            embed = Embed(
+                title=f"ℹ️ Alliance: {alliance}",
+                color=discord.Color.green()
             )
-
-        embed = Embed(
-            title="🤝 Alliances",
-            description="Who leads each, who’s in it, and who’s been invited.",
-            color=discord.Color.blurple()
-        )
-        for name, info in dyn.items():
-            leader = info.get("leader")
-            year = info.get("created_year", "unknown")
-            members = ", ".join(info.get("members", [])) or "*none*"
-            invites = ", ".join(info.get("invitations", {}).keys()) or "*none*"
+            embed.add_field(name="Leader", value=info.get("leader", "—"), inline=True)
+            embed.add_field(name="Founded", value=info.get("created_year", "—"), inline=True)
+            # Terms & Conditions
             embed.add_field(
-                name=f"**{name} ({year})**",
-                value=(
-                    f"**Leader:** {leader}\n"
-                    f"**Members:** {members}\n"
-                    f"**Invited:** {invites}\n"
-                ),
+                name="Terms & Conditions",
+                value=info.get("terms", "_No terms set._"),
                 inline=False
             )
+            # Members
+            members = info.get("members", [])
+            embed.add_field(
+                name=f"Members ({len(members)})",
+                value=", ".join(members) or "None",
+                inline=False
+            )
+            # Pending applications and invites counts
+            apps = info.get("applications", {})
+            invites = info.get("invitations", {})
+            embed.add_field(name="Pending Applications", value=str(len(apps)), inline=True)
+            embed.add_field(name="Outstanding Invites", value=str(len(invites)), inline=True)
 
-        await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+
     
     @alliances.command(name="apply", description="Apply to join a multi-nation alliance")
     @app_commands.describe(
