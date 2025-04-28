@@ -4010,6 +4010,18 @@ class SpideyUtils(commands.Cog):
         poll = dyn[alliance].get("polls", {}).get(poll_id)
         if not poll:
             return await interaction.response.send_message("❌ Poll ID not found.", ephemeral=True)
+        
+        user = interaction.user
+        user_country = self.alternate_country_dict.get(str(user.id))
+        if not user_country:
+            for country, data in self.cold_war_data["countries"].items():
+                if data.get("player_id") == user.id:
+                    user_country = country
+                    break
+
+        # only alliance members may vote
+        if not user_country or user_country not in dyn[alliance]["members"]:
+            return await interaction.response.send_message("❌ You’re not in that alliance!", ephemeral=True)
 
         votes = poll.get("votes", {})
         tally = Counter(votes.values())
@@ -4024,4 +4036,4 @@ class SpideyUtils(commands.Cog):
             embed.add_field(name=option, value=f"{count} vote{'s' if count!=1 else ''}", inline=True)
 
         embed.set_footer(text=f"Poll ID: {poll_id} • {len(votes)}/{len(poll['members'])} voted")
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
