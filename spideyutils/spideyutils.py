@@ -707,6 +707,7 @@ class SpideyUtils(commands.Cog):
     history = app_commands.Group(name="history", description="The global history of the RP.", parent=rp)
     un = app_commands.Group(name="un", description="Commands to interact with the UN", parent=rp)
     utils = app_commands.Group(name="utils", description="Commands designed to make the rp easier", parent=rp)
+    alliances = app_commands.Group(name="alliances", description="Manage multi-nation alliances", parent=diplomacy)
 
 
     
@@ -3398,11 +3399,10 @@ class SpideyUtils(commands.Cog):
             embed.add_field(name=typ.replace("_"," ").title(), value="\n".join(lines), inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
-    @diplomacy.group(name="alliance", description="Manage multi-nation alliances")
-    class AllianceGroup:
+   
 
-        @app_commands.comamnd(name="create", description="Found a new alliance/coalition")
-        async def create(self, interaction: Interaction):
+    @alliances.comamnd(name="create", description="Found a new alliance/coalition")
+    async def create(self, interaction: Interaction):
             you = interaction.user
             your_country = None
             for c, d in self.cold_war_data["countries"].items():
