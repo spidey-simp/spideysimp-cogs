@@ -525,17 +525,6 @@ class AllianceCreateModal(discord.ui.Modal, title="Create New Alliance"):
         style=discord.TextStyle.paragraph,
         placeholder="Describe the purposes, rules, policies, etc."
     )
-    invitation_message = discord.ui.TextInput(
-        label="Default invite message (optional)",
-        required=False,
-        style=discord.TextStyle.paragraph,
-    )
-    formation_year = discord.ui.TextInput(
-        label="Formation Year",
-        required=False,
-        placeholder="Self explanatory.",
-        style=discord.TextStyle.short
-    )
 
     def __init__(self, cog: "SpideyUtils", creator: str):
         super().__init__()
@@ -554,11 +543,7 @@ class AllianceCreateModal(discord.ui.Modal, title="Create New Alliance"):
             "invitations": {},
         }
 
-        year_str = self.formation_year.value.strip()
-        if year_str.isdigit():
-            created_year = int(year_str)
-        else:
-            created_year = self.cog.cold_war_data["current_year"]
+        created_year = self.cog.cold_war_data["current_year"]
         dyn[key]["created_year"] = created_year
 
 
@@ -569,67 +554,7 @@ class AllianceCreateModal(discord.ui.Modal, title="Create New Alliance"):
             f"✅ **{key}** Alliance created in the year {str(created_year)}!",
             ephemeral=True
         )
-    
-class AllianceInviteView(discord.ui.View):
-    def __init__(self, cog: "SpideyUtils", alliance_name: str, default_msg: str):
-        super().__init__(timeout=60)
-        self.cog = cog
-        self.alliance = alliance_name
-        self.default_msg = default_msg
 
-        # Build one SelectOption per country except the leader'
-        leader = cog.dynamic_data["diplomacy"]["alliances"][alliance_name]["leader"]
-        options = [
-            SelectOption(label=name, value=name)
-            for name in cog.cold_war_data["countries"]
-            if name != leader
-        ]
-
-        if options:
-            select= discord.ui.Select(
-                    placeholder="Select countries to invite…",
-                    min_values=0,
-                    max_values=len(options),
-                    options=options
-                )
-            self.add_item(select)
-        else:
-            pass
-
-    @discord.ui.select()
-    async def select_callback(self, select: discord.ui.Select, interaction: Interaction):
-        dyn = self.cog.dynamic_data["diplomacy"]["alliances"][self.alliance]["invitations"]
-        successes, errors = [], []
-
-        for country in select.values:
-            if country not in self.cog.cold_war_data["countries"]:
-                errors.append(country)
-                continue
-            dyn[country] = {
-                "message": self.default_msg,
-                "timestamp": interaction.created_at.isoformat()
-            }
-            try:
-                pid = self.cog.cold_war_data["countries"][country]["player_id"]
-                user = await self.cog.bot.fetch_user(pid)
-                dm = (
-                    f"🔔 You’re invited to **{self.alliance}** by **{self.cog.dynamic_data['diplomacy']['alliances'][self.alliance]['leader']}**!\n\n"
-                    f"{self.default_msg}\n\n"
-                    f"> {self.cog.dynamic_data['diplomacy']['alliances'][self.alliance]['terms']}"
-                )
-                await user.send(dm)
-                successes.append(country)
-            except:
-                errors.append(country)
-
-        self.cog.save_data()
-        await interaction.response.edit_message(
-            content=(
-                f"Invites sent to: {', '.join(successes) or 'None'}\n"
-                f"Errors: {', '.join(errors) or 'None'}"
-            ),
-            view=None
-        )
 
 
 class SpideyUtils(commands.Cog):
@@ -3426,22 +3351,30 @@ class SpideyUtils(commands.Cog):
         ][:25]
 
     @alliances.command(
-        name="invite",
-        description="Invite countries to an existing alliance"
+    name="invite",
+    description="Invite a country to an existing alliance"
     )
-    @app_commands.describe(alliance="Which alliance to invite to")
-    @app_commands.autocomplete(alliance=autocomplete_alliance)
+    @app_commands.describe(
+        alliance="Which alliance to invite to",
+        country="Which country to invite"
+    )
+    @app_commands.autocomplete(
+        alliance=autocomplete_alliance,
+        country=autocomplete_country
+    )
     async def invite(
         self,
         interaction: Interaction,
-        alliance: str
+        alliance: str,
+        country: str
     ):
+        # 1) fetch the alliance record
         dyn = self.dynamic_data.setdefault("diplomacy", {}).setdefault("alliances", {})
         data = dyn.get(alliance)
         if not data:
             return await interaction.response.send_message("❌ Alliance not found.", ephemeral=True)
 
-        # resolve which country this user represents
+        # 2) resolve invoking user's country & permission check
         your_country = next(
             (c for c,d in self.cold_war_data["countries"].items()
             if d.get("player_id") == interaction.user.id),
@@ -3452,8 +3385,125 @@ class SpideyUtils(commands.Cog):
                 "❌ Only the alliance leader can send invites.", ephemeral=True
             )
 
-        # they passed the permission check, so show the select
-        view = AllianceInviteView(self, alliance, default_msg="")
-        await interaction.response.send_message(
-            f"🔔 Who should join **{alliance}**?", view=view, ephemeral=True
+        # 3) make sure target exists and isn’t already a member/invited
+        if country not in self.cold_war_data["countries"]:
+            return await interaction.response.send_message("❌ Country not found.", ephemeral=True)
+        if country in data["members"]:
+            return await interaction.response.send_message(f"❌ {country} is already in the alliance.", ephemeral=True)
+        invites = data.setdefault("invitations", {})
+        if country in invites:
+            return await interaction.response.send_message(f"❌ {country} has already been invited.", ephemeral=True)
+
+        # 4) record the invitation
+        invites[country] = {
+            "message": f"{your_country} invites you to join **{alliance}**.",
+            "timestamp": interaction.created_at.isoformat()
+        }
+        self.save_data()
+
+        # 5) DM the country’s player
+        pid = self.cold_war_data["countries"][country]["player_id"]
+        user = await self.bot.fetch_user(pid)
+        await user.send(
+            f"🔔 **{your_country}** has invited you to join the alliance **{alliance}**!\n\n"
+            f"Terms: {data['terms']}\n"
+            f"Use `/rp alliances respond {alliance} yes` to accept or `... no` to decline."
         )
+
+        await interaction.response.send_message(
+            f"✅ Invitation sent to **{country}**.", ephemeral=True
+        )
+
+
+    @alliances.command(
+        name="respond",
+        description="Accept or decline an invitation to an alliance"
+    )
+    @app_commands.describe(
+        alliance="Which alliance you’re responding to",
+        accept="yes to join, no to decline"
+    )
+    @app_commands.autocomplete(alliance=autocomplete_alliance)
+    async def alliance_respond(
+        self,
+        interaction: discord.Interaction,
+        alliance: str,
+        accept: Literal["yes", "no"]
+    ):
+        """Let the invited country accept or reject an alliance."""
+        your_country = None
+        for c, d in self.cold_war_data["countries"].items():
+            if d.get("player_id") == interaction.user.id:
+                your_country = c
+                break
+        if not your_country:
+            return await interaction.response.send_message(
+                "❌ Couldn't figure out your country.", ephemeral=True
+            )
+
+        dyn = self.dynamic_data.setdefault("diplomacy", {}).setdefault("alliances", {})
+        if alliance not in dyn:
+            return await interaction.response.send_message(
+                f"❌ Alliance **{alliance}** not found.", ephemeral=True
+            )
+
+        invites = dyn[alliance].setdefault("invitations", {})
+        if your_country not in invites:
+            return await interaction.response.send_message(
+                "❌ You have no pending invite to that alliance.", ephemeral=True
+            )
+
+        leader = dyn[alliance]["leader"]
+        # remove the invitation
+        del invites[your_country]
+        if accept == "yes":
+            # add to members
+            dyn[alliance].setdefault("members", []).append(your_country)
+            msg = f"✅ You’ve **joined** **{alliance}**!"
+            # notify leader
+            leader_id = self.cold_war_data["countries"][leader]["player_id"]
+            user = await self.bot.fetch_user(leader_id)
+            await user.send(f"🔔 **{your_country}** has **accepted** your invitation to **{alliance}**.")
+        else:
+            msg = f"❌ You’ve **declined** the invitation to **{alliance}**."
+            leader_id = self.cold_war_data["countries"][leader]["player_id"]
+            user = await self.bot.fetch_user(leader_id)
+            await user.send(f"🔔 **{your_country}** has **declined** your invitation to **{alliance}**.")
+
+        self.save_data()
+        await interaction.response.send_message(msg, ephemeral=True)
+
+
+    @alliances.command(
+        name="view",
+        description="See all alliances, their leaders, and members"
+    )
+    async def alliance_view(self, interaction: discord.Interaction):
+        """List every alliance, show who leads it and who’s in it."""
+        dyn = self.dynamic_data.get("diplomacy", {}).get("alliances", {})
+        if not dyn:
+            return await interaction.response.send_message(
+                "❌ No alliances exist yet.", ephemeral=True
+            )
+
+        embed = Embed(
+            title="🤝 Alliances",
+            description="Who leads each, who’s in it, and who’s been invited.",
+            color=discord.Color.blurple()
+        )
+        for name, info in dyn.items():
+            leader = info.get("leader")
+            year = info.get("created_year", "unknown")
+            members = ", ".join(info.get("members", [])) or "*none*"
+            invites = ", ".join(info.get("invitations", {}).keys()) or "*none*"
+            embed.add_field(
+                name=f"{name} ({year})",
+                value=(
+                    f"**Leader:** {leader}\n"
+                    f"**Members:** {members}\n"
+                    f"**Invited:** {invites}"
+                ),
+                inline=False
+            )
+
+        await interaction.response.send_message(embed=embed)
