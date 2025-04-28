@@ -3501,13 +3501,129 @@ class SpideyUtils(commands.Cog):
             members = ", ".join(info.get("members", [])) or "*none*"
             invites = ", ".join(info.get("invitations", {}).keys()) or "*none*"
             embed.add_field(
-                name=f"{name} ({year})",
+                name=f"**{name} ({year})**",
                 value=(
                     f"**Leader:** {leader}\n"
                     f"**Members:** {members}\n"
-                    f"**Invited:** {invites}"
+                    f"**Invited:** {invites}\n"
                 ),
                 inline=False
             )
 
         await interaction.response.send_message(embed=embed)
+    
+    @alliances.command(name="apply", description="Apply to join a multi-nation alliance")
+    @app_commands.describe(
+        alliance="Name of the alliance you want to join",
+        message="Optional cover letter to the alliance leader"
+    )
+    @app_commands.autocomplete(alliance=autocomplete_alliance)
+    async def apply(
+        self,
+        interaction: Interaction,
+        alliance: str,
+        message: str | None = None
+    ):
+        data = self.dynamic_data.setdefault("diplomacy", {}).setdefault("alliances", {})
+        alli = data.get(alliance)
+        if not alli:
+            return await interaction.response.send_message(
+                f"❌ Alliance **{alliance}** not found.", ephemeral=True
+            )
+
+        your_country = None
+        for c,d in self.cold_war_data["countries"].items():
+            if d.get("player_id") == interaction.user.id:
+                your_country = c
+                break
+
+        if your_country in alli["members"]:
+            return await interaction.response.send_message(
+                "❌ You’re already a member.", ephemeral=True
+            )
+        if your_country in alli["applications"]:
+            return await interaction.response.send_message(
+                "❌ You’ve already applied and are awaiting review.", ephemeral=True
+            )
+
+        # record the application
+        alli["applications"][your_country] = {
+            "message": message or "",
+            "timestamp": interaction.created_at.isoformat()
+        }
+        self.save_data()
+
+        # notify the leader
+        leader_id = self.cold_war_data["countries"][alli["leader"]]["player_id"]
+        leader = await self.bot.fetch_user(leader_id)
+        dm = (
+            f"🔔 **{your_country}** has applied to join **{alliance}**.\n"
+            + (f"> {message}" if message else "_No message provided._")
+        )
+        await leader.send(dm)
+
+        await interaction.response.send_message(
+            f"✅ Your application to **{alliance}** has been sent.", ephemeral=True
+        )
+    
+    async def autocomplete_alliance_member(
+        self,
+        interaction: discord.Interaction,
+        current: str
+    ):
+        # pull the alliance name they’ve already entered
+        alli_name = interaction.namespace.alliance
+        alli = self.dynamic_data.get("diplomacy", {}).get("alliances", {}).get(alli_name, {})
+        members = alli.get("members", [])
+        return [
+            app_commands.Choice(name=m, value=m)
+            for m in members
+            if current.lower() in m.lower()
+        ][:25]
+
+    
+    @alliances.command(name="kick", description="(Leader only) Remove a member from your alliance")
+    @app_commands.describe(
+        alliance="Name of the alliance",
+        member="Which current member to remove"
+    )
+    @app_commands.autocomplete(alliance=autocomplete_alliance, member=autocomplete_alliance_member)
+    async def kick(
+        self,
+        interaction: Interaction,
+        alliance: str,
+        member: str
+    ):
+        data = self.dynamic_data.get("diplomacy", {}).get("alliances", {})
+        alli = data.get(alliance)
+        if not alli:
+            return await interaction.response.send_message(
+                f"❌ Alliance **{alliance}** not found.", ephemeral=True
+            )
+
+        # only leader can kick
+        your_country = None
+        for c,d in self.cold_war_data["countries"].items():
+            if d.get("player_id") == interaction.user.id:
+                your_country = c; break
+
+        if alli["leader"] != your_country:
+            return await interaction.response.send_message(
+                "❌ Only the alliance leader can remove members.", ephemeral=True
+            )
+        if member not in alli["members"]:
+            return await interaction.response.send_message(
+                f"❌ **{member}** is not in **{alliance}**.", ephemeral=True
+            )
+
+        alli["members"].remove(member)
+        self.save_data()
+
+        # notify the kicked country
+        kicked_id = self.cold_war_data["countries"][member]["player_id"]
+        user = await self.bot.fetch_user(kicked_id)
+        await user.send(f"🔔 You have been **kicked** from alliance **{alliance}** by **{your_country}**.")
+
+        await interaction.response.send_message(
+            f"✅ **{member}** removed from **{alliance}**.", ephemeral=True
+        )
