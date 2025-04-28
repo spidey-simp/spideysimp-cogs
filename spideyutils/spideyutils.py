@@ -3627,3 +3627,199 @@ class SpideyUtils(commands.Cog):
         await interaction.response.send_message(
             f"✅ **{member}** removed from **{alliance}**.", ephemeral=True
         )
+
+
+    @alliances.command(name="leave", description="Leave an alliance you’re a member of")
+    @app_commands.describe(
+        alliance="Which alliance to leave"
+    )
+    @app_commands.autocomplete(
+        alliance=autocomplete_alliance
+    )
+    async def leave(
+        self,
+        interaction: Interaction,
+        alliance: str
+    ):
+        dyn = self.dynamic_data.setdefault("diplomacy", {}).setdefault("alliances", {})
+        alli = dyn.get(alliance)
+        if not alli:
+            return await interaction.response.send_message(f"❌ Alliance **{alliance}** not found.", ephemeral=True)
+
+        # find your country
+        your_country = next(
+            (c for c,d in self.cold_war_data["countries"].items()
+             if d.get("player_id") == interaction.user.id),
+            None
+        )
+        if your_country not in alli["members"]:
+            return await interaction.response.send_message(
+                f"❌ You’re not a member of **{alliance}**.", ephemeral=True
+            )
+
+        alli["members"].remove(your_country)
+        self.save_data()
+
+        # notify leader
+        leader_id = self.cold_war_data["countries"][alli["leader"]]["player_id"]
+        leader = await self.bot.fetch_user(leader_id)
+        await leader.send(f"🔔 **{your_country}** has **left** the alliance **{alliance}**.")
+
+        await interaction.response.send_message(
+            f"✅ You have left **{alliance}**.", ephemeral=True
+        )
+
+    # ─── Disband Alliance ───
+    @alliances.command(name="disband", description="(Leader only) Disband your alliance")
+    @app_commands.describe(
+        alliance="Which alliance to disband"
+    )
+    @app_commands.autocomplete(
+        alliance=autocomplete_alliance
+    )
+    async def disband(
+        self,
+        interaction: Interaction,
+        alliance: str
+    ):
+        dyn = self.dynamic_data.get("diplomacy", {}).get("alliances", {})
+        alli = dyn.get(alliance)
+        if not alli:
+            return await interaction.response.send_message(f"❌ Alliance **{alliance}** not found.", ephemeral=True)
+
+        # only leader can disband
+        your_country = next(
+            (c for c,d in self.cold_war_data["countries"].items()
+             if d.get("player_id") == interaction.user.id),
+            None
+        )
+        if alli["leader"] != your_country:
+            return await interaction.response.send_message(
+                "❌ Only the alliance leader can disband it.", ephemeral=True
+            )
+
+        members = list(alli["members"])
+        # remove it
+        del dyn[alliance]
+        self.save_data()
+
+        # notify all members
+        for m in members:
+            if m == your_country:
+                continue
+            pid = self.cold_war_data["countries"][m]["player_id"]
+            user = await self.bot.fetch_user(pid)
+            await user.send(f"🔔 **{alliance}** has been **disbanded** by **{your_country}**.")
+
+        await interaction.response.send_message(
+            f"✅ Alliance **{alliance}** has been disbanded.", ephemeral=True
+        )
+    
+    @alliances.command(name="message", description="Post a private message to your alliance")
+    @app_commands.describe(
+        alliance="Which alliance to post into",
+        content="Your message"
+    )
+    @app_commands.autocomplete(alliance=autocomplete_alliance)
+    async def alliance_message(
+        self,
+        interaction: Interaction,
+        alliance: str,
+        content: str
+    ):
+        # locate alliance record
+        dyn = self.dynamic_data.setdefault("diplomacy", {}).setdefault("alliances", {})
+        alli = dyn.get(alliance)
+        if not alli:
+            return await interaction.response.send_message(
+                f"❌ Alliance **{alliance}** not found.", ephemeral=True
+            )
+
+        # find sender country
+        sender = next(
+            (c for c,d in self.cold_war_data["countries"].items()
+             if d.get("player_id")==interaction.user.id),
+            None
+        )
+        if sender not in alli["members"]:
+            return await interaction.response.send_message(
+                f"❌ You’re not in **{alliance}**.", ephemeral=True
+            )
+
+        # append to log
+        entry = {
+            "timestamp": interaction.created_at.isoformat(),
+            "sender": sender,
+            "message": content
+        }
+        alli.setdefault("chat", []).append(entry)
+        self.save_data()
+
+        # DM each member
+        for member_country in alli["members"]:
+            pid = self.cold_war_data["countries"][member_country]["player_id"]
+            user = await self.bot.fetch_user(pid)
+            embed = Embed(
+                title=f"💬 [{alliance}] {sender}",
+                description=content,
+                timestamp=interaction.created_at,
+                color=discord.Color.blurple()
+            )
+            await user.send(embed=embed)
+
+        await interaction.response.send_message(
+            f"✅ Message posted to **{alliance}**.", ephemeral=True
+        )
+
+    # ─── View recent messages ───
+    @alliances.command(name="messages", description="Fetch recent alliance messages")
+    @app_commands.describe(
+        alliance="Which alliance to view",
+        limit="How many recent messages (max 25)"
+    )
+    @app_commands.autocomplete(alliance=autocomplete_alliance)
+    async def alliance_messages(
+        self,
+        interaction: Interaction,
+        alliance: str,
+        limit: int = 10
+    ):
+        dyn = self.dynamic_data.get("diplomacy", {}).get("alliances", {})
+        alli = dyn.get(alliance)
+        if not alli:
+            return await interaction.response.send_message(
+                f"❌ Alliance **{alliance}** not found.", ephemeral=True
+            )
+
+        your_country = next(
+            (c for c,d in self.cold_war_data["countries"].items()
+             if d.get("player_id")==interaction.user.id),
+            None
+        )
+        if your_country not in alli["members"]:
+            return await interaction.response.send_message(
+                f"❌ You’re not in **{alliance}**.", ephemeral=True
+            )
+
+        chat = alli.get("chat", [])
+        if not chat:
+            return await interaction.response.send_message(
+                f"ℹ️ No messages yet in **{alliance}**.", ephemeral=True
+            )
+
+        limit = min(max(limit,1), 25)
+        recent = chat[-limit:]
+        # build a single embed
+        embed = Embed(
+            title=f"🗒️ Last {len(recent)} msgs — {alliance}",
+            color=discord.Color.blue()
+        )
+        for e in recent:
+            ts = datetime.fromisoformat(e["timestamp"]).strftime("%H:%M")
+            embed.add_field(
+                name=f"[{ts}] {e['sender']}",
+                value=e["message"],
+                inline=False
+            )
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
