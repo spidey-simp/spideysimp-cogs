@@ -566,8 +566,7 @@ class AllianceCreateModal(discord.ui.Modal, title="Create New Alliance"):
 
         # 2) now ask who to invite
         await interaction.response.send_message(
-            "✅ Alliance created! Who would you like to invite?",
-            view=AllianceInviteView(self.cog, key, self.invitation_message.value or ""),
+            f"✅ **{key}** Alliance created in the year {str(created_year)}!",
             ephemeral=True
         )
     
@@ -3417,3 +3416,40 @@ class SpideyUtils(commands.Cog):
         
             await interaction.response.send_modal(AllianceCreateModal(self, creator=your_country))
 
+    async def autocomplete_alliance(self, interaction: Interaction, current: str) -> list[Choice[str]]:
+        """Suggest existing alliance names for autocomplete."""
+        names = self.dynamic_data.get("diplomacy", {}).get("alliances", {}).keys()
+        return [
+            Choice(name=name, value=name)
+            for name in names
+            if current.lower() in name.lower()
+        ][:25]
+
+    @alliances.command(
+        name="invite",
+        description="Invite countries to an existing alliance"
+    )
+    @app_commands.describe(alliance="Which alliance to invite to")
+    @app_commands.autocomplete(alliance=autocomplete_alliance)
+    async def invite(
+        self,
+        interaction: Interaction,
+        alliance: str
+    ):
+        # permission check: only leader can invite
+        dyn = self.dynamic_data.setdefault("diplomacy", {}).setdefault("alliances", {})
+        data = dyn.get(alliance)
+        if not data:
+            return await interaction.response.send_message(
+                "❌ Alliance not found.", ephemeral=True
+            )
+        if data["leader"] != interaction.user.display_name:
+            return await interaction.response.send_message(
+                "❌ Only the alliance leader can send invites.", ephemeral=True
+            )
+
+        # reuse your AllianceInviteView
+        view = AllianceInviteView(self, alliance, default_msg="")
+        await interaction.response.send_message(
+            f"🔔 Who should join **{alliance}**?", view=view, ephemeral=True
+        )
