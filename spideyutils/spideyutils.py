@@ -3937,7 +3937,7 @@ class SpideyUtils(commands.Cog):
 
         await interaction.response.send_message(f"✅ Poll sent to {len(dyn[alliance]['members'])} members!", ephemeral=True)
     
-    async def autocomplete_poll_id(self, interaction: app_commands.Context, current: str):
+    async def autocomplete_poll_id(self, interaction: Interaction, current: str):
         # need the alliance param first
         alliance = getattr(interaction.namespace, "alliance", None)
         polls = (
