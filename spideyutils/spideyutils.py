@@ -707,7 +707,7 @@ class SpideyUtils(commands.Cog):
     history = app_commands.Group(name="history", description="The global history of the RP.", parent=rp)
     un = app_commands.Group(name="un", description="Commands to interact with the UN", parent=rp)
     utils = app_commands.Group(name="utils", description="Commands designed to make the rp easier", parent=rp)
-    alliances = app_commands.Group(name="alliances", description="Manage multi-nation alliances", parent=diplomacy)
+    alliances = app_commands.Group(name="alliances", description="Manage multi-nation alliances", parent=rp)
 
 
     
