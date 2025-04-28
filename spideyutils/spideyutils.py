@@ -475,6 +475,49 @@ class ResearchConfirmView(discord.ui.View):
             return await interaction.response.send_message("Nice try buddy. This ain't your command.", ephemeral=True)
         await interaction.response.edit_message(content="❌ Research canceled.", embed=None, view=None)
 
+class DiplomaticProposalModal(discord.ui.Modal, title="Write your proposal message"):
+        detail = discord.ui.TextInput(
+            label="Message (optional)",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            placeholder="Tell them why they should ally with you..."
+        )
+
+        def __init__(self, cog: "SpideyUtils", agreement_type:str, proposer: str, target: str):
+            super().__init__()
+            self.cog = cog
+            self.agreement_type = agreement_type
+            self.proposer = proposer
+            self.target = target
+        
+        async def on_submit(self, interaction: Interaction):
+            data = self.cog.dynamic_data.setdefault("diplomacy", {}).setdefault("pending", {})
+            key = f"{self.proposer}→{self.target}→{self.agreement_type}"
+            data[key] = {
+                "type": self.agreement_type,
+                "from": self.proposer,
+                "to": self.target,
+                "message": self.detail.value or "",
+                "timestamp": interaction.created_at.isoformat()
+            }
+
+            self.cog.save_data()
+
+            target_id = self.cog.cold_war_data["countries"][self.target]["player_id"]
+            user = await self.cog.bot.fetch_user(target_id)
+            embed = Embed(
+                title=f"Proposal: {self.agreement_type.replace('_', ' ').title()}",
+                description=self.detail.value or "_No message provided._",
+                color=0x00C2FF
+            )
+            embed.set_footer(text=f"From {self.proposer} - use /rp diplomacy proposals to respond")
+            await user.send(embed=embed)
+
+            await interaction.response.send_message(
+                f"Sent **{self.agreement_type.replace('_', ' ')}** proposal to **{self.target}**.",
+                ephemeral=True
+            )
+       
 
 class SpideyUtils(commands.Cog):
     def __init__(self, bot):
@@ -795,6 +838,7 @@ class SpideyUtils(commands.Cog):
             if current.lower() in country.lower()
             ][:25]
         
+    
     def get_all_event_years(self, data):
         global_years = list(data.get("global_history", {}).keys())
         country_years = set()
@@ -3076,4 +3120,47 @@ class SpideyUtils(commands.Cog):
         """Interactive command to input RP data (military, economic, research, political)."""
         # Placeholder: This command will walk you through prompts to input your nation's data
         await ctx.send("This command is under development. Stay tuned for updates!")
+    
+    @diplomacy.command(
+        name="propose",
+        description="Propose a diplomatic agreement with another country"
+    )
+    @app_commands.describe(
+        agreement_type="Type of agreement",
+        target="Country you're proposing to",
+        country="Pick your country if you have multiple"
+    )
+    @app_commands.choices(
+        agreement_type=[
+            app_commands.Choice(name="Alliance", value="alliance"),
+            app_commands.Choice(name="Non-Aggression Pact", value="non_aggression"),
+            app_commands.Choice(name="Peace Treaty", value="peace"),
+            app_commands.Choice(name="Trade Agreement", value="trade")
+        ]
+    )
+    @app_commands.autocomplete(target=autocomplete_country, country=autocomplete_my_country)
+    async def propose(
+        self,
+        interaction: Interaction,
+        agreement_type: app_commands.Choice[str],
+        target: str,
+        country: str
+    ):
+
+        if not country and str(interaction.user.id) in self.alternate_country_dict:
+            country = self.alternate_country_dict[str(interaction.user.id)]
+        if not country:
+            for c_key, details in self.cold_war_data["countries"].items():
+                if details.get("player_id") == interaction.user.id:
+                    country = c_key
+                    break
+        if not country or country not in self.cold_war_data["countries"]:
+            return await interaction.response.send_message("❌ Could not determine your country.", ephemeral=True)
+        
+        if target == country:
+            return await interaction.response.send_message("You seem to be attempting to send this to yourself.", ephemeral=True)
+        
+        await interaction.response.send_modal(
+            DiplomaticProposalModal(self, agreement_type.value, country, target)
+        )
 
