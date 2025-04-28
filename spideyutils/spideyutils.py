@@ -3144,7 +3144,7 @@ class SpideyUtils(commands.Cog):
         interaction: Interaction,
         agreement_type: app_commands.Choice[str],
         target: str,
-        country: str
+        country: str=None
     ):
 
         if not country and str(interaction.user.id) in self.alternate_country_dict:
@@ -3163,4 +3163,127 @@ class SpideyUtils(commands.Cog):
         await interaction.response.send_modal(
             DiplomaticProposalModal(self, agreement_type.value, country, target)
         )
+    
+
+    @diplomacy.command(name="proposals", description="View proposals sent to you.")
+    async def view_proposals(self, interaction: Interaction):
+        """List all pending proposals where you’re the target."""
+        you = interaction.user
+        # collect pending for your country
+        pend = self.dynamic_data.get("diplomacy", {}).get("pending", {})
+        your_country = None
+        for c, d in self.cold_war_data["countries"].items():
+            if d.get("player_id") == you.id:
+                your_country = c
+                break
+        if not your_country:
+            return await interaction.response.send_message("❌ You don’t represent a country.", ephemeral=True)
+
+        # filter keys of form "A→B→type"
+        msgs = [
+            (k,v) for k,v in pend.items()
+            if v["to"] == your_country
+        ]
+        if not msgs:
+            return await interaction.response.send_message("📭 No pending proposals.", ephemeral=True)
+
+        embed = Embed(title="📬 Pending Diplomatic Proposals", color=discord.Color.orange())
+        for key, info in msgs:
+            proposer = info["from"]
+            typ      = info["type"].replace("_"," ").title()
+            msg      = info["message"] or "_(no message)_"
+            embed.add_field(
+                name=f"{key}",
+                value=f"• **{typ}** from **{proposer}**\n> {msg}",
+                inline=False
+            )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    async def autocomplete_proposal_key(
+        self, interaction: Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        """Suggest keys for pending diplomacy proposals."""
+        user_country = None
+        uid = interaction.user.id
+        if str(uid) in self.alternate_country_dict:
+            user_country = self.alternate_country_dict[str(uid)]
+        else:
+            for country, info in self.cold_war_data["countries"].items():
+                if info.get("player_id") == uid:
+                    user_country = country
+                    break
+
+        pending = self.dynamic_data.get("diplomacy", {}).get("pending", {})
+        choices = []
+        for key, proposal in pending.items():
+            if proposal.get("to") == user_country and current.lower() in key.lower():
+                choices.append(app_commands.Choice(name=key, value=key))
+                if len(choices) == 25:
+                    break
+        return choices
+
+    @diplomacy.command(name="respond", description="Accept or reject a pending proposal.")
+    @app_commands.describe(
+        key="Proposal key (see /rp diplomacy proposals above)",
+        accept="Accept (yes) or reject (no)"
+    )
+    @app_commands.autocomplete(key=autocomplete_proposal_key)
+    async def respond(
+        self,
+        interaction: Interaction,
+        key: str,
+        accept: Literal["yes","no"]
+    ):
+        """Handle a single proposal by its key."""
+        pend = self.dynamic_data.setdefault("diplomacy", {}).setdefault("pending", {})
+        prop = pend.get(key)
+        if not prop:
+            return await interaction.response.send_message("❌ No such proposal.", ephemeral=True)
+
+        # permission check: only the 'to' country’s player can respond
+        your_country = None
+        for c,d in self.cold_war_data["countries"].items():
+            if d.get("player_id")==interaction.user.id:
+                your_country = c; break
+        if prop["to"] != your_country:
+            return await interaction.response.send_message("❌ You may only respond to proposals addressed to your country.", ephemeral=True)
+
+        # on accept: move to agreements
+        year = self.cold_war_data.get("current_year")
+        agr_bucket = self.dynamic_data["diplomacy"].setdefault("agreements", {}).setdefault(prop["type"], [])
+        if accept=="yes":
+            agr_bucket.append({
+                "from": prop["from"],
+                "to": prop["to"],
+                "message": prop["message"],
+                "year": year
+            })
+            result = f"✅ You **accepted** the {prop['type'].replace('_',' ')} with **{prop['from']}**."
+        else:
+            result = f"❌ You **rejected** the {prop['type'].replace('_',' ')} with **{prop['from']}**."
+
+        # remove pending and persist
+        del pend[key]
+        self.save_data()
+
+        # notify proposer by DM
+        pid = self.cold_war_data["countries"][prop["from"]]["player_id"]
+        user = await self.bot.fetch_user(pid)
+        await user.send(f"🔔 Your proposal ({prop['type'].replace('_',' ')}) to **{prop['to']}** was **{accept.upper()}**.")
+
+        await interaction.response.send_message(result, ephemeral=True)
+
+    @diplomacy.command(name="agreements", description="View all finalized diplomatic agreements.")
+    async def view_agreements(self, interaction: Interaction):
+        """Show adopted agreements, grouped by type and year."""
+        ag = self.dynamic_data.get("diplomacy", {}).get("agreements", {})
+        if not ag:
+            return await interaction.response.send_message("📜 No agreements in force yet.", ephemeral=True)
+        embed = Embed(title="🤝 Diplomatic Agreements", color=discord.Color.green())
+        for typ, lst in ag.items():
+            lines = []
+            for a in lst:
+                lines.append(f"• **{a['year']}**: {a['from']} ↔ {a['to']} “{a['message'] or ''}”")
+            embed.add_field(name=typ.replace("_"," ").title(), value="\n".join(lines), inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
