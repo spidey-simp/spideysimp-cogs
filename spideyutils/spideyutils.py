@@ -127,13 +127,28 @@ class AlliancePollButton(ui.Button):
     async def callback(self, interaction: Interaction):
         user = interaction.user
         dyn = self.cog.dynamic_data["diplomacy"]["alliances"][self.alliance]["polls"][self.poll_id]
+
+        # resolve the user’s country
+        user_country = self.cog.alternate_country_dict.get(str(user.id))
+        if not user_country:
+            for country, data in self.cog.cold_war_data["countries"].items():
+                if data.get("player_id") == user.id:
+                    user_country = country
+                    break
+
         # only alliance members may vote
-        if user.display_name not in dyn["members"]:
+        if not user_country or user_country not in dyn["members"]:
             return await interaction.response.send_message("❌ You’re not in that alliance!", ephemeral=True)
-        # record the vote
-        dyn.setdefault("votes", {})[user.display_name] = self.option
+
+        # record the vote by country
+        dyn.setdefault("votes", {})[user_country] = self.option
         self.cog.save_data()
-        await interaction.response.send_message(f"✅ Your vote for **{self.option}** has been recorded.", ephemeral=True)
+
+        await interaction.response.send_message(
+            f"✅ Your vote for **{self.option}** has been recorded.", 
+            ephemeral=True
+        )
+
 
 class AlliancePollView(ui.View):
     def __init__(self, cog, alliance: str, poll_id: str, question: str, options: list[str]):
