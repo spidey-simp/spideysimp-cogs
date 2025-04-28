@@ -517,7 +517,118 @@ class DiplomaticProposalModal(discord.ui.Modal, title="Write your proposal messa
                 f"Sent **{self.agreement_type.replace('_', ' ')}** proposal to **{self.target}**.",
                 ephemeral=True
             )
-       
+
+class AllianceCreateModal(discord.ui.Modal, title="Create New Alliance"):
+    name = discord.ui.TextInput(label="Alliance Name", max_length=50)
+    terms = discord.ui.TextInput(
+        label="Terms & Conditions",
+        style=discord.TextStyle.paragraph,
+        placeholder="Describe the purposes, rules, policies, etc."
+    )
+    invitation_message = discord.ui.TextInput(
+        label="Default invite message (optional)",
+        required=False,
+        style=discord.TextStyle.paragraph,
+    )
+    formation_year = discord.ui.TextInput(
+        label="Formation Year",
+        required=False,
+        placeholder="Self explanatory.",
+        style=discord.TextStyle.short
+    )
+
+    def __init__(self, cog: "SpideyUtils", creator: str):
+        super().__init__()
+        self.cog = cog
+        self.creator = creator
+
+    async def on_submit(self, interaction: Interaction):
+        # 1) create the alliance record
+        dyn = self.cog.dynamic_data.setdefault("diplomacy", {}).setdefault("alliances", {})
+        key = self.name.value.strip()
+        dyn[key] = {
+            "leader": self.creator,
+            "members": [self.creator],
+            "terms": self.terms.value,
+            "applications": {},
+            "invitations": {},
+        }
+
+        year_str = self.formation_year.value.strip()
+        if year_str.isdigit():
+            created_year = int(year_str)
+        else:
+            created_year = self.cog.cold_war_data["current_year"]
+        dyn[key]["created_year"] = created_year
+
+
+        self.cog.save_data()
+
+        # 2) now ask who to invite
+        await interaction.response.send_message(
+            "✅ Alliance created! Who would you like to invite?",
+            view=AllianceInviteView(self.cog, key, self.invitation_message.value or ""),
+            ephemeral=True
+        )
+    
+class AllianceInviteView(discord.ui.View):
+    def __init__(self, cog: "SpideyUtils", alliance_name: str, default_msg: str):
+        super().__init__(timeout=60)
+        self.cog = cog
+        self.alliance = alliance_name
+        self.default_msg = default_msg
+
+        # Build one SelectOption per country except the leader
+        options = [
+            discord.SelectOption(label=name)
+            for name in cog.cold_war_data["countries"]
+            if name != cog.dynamic_data["diplomacy"]["alliances"][alliance_name]["leader"]
+        ]
+
+        self.add_item(
+            discord.ui.Select(
+                placeholder="Select countries to invite…",
+                min_values=0,
+                max_values=len(options),
+                options=options
+            )
+        )
+
+    @discord.ui.select()
+    async def select_callback(self, select: discord.ui.Select, interaction: Interaction):
+        dyn = self.cog.dynamic_data["diplomacy"]["alliances"][self.alliance]["invitations"]
+        successes, errors = [], []
+
+        for country in select.values:
+            if country not in self.cog.cold_war_data["countries"]:
+                errors.append(country)
+                continue
+            dyn[country] = {
+                "message": self.default_msg,
+                "timestamp": interaction.created_at.isoformat()
+            }
+            try:
+                pid = self.cog.cold_war_data["countries"][country]["player_id"]
+                user = await self.cog.bot.fetch_user(pid)
+                dm = (
+                    f"🔔 You’re invited to **{self.alliance}** by **{self.cog.dynamic_data['diplomacy']['alliances'][self.alliance]['leader']}**!\n\n"
+                    f"{self.default_msg}\n\n"
+                    f"> {self.cog.dynamic_data['diplomacy']['alliances'][self.alliance]['terms']}"
+                )
+                await user.send(dm)
+                successes.append(country)
+            except:
+                errors.append(country)
+
+        self.cog.save_data()
+        await interaction.response.edit_message(
+            content=(
+                f"Invites sent to: {', '.join(successes) or 'None'}\n"
+                f"Errors: {', '.join(errors) or 'None'}"
+            ),
+            view=None
+        )
+
 
 class SpideyUtils(commands.Cog):
     def __init__(self, bot):
@@ -3286,4 +3397,20 @@ class SpideyUtils(commands.Cog):
                 lines.append(f"• **{a['year']}**: {a['from']} ↔ {a['to']} “{a['message'] or ''}”")
             embed.add_field(name=typ.replace("_"," ").title(), value="\n".join(lines), inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @diplomacy.group(name="alliance", description="Manage multi-nation alliances")
+    class AllianceGroup:
+
+        @app_commands.comamnd(name="create", description="Found a new alliance/coalition")
+        async def create(self, interaction: Interaction):
+            you = interaction.user
+            your_country = None
+            for c, d in self.cold_war_data["countries"].items():
+                if d.get("player_id") == you.id:
+                    your_country = c
+                    break
+            if not your_country:
+                return await interaction.response.send_message("❌ You don’t represent a country.", ephemeral=True)
+        
+            await interaction.response.send_modal(AllianceCreateModal(self, creator=your_country))
 
