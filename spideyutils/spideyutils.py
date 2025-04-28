@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands, Interaction, Embed
+from discord import app_commands, Interaction, Embed, SelectOption
 from discord.ext import commands, tasks
 from redbot.core import commands
 import json
@@ -578,21 +578,24 @@ class AllianceInviteView(discord.ui.View):
         self.alliance = alliance_name
         self.default_msg = default_msg
 
-        # Build one SelectOption per country except the leader
+        # Build one SelectOption per country except the leader'
+        leader = cog.dynamic_data["diplomacy"]["alliances"][alliance_name]["leader"]
         options = [
-            discord.SelectOption(label=name)
+            SelectOption(label=name, value=name)
             for name in cog.cold_war_data["countries"]
-            if name != cog.dynamic_data["diplomacy"]["alliances"][alliance_name]["leader"]
+            if name != leader
         ]
 
-        self.add_item(
-            discord.ui.Select(
-                placeholder="Select countries to invite…",
-                min_values=0,
-                max_values=len(options),
-                options=options
-            )
-        )
+        if options:
+            select= discord.ui.Select(
+                    placeholder="Select countries to invite…",
+                    min_values=0,
+                    max_values=len(options),
+                    options=options
+                )
+            self.add_item(select)
+        else:
+            pass
 
     @discord.ui.select()
     async def select_callback(self, select: discord.ui.Select, interaction: Interaction):
