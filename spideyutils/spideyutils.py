@@ -1,5 +1,5 @@
 import discord
-from discord import app_commands, Interaction, Embed, SelectOption
+from discord import app_commands, Interaction, Embed, SelectOption, ui, ButtonStyle
 from discord.ext import commands, tasks
 from redbot.core import commands
 import json
@@ -8,12 +8,13 @@ import random
 import asyncio
 from datetime import datetime
 import re
-from collections import defaultdict
+from collections import defaultdict, Counter
 import math
 from typing import Literal
 from discord.app_commands import Choice
 import copy
 import shutil
+import uuid
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -115,6 +116,36 @@ def normalize_static(obj, in_countries=False):
 
     return obj
 
+class AlliancePollButton(ui.Button):
+    def __init__(self, cog, alliance: str, poll_id: str, option: str):
+        super().__init__(label=option, style=ButtonStyle.primary, custom_id=f"poll:{poll_id}:{option}")
+        self.cog = cog
+        self.alliance = alliance
+        self.poll_id = poll_id
+        self.option = option
+
+    async def callback(self, interaction: Interaction):
+        user = interaction.user
+        dyn = self.cog.dynamic_data["diplomacy"]["alliances"][self.alliance]["polls"][self.poll_id]
+        # only alliance members may vote
+        if user.display_name not in dyn["members"]:
+            return await interaction.response.send_message("❌ You’re not in that alliance!", ephemeral=True)
+        # record the vote
+        dyn.setdefault("votes", {})[user.display_name] = self.option
+        self.cog.save_data()
+        await interaction.response.send_message(f"✅ Your vote for **{self.option}** has been recorded.", ephemeral=True)
+
+class AlliancePollView(ui.View):
+    def __init__(self, cog, alliance: str, poll_id: str, question: str, options: list[str]):
+        super().__init__(timeout=None)
+        self.cog = cog
+        self.alliance = alliance
+        self.poll_id = poll_id
+        # add a disabled button showing the question
+        self.add_item(ui.Button(label=question, style=ButtonStyle.secondary, disabled=True))
+        # one button per option
+        for o in options:
+            self.add_item(AlliancePollButton(cog, alliance, poll_id, o))
 
 class ConfirmSpyAssignView(discord.ui.View):
     def __init__(self, cog: "SpideyUtils", country: str, target: str, operation: str, op_data: dict, params: dict):
@@ -3480,6 +3511,7 @@ class SpideyUtils(commands.Cog):
 
     @alliances.command(name="view", description="View all alliances or summary for one")
     @app_commands.describe(alliance="Optional alliance name to view summary or leave blank for all.")
+    @app_commands.autocomplete(alliance=autocomplete_alliance)
     async def view(self, interaction: Interaction, alliance: str = None):
         alliances = self.cold_war_data.get("ALLIANCES", {})
         # Show all alliances
@@ -3531,62 +3563,77 @@ class SpideyUtils(commands.Cog):
             embed.add_field(name="Pending Applications", value=str(len(apps)), inline=True)
             embed.add_field(name="Outstanding Invites", value=str(len(invites)), inline=True)
 
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+            await interaction.response.send_message(embed=embed)
 
     
-    @alliances.command(name="apply", description="Apply to join a multi-nation alliance")
-    @app_commands.describe(
-        alliance="Name of the alliance you want to join",
-        message="Optional cover letter to the alliance leader"
-    )
+    @alliances.command(name="apply", description="Apply to join an existing alliance")
+    @app_commands.describe(alliance="Name of the alliance", message="Why you want to join (optional)")
     @app_commands.autocomplete(alliance=autocomplete_alliance)
-    async def apply(
-        self,
-        interaction: Interaction,
-        alliance: str,
-        message: str | None = None
-    ):
+    async def alliances_apply(self, interaction: Interaction, alliance: str, message: str = ""):
         data = self.dynamic_data.setdefault("diplomacy", {}).setdefault("alliances", {})
-        alli = data.get(alliance)
-        if not alli:
-            return await interaction.response.send_message(
-                f"❌ Alliance **{alliance}** not found.", ephemeral=True
-            )
+        if alliance not in data:
+            return await interaction.response.send_message(f"❌ Alliance '{alliance}' doesn’t exist.", ephemeral=True)
+        apps = data[alliance].setdefault("applications", {})
+        country = None
+        # determine applicant country from user ID
+        for cname, details in self.cold_war_data["countries"].items():
+            if details.get("player_id") == interaction.user.id:
+                country = cname; break
+        if not country:
+            return await interaction.response.send_message("❌ Could not resolve your country.", ephemeral=True)
+        if country in apps:
+            return await interaction.response.send_message("❌ You’ve already applied.", ephemeral=True)
+        # record application
+        await self.save_delta(
+            dict_path=["diplomacy","alliances",alliance,"applications",country],
+            str_val=message or True
+        )
+        await interaction.response.send_message(f"✅ Application sent to **{alliance}**.", ephemeral=True)
 
-        your_country = None
-        for c,d in self.cold_war_data["countries"].items():
-            if d.get("player_id") == interaction.user.id:
-                your_country = c
-                break
+    async def autocomplete_applicant(
+        self,
+        interaction: discord.Interaction,
+        current: str
+    ) -> list[app_commands.Choice[str]]:
+        # Grab the alliance name they’ve already typed
+        alliance = interaction.namespace.alliance
+        all_alliances = self.dynamic_data.get("diplomacy", {}).get("alliances", {})
+        apps = all_alliances.get(alliance, {}).get("applications", {})
 
-        if your_country in alli["members"]:
-            return await interaction.response.send_message(
-                "❌ You’re already a member.", ephemeral=True
-            )
-        if your_country in alli["applications"]:
-            return await interaction.response.send_message(
-                "❌ You’ve already applied and are awaiting review.", ephemeral=True
-            )
+        return [
+            app_commands.Choice(name=country, value=country)
+            for country in apps.keys()
+            if current.lower() in country.lower()
+        ][:25]
 
-        # record the application
-        alli["applications"][your_country] = {
-            "message": message or "",
-            "timestamp": interaction.created_at.isoformat()
-        }
+    @alliances.command(name="accept", description="Accept an application to your alliance")
+    @app_commands.describe(alliance="Name of the alliance", applicant="Country to accept")
+    @app_commands.autocomplete(alliance=autocomplete_alliance, applicant=autocomplete_applicant)
+    async def alliances_accept(self, interaction: Interaction, alliance: str, applicant: str):
+        dyn = self.dynamic_data.get("diplomacy", {}).get("alliances", {})
+        if alliance not in dyn:
+            return await interaction.response.send_message(f"❌ Alliance '{alliance}' not found.", ephemeral=True)
+        info = dyn[alliance]
+        # only leader can accept
+        if info["leader"] != interaction.user.display_name:
+            return await interaction.response.send_message("❌ Only the alliance leader can do that.", ephemeral=True)
+        apps = info.get("applications", {})
+        if applicant not in apps:
+            return await interaction.response.send_message(f"❌ No application from **{applicant}**.", ephemeral=True)
+        # 1) add to members
+        await self.save_delta(
+            dict_path=["diplomacy","alliances",alliance,"members"],
+            list_delta=[applicant]
+        )
+        # 2) remove from applications
+        #   since save_delta for dict_delta merges, to delete you’ll need to pop manually:
+        info["applications"].pop(applicant, None)
         self.save_data()
-
-        # notify the leader
-        leader_id = self.cold_war_data["countries"][alli["leader"]]["player_id"]
-        leader = await self.bot.fetch_user(leader_id)
-        dm = (
-            f"🔔 **{your_country}** has applied to join **{alliance}**.\n"
-            + (f"> {message}" if message else "_No message provided._")
-        )
-        await leader.send(dm)
-
-        await interaction.response.send_message(
-            f"✅ Your application to **{alliance}** has been sent.", ephemeral=True
-        )
+        # notify both parties
+        await interaction.response.send_message(f"✅ **{applicant}** has joined **{alliance}**!")
+        user_id = self.cold_war_data["countries"][applicant]["player_id"]
+        member = await self.bot.fetch_user(user_id)
+        await member.send(f"🎉 Your application to **{alliance}** has been accepted!")
     
     async def autocomplete_alliance_member(
         self,
@@ -3845,3 +3892,104 @@ class SpideyUtils(commands.Cog):
             )
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
+    
+    @alliances.command(name="poll", description="Create a poll for your alliance")
+    @app_commands.describe(question="Question for your alliance", alliance="The alliance you're asking this to.")
+    @app_commands.autocomplete(alliance=autocomplete_alliance)
+    async def alliances_poll(
+        self,
+        interaction: Interaction,
+        alliance: str,
+        question: str,
+        option1: str,
+        option2: str,
+        option3: str | None = None,
+        option4: str | None = None
+    ):
+        # 1) authorization
+        dyn = self.dynamic_data["diplomacy"]["alliances"]
+        if alliance not in dyn:
+            return await interaction.response.send_message("❌ Alliance not found.", ephemeral=True)
+        if dyn[alliance]["leader"] != interaction.user.display_name:
+            return await interaction.response.send_message("❌ Only the leader can start a poll.", ephemeral=True)
+
+        opts = [o for o in (option1, option2, option3, option4) if o]
+        poll_id = str(uuid.uuid4())[:8]
+        # 2) save poll skeleton
+        dyn[alliance].setdefault("polls", {})[poll_id] = {
+            "question": question,
+            "options": opts,
+            "votes": {},
+            "members": dyn[alliance]["members"]
+        }
+        self.save_data()
+
+        view = AlliancePollView(self, alliance, poll_id, question, opts)
+
+        # 3) DM every member
+        for member in dyn[alliance]["members"]:
+            pid = self.cold_war_data["countries"][member]["player_id"]
+            user = await self.bot.fetch_user(pid)
+            try:
+                await user.send(f"🗳 **{alliance} Poll**\n\n{question}", view=view)
+            except:
+                pass  # ignore if they’ve DMed off
+
+        await interaction.response.send_message(f"✅ Poll sent to {len(dyn[alliance]['members'])} members!", ephemeral=True)
+    
+    async def autocomplete_poll_id(self, interaction: app_commands.Context, current: str):
+        # need the alliance param first
+        alliance = getattr(interaction.namespace, "alliance", None)
+        polls = (
+            self.dynamic_data
+                .get("diplomacy", {})
+                .get("alliances", {})
+                .get(alliance, {})
+                .get("polls", {})
+        )
+        return [
+            Choice(name=f"{pid} – {polls[pid]['question'][:30]}…", value=pid)
+            for pid in polls.keys()
+            if current.lower() in pid.lower()
+        ][:25]
+    
+    @alliances.command(
+        name="poll_results", 
+        description="Show the current vote tally for an alliance poll"
+    )
+    @app_commands.describe(
+        alliance="Which alliance",
+        poll_id="ID of the poll to show results for"
+    )
+    @app_commands.autocomplete(
+        alliance=autocomplete_alliance,
+        poll_id=autocomplete_poll_id
+    )
+    async def poll_results(
+        self,
+        interaction: discord.Interaction,
+        alliance: str,
+        poll_id: str
+    ):
+        dyn = self.dynamic_data["diplomacy"]["alliances"]
+        if alliance not in dyn:
+            return await interaction.response.send_message("❌ Alliance not found.", ephemeral=True)
+
+        poll = dyn[alliance].get("polls", {}).get(poll_id)
+        if not poll:
+            return await interaction.response.send_message("❌ Poll ID not found.", ephemeral=True)
+
+        votes = poll.get("votes", {})
+        tally = Counter(votes.values())
+
+        embed = Embed(
+            title=f"🗳️ {alliance} Poll Results",
+            description=poll["question"],
+            color=discord.Color.blurple()
+        )
+        for option in poll["options"]:
+            count = tally.get(option, 0)
+            embed.add_field(name=option, value=f"{count} vote{'s' if count!=1 else ''}", inline=True)
+
+        embed.set_footer(text=f"Poll ID: {poll_id} • {len(votes)}/{len(poll['members'])} voted")
+        await interaction.response.send_message(embed=embed)
