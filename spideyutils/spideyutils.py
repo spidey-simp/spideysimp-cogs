@@ -3906,12 +3906,20 @@ class SpideyUtils(commands.Cog):
         option3: str | None = None,
         option4: str | None = None
     ):
+        your_country = None
         # 1) authorization
         dyn = self.dynamic_data["diplomacy"]["alliances"]
         if alliance not in dyn:
             return await interaction.response.send_message("❌ Alliance not found.", ephemeral=True)
-        if dyn[alliance]["leader"] != interaction.user.display_name:
-            return await interaction.response.send_message("❌ Only the leader can start a poll.", ephemeral=True)
+        if str(interaction.user.id) in self.alternate_country_dict:
+            your_country = self.alternate_country_dict[str(interaction.user.id)]
+        else:
+            for c, d in self.cold_war_data["countries"].items():
+                if d.get("player_id") == interaction.user.id:
+                    your_country = c
+                    break
+        if your_country != dyn["leader"]:
+            return await interaction.response.send_message("You do not appear to be the leader of this alliance.", ephemeral=True)
 
         opts = [o for o in (option1, option2, option3, option4) if o]
         poll_id = str(uuid.uuid4())[:8]
