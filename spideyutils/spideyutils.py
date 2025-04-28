@@ -3401,7 +3401,7 @@ class SpideyUtils(commands.Cog):
     
    
 
-    @alliances.comamnd(name="create", description="Found a new alliance/coalition")
+    @alliances.command(name="create", description="Found a new alliance/coalition")
     async def create(self, interaction: Interaction):
             you = interaction.user
             your_country = None
