@@ -3432,10 +3432,14 @@ class SpideyUtils(commands.Cog):
     ):
         """Let the invited country accept or reject an alliance."""
         your_country = None
-        for c, d in self.cold_war_data["countries"].items():
-            if d.get("player_id") == interaction.user.id:
-                your_country = c
-                break
+
+        if str(interaction.user.id) in self.alternate_country_dict:
+            your_country = self.alternate_country_dict[str(interaction.user.id)]
+        else:
+            for c, d in self.cold_war_data["countries"].items():
+                if d.get("player_id") == interaction.user.id:
+                    your_country = c
+                    break
         if not your_country:
             return await interaction.response.send_message(
                 "❌ Couldn't figure out your country.", ephemeral=True
