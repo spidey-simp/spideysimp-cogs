@@ -3436,19 +3436,23 @@ class SpideyUtils(commands.Cog):
         interaction: Interaction,
         alliance: str
     ):
-        # permission check: only leader can invite
         dyn = self.dynamic_data.setdefault("diplomacy", {}).setdefault("alliances", {})
         data = dyn.get(alliance)
         if not data:
-            return await interaction.response.send_message(
-                "❌ Alliance not found.", ephemeral=True
-            )
-        if data["leader"] != interaction.user.display_name:
+            return await interaction.response.send_message("❌ Alliance not found.", ephemeral=True)
+
+        # resolve which country this user represents
+        your_country = next(
+            (c for c,d in self.cold_war_data["countries"].items()
+            if d.get("player_id") == interaction.user.id),
+            None
+        )
+        if data["leader"] != your_country:
             return await interaction.response.send_message(
                 "❌ Only the alliance leader can send invites.", ephemeral=True
             )
 
-        # reuse your AllianceInviteView
+        # they passed the permission check, so show the select
         view = AllianceInviteView(self, alliance, default_msg="")
         await interaction.response.send_message(
             f"🔔 Who should join **{alliance}**?", view=view, ephemeral=True
