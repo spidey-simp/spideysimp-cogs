@@ -3893,7 +3893,7 @@ class SpideyUtils(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
-    @alliances.command(name="poll", description="Create a poll for your alliance")
+        @alliances.command(name="poll", description="Create a poll for your alliance")
     @app_commands.describe(question="Question for your alliance", alliance="The alliance you're asking this to.")
     @app_commands.autocomplete(alliance=autocomplete_alliance)
     async def alliances_poll(
@@ -3906,44 +3906,53 @@ class SpideyUtils(commands.Cog):
         option3: str | None = None,
         option4: str | None = None
     ):
-        your_country = None
         # 1) authorization
-        dyn = self.dynamic_data["diplomacy"]["alliances"]
-        if alliance not in dyn:
+        alliances = self.dynamic_data["diplomacy"]["alliances"]
+        if alliance not in alliances:
             return await interaction.response.send_message("❌ Alliance not found.", ephemeral=True)
+
+        # resolve your country
+        your_country = None
         if str(interaction.user.id) in self.alternate_country_dict:
             your_country = self.alternate_country_dict[str(interaction.user.id)]
         else:
-            for c, d in self.cold_war_data["countries"].items():
-                if d.get("player_id") == interaction.user.id:
-                    your_country = c
+            for country, data in self.cold_war_data["countries"].items():
+                if data.get("player_id") == interaction.user.id:
+                    your_country = country
                     break
-        if your_country != dyn["leader"]:
-            return await interaction.response.send_message("You do not appear to be the leader of this alliance.", ephemeral=True)
 
+        leader_country = alliances[alliance]["leader"]
+        if your_country != leader_country:
+            return await interaction.response.send_message(
+                "❌ Only the alliance leader can create polls.", ephemeral=True
+            )
+
+        # 2) build & save the poll
         opts = [o for o in (option1, option2, option3, option4) if o]
         poll_id = str(uuid.uuid4())[:8]
-        # 2) save poll skeleton
-        dyn[alliance].setdefault("polls", {})[poll_id] = {
+        alliances[alliance].setdefault("polls", {})[poll_id] = {
             "question": question,
             "options": opts,
             "votes": {},
-            "members": dyn[alliance]["members"]
+            "members": alliances[alliance]["members"]
         }
         self.save_data()
 
-        view = AlliancePollView(self, alliance, poll_id, question, opts)
-
         # 3) DM every member
-        for member in dyn[alliance]["members"]:
-            pid = self.cold_war_data["countries"][member]["player_id"]
+        view = AlliancePollView(self, alliance, poll_id, question, opts)
+        for member_country in alliances[alliance]["members"]:
+            pid = self.cold_war_data["countries"][member_country]["player_id"]
             user = await self.bot.fetch_user(pid)
             try:
                 await user.send(f"🗳 **{alliance} Poll**\n\n{question}", view=view)
             except:
-                pass  # ignore if they’ve DMed off
+                pass
 
-        await interaction.response.send_message(f"✅ Poll sent to {len(dyn[alliance]['members'])} members!", ephemeral=True)
+        await interaction.response.send_message(
+            f"✅ Poll `{poll_id}` sent to {len(alliances[alliance]['members'])} members!", 
+            ephemeral=True
+        )
+
     
     async def autocomplete_poll_id(self, interaction: Interaction, current: str):
         # need the alliance param first
