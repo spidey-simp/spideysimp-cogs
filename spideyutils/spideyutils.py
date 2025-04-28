@@ -3893,7 +3893,7 @@ class SpideyUtils(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
     
-        @alliances.command(name="poll", description="Create a poll for your alliance")
+    @alliances.command(name="poll", description="Create a poll for your alliance")
     @app_commands.describe(question="Question for your alliance", alliance="The alliance you're asking this to.")
     @app_commands.autocomplete(alliance=autocomplete_alliance)
     async def alliances_poll(
