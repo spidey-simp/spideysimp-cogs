@@ -2074,7 +2074,125 @@
         "foreign_intelligence_score": 40,
         "spy_network_score": 35
       }
+    },
+    "Portugal": {
+      "MILITARY": {
+        "army_divisions": 25,
+        "aviation_wings": 10,
+        "fleet_task_groups": 1,
+        "officer_skill_level": 3,
+        "avg_troop_skill_level": 3,
+        "military_readiness": "partial",
+        "nuclear_arsenal": 0
+      },
+      "ECONOMIC": {
+        "budget_surplus": 2,
+        "factories": {
+          "civilian_factories": 12,
+          "military_factories": 6,
+          "naval_dockyards": 2,
+          "airbases": 3,
+          "nuclear_facilities": 0
+        },
+        "oil_reserves": 2,
+        "infrastructure_rating": 2
+      },
+      "POLITICAL": {
+        "population": 9000000,
+        "recruitable_manpower": 1500000,
+        "public_support_score": 60,
+        "civil_unrest_level": 20
+      },
+      "RESEARCH": {
+        "research_bonus": 0.05,
+        "unlocked_techs": [
+          "World War II Era Firearms",
+          "Postwar Combat Uniforms",
+          "Post-War Field Guns",
+          "Postwar Industrial Grid"
+        ],
+        "research_slots": 2
+      },
+      "COUNTRY_HISTORY": {
+        "1945": "Portugal finishes WWII neutral under Salazar’s Estado Novo, its empire intact.",
+        "1952": "Tightens colonial administration in Africa amid rising nationalist unrest."
+      },
+      "GLOBAL": {
+        "global_influence": 40,
+        "DOCTRINE_FOCUS": "colonial defense",
+        "CONSCRIPTION_POLICY": "volunteer_only"
+      },
+      "LEADER": {
+        "name": "António de Oliveira Salazar",
+        "description": "Architect of the Estado Novo, Salazar rules Portugal with an iron hand and a vision of stability through austerity. He prizes order above all else and views European turmoil as an opportunity to reaffirm Portugal’s traditional role.",
+        "IMAGE": "https://upload.wikimedia.org/wikipedia/commons/5/54/Ant%C3%B3nio_de_Oliveira_Salazar.jpg"
+      },
+      "DETAILS": "Under Salazar’s authoritarian Estado Novo, Portugal quietly sustains its colonial empire in Africa. Neutral in WWII, it now leverages its NATO ties and Atlantic ports to watch Europe’s shifting balance—and may yet rekindle old alliances.",
+      "PUBLIC_DESC": "Portugal stands as a neutral authoritarian state, steadfast in its overseas empire and cautious in European affairs under Salazar’s steady hand.",
+      "CHIEF_OF_STAFF": "General Venâncio Deslandes",
+      "IDEOLOGY": {
+        "leading_ideology": "authoritarian",
+        "democratic": 5,
+        "fascist": 30,
+        "communist": 5,
+        "authoritarian": 60,
+        "monarchic": 0
+      },
+      "STARTER_GOALS": [
+        "Preserve colonial empire",
+        "Limit communist influence at home",
+        "Strengthen Atlantic alliances"
+      ],
+      "DOCTRINE_FOCUS": "corporatist stability",
+      "CONSCRIPTION_POLICY": "volunteer_only",
+      "NATIONAL_SPIRITS": [
+        {
+          "name": "Estado Novo Stability",
+          "description": "Salazar’s rigid corporatist order has kept civil unrest low. The regime prizes stability above all else—and will tolerate little challenge.",
+          "type": "political",
+          "public": true,
+          "modifiers": {
+            "civil_unrest_level": -10,
+            "domestic_cohesion_rolls": 20
+          }
+        },
+        {
+          "name": "Colonial Stewards",
+          "description": "Portugal’s officers and administrators guard Angola and Mozambique as sacred trust—any challenge is met with strict repression.",
+          "type": "military",
+          "modifiers": {
+            "resistance_suppression_modifier_in_colonies": 15,
+            "colonial_administration_efficiency": 10
+          }
+        },
+        {
+          "name": "Austere Finance",
+          "description": "A legacy of austerity keeps the treasury balanced but starves investment—growth is slow, but the budget rarely falters.",
+          "type": "economic",
+          "modifiers": {
+            "budget_surplus": 2,
+            "infrastructure_development_penalty": -10
+          }
+        },
+        {
+          "name": "Atlantic Watch",
+          "description": "Portugal’s strategic Azores bases make it a vital NATO outpost—Washington watches closely, and Lisbon wields the leverage.",
+          "type": "military",
+          "public": true,
+          "modifiers": {
+            "naval_dockyard_output_bonus": 0.10,
+            "diplomatic_influence_with_western_powers": 10
+          }
+        }
+      ],
+      "ESPIONAGE": {
+        "total_operatives": 2,
+        "foreign_intelligence_score": 20,
+        "domestic_intelligence_score": 40,
+        "spy_network_score": 25
+      }
     }
+
   },
   "ALLIANCES": {
     "Catholic Pact": {
@@ -4168,7 +4286,7 @@
       "nuclear_facility":  5
     }
   },
-  "un": {
+  "UN": {
     "members": [
       "United States",
       "Soviet Union",
@@ -4180,7 +4298,8 @@
       "Kingdom of Spain",
       "Austrian Empire",
       "Republic of Turkey",
-      "Kingdom of Italy"
+      "Kingdom of Italy",
+      "Portugal"
     ],
     "permanent_security_council": [
       "United States",
@@ -4189,5 +4308,1839 @@
       "France",
       "Republic of China (KMT)"
     ]
+  },
+  "REGIONS": {
+    "Europe": {
+      "British Isles": {
+        "description": "The island group comprising Great Britain and Ireland, split between the United Kingdom and the Republic of Ireland. Broken into topographical subregions to reflect varied terrain and defensive chokepoints.",
+        "major_powers": ["United Kingdom", "Republic of Ireland"],
+        "regions": {
+          "Kent Coast & White Cliffs": {
+            "major_cities": [
+              { "name": "Dover", "victory_points": 2 },
+              { "name": "Canterbury", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 2,
+            "infrastructure_level": 2,
+            "terrain": "coastal cliffs",
+            "bordering_regions": ["Thames Basin & London Hinterlands"],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["United Kingdom"],
+            "claimed_by": []
+          },
+          "Thames Basin & London Hinterlands": {
+            "major_cities": [
+              { "name": "London", "victory_points": 5 },
+              { "name": "Oxford", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 3,
+            "infrastructure_level": 5,
+            "terrain": "urban plains",
+            "bordering_regions": ["Kent Coast & White Cliffs", "Midlands Plains"],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["United Kingdom"],
+            "claimed_by": []
+          },
+          "Midlands Plains": {
+            "major_cities": [
+              { "name": "Birmingham", "victory_points": 3 },
+              { "name": "Coventry", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 2,
+            "infrastructure_level": 4,
+            "terrain": "plains",
+            "bordering_regions": ["Thames Basin & London Hinterlands", "Pennine Hills", "Wales & Border Hills"],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["United Kingdom"],
+            "claimed_by": []
+          },
+          "Pennine Hills": {
+            "major_cities": [
+              { "name": "Manchester", "victory_points": 3 },
+              { "name": "Leeds", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 2,
+            "infrastructure_level": 3,
+            "terrain": "hills",
+            "bordering_regions": ["Midlands Plains", "Northern England Coast", "Scottish Lowlands"],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["United Kingdom"],
+            "claimed_by": []
+          },
+          "Northern England Coast": {
+            "major_cities": [
+              { "name": "Newcastle", "victory_points": 2 },
+              { "name": "Hull", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "coastal plains",
+            "bordering_regions": ["Pennine Hills", "Scottish Lowlands"],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["United Kingdom"],
+            "claimed_by": []
+          },
+          "Scottish Lowlands": {
+            "major_cities": [
+              { "name": "Glasgow", "victory_points": 3 },
+              { "name": "Edinburgh", "victory_points": 3 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "plains",
+            "bordering_regions": ["Northern England Coast", "Scottish Highlands"],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["United Kingdom"],
+            "claimed_by": []
+          },
+          "Scottish Highlands": {
+            "major_cities": [
+              { "name": "Inverness", "victory_points": 1 },
+              { "name": "Aberdeen", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "mountainous",
+            "bordering_regions": ["Scottish Lowlands"],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["United Kingdom"],
+            "claimed_by": []
+          },
+          "Wales & Border Hills": {
+            "major_cities": [
+              { "name": "Cardiff", "victory_points": 2 },
+              { "name": "Swansea", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "mountainous",
+            "bordering_regions": ["Midlands Plains"],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["United Kingdom"],
+            "claimed_by": []
+          },
+          "Northern Ireland Plains": {
+            "major_cities": [
+              { "name": "Belfast", "victory_points": 3 },
+              { "name": "Derry", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "plains",
+            "bordering_regions": ["Republic of Ireland East Coast"],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["United Kingdom"],
+            "claimed_by": ["Republic of Ireland"]
+          },
+          "Republic of Ireland East Coast": {
+            "major_cities": [
+              { "name": "Dublin", "victory_points": 4 },
+              { "name": "Cork", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "plains",
+            "bordering_regions": ["Northern Ireland Plains", "Republic of Ireland West"],
+            "stationed_divisions": [],
+            "controlling_country": "Republic of Ireland",
+            "core_countries": ["Republic of Ireland"],
+            "claimed_by": []
+          },
+          "Republic of Ireland West": {
+            "major_cities": [
+              { "name": "Galway", "victory_points": 2 },
+              { "name": "Limerick", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "plains",
+            "bordering_regions": ["Republic of Ireland East Coast"],
+            "stationed_divisions": [],
+            "controlling_country": "Republic of Ireland",
+            "core_countries": ["Republic of Ireland"],
+            "claimed_by": []
+          }
+        }
+      },
+      
+        "Iberian Peninsula": {
+          "description": "The southwestern corner of Europe, comprising Spain and Portugal, divided into distinct topographical regions.",
+          "major_powers": ["Spain", "Portugal"],
+          "regions": {
+            "Cantabrian Coast & Mountains": {
+              "major_cities": [
+                { "name": "Bilbao", "victory_points": 2 },
+                { "name": "Santander", "victory_points": 1 },
+                { "name": "Oviedo", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 2,
+              "terrain": "mountainous",
+              "bordering_regions": ["Pyrenean Foothills", "Meseta Central"],
+              "stationed_divisions": [],
+              "controlling_country": "Spain",
+              "core_countries": ["Spain"],
+              "claimed_by": []
+            },
+            "Pyrenean Foothills": {
+              "major_cities": [
+                { "name": "Huesca", "victory_points": 1 },
+                { "name": "Lleida", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 2,
+              "terrain": "hills",
+              "bordering_regions": ["Cantabrian Coast & Mountains", "Ebro Valley & Catalonia", "Meseta Central", "The Pyrenees"],
+              "stationed_divisions": [],
+              "controlling_country": "Spain",
+              "core_countries": ["Spain"],
+              "claimed_by": []
+            },
+            "Ebro Valley & Catalonia": {
+              "major_cities": [
+                { "name": "Zaragoza", "victory_points": 2 },
+                { "name": "Barcelona", "victory_points": 3 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 4,
+              "terrain": "plains",
+              "bordering_regions": ["Pyrenean Foothills", "Meseta Central"],
+              "stationed_divisions": [],
+              "controlling_country": "Spain",
+              "core_countries": ["Spain"],
+              "claimed_by": []
+            },
+            "Meseta Central": {
+              "major_cities": [
+                { "name": "Madrid", "victory_points": 4 },
+                { "name": "Toledo", "victory_points": 1 },
+                { "name": "Salamanca", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 4,
+              "terrain": "plateau",
+              "bordering_regions": [
+                "Cantabrian Coast & Mountains",
+                "Pyrenean Foothills",
+                "Ebro Valley & Catalonia",
+                "Andalusian Plains & Sierra Morena",
+                "Portuguese Interior Highlands"
+              ],
+              "stationed_divisions": [],
+              "controlling_country": "Spain",
+              "core_countries": ["Spain"],
+              "claimed_by": []
+            },
+            "Andalusian Plains & Sierra Morena": {
+              "major_cities": [
+                { "name": "Seville", "victory_points": 3 },
+                { "name": "Granada", "victory_points": 2 },
+                { "name": "Córdoba", "victory_points": 2 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 3,
+              "terrain": "plains/hills",
+              "bordering_regions": ["Meseta Central", "Portuguese Atlantic Coast", "Portuguese Interior Highlands", "Gibraltar"],
+              "stationed_divisions": [],
+              "controlling_country": "Spain",
+              "core_countries": ["Spain"],
+              "claimed_by": []
+            },
+            "Portuguese Atlantic Coast": {
+              "major_cities": [
+                { "name": "Porto", "victory_points": 2 },
+                { "name": "Lisbon", "victory_points": 3 },
+                { "name": "Faro", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 3,
+              "terrain": "coastal",
+              "bordering_regions": ["Andalusian Plains & Sierra Morena", "Portuguese Interior Highlands", "Meseta Central"],
+              "stationed_divisions": [],
+              "controlling_country": "Portugal",
+              "core_countries": ["Portugal"],
+              "claimed_by": []
+            },
+            "Portuguese Interior Highlands": {
+              "major_cities": [
+                { "name": "Coimbra", "victory_points": 1 },
+                { "name": "Évora", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 0,
+              "infrastructure_level": 2,
+              "terrain": "hills",
+              "bordering_regions": ["Portuguese Atlantic Coast", "Meseta Central", "Andalusian Plains & Sierra Morena"],
+              "stationed_divisions": [],
+              "controlling_country": "Portugal",
+              "core_countries": ["Portugal"],
+              "claimed_by": []
+            },
+            "Gibraltar": {
+              "major_cities": [
+                { "name": "Gibraltar", "victory_points": 2 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 3,
+              "infrastructure_level": 2,
+              "terrain": "rocky coastal",
+              "bordering_regions": ["Andalusian Plains & Sierra Morena"],
+              "stationed_divisions": [],
+              "controlling_country": "United Kingdom",
+              "core_countries": ["United Kingdom"],
+              "claimed_by": ["Spain"]
+            }
+          }
+        },
+        "Apennine Peninsula": {
+          "description": "Italy’s boot-shaped peninsula, dominated by the spine of the Apennine Mountains and the fertile coastal plains on either side.",
+          "regions": {
+            "Tyrrhenian Coastal Plain": {
+              "major_cities": [
+                { "name": "Rome", "victory_points": 5 },
+                { "name": "Naples", "victory_points": 4 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 4,
+              "terrain": "plains",
+              "bordering_regions": ["Apennine Mountains", "Calabria"],
+              "stationed_divisions": [],
+              "controlling_country": "Kingdom of Italy",
+              "core_countries": ["Kingdom of Italy"],
+              "claimed_by": []
+            },
+            "Apennine Mountains": {
+              "major_cities": [
+                { "name": "L'Aquila", "victory_points": 2 },
+                { "name": "Campobasso", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 0,
+              "infrastructure_level": 2,
+              "terrain": "mountainous",
+              "bordering_regions": ["Tyrrhenian Coastal Plain", "Adriatic Coastal Plain", "Calabria"],
+              "stationed_divisions": [],
+              "controlling_country": "Kingdom of Italy",
+              "core_countries": ["Kingdom of Italy"],
+              "claimed_by": []
+            },
+            "Adriatic Coastal Plain": {
+              "major_cities": [
+                { "name": "Venice", "victory_points": 4 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 3,
+              "terrain": "plains",
+              "bordering_regions": ["Apennine Mountains"],
+              "stationed_divisions": [],
+              "controlling_country": "Kingdom of Italy",
+              "core_countries": ["Kingdom of Italy"],
+              "claimed_by": []
+            },
+            "Calabria": {
+              "major_cities": [
+                { "name": "Reggio Calabria", "victory_points": 2 },
+                { "name": "Catanzaro", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 0,
+              "infrastructure_level": 2,
+              "terrain": "mountainous",
+              "bordering_regions": ["Tyrrhenian Coastal Plain", "Apennine Mountains"],
+              "stationed_divisions": [],
+              "controlling_country": "Kingdom of Italy",
+              "core_countries": ["Kingdom of Italy"],
+              "claimed_by": []
+            },
+            "Ligurian Coastal Plain": {
+              "major_cities": [
+                { "name": "Genoa", "victory_points": 4 },
+                { "name": "La Spezia", "victory_points": 2 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 3,
+              "terrain": "coastal",
+              "bordering_regions": ["Tuscan Plains", "Apennine Mountains"],
+              "stationed_divisions": [],
+              "controlling_country": "Kingdom of Italy",
+              "core_countries": ["Kingdom of Italy"],
+              "claimed_by": []
+            },
+            "Tuscan Plains": {
+              "major_cities": [
+                { "name": "Florence", "victory_points": 5 },
+                { "name": "Pisa", "victory_points": 3 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 4,
+              "terrain": "plains",
+              "bordering_regions": ["Ligurian Coastal Plain", "Apennine Mountains"],
+              "stationed_divisions": [],
+              "controlling_country": "Kingdom of Italy",
+              "core_countries": ["Kingdom of Italy"],
+              "claimed_by": []
+            },
+            "Basilicata Uplands": {
+              "major_cities": [
+                { "name": "Potenza", "victory_points": 2 },
+                { "name": "Matera", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 0,
+              "infrastructure_level": 2,
+              "terrain": "mountainous",
+              "bordering_regions": ["Apennine Mountains", "Calabria", "Apulia"],
+              "stationed_divisions": [],
+              "controlling_country": "Kingdom of Italy",
+              "core_countries": ["Kingdom of Italy"],
+              "claimed_by": []
+            },
+            "Apulia": {
+              "major_cities": [
+                { "name": "Bari", "victory_points": 3 },
+                { "name": "Brindisi", "victory_points": 2 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 3,
+              "terrain": "plains",
+              "bordering_regions": ["Adriatic Coastal Plain", "Basilicata Uplands"],
+              "stationed_divisions": [],
+              "controlling_country": "Kingdom of Italy",
+              "core_countries": ["Kingdom of Italy"],
+              "claimed_by": []
+          }
+        }
+      },
+      "Western Europe": {
+          "description": "France’s core strategic heartland, from the Seine’s basin through Normandy and across Alsace-Lorraine down into the foothills of the Alps and Pyrenees.",
+          "regions": {
+            "Greater Paris Region": {
+              "major_cities": [
+                { "name": "Paris", "victory_points": 5 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 4,
+              "terrain": "urban",
+              "bordering_regions": ["Normandy", "Alsace-Lorraine", "South French Countryside"],
+              "stationed_divisions": [],
+              "controlling_country": "France",
+              "core_countries": ["France"],
+              "claimed_by": []
+            },
+            "Normandy": {
+              "major_cities": [
+                { "name": "Caen", "victory_points": 2 },
+                { "name": "Rouen", "victory_points": 2 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 2,
+              "infrastructure_level": 3,
+              "terrain": "plains",
+              "bordering_regions": ["Greater Paris Region", "Brittany", "South French Countryside"],
+              "stationed_divisions": [],
+              "controlling_country": "France",
+              "core_countries": ["France"],
+              "claimed_by": []
+            },
+            "Alsace-Lorraine": {
+              "major_cities": [
+                { "name": "Strasbourg", "victory_points": 3 },
+                { "name": "Metz", "victory_points": 2 }
+              ],
+              "civil_unrest_level": 1,
+              "fortification_level": 3,
+              "infrastructure_level": 3,
+              "terrain": "hills",
+              "bordering_regions": ["Greater Paris Region", "West German Rhineland", "South French Countryside", "Swiss Border"],
+              "stationed_divisions": [],
+              "controlling_country": "France",
+              "core_countries": ["France", "Germany"],
+              "claimed_by": ["Germany"]
+            },
+            "South French Countryside": {
+              "major_cities": [
+                { "name": "Clermont-Ferrand", "victory_points": 1 },
+                { "name": "Limoges", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 0,
+              "infrastructure_level": 2,
+              "terrain": "plains",
+              "bordering_regions": ["Greater Paris Region", "Normandy", "Alsace-Lorraine", "West Alps", "North Pyrenees"],
+              "stationed_divisions": [],
+              "controlling_country": "France",
+              "core_countries": ["France"],
+              "claimed_by": []
+            },
+            "West Alps": {
+              "major_cities": [
+                { "name": "Nice", "victory_points": 3 },
+                { "name": "Grenoble", "victory_points": 2 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 2,
+              "infrastructure_level": 2,
+              "terrain": "mountainous",
+              "bordering_regions": ["South French Countryside", "North Italy Alps", "Swiss Border"],
+              "stationed_divisions": [],
+              "controlling_country": "France",
+              "core_countries": ["France"],
+              "claimed_by": []
+            },
+            "North Pyrenees": {
+              "major_cities": [
+                { "name": "Pau", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 2,
+              "terrain": "mountainous",
+              "bordering_regions": ["South French Countryside", "Pyrenean Foothills"],
+              "stationed_divisions": [],
+              "controlling_country": "France",
+              "core_countries": ["France"],
+              "claimed_by": []
+            },
+            "Brittany": {
+              "major_cities": [
+                { "name": "Rennes", "victory_points": 2 },
+                { "name": "Brest", "victory_points": 2 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 3,
+              "terrain": "coastal",
+              "bordering_regions": ["Normandy"],
+              "stationed_divisions": [],
+              "controlling_country": "France",
+              "core_countries": ["France"],
+              "claimed_by": []
+            }
+          }
+        },
+      "Low Countries": {
+        "description": "A flat coastal and inland region encompassing the modern Netherlands, Belgium and Luxembourg—defined by reclaimed polders, strategic North Sea ports, dense river corridors and the rolling Ardennes uplands. Control here grants dominance of trade routes into central Europe via the Rhine and Meuse.",
+        "major_powers": ["Netherlands", "Belgium", "Luxembourg"],
+        "regions": {
+          "Holland & Zeeland Delta": {
+            "major_cities": [
+              { "name": "Amsterdam", "victory_points": 5 },
+              { "name": "Rotterdam", "victory_points": 5 },
+              { "name": "The Hague", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 2,
+            "infrastructure_level": 5,
+            "terrain": "coastal polders",
+            "bordering_regions": ["Frisian Islands", "Utrecht & Gelderland Plain", "Flanders Coast & Ports"],
+            "stationed_divisions": [],
+            "controlling_country": "Netherlands",
+            "core_countries": ["Netherlands"],
+            "claimed_by": []
+          },
+          "Utrecht & Gelderland Plain": {
+            "major_cities": [
+              { "name": "Utrecht", "victory_points": 2 },
+              { "name": "Arnhem", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 4,
+            "terrain": "inland plains",
+            "bordering_regions": ["Holland & Zeeland Delta", "Frisian Islands", "Brabant & Meuse Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Netherlands",
+            "core_countries": ["Netherlands"],
+            "claimed_by": []
+          },
+          "Frisian Islands": {
+            "major_cities": [
+              { "name": "Leeuwarden", "victory_points": 1 },
+              { "name": "Harlingen", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 0,
+            "infrastructure_level": 2,
+            "terrain": "islands and tidal flats",
+            "bordering_regions": ["Holland & Zeeland Delta"],
+            "stationed_divisions": [],
+            "controlling_country": "Netherlands",
+            "core_countries": ["Netherlands"],
+            "claimed_by": []
+          },
+          "Flanders Coast & Ports": {
+            "major_cities": [
+              { "name": "Antwerp", "victory_points": 4 },
+              { "name": "Ostend", "victory_points": 2 },
+              { "name": "Bruges", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 2,
+            "infrastructure_level": 4,
+            "terrain": "coastal plains",
+            "bordering_regions": ["Holland & Zeeland Delta", "Brabant & Meuse Basin", "Ardennes & Luxembourg Highlands"],
+            "stationed_divisions": [],
+            "controlling_country": "Belgium",
+            "core_countries": ["Belgium"],
+            "claimed_by": []
+          },
+          "Brabant & Meuse Basin": {
+            "major_cities": [
+              { "name": "Brussels", "victory_points": 5 },
+              { "name": "Liège", "victory_points": 3 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 4,
+            "terrain": "river basin",
+            "bordering_regions": ["Utrecht & Gelderland Plain", "Flanders Coast & Ports", "Ardennes & Luxembourg Highlands"],
+            "stationed_divisions": [],
+            "controlling_country": "Belgium",
+            "core_countries": ["Belgium"],
+            "claimed_by": []
+          },
+          "Ardennes & Luxembourg Highlands": {
+            "major_cities": [
+              { "name": "Bastogne", "victory_points": 1 },
+              { "name": "Luxembourg City", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 0,
+            "infrastructure_level": 3,
+            "terrain": "hills and low mountains",
+            "bordering_regions": ["Flanders Coast & Ports", "Brabant & Meuse Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Belgium",
+            "core_countries": ["Belgium", "Luxembourg"],
+            "claimed_by": []
+          }
+        }
+      },
+      "Central Europe": {
+        "description": "The industrial and alpine heartland straddling the North German Plain, the Rhine–Main corridor, German uplands, Bavarian Alps, Swiss Plateau, and the eastern basins of Bohemia and the Pannonian basin. Control here secures Europe’s core rail and river arteries, mountain passes, and heavy-industry centers.",
+        "major_powers": ["Germany", "Swiss Confederation", "Austrian Empire"],
+        "regions": {
+          "North German Plain & Monarchist Stronghold": {
+            "major_cities": [
+              { "name": "Hamburg", "victory_points": 4 },
+              { "name": "Hanover", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 75,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "coastal plains",
+            "bordering_regions": ["Berlin Ruins & Brandenburg Wasteland", "Rhine–Main & Democratic Resistance"],
+            "stationed_divisions": [],
+            "controlling_country": "Germany",
+            "core_countries": ["Germany"],
+            "claimed_by": []
+          },
+          "Berlin Ruins & Brandenburg Wasteland": {
+            "major_cities": [
+              { "name": "Berlin", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 100,
+            "fortification_level": 0,
+            "infrastructure_level": 0,
+            "terrain": "urban wasteland",
+            "bordering_regions": ["North German Plain & Monarchist Stronghold", "Rhine–Main & Democratic Resistance"],
+            "stationed_divisions": [],
+            "controlling_country": "Germany",
+            "core_countries": ["Germany"],
+            "claimed_by": []
+          },
+          "Rhine–Main & Democratic Resistance": {
+            "major_cities": [
+              { "name": "Frankfurt", "victory_points": 4 },
+              { "name": "Mainz", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 85,
+            "fortification_level": 2,
+            "infrastructure_level": 5,
+            "terrain": "river basin",
+            "bordering_regions": ["North German Plain & Monarchist Stronghold", "Saxony & Communist Cells", "Bavarian Alps & Fascist Remnants", "Berlin Ruins & Brandenburg Wasteland"],
+            "stationed_divisions": [],
+            "controlling_country": "Germany",
+            "core_countries": ["Germany"],
+            "claimed_by": []
+          },
+          "Saxony & Communist Cells": {
+            "major_cities": [
+              { "name": "Leipzig", "victory_points": 3 },
+              { "name": "Dresden", "victory_points": 3 }
+            ],
+            "civil_unrest_level": 90,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "hills & low mountains",
+            "bordering_regions": ["Rhine–Main & Democratic Resistance", "Bavarian Alps & Fascist Remnants", "Bohemian Basin & Prague Corridor"],
+            "stationed_divisions": [],
+            "controlling_country": "Germany",
+            "core_countries": ["Germany"],
+            "claimed_by": []
+          },
+          "Bavarian Alps & Fascist Remnants": {
+            "major_cities": [
+              { "name": "Munich", "victory_points": 4 },
+              { "name": "Salzburg", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 80,
+            "fortification_level": 2,
+            "infrastructure_level": 4,
+            "terrain": "alpine foothills & basin",
+            "bordering_regions": ["Saxony & Communist Cells", "Rhine–Main & Democratic Resistance", "Swiss Plateau & Alpine Passes"],
+            "stationed_divisions": [],
+            "controlling_country": "Germany",
+            "core_countries": ["Germany"],
+            "claimed_by": []
+          },
+          "Swiss Plateau & Alpine Passes": {
+            "major_cities": [
+              { "name": "Zurich", "victory_points": 3 },
+              { "name": "Geneva", "victory_points": 3 }
+            ],
+            "civil_unrest_level": 10,
+            "fortification_level": 3,
+            "infrastructure_level": 4,
+            "terrain": "plateau & mountain passes",
+            "bordering_regions": ["Bavarian Alps & Fascist Remnants", "Bohemian Basin & Prague Corridor"],
+            "stationed_divisions": [],
+            "controlling_country": "Swiss Confederation",
+            "core_countries": ["Swiss Confederation"],
+            "claimed_by": []
+          },
+          "Bohemian Basin & Prague Corridor": {
+            "major_cities": [
+              { "name": "Prague", "victory_points": 4 },
+              { "name": "Plzeň", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 45,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "river basin",
+            "bordering_regions": ["Saxony & Communist Cells", "Bavarian Alps & Fascist Remnants", "Pannonian Basin (Budapest & Hungarian Plains)"],
+            "stationed_divisions": [],
+            "controlling_country": "Austrian Empire",
+            "core_countries": ["Austrian Empire", "Czech Republic"],
+            "claimed_by": []
+          },
+          "Pannonian Basin (Budapest & Hungarian Plains)": {
+            "major_cities": [
+              { "name": "Budapest", "victory_points": 4 },
+              { "name": "Debrecen", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 40,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "flat plains",
+            "bordering_regions": ["Bohemian Basin & Prague Corridor", "Slovenian Alpine Foothills"],
+            "stationed_divisions": [],
+            "controlling_country": "Austrian Empire",
+            "core_countries": ["Austrian Empire", "Hungary"],
+            "claimed_by": []
+          },
+          "Slovenian Alpine Foothills": {
+            "major_cities": [
+              { "name": "Ljubljana", "victory_points": 2 },
+              { "name": "Maribor", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 35,
+            "fortification_level": 0,
+            "infrastructure_level": 2,
+            "terrain": "hills & foothills",
+            "bordering_regions": ["Pannonian Basin (Budapest & Hungarian Plains)", "Croatian Littoral & Dalmatia"],
+            "stationed_divisions": [],
+            "controlling_country": "Austrian Empire",
+            "core_countries": ["Austrian Empire", "Slovenia"],
+            "claimed_by": []
+          },
+          "Croatian Littoral & Dalmatia": {
+            "major_cities": [
+              { "name": "Split", "victory_points": 2 },
+              { "name": "Rijeka", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 60,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "coastal mountains",
+            "bordering_regions": ["Slovenian Alpine Foothills"],
+            "stationed_divisions": [],
+            "controlling_country": "Kingdom of Italy",
+            "core_countries": ["Kingdom of Italy", "Croatia"],
+            "claimed_by": ["Austrian Empire"]
+          }
+        }
+      },
+      "Balkans": {
+        "description": "The contested southeastern flank of Europe, from the Adriatic through the Dinaric Alps, Pannonian basin, and Aegean approaches. Here the Kingdom of Italy, the crumbling Federation of Balkan Republics, Greece and Bulgaria vie for influence over strategic passes, plains and ports.",
+        "major_powers": ["Kingdom of Italy", "Federation of Balkan Republics", "Greece", "Bulgaria"],
+        "regions": {
+          "Albanian Highlands & Tirana Basin": {
+            "major_cities": [
+              { "name": "Tirana", "victory_points": 3 },
+              { "name": "Shkodër", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 20,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "mountainous",
+            "bordering_regions": ["Croatian Littoral & Dalmatia", "Macedonian Highlands & Skopje Gate"],
+            "stationed_divisions": [],
+            "controlling_country": "Kingdom of Italy",
+            "core_countries": ["Albania"],
+            "claimed_by": []
+          },
+          "Bosnian Highlands & Sarajevo Corridor": {
+            "major_cities": [
+              { "name": "Sarajevo", "victory_points": 3 },
+              { "name": "Mostar", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 85,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "mountainous",
+            "bordering_regions": ["Croatian Littoral & Dalmatia", "Serbian Plains & Belgrade Basin", "Macedonian Highlands & Skopje Gate"],
+            "stationed_divisions": [],
+            "controlling_country": "Federation of Balkan Republics",
+            "core_countries": ["Federation of Balkan Republics"],
+            "claimed_by": []
+          },
+          "Serbian Plains & Belgrade Basin": {
+            "major_cities": [
+              { "name": "Belgrade", "victory_points": 4 },
+              { "name": "Novi Sad", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 80,
+            "fortification_level": 1,
+            "infrastructure_level": 4,
+            "terrain": "river plains",
+            "bordering_regions": ["Bosnian Highlands & Sarajevo Corridor", "Croatian Littoral & Dalmatia", "Macedonian Highlands & Skopje Gate"],
+            "stationed_divisions": [],
+            "controlling_country": "Federation of Balkan Republics",
+            "core_countries": ["Federation of Balkan Republics"],
+            "claimed_by": []
+          },
+          "Macedonian Highlands & Skopje Gate": {
+            "major_cities": [
+              { "name": "Skopje", "victory_points": 3 },
+              { "name": "Bitola", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 90,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "hills & mountain passes",
+            "bordering_regions": ["Serbian Plains & Belgrade Basin", "Bosnian Highlands & Sarajevo Corridor", "Albanian Highlands & Tirana Basin", "Greek Macedonia & Thessaloniki Corridor", "Bulgarian Danubian Plains & Sofia Corridor"],
+            "stationed_divisions": [],
+            "controlling_country": "Federation of Balkan Republics",
+            "core_countries": ["Federation of Balkan Republics"],
+            "claimed_by": []
+          },
+          "Greek Macedonia & Thessaloniki Corridor": {
+            "major_cities": [
+              { "name": "Thessaloniki", "victory_points": 4 },
+              { "name": "Kavala", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 15,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "plains & coastline",
+            "bordering_regions": ["Macedonian Highlands & Skopje Gate", "Albanian Highlands & Tirana Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Greece",
+            "core_countries": ["Greece"],
+            "claimed_by": []
+          },
+          "Bulgarian Danubian Plains & Sofia Corridor": {
+            "major_cities": [
+              { "name": "Sofia", "victory_points": 3 },
+              { "name": "Plovdiv", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 20,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "river plains",
+            "bordering_regions": ["Macedonian Highlands & Skopje Gate"],
+            "stationed_divisions": [],
+            "controlling_country": "Bulgaria",
+            "core_countries": ["Bulgaria"],
+            "claimed_by": []
+          }
+        }
+      },
+      "Eastern Europe": {
+        "description": "The eastern corridor of the continent, from the Baltic to the Black Sea, dominated by the Polish People’s Republic and Romania. Strategic river basins, plains and mountain barriers shape both defense and movement.",
+        "major_powers": ["Polish People’s Republic", "Romania"],
+        "regions": {
+          "Polish Baltic Coast & Masurian Lakes": {
+            "major_cities": [
+              { "name": "Gdańsk", "victory_points": 2 },
+              { "name": "Gdynia", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 10,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "coastal plains & lakes",
+            "bordering_regions": ["Warsaw & Vistula Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Polish People’s Republic",
+            "core_countries": ["Polish People’s Republic"],
+            "claimed_by": []
+          },
+          "Warsaw & Vistula Basin": {
+            "major_cities": [
+              { "name": "Warsaw", "victory_points": 5 },
+              { "name": "Toruń", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 15,
+            "fortification_level": 2,
+            "infrastructure_level": 5,
+            "terrain": "river plains",
+            "bordering_regions": ["Polish Baltic Coast & Masurian Lakes", "Silesian Highlands & Upper Silesia", "Podlaskie Lowlands & Białystok", "Carpathian Foothills & Kraków Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Polish People’s Republic",
+            "core_countries": ["Polish People’s Republic"],
+            "claimed_by": []
+          },
+          "Silesian Highlands & Upper Silesia": {
+            "major_cities": [
+              { "name": "Katowice", "victory_points": 2 },
+              { "name": "Wrocław", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 20,
+            "fortification_level": 2,
+            "infrastructure_level": 4,
+            "terrain": "hills & uplands",
+            "bordering_regions": ["Warsaw & Vistula Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Polish People’s Republic",
+            "core_countries": ["Polish People’s Republic"],
+            "claimed_by": []
+          },
+          "Podlaskie Lowlands & Białystok": {
+            "major_cities": [
+              { "name": "Białystok", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 10,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "plains",
+            "bordering_regions": ["Warsaw & Vistula Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Polish People’s Republic",
+            "core_countries": ["Polish People’s Republic"],
+            "claimed_by": []
+          },
+          "Carpathian Foothills & Kraków Basin": {
+            "major_cities": [
+              { "name": "Kraków", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 25,
+            "fortification_level": 2,
+            "infrastructure_level": 3,
+            "terrain": "hills & low mountains",
+            "bordering_regions": ["Warsaw & Vistula Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Polish People’s Republic",
+            "core_countries": ["Polish People’s Republic"],
+            "claimed_by": []
+          },
+          "Transylvanian Plateau & Carpathians": {
+            "major_cities": [
+              { "name": "Cluj-Napoca", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 15,
+            "fortification_level": 2,
+            "infrastructure_level": 2,
+            "terrain": "plateau & mountains",
+            "bordering_regions": ["Wallachian Plain & Bucharest Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Romania",
+            "core_countries": ["Romania"],
+            "claimed_by": []
+          },
+          "Wallachian Plain & Bucharest Basin": {
+            "major_cities": [
+              { "name": "Bucharest", "victory_points": 5 },
+              { "name": "Ploiești", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 10,
+            "fortification_level": 1,
+            "infrastructure_level": 4,
+            "terrain": "plains",
+            "bordering_regions": ["Transylvanian Plateau & Carpathians", "Dobruja Coast & Danube Delta"],
+            "stationed_divisions": [],
+            "controlling_country": "Romania",
+            "core_countries": ["Romania"],
+            "claimed_by": []
+          },
+          "Dobruja Coast & Danube Delta": {
+            "major_cities": [
+              { "name": "Constanța", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 10,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "marsh & coastal plain",
+            "bordering_regions": ["Wallachian Plain & Bucharest Basin"],
+            "stationed_divisions": [],
+            "controlling_country": "Romania",
+            "core_countries": ["Romania"],
+            "claimed_by": []
+          }
+        }
+      },
+      "Baltics Region": {
+        "description": "The strategic northern flank of Europe, comprising Finland, Estonia, Latvia and Lithuania—an area of forests, lakes and coastal plains long valued as a buffer against Russia.",
+        "major_powers": ["Republic of Finland", "Estonia", "Latvia", "Lithuania"],
+        "regions": {
+          "Finnish Lakelands & Borderlands": {
+            "major_cities": [
+              { "name": "Helsinki", "victory_points": 5 },
+              { "name": "Turku", "victory_points": 2 },
+              { "name": "Tampere", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 25,
+            "fortification_level": 2,
+            "infrastructure_level": 3,
+            "terrain": "forested lakelands",
+            "bordering_regions": [],
+            "stationed_divisions": [],
+            "controlling_country": "Republic of Finland",
+            "core_countries": ["Republic of Finland"],
+            "claimed_by": []
+          },
+          "Estonian Coast & Woodlands": {
+            "major_cities": [
+              { "name": "Tallinn", "victory_points": 3 },
+              { "name": "Tartu", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 20,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "coastal plains and forest",
+            "bordering_regions": ["Latvian Plains & Riverlands"],
+            "stationed_divisions": [],
+            "controlling_country": "Estonia",
+            "core_countries": ["Estonia"],
+            "claimed_by": []
+          },
+          "Latvian Plains & Riverlands": {
+            "major_cities": [
+              { "name": "Riga", "victory_points": 4 },
+              { "name": "Daugavpils", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 20,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "plains and river valleys",
+            "bordering_regions": ["Estonian Coast & Woodlands", "Lithuanian Forests & Lowlands"],
+            "stationed_divisions": [],
+            "controlling_country": "Latvia",
+            "core_countries": ["Latvia"],
+            "claimed_by": []
+          },
+          "Lithuanian Forests & Lowlands": {
+            "major_cities": [
+              { "name": "Vilnius", "victory_points": 4 },
+              { "name": "Kaunas", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 20,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "forests and lowlands",
+            "bordering_regions": ["Latvian Plains & Riverlands"],
+            "stationed_divisions": [],
+            "controlling_country": "Lithuania",
+            "core_countries": ["Lithuania"],
+            "claimed_by": []
+          }
+        }
+      },
+      "Mediterranean Islands": {
+        "description": "An archipelago of strategic outposts spanning the Mediterranean Sea—each island defined by rugged coasts, interior highlands or fertile plains, and centuries-old fortifications guarding vital sea lanes. Control here offers the power to choke commerce or project naval force from Gibraltar to the Levant.",
+        "regions": {
+          "Sicily": {
+            "major_cities": [
+              { "name": "Palermo", "victory_points": 4 },
+              { "name": "Catania", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 2,
+            "infrastructure_level": 3,
+            "terrain": "mixed",
+            "bordering_regions": [],
+            "stationed_divisions": [],
+            "controlling_country": "Kingdom of Italy",
+            "core_countries": ["Kingdom of Italy"],
+            "claimed_by": []
+          },
+          "Corsica": {
+            "major_cities": [
+              { "name": "Ajaccio", "victory_points": 2 },
+              { "name": "Bastia", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "mountainous",
+            "bordering_regions": [],
+            "stationed_divisions": [],
+            "controlling_country": "France",
+            "core_countries": ["France"],
+            "claimed_by": []
+          },
+          "Sardinia": {
+            "major_cities": [
+              { "name": "Cagliari", "victory_points": 3 },
+              { "name": "Sassari", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "mountainous",
+            "bordering_regions": [],
+            "stationed_divisions": [],
+            "controlling_country": "Kingdom of Italy",
+            "core_countries": ["Kingdom of Italy"],
+            "claimed_by": []
+          },
+          "Malta": {
+            "major_cities": [
+              { "name": "Valletta", "victory_points": 4 },
+              { "name": "Mdina", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 4,
+            "infrastructure_level": 2,
+            "terrain": "coastal",
+            "bordering_regions": [],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["Malta"],
+            "claimed_by": []
+          },
+          "Balearic Islands": {
+              "major_cities": [
+                { "name": "Palma", "victory_points": 2 },
+                { "name": "Ibiza", "victory_points": 1 },
+                { "name": "Mahon", "victory_points": 1 }
+              ],
+              "civil_unrest_level": 0,
+              "fortification_level": 1,
+              "infrastructure_level": 2,
+              "terrain": "island",
+              "bordering_regions": [],
+              "stationed_divisions": [],
+              "controlling_country": "Spain",
+              "core_countries": ["Spain"],
+              "claimed_by": []
+            },
+            "Cyprus": {
+            "major_cities": [
+              { "name": "Nicosia", "victory_points": 3 },
+              { "name": "Limassol", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "mixed",
+            "bordering_regions": [],
+            "stationed_divisions": [],
+            "controlling_country": "United Kingdom",
+            "core_countries": ["Cyprus"],
+            "claimed_by": ["Turkey"]
+          },
+          "Crete": {
+            "major_cities": [
+              { "name": "Heraklion", "victory_points": 2 },
+              { "name": "Chania", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 0,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "mountainous",
+            "bordering_regions": [],
+            "stationed_divisions": [],
+            "controlling_country": "Greece",
+            "core_countries": ["Greece"],
+            "claimed_by": []
+          }
+        }
+      }
+
+    },
+    "Asia": {},
+    "Africa": {},
+    "Oceania": {},
+    "The Americas": {},
+    "Sea Zones": {
+      "Arctic West Atlantic": {
+        "climate_band": "Arctic",
+        "storm_chance": 50,
+        "supply_penalty": 30,
+        "movement_penalty": 40,
+        "bordering_zones": ["Sub-Arctic West Atlantic", "Arctic East Atlantic"]
+      },
+      "Arctic East Atlantic": {
+        "climate_band": "Arctic",
+        "storm_chance": 50,
+        "supply_penalty": 30,
+        "movement_penalty": 40,
+        "bordering_zones": ["Sub-Arctic East Atlantic", "Arctic West Atlantic"]
+      },
+      "Sub-Arctic West Atlantic": {
+        "climate_band": "Sub-Arctic",
+        "storm_chance": 40,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Arctic West Atlantic", "North Temperate West Atlantic", "Sub-Arctic East Atlantic"]
+      },
+      "Sub-Arctic East Atlantic": {
+        "climate_band": "Sub-Arctic",
+        "storm_chance": 40,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Arctic East Atlantic", "North Temperate East Atlantic", "Sub-Arctic West Atlantic", "North Sea"]
+      },
+      "North Temperate West Atlantic": {
+        "climate_band": "North Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Sub-Arctic West Atlantic", "North Sub-Tropic West Atlantic", "North Temperate East Atlantic"]
+      },
+      "North Temperate East Atlantic": {
+        "climate_band": "North Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Sub-Arctic East Atlantic", "North Sub-Tropic East Atlantic", "North Temperate West Atlantic", "English Channel", "Bay of Biscay"]
+      },
+      "North Sub-Tropic West Atlantic": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 0,
+        "bordering_zones": ["North Temperate West Atlantic", "Northern Tropics West Atlantic", "Gulf of Mexico", "Caribbean Sea"]
+      },
+      "North Sub-Tropic East Atlantic": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 0,
+        "bordering_zones": ["North Temperate East Atlantic", "Northern Tropics East Atlantic", "Bay of Biscay", "Western Mediterranean"]
+      },
+      "Northern Tropics West Atlantic": {
+        "climate_band": "Northern Tropics",
+        "storm_chance": 50,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["North Sub-Tropic West Atlantic", "Northern Tropics East Atlantic", "Equatorial West Atlantic", "Caribbean Sea"]
+      },
+      "Northern Tropics East Atlantic": {
+        "climate_band": "Northern Tropics",
+        "storm_chance": 50,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["North Sub-Tropic East Atlantic", "Equatorial East Atlantic", "Northern Tropics West Atlantic"]
+      },
+      "Equatorial West Atlantic": {
+        "climate_band": "Equator",
+        "storm_chance": 60,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Northern Tropics West Atlantic", "Southern Tropics West Atlantic", "Equatorial East Atlantic"]
+      },
+      "Equatorial East Atlantic": {
+        "climate_band": "Equator",
+        "storm_chance": 60,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Northern Tropics East Atlantic", "Southern Tropics East Atlantic", "Equatorial West Atlantic"]
+      },
+      "Southern Tropics West Atlantic": {
+        "climate_band": "Southern Tropics",
+        "storm_chance": 40,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["Equatorial West Atlantic", "Southern Sub-Tropic West Atlantic", "Southern Tropics East Atlantic"]
+      },
+      "Southern Tropics East Atlantic": {
+        "climate_band": "Southern Tropics",
+        "storm_chance": 40,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["Equatorial East Atlantic", "Southern Sub-Tropic East Atlantic", "Southern Tropics West Atlantic"]
+      },
+      "Southern Sub-Tropic West Atlantic": {
+        "climate_band": "Southern Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["Southern Tropics West Atlantic", "South Temperate West Atlantic", "Southern Sub-Tropic East Atlantic"]
+      },
+      "Southern Sub-Tropic East Atlantic": {
+        "climate_band": "Southern Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["Southern Tropics East Atlantic", "South Temperate East Atlantic", "Southern Sub-Tropic West Atlantic"]
+      },
+      "South Temperate West Atlantic": {
+        "climate_band": "South Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Southern Sub-Tropic West Atlantic", "South Temperate East Atlantic", "West Antarctic Ocean"]
+      },
+      "South Temperate East Atlantic": {
+        "climate_band": "South Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Southern Sub-Tropic East Atlantic", "South Temperate West Atlantic", "West Antarctic Ocean"]
+      },
+      "Cape of Africa": {
+        "climate_band": "South Temperate",
+        "storm_chance": 65,
+        "supply_penalty": 15,
+        "movement_penalty": 20,
+        "bordering_zones": ["South Temperate East Atlantic", "West Indian Ocean", "West Antarctic Ocean"]
+      },
+      "Caribbean Sea": {
+        "climate_band": "Northern Tropics",
+        "storm_chance": 60,
+        "supply_penalty": 10,
+        "movement_penalty": 0,
+        "bordering_zones": ["North Sub-Tropic West Atlantic", "Northern Tropics West Atlantic", "Gulf of Mexico", "Panama Canal"]
+      },
+      "Gulf of Mexico": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 40,
+        "supply_penalty": 10,
+        "movement_penalty": 0,
+        "bordering_zones": ["North Sub-Tropic West Atlantic", "Caribbean Sea"]
+      },
+      "Drake Passage": {
+        "climate_band": "Antarctic",
+        "storm_chance": 80,
+        "supply_penalty": 40,
+        "movement_penalty": 50,
+        "bordering_zones": ["West Antarctic Ocean", "East Antarctic Ocean"]
+      },
+      "English Channel": {
+        "climate_band": "North Temperate",
+        "storm_chance": 30,
+        "supply_penalty": 5,
+        "movement_penalty": 5,
+        "bordering_zones": ["North Temperate East Atlantic", "Bay of Biscay", "North Sea"]
+      },
+      "Bay of Biscay": {
+        "climate_band": "North Temperate",
+        "storm_chance": 40,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["North Temperate East Atlantic", "English Channel", "North Sub-Tropic East Atlantic"]
+      },
+      "North Sea": {
+        "climate_band": "North Temperate",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["English Channel", "Baltic Sea", "Sub-Arctic East Atlantic"]
+      },
+      "Western Mediterranean": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Central Mediterranean", "North Sub-Tropic East Atlantic"]
+      },
+      "Central Mediterranean": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Western Mediterranean", "Eastern Mediterranean", "Adriatic Sea"]
+      },
+      "Eastern Mediterranean": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Central Mediterranean", "Aegean Sea"]
+      },
+      "Aegean Sea": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["Eastern Mediterranean", "Sea of Marmara"]
+      },
+      "Adriatic Sea": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["Central Mediterranean"]
+      },
+      "Black Sea": {
+        "climate_band": "North Temperate",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["Sea of Marmara"]
+      },
+      "Baltic Sea": {
+        "climate_band": "North Temperate",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["North Sea"]
+      },
+      "Sea of Marmara": {
+        "climate_band": "North Temperate",
+        "storm_chance": 25,
+        "supply_penalty": 5,
+        "movement_penalty": 5,
+        "bordering_zones": ["Aegean Sea", "Black Sea"]
+      },
+      "West Antarctic Ocean": {
+        "climate_band": "Antarctic",
+        "storm_chance": 90,
+        "supply_penalty": 50,
+        "movement_penalty": 60,
+        "bordering_zones": ["South Temperate West Atlantic", "South Temperate East Atlantic", "Drake Passage", "Cape of Africa", "Central Antarctic Ocean"]
+      },
+      "West Indian Ocean": {
+        "climate_band": "Southern Tropics",
+        "storm_chance": 40,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["Cape of Africa", "East Indian Ocean", "Arabian Sea", "Central Antarctic Ocean"]
+      },
+      "East Indian Ocean": {
+        "climate_band": "Southern Tropics",
+        "storm_chance": 50,
+        "supply_penalty": 15,
+        "movement_penalty": 15,
+        "bordering_zones": ["West Indian Ocean", "Bay of Bengal", "Southern Tropics East Pacific", "Java Sea", "Strait of Malacca", "Central Antarctic Ocean"]
+      },
+      "Central Antarctic Ocean": {
+        "climate_band": "Antarctic",
+        "storm_chance": 90,
+        "supply_penalty": 50,
+        "movement_penalty": 60,
+        "bordering_zones": ["West Antarctic Ocean", "East Antarctic Ocean", "West Indian Ocean", "East Indian Ocean"]
+      },
+      "Arabian Sea": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 45,
+        "supply_penalty": 10,
+        "movement_penalty": 10,
+        "bordering_zones": ["West Indian Ocean", "Red Sea", "Bay of Bengal"]
+      },
+      "Bay of Bengal": {
+        "climate_band": "Northern Tropics",
+        "storm_chance": 60,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Arabian Sea", "East Indian Ocean", "Strait of Malacca"]
+      },
+      "Red Sea": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 10,
+        "bordering_zones": ["Arabian Sea", "Suez Canal"]
+      },
+      "Strait of Malacca": {
+        "climate_band": "Equator",
+        "storm_chance": 50,
+        "supply_penalty": 15,
+        "movement_penalty": 20,
+        "bordering_zones": ["Bay of Bengal", "South China Sea", "East Indian Ocean", "Java Sea"]
+      },
+        "Coral Sea": {
+          "climate_band": "Southern Tropics",
+          "storm_chance": 55,
+          "supply_penalty": 15,
+          "movement_penalty": 15,
+          "bordering_zones": ["Equatorial West Pacific", "Tasman Sea", "Solomon Sea"]
+        },
+        "Tasman Sea": {
+          "climate_band": "Southern Sub-Tropic",
+          "storm_chance": 35,
+          "supply_penalty": 10,
+          "movement_penalty": 10,
+          "bordering_zones": ["Coral Sea", "South Temperate Central Pacific"]
+        },
+        "East Antarctic Ocean": {
+          "climate_band": "Antarctic",
+          "storm_chance": 90,
+          "supply_penalty": 50,
+          "movement_penalty": 60,
+          "bordering_zones": ["South Temperate Central Pacific", "South Temperate East Pacific", "South Temperate West Pacific", "Central Antarctic Ocean"]
+        },
+        "Bering Sea": {
+          "climate_band": "Arctic",
+          "storm_chance": 60,
+          "supply_penalty": 35,
+          "movement_penalty": 40,
+          "bordering_zones": ["Sea of Japan", "Sub-Arctic West Pacific"]
+        },
+        "Sea of Japan": {
+          "climate_band": "North Temperate",
+          "storm_chance": 30,
+          "supply_penalty": 15,
+          "movement_penalty": 10,
+          "bordering_zones": ["Bering Sea", "North Temperate West Pacific", "Yellow Sea"]
+        },
+        "Yellow Sea": {
+          "climate_band": "North Temperate",
+          "storm_chance": 35,
+          "supply_penalty": 20,
+          "movement_penalty": 10,
+          "bordering_zones": ["Sea of Japan", "South China Sea"]
+        },
+        "South China Sea": {
+          "climate_band": "Northern Tropics",
+          "storm_chance": 60,
+          "supply_penalty": 20,
+          "movement_penalty": 15,
+          "bordering_zones": ["Yellow Sea", "Strait of Malacca", "Northern Tropics West Pacific", "Java Sea"]
+        },
+        "Philippine Sea": {
+          "climate_band": "Northern Tropics",
+          "storm_chance": 65,
+          "supply_penalty": 25,
+          "movement_penalty": 20,
+          "bordering_zones": ["Northern Tropics West Pacific", "Micronesia Region"]
+        },
+      "Solomon Sea": {
+        "climate_band": "Southern Tropics",
+        "storm_chance": 55,
+        "supply_penalty": 20,
+        "movement_penalty": 15,
+        "bordering_zones": ["Coral Sea", "Equatorial West Pacific"]
+      },
+      "Java Sea": {
+        "climate_band": "Equator",
+        "storm_chance": 60,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Strait of Malacca", "South China Sea", "East Indian Ocean"]
+      },
+      "Micronesia Region": {
+        "climate_band": "Equator",
+        "storm_chance": 45,
+        "supply_penalty": 25,
+        "movement_penalty": 20,
+        "bordering_zones": ["Equatorial Central Pacific", "Philippine Sea"]
+      },
+      "Arctic West Pacific": {
+        "climate_band": "Arctic",
+        "storm_chance": 50,
+        "supply_penalty": 30,
+        "movement_penalty": 40,
+        "bordering_zones": ["Arctic Central Pacific", "Sub-Arctic West Pacific"]
+      },
+      "Arctic Central Pacific": {
+        "climate_band": "Arctic",
+        "storm_chance": 50,
+        "supply_penalty": 30,
+        "movement_penalty": 40,
+        "bordering_zones": ["Arctic West Pacific", "Arctic East Pacific", "Sub-Arctic Central Pacific"]
+      },
+      "Arctic East Pacific": {
+        "climate_band": "Arctic",
+        "storm_chance": 50,
+        "supply_penalty": 30,
+        "movement_penalty": 40,
+        "bordering_zones": ["Arctic Central Pacific", "Sub-Arctic East Pacific"]
+      },
+
+      "Sub-Arctic West Pacific": {
+        "climate_band": "Sub-Arctic",
+        "storm_chance": 40,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Arctic West Pacific", "Sub-Arctic Central Pacific", "North Temperate West Pacific"]
+      },
+      "Sub-Arctic Central Pacific": {
+        "climate_band": "Sub-Arctic",
+        "storm_chance": 40,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Arctic Central Pacific", "Sub-Arctic West Pacific", "Sub-Arctic East Pacific", "North Temperate Central Pacific"]
+      },
+      "Sub-Arctic East Pacific": {
+        "climate_band": "Sub-Arctic",
+        "storm_chance": 40,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Arctic East Pacific", "Sub-Arctic Central Pacific", "North Temperate East Pacific"]
+      },
+
+      "North Temperate West Pacific": {
+        "climate_band": "North Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Sub-Arctic West Pacific", "North Temperate Central Pacific", "North Sub-Tropic West Pacific"]
+      },
+      "North Temperate Central Pacific": {
+        "climate_band": "North Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Sub-Arctic Central Pacific", "North Temperate West Pacific", "North Temperate East Pacific", "North Sub-Tropic Central Pacific"]
+      },
+      "North Temperate East Pacific": {
+        "climate_band": "North Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Sub-Arctic East Pacific", "North Temperate Central Pacific", "North Sub-Tropic East Pacific"]
+      },
+
+      "North Sub-Tropic West Pacific": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 0,
+        "bordering_zones": ["North Temperate West Pacific", "North Sub-Tropic Central Pacific", "Northern Tropics West Pacific"]
+      },
+      "North Sub-Tropic Central Pacific": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 0,
+        "bordering_zones": ["North Temperate Central Pacific", "North Sub-Tropic West Pacific", "North Sub-Tropic East Pacific", "Northern Tropics Central Pacific"]
+      },
+      "North Sub-Tropic East Pacific": {
+        "climate_band": "North Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 0,
+        "bordering_zones": ["North Temperate East Pacific", "North Sub-Tropic Central Pacific", "Northern Tropics East Pacific"]
+      },
+
+      "Northern Tropics West Pacific": {
+        "climate_band": "Northern Tropics",
+        "storm_chance": 50,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["North Sub-Tropic West Pacific", "Northern Tropics Central Pacific", "Equatorial West Pacific"]
+      },
+      "Northern Tropics Central Pacific": {
+        "climate_band": "Northern Tropics",
+        "storm_chance": 50,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["North Sub-Tropic Central Pacific", "Northern Tropics West Pacific", "Northern Tropics East Pacific", "Equatorial Central Pacific"]
+      },
+      "Northern Tropics East Pacific": {
+        "climate_band": "Northern Tropics",
+        "storm_chance": 50,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["North Sub-Tropic East Pacific", "Northern Tropics Central Pacific", "Equatorial East Pacific"]
+      },
+
+      "Equatorial West Pacific": {
+        "climate_band": "Equator",
+        "storm_chance": 60,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Northern Tropics West Pacific", "Equatorial Central Pacific", "Southern Tropics West Pacific"]
+      },
+      "Equatorial Central Pacific": {
+        "climate_band": "Equator",
+        "storm_chance": 60,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Northern Tropics Central Pacific", "Equatorial West Pacific", "Equatorial East Pacific", "Southern Tropics Central Pacific"]
+      },
+      "Equatorial East Pacific": {
+        "climate_band": "Equator",
+        "storm_chance": 60,
+        "supply_penalty": 20,
+        "movement_penalty": 20,
+        "bordering_zones": ["Northern Tropics East Pacific", "Equatorial Central Pacific", "Southern Tropics East Pacific"]
+      },
+
+      "Southern Tropics West Pacific": {
+        "climate_band": "Southern Tropics",
+        "storm_chance": 40,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["Equatorial West Pacific", "Southern Tropics Central Pacific", "Southern Sub-Tropic West Pacific"]
+      },
+      "Southern Tropics Central Pacific": {
+        "climate_band": "Southern Tropics",
+        "storm_chance": 40,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["Equatorial Central Pacific", "Southern Tropics West Pacific", "Southern Tropics East Pacific", "Southern Sub-Tropic Central Pacific"]
+      },
+      "Southern Tropics East Pacific": {
+        "climate_band": "Southern Tropics",
+        "storm_chance": 40,
+        "supply_penalty": 15,
+        "movement_penalty": 10,
+        "bordering_zones": ["Equatorial East Pacific", "Southern Tropics Central Pacific", "Southern Sub-Tropic East Pacific"]
+      },
+
+      "Southern Sub-Tropic West Pacific": {
+        "climate_band": "Southern Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["Southern Tropics West Pacific", "Southern Sub-Tropic Central Pacific", "South Temperate West Pacific"]
+      },
+      "Southern Sub-Tropic Central Pacific": {
+        "climate_band": "Southern Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["Southern Tropics Central Pacific", "Southern Sub-Tropic West Pacific", "Southern Sub-Tropic East Pacific", "South Temperate Central Pacific"]
+      },
+      "Southern Sub-Tropic East Pacific": {
+        "climate_band": "Southern Sub-Tropic",
+        "storm_chance": 30,
+        "supply_penalty": 10,
+        "movement_penalty": 5,
+        "bordering_zones": ["Southern Tropics East Pacific", "Southern Sub-Tropic Central Pacific", "South Temperate East Pacific"]
+      },
+      "South Temperate West Pacific": {
+        "climate_band": "South Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Southern Sub-Tropic West Pacific", "South Temperate Central Pacific", "East Antarctic Ocean"]
+      },
+      "South Temperate Central Pacific": {
+        "climate_band": "South Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Southern Sub-Tropic Central Pacific", "South Temperate West Pacific", "South Temperate East Pacific", "East Antarctic Ocean"]
+      },
+      "South Temperate East Pacific": {
+        "climate_band": "South Temperate",
+        "storm_chance": 20,
+        "supply_penalty": 5,
+        "movement_penalty": 0,
+        "bordering_zones": ["Southern Sub-Tropic East Pacific", "South Temperate Central Pacific", "East Antarctic Ocean"]
+      }
+    },
+    "Naval Chokepoints": {
+      "Gibraltar Strait": {
+        "type": "strait",
+        "connects": ["North Temperate East Atlantic", "Western Mediterranean"],
+        "controller": "United Kingdom",
+        "status": "open",
+        "general_policy": "all_ships",
+        "special_rules": ["chokepoint for Atlantic-Med transition"]
+      },
+      "Danish Straits": {
+        "type": "strait",
+        "connects": ["North Sea", "Baltic Sea"],
+        "controller": "Denmark",
+        "status": "open",
+        "general_policy": "all_ships",
+        "special_rules": ["blockable by controller", "critical for Baltic access"]
+      },
+      "Kiel Canal": {
+        "type": "canal",
+        "connects": ["North Sea", "Baltic Sea"],
+        "controller": "Germany",
+        "status": "open",
+        "general_policy": "all_ships",
+        "special_rules": ["taxable passage", "military restricted during wartime"]
+      },
+      "Bosphorus Strait": {
+        "type": "strait",
+        "connects": ["Black Sea", "Sea of Marmara"],
+        "controller": "Turkey",
+        "status": "open",
+        "general_policy": "all_ships",
+        "special_rules": ["blockable by controller", "critical for USSR Black Sea access"]
+      },
+      "Dardanelles Strait": {
+        "type": "strait",
+        "connects": ["Sea of Marmara", "Aegean Sea"],
+        "controller": "Turkey",
+        "status": "open",
+        "general_policy": "all_ships",
+        "special_rules": ["blockable by controller", "Montreux Convention governs wartime closure"]
+      },
+      "Suez Canal": {
+        "type": "canal",
+        "connects": ["Eastern Mediterranean", "Red Sea"],
+        "controller": "United Kingdom",
+        "status": "open",
+        "general_policy": "all_ships",
+        "special_rules": ["taxable passage", "vulnerable to closure by military force"]
+      },
+      "Bab el-Mandeb Strait": {
+        "type": "strait",
+        "connects": ["Red Sea", "Arabian Sea"],
+        "controller": "United Kingdom",
+        "status": "open",
+        "general_policy": "all_ships",
+        "special_rules": ["blockable by controller", "critical for Red Sea traffic"]
+      },
+        "Panama Canal": {
+          "type": "canal",
+          "connects": ["Caribbean Sea", "Northern Tropics East Pacific"],
+          "controller": "United States",
+          "status": "open",
+          "general_policy": "all_ships",
+          "special_rules": ["taxable passage", "can be sabotaged or seized"]
+        },
+        "Bering Strait": {
+          "type": "strait",
+          "connects": ["Arctic East Pacific", "Arctic West Atlantic"],
+          "controller": "Soviet Union",
+          "status": "open",
+          "general_policy": "all_ships",
+          "special_rules": ["ice hazards most of year", "seasonal passability"]
+      }
+      
+    }
   }
 }

@@ -89,32 +89,6 @@ async def backup_dynamic_json(self):
     except Exception as e:
         print(f"Failed to backup dynamic JSON: {e}")
 
-def normalize_static(obj, in_countries=False):
-    """
-    - At the very top level, when we see the raw "COUNTRIES" dict, we
-      copy its keys verbatim into lowercase "countries" without slugifying them.
-    - Everywhere else, we slugify keys as before.
-    """
-    if isinstance(obj, dict):
-        new = {}
-        for k, v in obj.items():
-            # catch the raw COUNTRIES block, before it gets slugified
-            if not in_countries and k.lower() == "countries":
-                # copy raw country-names → data, but normalize _inside_ each country
-                raw_c = {}
-                for country_name, country_data in v.items():
-                    raw_c[country_name] = normalize_static(country_data, in_countries=True)
-                new["countries"] = raw_c
-            else:
-                # slugify everything else
-                nk = re.sub(r'\W+', '_', k.strip()).lower()
-                new[nk] = normalize_static(v, in_countries=in_countries)
-        return new
-
-    if isinstance(obj, list):
-        return [normalize_static(i, in_countries=in_countries) for i in obj]
-
-    return obj
 
 class AlliancePollButton(ui.Button):
     def __init__(self, cog, alliance: str, poll_id: str, option: str):
@@ -131,7 +105,7 @@ class AlliancePollButton(ui.Button):
         # resolve the user’s country
         user_country = self.cog.alternate_country_dict.get(str(user.id))
         if not user_country:
-            for country, data in self.cog.cold_war_data["countries"].items():
+            for country, data in self.cog.cold_war_data["COUNTRIES"].items():
                 if data.get("player_id") == user.id:
                     user_country = country
                     break
@@ -176,7 +150,7 @@ class ConfirmSpyAssignView(discord.ui.View):
     async def confirm(self, interaction: Interaction, button: discord.ui.Button):
         # ensure our data is initialized
         self.cog.init_spy_data(self.country)
-        actor = self.cog.cold_war_data["countries"][self.country]["espionage"]
+        actor = self.cog.cold_war_data["COUNTRIES"][self.country]["ESPIONAGE"]
 
         # recompute free = total – sum(already assigned)
         total = actor.get("total_operatives", 0)
@@ -197,9 +171,9 @@ class ConfirmSpyAssignView(discord.ui.View):
         
         await self.cog.save_delta(
             dict_path=[
-                "countries",
+                "COUNTRIES",
                 self.country,
-                "espionage",
+                "ESPIONAGE",
                 "assigned_ops"
             ],
             dict_delta={
@@ -212,15 +186,15 @@ class ConfirmSpyAssignView(discord.ui.View):
 
         await self.cog.save_delta(
             dict_path=[
-                "countries",
+                "COUNTRIES",
                 self.country,
-                "espionage",
+                "ESPIONAGE",
                 "operatives_available"
                 ], 
                 int_delta=new_free - self.cog.dynamic_data
-                                        .get("countries", {})
+                                        .get("COUNTRIES", {})
                                         .get(self.country, {})
-                                        .get("espionage", {})
+                                        .get("ESPIONAGE", {})
                                         .get("operatives_available", 0)
                                         )
 
@@ -312,7 +286,7 @@ class StartProjectConfirmView(discord.ui.View):
 
         # 2) Create / overwrite the project entry
         path_proj = [
-            "countries",
+            "COUNTRIES",
             self.country,
             "national_projects",
             self.project_name
@@ -330,7 +304,7 @@ class StartProjectConfirmView(discord.ui.View):
         # — research_penalty →
         rp = self.penalties.get("research_penalty")
         if rp is not None:
-            path_rp = ["countries", self.country, "research", "research_bonus"]
+            path_rp = ["COUNTRIES", self.country, "RESEARCH", "research_bonus"]
             await self.cog.save_delta(
                 dict_path=path_rp,
                 int_delta=-rp
@@ -340,9 +314,9 @@ class StartProjectConfirmView(discord.ui.View):
         ep = self.penalties.get("espionage_penalty")
         if ep is not None:
             path_ep = [
-                "countries",
+                "COUNTRIES",
                 self.country,
-                "espionage",
+                "ESPIONAGE",
                 "domestic_intelligence_score"
             ]
             await self.cog.save_delta(
@@ -354,11 +328,11 @@ class StartProjectConfirmView(discord.ui.View):
         fp = self.penalties.get("factory_penalty")
         if fp is not None:
             # figure out old & new
-            old = self.cog.dynamic_data["countries"][self.country] \
+            old = self.cog.dynamic_data["COUNTRIES"][self.country] \
                         ["economic"]["factories"]["civilian_factories"]
             new = max(0, old - fp)
             path_fp = [
-                "countries",
+                "COUNTRIES",
                 self.country,
                 "economic",
                 "factories",
@@ -379,7 +353,7 @@ class StartProjectConfirmView(discord.ui.View):
 
     @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if str(interaction.user.id) != str(self.data_ref["countries"][self.country]["player_id"]):
+        if str(interaction.user.id) != str(self.data_ref["COUNTRIES"][self.country]["player_id"]):
             return await interaction.response.send_message("Nice try buddy. This ain't your command.", ephemeral=True)
         await interaction.response.edit_message(content="❌ Project canceled.", view=None, embed=None)
 
@@ -466,20 +440,20 @@ class ResearchConfirmView(discord.ui.View):
     @discord.ui.button(label="✅ Confirm", style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Unlock instantly if carry-over covers it
-        if str(interaction.user.id) != str(self.data_ref["countries"][self.country]["player_id"]):
+        if str(interaction.user.id) != str(self.data_ref["COUNTRIES"][self.country]["player_id"]):
             return await interaction.response.send_message("Nice try buddy. This ain't your command.", ephemeral=True)
         if self.remaining_days == 0:
             # 1) Add to unlocked_techs list
-            path_unlock = ["countries", self.country, "research", "unlocked_techs"]
+            path_unlock = ["COUNTRIES", self.country, "RESEARCH", "unlocked_techs"]
             await self.cog.save_delta(
                 dict_path=path_unlock,
                 list_delta=[self.tech_name]
             )
 
             # 2) Set carryover_days[slot] = carry_used
-            old = self.data_ref["countries"][self.country]["research"]["carryover_days"].get(self.slot, 0)
+            old = self.data_ref["COUNTRIES"][self.country]["RESEARCH"]["carryover_days"].get(self.slot, 0)
             new_val = self.carry_used
-            path_carry = ["countries", self.country, "research", "carryover_days", self.slot]
+            path_carry = ["COUNTRIES", self.country, "RESEARCH", "carryover_days", self.slot]
             await self.cog.save_delta(
                 dict_path=path_carry,
                 int_delta=new_val - old
@@ -489,7 +463,7 @@ class ResearchConfirmView(discord.ui.View):
 
         else:
             # 1) Place it into active_slots
-            path_active = ["countries", self.country, "research", "active_slots", self.slot]
+            path_active = ["COUNTRIES", self.country, "RESEARCH", "active_slots", self.slot]
             await self.cog.save_delta(
                 dict_path=path_active,
                 dict_delta={
@@ -499,8 +473,8 @@ class ResearchConfirmView(discord.ui.View):
             )
 
             # 2) Zero out carryover_days[slot]
-            old = self.data_ref["countries"][self.country]["research"]["carryover_days"].get(self.slot, 0)
-            path_carry = ["countries", self.country, "research", "carryover_days", self.slot]
+            old = self.data_ref["COUNTRIES"][self.country]["RESEARCH"]["carryover_days"].get(self.slot, 0)
+            path_carry = ["COUNTRIES", self.country, "RESEARCH", "carryover_days", self.slot]
             await self.cog.save_delta(
                 dict_path=path_carry,
                 int_delta=-old
@@ -517,7 +491,7 @@ class ResearchConfirmView(discord.ui.View):
 
     @discord.ui.button(label="❌ Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if str(interaction.user.id) != str(self.data_ref["countries"][self.country]["player_id"]):
+        if str(interaction.user.id) != str(self.data_ref["COUNTRIES"][self.country]["player_id"]):
             return await interaction.response.send_message("Nice try buddy. This ain't your command.", ephemeral=True)
         await interaction.response.edit_message(content="❌ Research canceled.", embed=None, view=None)
 
@@ -549,7 +523,7 @@ class DiplomaticProposalModal(discord.ui.Modal, title="Write your proposal messa
 
             self.cog.save_data()
 
-            target_id = self.cog.cold_war_data["countries"][self.target]["player_id"]
+            target_id = self.cog.cold_war_data["COUNTRIES"][self.target]["player_id"]
             user = await self.cog.bot.fetch_user(target_id)
             embed = Embed(
                 title=f"Proposal: {self.agreement_type.replace('_', ' ').title()}",
@@ -646,8 +620,7 @@ class SpideyUtils(commands.Cog):
     def load_data(self):
          # 1) load the static + dynamic JSON
             with open(static_path, "r") as f:
-                raw_static = json.load(f)
-            self.static_data = normalize_static(raw_static)
+                self.static_data = json.load(f)
             
             
             if os.path.exists(dynamic_path):
@@ -658,9 +631,9 @@ class SpideyUtils(commands.Cog):
                     "turn": 0,
                     "current_year": None,
                     "day": None,
-                    "countries": {},
-                    "un": {},
-                    "global_history": {}
+                    "COUNTRIES": {},
+                    "UN": {},
+                    "GLOBAL_HISTORY": {}
                 }
 
             merged = copy.deepcopy(self.static_data)
@@ -765,7 +738,7 @@ class SpideyUtils(commands.Cog):
         Initializes espionage-related dynamic fields for the given country
         in self.cold_war_data if they aren't already set.
         """
-        esp = self.cold_war_data["countries"].setdefault(country, {}).setdefault("espionage", {})
+        esp = self.cold_war_data["COUNTRIES"].setdefault(country, {}).setdefault("ESPIONAGE", {})
 
         # Initialize operatives_available only if not set
         if "operatives_available" not in esp:
@@ -781,8 +754,8 @@ class SpideyUtils(commands.Cog):
         global_log = []
         spy_results = {}
 
-        for country, data in self.cold_war_data.get("countries", {}).items():
-            espionage = data.get("espionage", {})
+        for country, data in self.cold_war_data.get("COUNTRIES", {}).items():
+            espionage = data.get("ESPIONAGE", {})
             assigned = espionage.get("assigned_ops", {})
             total_ops = espionage.get("total_operatives", 0)
 
@@ -800,9 +773,9 @@ class SpideyUtils(commands.Cog):
                     # Scores
                     actor_score = espionage.get("foreign_intelligence_score", 0)
                     target_score = (
-                        self.cold_war_data["countries"]
+                        self.cold_war_data["COUNTRIES"]
                              .get(target, {})
-                             .get("espionage", {})
+                             .get("ESPIONAGE", {})
                              .get("domestic_intelligence_score", 0)
                     )
                     network = espionage.get("spy_networks", {}).get(target, 0)
@@ -825,7 +798,7 @@ class SpideyUtils(commands.Cog):
                         result_msg += " — 🛑 AGENTS CAUGHT"
                         # deduct one operative
                         await self.save_delta(
-                            dict_path=["countries", country, "espionage", "total_operatives"],
+                            dict_path=["COUNTRIES", country, "ESPIONAGE", "total_operatives"],
                             int_delta=-1
                         )
 
@@ -853,12 +826,12 @@ class SpideyUtils(commands.Cog):
             # reset per‐turn pools
             # operatives_available ← total_ops
             await self.save_delta(
-                dict_path=["countries", country, "espionage", "operatives_available"],
+                dict_path=["COUNTRIES", country, "ESPIONAGE", "operatives_available"],
                 int_delta=(total_ops - espionage.get("operatives_available", 0))
             )
             # clear assigned_ops
             await self.save_delta(
-                dict_path=["countries", country, "espionage", "assigned_ops"],
+                dict_path=["COUNTRIES", country, "ESPIONAGE", "assigned_ops"],
                 dict_delta={}
             )
 
@@ -894,7 +867,7 @@ class SpideyUtils(commands.Cog):
             (target if seg == "target" else seg)
             for seg in effect["path"].split(".")
         ]
-        dict_path = ["countries", country] + segments
+        dict_path = ["COUNTRIES", country] + segments
 
         if effect["type"] == "add":
             # additive
@@ -902,7 +875,7 @@ class SpideyUtils(commands.Cog):
 
         elif effect["type"] == "set":
             # compute old to send correct delta
-            node = self.cold_war_data["countries"][country]
+            node = self.cold_war_data["COUNTRIES"][country]
             for seg in segments:
                 node = node.get(seg, 0)
             old = node if isinstance(node, (int, float)) else 0
@@ -919,15 +892,15 @@ class SpideyUtils(commands.Cog):
     async def autocomplete_country(self, interaction: discord.Interaction, current: str):
         return [
             app_commands.Choice(name=country, value=country)
-            for country in self.cold_war_data.get("countries", {}).keys()
+            for country in self.cold_war_data.get("COUNTRIES", {}).keys()
             if current.lower() in country.lower()
             ][:25]
         
     
     def get_all_event_years(self, data):
-        global_years = list(data.get("global_history", {}).keys())
+        global_years = list(data.get("GLOBAL_HISTORY", {}).keys())
         country_years = set()
-        for country_data in data.get("countries", {}).values():
+        for country_data in data.get("COUNTRIES", {}).values():
             country_years.update(country_data.get("country_history", {}).keys())
         return sorted(set(global_years).union(country_years), reverse=True)
 
@@ -949,7 +922,7 @@ class SpideyUtils(commands.Cog):
         data = self.bot.get_cog("SpideyUtils").cold_war_data
 
         if global_view:
-            global_events = data.get("global_history", {})
+            global_events = data.get("GLOBAL_HISTORY", {})
             if not year:
                 # Summary view – just year + headlines
                 embed = discord.Embed(title="📰 Global Historical Record", color=discord.Color.blurple())
@@ -1000,7 +973,7 @@ class SpideyUtils(commands.Cog):
                 return await interaction.followup.send(embeds=embeds[:10])
 
         # Country-specific view
-        countries = data.get("countries", {})
+        countries = data.get("COUNTRIES", {})
         if country not in countries:
             return await interaction.response.send_message(f"❌ Country '{country}' not found.", ephemeral=True)
 
@@ -1111,11 +1084,11 @@ class SpideyUtils(commands.Cog):
 
 
     async def autocomplete_branch(self, interaction: discord.Interaction, current: str):
-        branches = self.cold_war_data.get("tech_tree", {}).keys()
+        branches = self.cold_war_data.get("TECH_TREE", {}).keys()
         return [app_commands.Choice(name=b, value=b) for b in branches if current.lower() in b.lower()][:25]
 
     async def autocomplete_sub_branch(self, interaction: discord.Interaction, current: str):
-        tech_tree = self.cold_war_data.get("tech_tree", {})
+        tech_tree = self.cold_war_data.get("TECH_TREE", {})
         branch = interaction.namespace.branch
         results = []
         if branch:
@@ -1135,14 +1108,14 @@ class SpideyUtils(commands.Cog):
         return results[:25]
 
     async def autocomplete_my_country(self, interaction: discord.Interaction, current: str):
-        countries = self.cold_war_data.get("countries", {})
+        countries = self.cold_war_data.get("COUNTRIES", {})
         return [app_commands.Choice(name=c, value=c) for c in countries if (current.lower() in c.lower()) and (countries.get(c, {}).get("player_id")== interaction.user.id)][:25]
     
     def get_available_techs(self, branch: str, country_data: dict, tech_tree: dict):
-        unlocked = country_data.get("research", {}).get("unlocked_techs", [])
+        unlocked = country_data.get("RESEARCH", {}).get("unlocked_techs", [])
         active = [
             data["tech"]
-            for data in country_data.get("research", {}).get("active_slots", {}).values()
+            for data in country_data.get("RESEARCH", {}).get("active_slots", {}).values()
             if isinstance(data, dict) and "tech" in data
         ]
         available = []
@@ -1188,16 +1161,16 @@ class SpideyUtils(commands.Cog):
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict.get(str(interaction.user.id))
         elif not country:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
 
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return []
 
-        country_data = self.cold_war_data["countries"][country]
-        tech_tree = self.cold_war_data.get("tech_tree", {})
+        country_data = self.cold_war_data["COUNTRIES"][country]
+        tech_tree = self.cold_war_data.get("TECH_TREE", {})
 
         available = self.get_available_techs(branch, country_data, tech_tree)
         return [
@@ -1233,16 +1206,16 @@ class SpideyUtils(commands.Cog):
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return await interaction.response.send_message(
                 "❌ Could not determine your country.", ephemeral=True
             )
 
-        data = self.cold_war_data["countries"][country]
+        data = self.cold_war_data["COUNTRIES"][country]
         econ = data["economic"]["factories"]
         total_civ = econ.get("civilian_factories", 0)
 
@@ -1313,7 +1286,7 @@ class SpideyUtils(commands.Cog):
         # ── apply all deltas via save_delta ──
         for slot_name, delta in changes.items():
             await self.save_delta(
-                dict_path=["countries", country, "production", "assigned_factories", slot_name],
+                dict_path=["COUNTRIES", country, "production", "assigned_factories", slot_name],
                 int_delta=delta
             )
 
@@ -1323,7 +1296,7 @@ class SpideyUtils(commands.Cog):
             if slot_name == "unassigned":
                 lines.append(f"– Freed {d} factories into the unassigned pool.")
             else:
-                current_val = self.cold_war_data["countries"][country]["production"]["assigned_factories"][slot_name]
+                current_val = self.cold_war_data["COUNTRIES"][country]["production"]["assigned_factories"][slot_name]
                 pretty = slot_name.replace("_"," ").title()
                 sign = "-" if d<0 else "+"
                 lines.append(f"– `{pretty}` {sign}{abs(d)} → now {current_val}.")
@@ -1345,14 +1318,14 @@ class SpideyUtils(commands.Cog):
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
-        data = self.cold_war_data["countries"][country]
+        data = self.cold_war_data["COUNTRIES"][country]
         prod = data.get("production", {})
         assigned = prod.get("assigned_factories", {})
         stock = prod.get("stockpiles", {})
@@ -1383,16 +1356,16 @@ class SpideyUtils(commands.Cog):
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict.get(str(interaction.user.id))
         elif not country:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
 
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
-        country_data = self.cold_war_data["countries"][country]
-        research = country_data.get("research", {})
+        country_data = self.cold_war_data["COUNTRIES"][country]
+        research = country_data.get("RESEARCH", {})
         unlocked = research.get("unlocked_techs", [])
         active_slots = research.get("active_slots", {})
         carryover = research.get("carryover_days", {})
@@ -1411,7 +1384,7 @@ class SpideyUtils(commands.Cog):
             return await interaction.followup.send(f"❌ Slot {slot} is already occupied.", ephemeral=True)
 
         # Locate tech from available options
-        tech_tree = self.cold_war_data.get("tech_tree", {})
+        tech_tree = self.cold_war_data.get("TECH_TREE", {})
         available_techs = self.get_available_techs(branch, country_data, tech_tree)
 
         if tech_name not in available_techs:
@@ -1440,7 +1413,7 @@ class SpideyUtils(commands.Cog):
 
         # Calculate total bonus
         def calculate_total_bonus(branch_name: str, country_data: dict):
-            generic_bonus = country_data.get("research", {}).get("research_bonus")
+            generic_bonus = country_data.get("RESEARCH", {}).get("research_bonus")
             bonus = generic_bonus
             for spirit in country_data.get("national_spirits", []):
                 bonuses = spirit.get("research_bonus") or spirit.get("modifiers", {}).get("research_bonus", {})
@@ -1484,7 +1457,7 @@ class SpideyUtils(commands.Cog):
         await interaction.response.defer(thinking=True)
 
         
-        countries = self.cold_war_data.get("countries", {})
+        countries = self.cold_war_data.get("COUNTRIES", {})
 
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
@@ -1498,7 +1471,7 @@ class SpideyUtils(commands.Cog):
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
         data = countries[country]
-        research = data.get("research", {})
+        research = data.get("RESEARCH", {})
         active_slots = research.get("active_slots", {})
         carryover = research.get("carryover_days", {})
         max_slots = research.get("research_slots", 1)
@@ -1536,7 +1509,7 @@ class SpideyUtils(commands.Cog):
     @utils.command(name="alternate_country", description="Switch which of your countries is active.")
     @app_commands.autocomplete(country=autocomplete_my_country)
     async def alternate_country(self, interaction: discord.Interaction, country: str):
-        if country not in self.cold_war_data.get("countries", {}):
+        if country not in self.cold_war_data.get("COUNTRIES", {}):
             return await interaction.response.send_message("Country not found.", ephemeral=True)
         self.alternate_country_dict[str(interaction.user.id)] = country
         await interaction.response.send_message(f"You are now viewing the game as **{country}**.", ephemeral=True)
@@ -1546,7 +1519,7 @@ class SpideyUtils(commands.Cog):
     async def view_tech(self, interaction: discord.Interaction, branch: str = None, sub_branch: str = None):
         await interaction.response.defer(thinking=True)
 
-        tech_tree = self.cold_war_data.get("tech_tree", {})
+        tech_tree = self.cold_war_data.get("TECH_TREE", {})
         year = self.cold_war_data.get("current_year", "1952")
 
         user_id = str(interaction.user.id)
@@ -1554,17 +1527,17 @@ class SpideyUtils(commands.Cog):
             country_name = self.alternate_country_dict[user_id]
         else:
             country_name = None
-            for country_key, details in self.cold_war_data.get("countries", {}).items():
+            for country_key, details in self.cold_war_data.get("COUNTRIES", {}).items():
                 if details.get("player_id") == interaction.user.id:
                     country_name = country_key
                     break
         if not country_name:
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
-        country_data = self.cold_war_data["countries"].get(country_name, {})
-        unlocked = country_data.get("research", {}).get("unlocked_techs", [])
-        in_progress = dict(country_data.get("research", {}).get("active_slots"))
-        generic_bonus = country_data.get("research", {}).get("research_bonus")
+        country_data = self.cold_war_data["COUNTRIES"].get(country_name, {})
+        unlocked = country_data.get("RESEARCH", {}).get("unlocked_techs", [])
+        in_progress = dict(country_data.get("RESEARCH", {}).get("active_slots"))
+        generic_bonus = country_data.get("RESEARCH", {}).get("research_bonus")
 
         def calculate_total_bonus(branch_name):
             bonus = generic_bonus
@@ -1649,15 +1622,15 @@ class SpideyUtils(commands.Cog):
             country = self.alternate_country_dict[str(interaction.user.id)]
 
         if not country:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
 
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return []
 
-        country_data = self.cold_war_data["countries"][country]
+        country_data = self.cold_war_data["COUNTRIES"][country]
         active_projects = country_data.get("national_projects", {}).keys()
 
         # Static list of all projects — expand as needed
@@ -1682,15 +1655,15 @@ class SpideyUtils(commands.Cog):
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
 
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
-        country_data = self.cold_war_data["countries"][country]
+        country_data = self.cold_war_data["COUNTRIES"][country]
         np_data = country_data.setdefault("national_projects", {})
 
         if project_name in np_data:
@@ -1749,15 +1722,15 @@ class SpideyUtils(commands.Cog):
             country = self.alternate_country_dict[str(interaction.user.id)]
 
         if not country:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
 
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
-        data = self.cold_war_data["countries"][country]
+        data = self.cold_war_data["COUNTRIES"][country]
         projects = data.get("national_projects", {})
         all_defs = self.cold_war_data.get("national_projects", {})
         miles = all_defs.get("milestones", {})
@@ -1799,7 +1772,7 @@ class SpideyUtils(commands.Cog):
 
 
     async def autocomplete_sc_choice1(self, interaction: Interaction, current: str):
-        un = self.cold_war_data["un"]
+        un = self.cold_war_data["UN"]
         nonperm = [m for m in un["members"] if m not in un["permanent_security_council"]]
         return [
             app_commands.Choice(name=c, value=c)
@@ -1808,7 +1781,7 @@ class SpideyUtils(commands.Cog):
         ][:25]
 
     async def autocomplete_sc_choice2(self, interaction: Interaction, current: str):
-        un = self.cold_war_data["un"]
+        un = self.cold_war_data["UN"]
         nonperm = [m for m in un["members"] if m not in un["permanent_security_council"]]
         first = getattr(interaction.namespace, "choice1", None)
         return [
@@ -1818,7 +1791,7 @@ class SpideyUtils(commands.Cog):
         ][:25]
 
     async def autocomplete_sc_choice3(self, interaction: Interaction, current: str):
-        un = self.cold_war_data["un"]
+        un = self.cold_war_data["UN"]
         nonperm = [m for m in un["members"] if m not in un["permanent_security_council"]]
         first = getattr(interaction.namespace, "choice1", None)
         second = getattr(interaction.namespace, "choice2", None)
@@ -1854,7 +1827,7 @@ class SpideyUtils(commands.Cog):
         if str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         else:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
@@ -1866,7 +1839,7 @@ class SpideyUtils(commands.Cog):
         term = f"{year}-{year+2}"
 
         # 3) locate votes dict
-        un = self.cold_war_data.setdefault("un", {})
+        un = self.cold_war_data.setdefault("UN", {})
         votes = un.setdefault("votes", {}) \
                    .setdefault("security_membership", {}) \
                    .setdefault(term, {})
@@ -1881,7 +1854,7 @@ class SpideyUtils(commands.Cog):
         picks = [c for c in (choice1, choice2, choice3) if c]
         
         await self.save_delta(
-            dict_path=["un", "votes", "security_membership", term, country],
+            dict_path=["UN", "votes", "security_membership", term, country],
             list_delta=picks
         )
 
@@ -1914,7 +1887,7 @@ class SpideyUtils(commands.Cog):
         if str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         else:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
@@ -1923,7 +1896,7 @@ class SpideyUtils(commands.Cog):
 
         term = f"{self.cold_war_data['current_year']}-" \
                f"{self.cold_war_data['current_year']+2}"
-        un = self.cold_war_data.setdefault("un", {})
+        un = self.cold_war_data.setdefault("UN", {})
         noms = un.setdefault("sg_nominations", {}).setdefault(term, [])
 
         # 2) must be UN member
@@ -1938,7 +1911,7 @@ class SpideyUtils(commands.Cog):
             )
         # 4) record
         await self.save_delta(
-            dict_path=["un","sg_nominations", term],
+            dict_path=["UN","sg_nominations", term],
             list_delta=[candidate]
         )
 
@@ -1956,7 +1929,7 @@ class SpideyUtils(commands.Cog):
     async def view_sg_noms(self, interaction: Interaction):
         term = f"{self.cold_war_data['current_year']}-" \
                f"{self.cold_war_data['current_year']+2}"
-        noms = self.cold_war_data["un"]["sg_nominations"].get(term, [])
+        noms = self.cold_war_data["UN"]["sg_nominations"].get(term, [])
         embed = Embed(
             title=f"📝 SG Nominations ({term})",
             description="\n".join(f"• {c}" for c in noms) or "No nominations yet.",
@@ -1967,13 +1940,13 @@ class SpideyUtils(commands.Cog):
     async def autocomplete_un_votes(self, interaction, current: str):
         return [
             app_commands.Choice(name=k, value=k)
-            for k in self.cold_war_data.get("un", {}).get("votes", {}).keys()
+            for k in self.cold_war_data.get("UN", {}).get("votes", {}).keys()
             if current.lower() in k.lower()
         ][:25]
 
     async def autocomplete_un_terms(self, interaction, current: str):
         # Grab all the term‐strings under each vote
-        votes = self.cold_war_data.get("un", {}).get("votes", {})
+        votes = self.cold_war_data.get("UN", {}).get("votes", {})
         terms = {term for sub in votes.values() for term in sub.keys()}
         return [
             app_commands.Choice(name=t, value=t)
@@ -1998,7 +1971,7 @@ class SpideyUtils(commands.Cog):
         vote: str,
         term: str | None = None
     ):
-        un = self.cold_war_data.get("un", {})
+        un = self.cold_war_data.get("UN", {})
         votes_block = un.get("votes", {})
         if vote not in votes_block:
             return await interaction.response.send_message(
@@ -2042,7 +2015,7 @@ class SpideyUtils(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         # 1) Grab the UN block (lowercase key) and its votes
-        un_block    = self.cold_war_data.get("un", {})
+        un_block    = self.cold_war_data.get("UN", {})
         votes_block = un_block.get("votes", {})
 
         if not votes_block:
@@ -2061,7 +2034,7 @@ class SpideyUtils(commands.Cog):
         if str(interaction.user.id) in self.alternate_country_dict:
             user_country = self.alternate_country_dict[str(interaction.user.id)]
         else:
-            for c, d in self.cold_war_data["countries"].items():
+            for c, d in self.cold_war_data["COUNTRIES"].items():
                 if d.get("player_id") == interaction.user.id:
                     user_country = c
                     break
@@ -2119,7 +2092,7 @@ class SpideyUtils(commands.Cog):
     
     @un.command(name="membership", description="Show all the UN members. Though it's kind of obvious.")
     async def un_membership(self, interaction: Interaction):
-        un_dict = self.cold_war_data.get("un", {})
+        un_dict = self.cold_war_data.get("UN", {})
         secretary_general = un_dict.get("secretary_general", "Vacant")
 
         embed = discord.Embed(title="🇺🇳 United Nations Members", color=0x5B92E5)
@@ -2143,7 +2116,7 @@ class SpideyUtils(commands.Cog):
         vote_key = interaction.namespace.vote_key
         vote = (
             self.cold_war_data
-            .get("un", {})
+            .get("UN", {})
             .get("votes", {})
             .get(vote_key, {})
         )
@@ -2178,7 +2151,7 @@ class SpideyUtils(commands.Cog):
         choice3: str | None = None,
     ):
         # 1) locate the vote
-        un    = self.cold_war_data.get("un", {})
+        un    = self.cold_war_data.get("UN", {})
         votes = un.get("votes", {})
         vote  = votes.get(vote_key)
         if not vote:
@@ -2192,7 +2165,7 @@ class SpideyUtils(commands.Cog):
         if str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         else:
-            for c, data in self.cold_war_data["countries"].items():
+            for c, data in self.cold_war_data["COUNTRIES"].items():
                 if data.get("player_id") == interaction.user.id:
                     country = c
                     break
@@ -2218,7 +2191,7 @@ class SpideyUtils(commands.Cog):
                 )
             casts[country] = choice.title()
             await self.save_delta(
-                dict_path=["un","votes",vote_key,"casts",country],
+                dict_path=["UN","votes",vote_key,"casts",country],
                 str_val=choice.title()        # or list_delta=<ranking> for RCV
             )
 
@@ -2238,7 +2211,7 @@ class SpideyUtils(commands.Cog):
                     f"❌ Invalid ranking. Choices must be unique and from {allowed}.", ephemeral=True
                 )
             await self.save_delta(
-                dict_path=["un","votes",vote_key,"casts",country],
+                dict_path=["UN","votes",vote_key,"casts",country],
                 list_delta=ranking         # or list_delta=<ranking> for RCV
             )
 
@@ -2270,14 +2243,14 @@ class SpideyUtils(commands.Cog):
         
         # 2) Build vote_key from title…
         vote_key = title.lower().replace(" ", "_")
-        un = self.cold_war_data.setdefault("un", {})
+        un = self.cold_war_data.setdefault("UN", {})
         votes = un.setdefault("votes", {})
 
         # 3) Determine options
         if use_nominees:
             # pull from SG nominations
             term = f"{self.cold_war_data['current_year']}-{self.cold_war_data['current_year']+2}"
-            opts = self.cold_war_data["un"]["sg_nominations"].get(term, [])
+            opts = self.cold_war_data["UN"]["sg_nominations"].get(term, [])
             if not opts:
                 return await interaction.response.send_message(
                     "❌ No SG nominees to vote on.", ephemeral=True
@@ -2319,7 +2292,7 @@ class SpideyUtils(commands.Cog):
 
     @diplomacy.command(name="country_view", description="See all countries and their players")
     async def country_view(self, interaction: Interaction):
-        countries = self.cold_war_data["countries"]
+        countries = self.cold_war_data["COUNTRIES"]
         embed = Embed(
             title="🌐 Cold War Countries & Players",
             description="Click a name to DM the player.",
@@ -2361,18 +2334,18 @@ class SpideyUtils(commands.Cog):
         return paragraph
     
     def calculate_knowledge(self, viewer_data, target_data, target_name):
-        spy_networks = viewer_data.get("espionage", {}).get("spy_networks", {})
+        spy_networks = viewer_data.get("ESPIONAGE", {}).get("spy_networks", {})
         spy_score = spy_networks.get(target_name, 0)
-        foreign = viewer_data.get("espionage", {}).get("foreign_intelligence_score", 0)
-        domestic = target_data.get("espionage", {}).get("domestic_intelligence_score", 0)
+        foreign = viewer_data.get("ESPIONAGE", {}).get("foreign_intelligence_score", 0)
+        domestic = target_data.get("ESPIONAGE", {}).get("domestic_intelligence_score", 0)
         return max(10, (foreign + spy_score) - domestic)
 
     def get_best_intel_country(self, user_id, countries):
         options = [(name, data) for name, data in countries.items() if data.get("player_id") == user_id]
         if not options:
             return None
-        return max(options, key=lambda x: x[1].get("espionage", {}).get("foreign_intelligence_score", 0) +
-                                          x[1].get("espionage", {}).get("spy_network_score", 0))
+        return max(options, key=lambda x: x[1].get("ESPIONAGE", {}).get("foreign_intelligence_score", 0) +
+                                          x[1].get("ESPIONAGE", {}).get("spy_network_score", 0))
 
     def redacted(self, text, knowledge, threshold=50):
         return text if knowledge >= threshold else self.redact_paragraph_weighted(text, knowledge)
@@ -2383,7 +2356,7 @@ class SpideyUtils(commands.Cog):
 
         thresholds = {
             "population": (0.02, 40),
-            "research": (None, 80),  # Show only if knowledge >= 80
+            "RESEARCH": (None, 80),  # Show only if knowledge >= 80
             "military": (0.15, 30),
             "intel": (0.10, 50),
             "generic": (0.10, 50)
@@ -2453,7 +2426,7 @@ class SpideyUtils(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         cold_war_data = self.bot.get_cog("SpideyUtils").cold_war_data
-        countries = cold_war_data.get("countries", {})
+        countries = cold_war_data.get("COUNTRIES", {})
         target = countries.get(country)
         if not target:
             return await interaction.followup.send(f"❌ Country '{country}' not found.", ephemeral=True)
@@ -2549,10 +2522,10 @@ class SpideyUtils(commands.Cog):
         embeds.append(pol)
 
         # INTEL
-        esp = target.get("espionage", {})
+        esp = target.get("ESPIONAGE", {})
         intel = discord.Embed(title="🕵️ Intelligence & Research", color=discord.Color.greyple())
-        intel.add_field(name="Research Coefficient", value=self.ranged_value(target.get("research", {}).get("research_coefficient", 0), knowledge, "research"))
-        intel.add_field(name="Nuclear Arsenal", value=self.ranged_value(target.get("research", {}).get("nuclear_arsenal", 0), knowledge))
+        intel.add_field(name="Research Coefficient", value=self.ranged_value(target.get("RESEARCH", {}).get("research_coefficient", 0), knowledge, "RESEARCH"))
+        intel.add_field(name="Nuclear Arsenal", value=self.ranged_value(target.get("RESEARCH", {}).get("nuclear_arsenal", 0), knowledge))
         intel.add_field(name="Foreign Intel Score", value=self.ranged_value(esp.get("foreign_intelligence_score", 0), knowledge, "intel"))
         intel.add_field(name="Domestic Intel Score", value=self.ranged_value(esp.get("domestic_intelligence_score", 0), knowledge, "intel"))
         intel.add_field(name="Spy Network Efficiency", value=self.ranged_value(esp.get("spy_network_score", 0), knowledge, "intel"))
@@ -2639,15 +2612,15 @@ class SpideyUtils(commands.Cog):
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
-            for c_key, det in self.cold_war_data["countries"].items():
+            for c_key, det in self.cold_war_data["COUNTRIES"].items():
                 if det.get("player_id") == interaction.user.id:
                     country = c_key
                     break
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
         # ── Validate target & operation ──
-        if target not in self.cold_war_data["countries"]:
+        if target not in self.cold_war_data["COUNTRIES"]:
             return await interaction.followup.send("❌ Target country not found.", ephemeral=True)
         op_data = self.cold_war_data.get("ESPIONAGE", {}).get("operations", {}).get(operation)
         if not op_data:
@@ -2665,7 +2638,7 @@ class SpideyUtils(commands.Cog):
             )
 
         # ── Prepare confirmation ──
-        leader = self.cold_war_data["countries"][target].get("leader", {}).get("name", "<leader>")
+        leader = self.cold_war_data["COUNTRIES"][target].get("leader", {}).get("name", "<leader>")
         desc = op_data["description"].format(
             country=country,
             target=target,
@@ -2722,16 +2695,16 @@ class SpideyUtils(commands.Cog):
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return await interaction.followup.send("❌ Could not determine your country.", ephemeral=True)
 
         # Init and pull data
         self.init_spy_data(country)
-        esp = self.cold_war_data["countries"][country]["espionage"]
+        esp = self.cold_war_data["COUNTRIES"][country]["ESPIONAGE"]
         total_ops = esp.get("total_operatives", 0)
         free_ops = esp.get("operatives_available", 0)
         assigned = esp.get("assigned_ops", {})
@@ -2802,7 +2775,7 @@ class SpideyUtils(commands.Cog):
                 if free_ops >= req_ops and net >= req_net:
                     # fetch real leader for this target
                     leader_name = (
-                        self.cold_war_data["countries"]
+                        self.cold_war_data["COUNTRIES"]
                             .get(tgt, {})
                             .get("leader", {})
                             .get("name", "<leader>")
@@ -2835,7 +2808,7 @@ class SpideyUtils(commands.Cog):
         await interaction.response.defer(thinking=True,ephemeral=False)
         
         data = self.bot.get_cog("SpideyUtils").cold_war_data
-        countries = data.get("countries", {})
+        countries = data.get("COUNTRIES", {})
         info = countries.get(country)
         if not info:
             return await interaction.followup.send(f"❌ Country '{country}' not found.", ephemeral=True)
@@ -2997,8 +2970,8 @@ class SpideyUtils(commands.Cog):
             "rp_name": rp_name,
             "time_period": time_period,
             "description": description,
-            "global_history": {},
-            "countries": {}
+            "GLOBAL_HISTORY": {},
+            "COUNTRIES": {}
         }
         with open(filepath, "w") as f:
             json.dump(rp_structure, f, indent=4)
@@ -3184,15 +3157,15 @@ class SpideyUtils(commands.Cog):
             return await ctx.send("RP not found. Please set up the RP first using [p]setuprp.")
         with open(filepath, "r") as f:
             rp_data = json.load(f)
-        if "countries" not in rp_data:
-            rp_data["countries"] = {}
-        rp_data["countries"][country_name] = {
+        if "COUNTRIES" not in rp_data:
+            rp_data["COUNTRIES"] = {}
+        rp_data["COUNTRIES"][country_name] = {
             "leader": None,
             "details": details,
             "military": {},
             "economic": {},
             "political": {},
-            "research": {},
+            "RESEARCH": {},
             "country_history": {},
             "past_turns": {}
         }
@@ -3235,11 +3208,11 @@ class SpideyUtils(commands.Cog):
         if not country and str(interaction.user.id) in self.alternate_country_dict:
             country = self.alternate_country_dict[str(interaction.user.id)]
         if not country:
-            for c_key, details in self.cold_war_data["countries"].items():
+            for c_key, details in self.cold_war_data["COUNTRIES"].items():
                 if details.get("player_id") == interaction.user.id:
                     country = c_key
                     break
-        if not country or country not in self.cold_war_data["countries"]:
+        if not country or country not in self.cold_war_data["COUNTRIES"]:
             return await interaction.response.send_message("❌ Could not determine your country.", ephemeral=True)
         
         if target == country:
@@ -3257,7 +3230,7 @@ class SpideyUtils(commands.Cog):
         # collect pending for your country
         pend = self.dynamic_data.get("diplomacy", {}).get("pending", {})
         your_country = None
-        for c, d in self.cold_war_data["countries"].items():
+        for c, d in self.cold_war_data["COUNTRIES"].items():
             if d.get("player_id") == you.id:
                 your_country = c
                 break
@@ -3293,7 +3266,7 @@ class SpideyUtils(commands.Cog):
         if str(uid) in self.alternate_country_dict:
             user_country = self.alternate_country_dict[str(uid)]
         else:
-            for country, info in self.cold_war_data["countries"].items():
+            for country, info in self.cold_war_data["COUNTRIES"].items():
                 if info.get("player_id") == uid:
                     user_country = country
                     break
@@ -3327,7 +3300,7 @@ class SpideyUtils(commands.Cog):
 
         # permission check: only the 'to' country’s player can respond
         your_country = None
-        for c,d in self.cold_war_data["countries"].items():
+        for c,d in self.cold_war_data["COUNTRIES"].items():
             if d.get("player_id")==interaction.user.id:
                 your_country = c; break
         if prop["to"] != your_country:
@@ -3352,7 +3325,7 @@ class SpideyUtils(commands.Cog):
         self.save_data()
 
         # notify proposer by DM
-        pid = self.cold_war_data["countries"][prop["from"]]["player_id"]
+        pid = self.cold_war_data["COUNTRIES"][prop["from"]]["player_id"]
         user = await self.bot.fetch_user(pid)
         await user.send(f"🔔 Your proposal ({prop['type'].replace('_',' ')}) to **{prop['to']}** was **{accept.upper()}**.")
 
@@ -3378,7 +3351,7 @@ class SpideyUtils(commands.Cog):
     async def create(self, interaction: Interaction):
             you = interaction.user
             your_country = None
-            for c, d in self.cold_war_data["countries"].items():
+            for c, d in self.cold_war_data["COUNTRIES"].items():
                 if d.get("player_id") == you.id:
                     your_country = c
                     break
@@ -3422,7 +3395,7 @@ class SpideyUtils(commands.Cog):
 
         # 2) resolve invoking user's country & permission check
         your_country = next(
-            (c for c,d in self.cold_war_data["countries"].items()
+            (c for c,d in self.cold_war_data["COUNTRIES"].items()
             if d.get("player_id") == interaction.user.id),
             None
         )
@@ -3432,7 +3405,7 @@ class SpideyUtils(commands.Cog):
             )
 
         # 3) make sure target exists and isn’t already a member/invited
-        if country not in self.cold_war_data["countries"]:
+        if country not in self.cold_war_data["COUNTRIES"]:
             return await interaction.response.send_message("❌ Country not found.", ephemeral=True)
         if country in data["members"]:
             return await interaction.response.send_message(f"❌ {country} is already in the alliance.", ephemeral=True)
@@ -3448,7 +3421,7 @@ class SpideyUtils(commands.Cog):
         self.save_data()
 
         # 5) DM the country’s player
-        pid = self.cold_war_data["countries"][country]["player_id"]
+        pid = self.cold_war_data["COUNTRIES"][country]["player_id"]
         user = await self.bot.fetch_user(pid)
         await user.send(
             f"🔔 **{your_country}** has invited you to join the alliance **{alliance}**!\n\n"
@@ -3482,7 +3455,7 @@ class SpideyUtils(commands.Cog):
         if str(interaction.user.id) in self.alternate_country_dict:
             your_country = self.alternate_country_dict[str(interaction.user.id)]
         else:
-            for c, d in self.cold_war_data["countries"].items():
+            for c, d in self.cold_war_data["COUNTRIES"].items():
                 if d.get("player_id") == interaction.user.id:
                     your_country = c
                     break
@@ -3511,12 +3484,12 @@ class SpideyUtils(commands.Cog):
             dyn[alliance].setdefault("members", []).append(your_country)
             msg = f"✅ You’ve **joined** **{alliance}**!"
             # notify leader
-            leader_id = self.cold_war_data["countries"][leader]["player_id"]
+            leader_id = self.cold_war_data["COUNTRIES"][leader]["player_id"]
             user = await self.bot.fetch_user(leader_id)
             await user.send(f"🔔 **{your_country}** has **accepted** your invitation to **{alliance}**.")
         else:
             msg = f"❌ You’ve **declined** the invitation to **{alliance}**."
-            leader_id = self.cold_war_data["countries"][leader]["player_id"]
+            leader_id = self.cold_war_data["COUNTRIES"][leader]["player_id"]
             user = await self.bot.fetch_user(leader_id)
             await user.send(f"🔔 **{your_country}** has **declined** your invitation to **{alliance}**.")
 
@@ -3591,7 +3564,7 @@ class SpideyUtils(commands.Cog):
         apps = data[alliance].setdefault("applications", {})
         country = None
         # determine applicant country from user ID
-        for cname, details in self.cold_war_data["countries"].items():
+        for cname, details in self.cold_war_data["COUNTRIES"].items():
             if details.get("player_id") == interaction.user.id:
                 country = cname; break
         if not country:
@@ -3646,7 +3619,7 @@ class SpideyUtils(commands.Cog):
         self.save_data()
         # notify both parties
         await interaction.response.send_message(f"✅ **{applicant}** has joined **{alliance}**!")
-        user_id = self.cold_war_data["countries"][applicant]["player_id"]
+        user_id = self.cold_war_data["COUNTRIES"][applicant]["player_id"]
         member = await self.bot.fetch_user(user_id)
         await member.send(f"🎉 Your application to **{alliance}** has been accepted!")
     
@@ -3687,7 +3660,7 @@ class SpideyUtils(commands.Cog):
 
         # only leader can kick
         your_country = None
-        for c,d in self.cold_war_data["countries"].items():
+        for c,d in self.cold_war_data["COUNTRIES"].items():
             if d.get("player_id") == interaction.user.id:
                 your_country = c; break
 
@@ -3704,7 +3677,7 @@ class SpideyUtils(commands.Cog):
         self.save_data()
 
         # notify the kicked country
-        kicked_id = self.cold_war_data["countries"][member]["player_id"]
+        kicked_id = self.cold_war_data["COUNTRIES"][member]["player_id"]
         user = await self.bot.fetch_user(kicked_id)
         await user.send(f"🔔 You have been **kicked** from alliance **{alliance}** by **{your_country}**.")
 
@@ -3732,7 +3705,7 @@ class SpideyUtils(commands.Cog):
 
         # find your country
         your_country = next(
-            (c for c,d in self.cold_war_data["countries"].items()
+            (c for c,d in self.cold_war_data["COUNTRIES"].items()
              if d.get("player_id") == interaction.user.id),
             None
         )
@@ -3745,7 +3718,7 @@ class SpideyUtils(commands.Cog):
         self.save_data()
 
         # notify leader
-        leader_id = self.cold_war_data["countries"][alli["leader"]]["player_id"]
+        leader_id = self.cold_war_data["COUNTRIES"][alli["leader"]]["player_id"]
         leader = await self.bot.fetch_user(leader_id)
         await leader.send(f"🔔 **{your_country}** has **left** the alliance **{alliance}**.")
 
@@ -3773,7 +3746,7 @@ class SpideyUtils(commands.Cog):
 
         # only leader can disband
         your_country = next(
-            (c for c,d in self.cold_war_data["countries"].items()
+            (c for c,d in self.cold_war_data["COUNTRIES"].items()
              if d.get("player_id") == interaction.user.id),
             None
         )
@@ -3791,7 +3764,7 @@ class SpideyUtils(commands.Cog):
         for m in members:
             if m == your_country:
                 continue
-            pid = self.cold_war_data["countries"][m]["player_id"]
+            pid = self.cold_war_data["COUNTRIES"][m]["player_id"]
             user = await self.bot.fetch_user(pid)
             await user.send(f"🔔 **{alliance}** has been **disbanded** by **{your_country}**.")
 
@@ -3821,7 +3794,7 @@ class SpideyUtils(commands.Cog):
 
         # find sender country
         sender = next(
-            (c for c,d in self.cold_war_data["countries"].items()
+            (c for c,d in self.cold_war_data["COUNTRIES"].items()
              if d.get("player_id")==interaction.user.id),
             None
         )
@@ -3841,7 +3814,7 @@ class SpideyUtils(commands.Cog):
 
         # DM each member
         for member_country in alli["members"]:
-            pid = self.cold_war_data["countries"][member_country]["player_id"]
+            pid = self.cold_war_data["COUNTRIES"][member_country]["player_id"]
             user = await self.bot.fetch_user(pid)
             embed = Embed(
                 title=f"💬 [{alliance}] {sender}",
@@ -3876,7 +3849,7 @@ class SpideyUtils(commands.Cog):
             )
 
         your_country = next(
-            (c for c,d in self.cold_war_data["countries"].items()
+            (c for c,d in self.cold_war_data["COUNTRIES"].items()
              if d.get("player_id")==interaction.user.id),
             None
         )
@@ -3931,7 +3904,7 @@ class SpideyUtils(commands.Cog):
         if str(interaction.user.id) in self.alternate_country_dict:
             your_country = self.alternate_country_dict[str(interaction.user.id)]
         else:
-            for country, data in self.cold_war_data["countries"].items():
+            for country, data in self.cold_war_data["COUNTRIES"].items():
                 if data.get("player_id") == interaction.user.id:
                     your_country = country
                     break
@@ -3956,7 +3929,7 @@ class SpideyUtils(commands.Cog):
         # 3) DM every member
         view = AlliancePollView(self, alliance, poll_id, question, opts)
         for member_country in alliances[alliance]["members"]:
-            pid = self.cold_war_data["countries"][member_country]["player_id"]
+            pid = self.cold_war_data["COUNTRIES"][member_country]["player_id"]
             user = await self.bot.fetch_user(pid)
             try:
                 await user.send(f"🗳 **{alliance} Poll**\n\n{question}", view=view)
@@ -4014,7 +3987,7 @@ class SpideyUtils(commands.Cog):
         user = interaction.user
         user_country = self.alternate_country_dict.get(str(user.id))
         if not user_country:
-            for country, data in self.cold_war_data["countries"].items():
+            for country, data in self.cold_war_data["COUNTRIES"].items():
                 if data.get("player_id") == user.id:
                     user_country = country
                     break
