@@ -5200,8 +5200,13 @@
         }
       },
       "Eastern Europe": {
-        "description": "The eastern corridor of the continent, from the Baltic to the Black Sea, dominated by the Polish People’s Republic and Romania. Strategic river basins, plains and mountain barriers shape both defense and movement.",
-        "major_powers": ["Polish People’s Republic", "Romania"],
+        "description": "The eastern corridor of the continent, from the Baltic to the Black Sea, dominated by the Polish People’s Republic, Romania, the Soviet Union and the Austrian Empire. Strategic river basins, plains and mountain barriers shape both defense and movement.",
+        "major_powers": [
+          "Polish People’s Republic",
+          "Romania",
+          "Soviet Union",
+          "Austrian Empire"
+        ],
         "regions": {
           "Polish Baltic Coast & Masurian Lakes": {
             "major_cities": [
@@ -5317,6 +5322,140 @@
             "stationed_divisions": [],
             "controlling_country": "Romania",
             "core_countries": ["Romania"],
+            "claimed_by": []
+          },
+          "Slovakian Highlands & Danube Corridor": {
+            "major_cities": [
+              { "name": "Bratislava", "victory_points": 2 },
+              { "name": "Košice",    "victory_points": 1 }
+            ],
+            "civil_unrest_level": 30,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "hills & river corridor",
+            "bordering_regions": [
+              "Silesian Highlands & Upper Silesia",
+              "Warsaw & Vistula Basin",
+              "Carpathian Foothills & Kraków Basin",
+              "Transylvanian Plateau & Carpathians"
+            ],
+            "stationed_divisions": [],
+            "controlling_country": "Austrian Empire",
+            "core_countries": ["Slovakia"],
+            "claimed_by": []
+          },
+          "Northern Belarus Lakes & Grodno Plains": {
+            "major_cities": [
+              { "name": "Vitebsk", "victory_points": 2 },
+              { "name": "Grodno",  "victory_points": 2 }
+            ],
+            "civil_unrest_level": 20,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "lakes & plains",
+            "bordering_regions": [
+              "Polish Baltic Coast & Masurian Lakes",
+              "Southern Belarus Marshes & Minsk Basin"
+            ],
+            "stationed_divisions": [],
+            "controlling_country": "Soviet Union",
+            "core_countries": ["Belarus"],
+            "claimed_by": []
+          },
+          "Southern Belarus Marshes & Minsk Basin": {
+            "major_cities": [
+              { "name": "Minsk", "victory_points": 4 },
+              { "name": "Brest", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 20,
+            "fortification_level": 1,
+            "infrastructure_level": 2,
+            "terrain": "marshes & river basin",
+            "bordering_regions": [
+              "Northern Belarus Lakes & Grodno Plains",
+              "Warsaw & Vistula Basin",
+              "Western Ukraine & Lviv Highlands"
+            ],
+            "stationed_divisions": [],
+            "controlling_country": "Soviet Union",
+            "core_countries": ["Belarus"],
+            "claimed_by": []
+          },
+
+          "Western Ukraine & Lviv Highlands": {
+            "major_cities": [
+              { "name": "Lviv", "victory_points": 3 },
+              { "name": "Ivano-Frankivsk", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 25,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "hills & highlands",
+            "bordering_regions": [
+              "Southern Belarus Marshes & Minsk Basin",
+              "Podlaskie Lowlands & Białystok",
+              "Slovakian Highlands & Danube Corridor",
+              "Transylvanian Plateau & Carpathians"
+            ],
+            "stationed_divisions": [],
+            "controlling_country": "Soviet Union",
+            "core_countries": ["Ukraine"],
+            "claimed_by": []
+          },
+          "Dnieper Corridor & Kyiv Basin": {
+            "major_cities": [
+              { "name": "Kyiv",  "victory_points": 5 },
+              { "name": "Chernihiv", "victory_points": 1 }
+            ],
+            "civil_unrest_level": 25,
+            "fortification_level": 1,
+            "infrastructure_level": 3,
+            "terrain": "river plains",
+            "bordering_regions": [
+              "Western Ukraine & Lviv Highlands",
+              "Southern Belarus Marshes & Minsk Basin",
+              "Donbas & Eastern Industrial Basin",
+              "Crimea Peninsula"
+            ],
+            "stationed_divisions": [],
+            "controlling_country": "Soviet Union",
+            "core_countries": ["Ukraine"],
+            "claimed_by": []
+          },
+          "Donbas & Eastern Industrial Basin": {
+            "major_cities": [
+              { "name": "Kharkiv",  "victory_points": 3 },
+              { "name": "Donetsk", "victory_points": 2 }
+            ],
+            "civil_unrest_level": 30,
+            "fortification_level": 1,
+            "infrastructure_level": 4,
+            "terrain": "industrial plains",
+            "bordering_regions": [
+              "Dnieper Corridor & Kyiv Basin",
+              "Crimea Peninsula"
+            ],
+            "stationed_divisions": [],
+            "controlling_country": "Soviet Union",
+            "core_countries": ["Ukraine"],
+            "claimed_by": []
+          },
+          "Crimea Peninsula": {
+            "major_cities": [
+              { "name": "Sevastopol",    "victory_points": 3 },
+              { "name": "Simferopol",    "victory_points": 2 }
+            ],
+            "civil_unrest_level": 20,
+            "fortification_level": 2,
+            "infrastructure_level": 2,
+            "terrain": "coastal mountains & plains",
+            "bordering_regions": [
+              "Dnieper Corridor & Kyiv Basin",
+              "Donbas & Eastern Industrial Basin"
+            ],
+            "stationed_divisions": [],
+            "controlling_country": "Soviet Union",
+            "core_countries": ["Ukraine"],
             "claimed_by": []
           }
         }

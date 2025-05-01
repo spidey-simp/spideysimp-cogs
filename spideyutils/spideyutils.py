@@ -918,6 +918,8 @@ class SpideyUtils(commands.Cog):
     async def view_history(self, interaction: discord.Interaction, country: str = None, global_view: bool = False, year: str = None):
         await interaction.response.defer(thinking=True, ephemeral=False)
 
+        if not global_view and not country:
+            await interaction.followup.send("Please either select global or a country.", ephemeral=True)
         
         data = self.bot.get_cog("SpideyUtils").cold_war_data
 
@@ -2357,7 +2359,7 @@ class SpideyUtils(commands.Cog):
         thresholds = {
             "population": (0.02, 40),
             "RESEARCH": (None, 80),  # Show only if knowledge >= 80
-            "military": (0.15, 30),
+            "MILITARY": (0.15, 30),
             "intel": (0.10, 50),
             "generic": (0.10, 50)
         }
@@ -2437,7 +2439,7 @@ class SpideyUtils(commands.Cog):
         knowledge = 100 if is_owner else self.calculate_knowledge(viewer_data, target, country)
 
         embeds = []
-        leader = target.get("leader", {})
+        leader = target.get("LEADER", {})
 
         # OVERVIEW
         if is_owner:
@@ -2451,14 +2453,14 @@ class SpideyUtils(commands.Cog):
         overview = discord.Embed(title=title, color=discord.Color.dark_blue())
         if not is_owner:
             overview.add_field(name=self.classify_stamp(knowledge), value=self.general_report(country, knowledge), inline=False)
-        overview.description = self.redacted(target.get("details", "No description."), knowledge)
+        overview.description = self.redacted(target.get("DETAILS", "No description."), knowledge)
         overview.set_footer(text=footer_text)
-        if target.get("image"):
-            overview.set_image(url=target["image"])
-        ideology = target.get("ideology", {})
+        if target.get("IMAGE"):
+            overview.set_image(url=target["IMAGE"])
+        ideology = target.get("IDEOLOGY", {})
         overview.add_field(name="Leading Ideology", value=ideology.get("leading_ideology", "Unknown"))
-        overview.add_field(name="Doctrine", value=target.get("global", {}).get("doctrine_focus", "N/A"), inline=True)
-        overview.add_field(name="Conscription", value=target.get("global", {}).get("conscription_policy", "N/A"), inline=True)
+        overview.add_field(name="Doctrine", value=target.get("global", {}).get("DOCTRINE_FOCUS", "N/A"), inline=True)
+        overview.add_field(name="Conscription", value=target.get("global", {}).get("CONSCRIPTION_POLICY", "N/A"), inline=True)
         embeds.append(overview)
 
         # LEADER
@@ -2468,7 +2470,7 @@ class SpideyUtils(commands.Cog):
             leader_desc.append("// EYES ONLY - DO NOT DISTRIBUTE //")
         if leader.get("description"):
             leader_desc.append(self.redact_paragraph_weighted(leader.get("description"), knowledge))
-        leader_img = leader.get("image", None)
+        leader_img = leader.get("IMAGE", None)
 
         leader_description = "\n\n".join(leader_desc)
 
@@ -2482,7 +2484,7 @@ class SpideyUtils(commands.Cog):
             embeds.append(leader_embed)
 
         # MILITARY
-        m = target.get("military", {})
+        m = target.get("MILITARY", {})
         mil = discord.Embed(title="🪖 Military Overview", color=discord.Color.red())
         for k, label in [("army_divisions", "Army Divisions"),
                          ("aviation_wings", "Aviation Wings"),
@@ -2499,7 +2501,7 @@ class SpideyUtils(commands.Cog):
         embeds.append(mil)
 
         # ECONOMY
-        econ = target.get("economic", {})
+        econ = target.get("ECONOMIC", {})
         eco = discord.Embed(title="💰 Economic Overview", color=discord.Color.green())
         for k, label in [("budget_surplus", "Budget Surplus"),
                          ("civilian_factories", "Civilian Factories"),
@@ -2509,14 +2511,14 @@ class SpideyUtils(commands.Cog):
         embeds.append(eco)
 
         # POLITICAL
-        p = target.get("political", {})
+        p = target.get("POLITICAL", {})
         pol = discord.Embed(title="📊 Political/Demographic Overview", color=discord.Color.purple())
         for k, label in [("population", "Population"),
                          ("recruitable_manpower", "Recruitable Manpower"),
                          ("public_support_score", "Public Support"),
                          ("civil_unrest_level", "Civil Unrest")]:
             pol.add_field(name=label, value=self.ranged_value(p.get(k, 0), knowledge, "population" if k == "population" else "generic"))
-        ideology_breakdown = target.get("ideology", {})
+        ideology_breakdown = target.get("IDEOLOGY", {})
         for ideol in ["democratic", "fascist", "communist", "authoritarian", "monarchic"]:
             pol.add_field(name=f"{ideol.title()} Support", value=self.ranged_value(ideology_breakdown.get(ideol, 0), knowledge), inline=True)
         embeds.append(pol)
@@ -2531,7 +2533,7 @@ class SpideyUtils(commands.Cog):
         intel.add_field(name="Spy Network Efficiency", value=self.ranged_value(esp.get("spy_network_score", 0), knowledge, "intel"))
 
         # NATIONAL SPIRITS
-        spirits_data = target.get("national_spirits", [])
+        spirits_data = target.get("NATIONAL_SPIRITS", [])
         if spirits_data:
             # Group spirits by type
             spirit_groups = defaultdict(list)
@@ -2813,14 +2815,14 @@ class SpideyUtils(commands.Cog):
         if not info:
             return await interaction.followup.send(f"❌ Country '{country}' not found.", ephemeral=True)
 
-        global_data = info.get("global", {})
-        ideology = info.get("ideology", {})
-        leader = info.get("leader", {})
+        global_data = info.get("GLOBAL", {})
+        ideology = info.get("IDEOLOGY", {})
+        leader = info.get("LEADER", {})
 
         # Basic Info Embed
         embed = discord.Embed(
             title=f"📋 Bureau of Global Intelligence – Summary Report",
-            description=info.get("public_desc", "No public information available."),
+            description=info.get("PUBLIC_DESC", "No public information available."),
             color=discord.Color.blue()
         )
         embed.set_author(name=f"Filed under: Public Record – {country}")
@@ -2829,8 +2831,8 @@ class SpideyUtils(commands.Cog):
         embed.add_field(name="Doctrine", value=global_data.get("doctrine_focus", "Unknown"), inline=True)
         embed.add_field(name="Conscription", value=global_data.get("conscription_policy", "Unknown"), inline=True)
 
-        if info.get("image"):
-            embed.set_image(url=info["image"])
+        if info.get("IMAGE"):
+            embed.set_image(url=info["IMAGE"])
         
         embed.set_footer(text="United Nations' Materials | Not for Public Distribution")
 
@@ -2840,11 +2842,11 @@ class SpideyUtils(commands.Cog):
             description=leader.get("name", "Unknown"),
             color=discord.Color.dark_gold()
         )
-        if leader.get("image"):
-            leader_embed.set_image(url=leader["image"])
+        if leader.get("IMAGE"):
+            leader_embed.set_image(url=leader["IMAGE"])
 
         # National Spirits (public only)
-        spirits_data = info.get("national_spirits", [])
+        spirits_data = info.get("NATIONAL_SPIRITS", [])
         public_spirits = [s for s in spirits_data if s.get("public")]
 
         spirit_embed = discord.Embed(
