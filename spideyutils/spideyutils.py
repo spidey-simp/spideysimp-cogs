@@ -2459,8 +2459,8 @@ class SpideyUtils(commands.Cog):
             overview.set_image(url=target["IMAGE"])
         ideology = target.get("IDEOLOGY", {})
         overview.add_field(name="Leading Ideology", value=ideology.get("leading_ideology", "Unknown"))
-        overview.add_field(name="Doctrine", value=target.get("global", {}).get("DOCTRINE_FOCUS", "N/A"), inline=True)
-        overview.add_field(name="Conscription", value=target.get("global", {}).get("CONSCRIPTION_POLICY", "N/A"), inline=True)
+        overview.add_field(name="Doctrine", value=target.get("GLOBAL", {}).get("DOCTRINE_FOCUS", "N/A"), inline=True)
+        overview.add_field(name="Conscription", value=target.get("GLOBAL", {}).get("CONSCRIPTION_POLICY", "N/A"), inline=True)
         embeds.append(overview)
 
         # LEADER
