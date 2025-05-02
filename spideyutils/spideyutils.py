@@ -2828,8 +2828,8 @@ class SpideyUtils(commands.Cog):
         embed.set_author(name=f"Filed under: Public Record – {country}")
 
         embed.add_field(name="Ideology", value=ideology.get("leading_ideology", "Unknown"))
-        embed.add_field(name="Doctrine", value=global_data.get("doctrine_focus", "Unknown"), inline=True)
-        embed.add_field(name="Conscription", value=global_data.get("conscription_policy", "Unknown"), inline=True)
+        embed.add_field(name="Doctrine", value=global_data.get("DOCTRINE_FOCUS", "Unknown"), inline=True)
+        embed.add_field(name="Conscription", value=global_data.get("CONSCRIPTION_POLICY", "Unknown"), inline=True)
 
         if info.get("IMAGE"):
             embed.set_image(url=info["IMAGE"])
