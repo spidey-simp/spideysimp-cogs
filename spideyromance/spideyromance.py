@@ -215,7 +215,6 @@ class SpideyRomance(commands.Cog):
 
         embed.set_footer(text=advice)
 
-        if gif:
-            embed.set_image(url=gif)
         
         await interaction.followup.send(embed=embed)
+        await interaction.followup.send(gif)
