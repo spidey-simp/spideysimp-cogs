@@ -216,12 +216,8 @@ class SpideyRomance(commands.Cog):
         embed.add_field(name="Verdict", value=random.choice(verdict_msg), inline=False)
 
         embed.set_footer(text=advice)
-        try:
-            embed.set_image(url=gif)
-        except Exception:
-            pass
         
-        embed.set_image(url="https://media.tenor.com/2cYbPvbs-KQAAAAC/bear-love-hearts.gif")
-
 
         await interaction.followup.send(embed=embed)
+        await asyncio.sleep(0.3)
+        await interaction.channel.send(content=gif)
