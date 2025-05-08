@@ -450,7 +450,7 @@ class SpideyRomance(commands.Cog):
                 embed.add_field(name="Compatibility Score", value=f"**{compat_score}%**", inline=False)
                 embed.add_field(name="Verdict", value=random.choice(verdict_msg), inline=False)
 
-                embed.set_footer(text=advice)
+                embed.set_footer(text=random.choice(advice))
                 
 
                 await interaction.followup.send(embed=embed)
@@ -463,7 +463,7 @@ class SpideyRomance(commands.Cog):
                     f"**{name1}** {'❤️' if compat_score > 50 else '💔'} **{name2}**\n"
                     f"**Compatibility Score:** {compat_score}"
                     f"**The Mystic {self.bot.user.mention}'s Verdict:** {random.choice(verdict_msg)}\n"
-                    f"**Relationship Advice:** {advice}\n"
+                    f"**Relationship Advice:** {random.choice(advice)}\n"
                     f"{random.choice(gifs)}"
                 )
 
