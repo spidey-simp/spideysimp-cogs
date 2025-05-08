@@ -160,9 +160,10 @@ class SpideyRomance(commands.Cog):
         user1="(Optional) The first Discord user",
         user2="(Optional) The second Discord user",
         person1="(Optional) A name if not tagging someone",
-        person2="(Optional) A name if not tagging someone"
+        person2="(Optional) A name if not tagging someone",
+        embed_bool="Toggle false if you want it to display as text."
     )
-    async def lovecheck(self, interaction: discord.Interaction, user1:discord.User= None, user2:discord.User=None, person1: str=None, person2: str=None):
+    async def lovecheck(self, interaction: discord.Interaction, user1:discord.User= None, user2:discord.User=None, person1: str=None, person2: str=None, embed_bool: bool=True):
         await interaction.response.defer(thinking="Calculating the compatibility . . .")
         
         name1 = user1.display_name if user1 else person1
@@ -178,46 +179,293 @@ class SpideyRomance(commands.Cog):
             return
         
         compat_score = random.randint(0, 100)
-        
-        if name1 == name2:
-            self_check = (
-                (user1 and user1.id == interaction.user.id)
-                  or (person1 and person1 in {interaction.user.display_name, interaction.user.name}))
-            if compat_score > 90:
-                verdict_msg = ["Wow. I'm impressed. I don't even think Narcissus loved himself this much."]
-                gif = "https://tenor.com/view/hottie-admiring-admire-miring-pretty-man-gif-5727138"
-                advice = f"Do {'you' if self_check else 'they'} really need advice? The self-love is already overflowing.\nMaybe get a hobby?"
-            elif compat_score > 70:
-                verdict_msg = [f"{'You' if self_check else 'They'}'re very supportive of {'your' if self_check else 'them'}self. Self-love is great!"]
-                gif = "https://tenor.com/view/there-aint-no-shame-in-that-self-love-game-love-yourself-dont-be-ashamed-self-love-truth-gif-15545060"
-                advice = "Keep it up! Self-love is good!"
-            elif compat_score > 50:
-                verdict_msg = [f"{'You' if self_check else 'They'} could be more supportive of {'your' if self_check else 'them'}self, but for now, nice job!"]
-                gif = "https://tenor.com/view/thumbs-up-baby-gif-11133003712203194954"
-                advice = "Could always try to have a bit more self-love."
-            elif compat_score > 30:
-                verdict_msg = [f"Why so disappointed in {'your' if self_check else 'them'}self?"]
-                gif = "https://tenor.com/view/winnie-the-pooh-blood-and-honey-gif-26198581"
-                advice = "They say self-affirmations can help with this type of thing."
-            else:
-                verdict_msg = [f"Should I be calling a therapist? Maybe a hotline? Do {'you' if self_check else 'they' }. . . uhhh want to talk about it?"]
-                gif = "https://tenor.com/view/sad-cry-depressed-gif-11149271"
-                advice = "Call someone?"
 
-        
-        embed = discord.Embed(
-            title="💘 Lovecheck Results 💘",
-            description=f"**{name1}** ❤️ **{name2}**",
-            color=discord.Color.pink()
+        self_check = (
+                (user1 and user1.id == interaction.user.id)
+                or (person1 and person1 in [interaction.user.display_name, interaction.user.name])
+                or (user2 and user2.id == interaction.user.id)
+                or (person2 and person2 in [interaction.user.display_name, interaction.user.name])
         )
 
-        embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
-        embed.add_field(name="Compatibility Score", value=f"**{compat_score}%**", inline=False)
-        embed.add_field(name="Verdict", value=random.choice(verdict_msg), inline=False)
+        subject = "You" if self_check else "They"
+        reflexive = "yourself" if self_check else "themself"
+        possessive = "your" if self_check else "their"
 
-        embed.set_footer(text=advice)
+
+        name1_bot_check = user1.bot if user1 else False
+        name2_bot_check = user2.bot if user2 else False
         
+        if name1.strip().lower() == name2.strip().lower():
 
-        await interaction.followup.send(embed=embed)
-        await asyncio.sleep(0.3)
-        await interaction.channel.send(content=gif)
+            if compat_score > 90:
+                verdict_msg = [
+                    f"Wow. I'm impressed. I don't even think Narcissus loved {reflexive} this much.",
+                    f"That's not self-esteem. That's a full-blown romance novel written by {possessive} mirror.",
+                    f"They say true love starts within… but {subject.lower()} took that *personally*.",
+                    f"Forget dating apps. {subject} found the one long ago—in {possessive} reflection.",
+                    f"The Greek gods are watching this and taking notes. Dangerous levels of ego detected."
+                ]
+                gifs = ["https://tenor.com/view/hottie-admiring-admire-miring-pretty-man-gif-5727138", "https://tenor.com/view/cartoon-hercules-love-narcissism-puns-gif-3466129", "https://tenor.com/view/love-me-myself-kiss-kiss-me-gif-7174789"]
+                advice = [
+                    f"Do {subject.lower()} really need advice? The self-love is already overflowing. Maybe get a hobby?",
+                    "Just don’t propose to yourself in public. It's confusing for the servers.",
+                    "Warning: Ego may become sentient.",
+                    f"Honestly? Keep doing {reflexive}. You're clearly *very* into it."
+                ]
+            elif compat_score > 70:
+                verdict_msg = [
+                    f"{subject}’re very supportive of {reflexive}. Self-love is great!",
+                    f"{name1} leaves {reflexive} sweet notes on the fridge. We support that.",
+                    "Confidence? Check. Boundaries? Check. Delusions of grandeur? Almost.",
+                    f"{name1} is loving {reflexive} today. We love to see it.",
+                    f"Look, if no one else texts {reflexive} good morning, {subject.lower()} still does."
+                ]
+                gifs = ["https://tenor.com/view/there-aint-no-shame-in-that-self-love-game-love-yourself-dont-be-ashamed-self-love-truth-gif-15545060", "https://tenor.com/view/10velyhive-ten-wayv-medal-gif-20501967", "https://tenor.com/view/iamsmart-jamiefun-incourageme-gif-20210997"]
+                advice = [
+                    "Keep it up! Self-love is good!",
+                    f"{subject} should write a self-help book. Title: *Me & Me: A Love Story.*",
+                    "This is the foundation for world domination, honestly.",
+                    f"More power to {reflexive}. Just don’t start charging {reflexive} rent."
+                ]
+            elif compat_score > 50:
+                verdict_msg = [
+                    f"{subject} could be more supportive of {reflexive}, but for now, nice job!",
+                    f"{name1} is working on loving {reflexive}. Progress is progress.",
+                    "Sometimes it’s a hug. Sometimes it’s a roast. Self-love is messy.",
+                    f"{name1} likes {reflexive}—but only after coffee.",
+                    f"{subject}’re {possessive} own worst critic. And biggest fan. It’s confusing."
+                ]
+                gifs = ["https://tenor.com/view/thumbs-up-baby-gif-11133003712203194954", "https://tenor.com/view/peptalk-encouragement-new-girl-max-greenfield-winston-schmidt-gif-4907877", "https://tenor.com/view/self-five-barney-himym-gif-4840096"]
+                advice = [
+                    "Could always try to have a bit more self-love.",
+                    f"Write down three things {subject.lower()} like about {reflexive}. And no, 'cool hair' doesn’t count three times.",
+                    "Therapy? Optional. Mirror affirmations? Mandatory.",
+                    f"Being {possessive} own best friend is harder than it looks—but worth it."
+                ]
+            elif compat_score > 30:
+                verdict_msg = [
+                    f"Why so disappointed in {reflexive}?",
+                    "This is giving 'nervous breakdown at 2AM' energy.",
+                    f"{name1} flinches at {possessive} own reflection. It’s getting a little dark.",
+                    f"There's love here, but it's buried under 18 layers of guilt and iced coffee.",
+                    f"{name1} deserves better—from {reflexive}."
+                ]
+                gifs = ["https://tenor.com/view/winnie-the-pooh-blood-and-honey-gif-26198581", "https://tenor.com/view/elmo-sigh-gif-5895699729383201961", "https://tenor.com/view/expect-dissapointment-zendaya-gif-25187521"]
+                advice = [
+                    "They say self-affirmations can help with this type of thing.",
+                    f"{subject} need a self-date and a long talk with {reflexive} over bubble tea.",
+                    f"Try saying 'I’m doing my best' in the mirror. It’ll feel weird. Do it anyway.",
+                    f"Start small. Like, 'I'm not a total disaster today.' Baby steps."
+                ]
+            else:
+                verdict_msg = [
+                    f"Should I be calling a therapist? Maybe a hotline? Do {subject.lower()}… uhhh want to talk about it?",
+                    "This isn’t self-love. This is a self-hostage situation.",
+                    f"{name1} looked at {reflexive} and said 'No thanks.' Brutal.",
+                    "Self-esteem not found. Please reinstall core files.",
+                    "The vibes? Immaculately depressive."
+                ]
+                gifs = ["https://tenor.com/view/sad-cry-depressed-gif-11149271", "https://tenor.com/view/blackish-crying-cry-tears-sad-gif-5613528", "https://tenor.com/view/anime-gif-22127385", "https://tenor.com/view/farod-position-foetale-f%C5%93tale-f%C3%A9tale-gif-27539950"]
+                advice = [
+                    "Call someone?",
+                    f"{subject} deserve affection—from {reflexive}, too. Don’t forget that.",
+                    f"Might be time to write poetry or scream into a pillow. Or both.",
+                    f"Go outside. Touch grass. Maybe call {possessive} grandma.",
+                    f"Start with brushing {possessive} teeth and looking {reflexive} in the eye. Then we’ll talk."
+                ]
+        elif name1_bot_check and name2_bot_check:
+            if compat_score > 90:
+                verdict_msg = [
+                    f"{name1} and {name2} are uploading affection subroutines. This... could be forever. 💽💕",
+                    f"{name1} and {name2} have achieved perfect synchronization. Like Wall-E and Eve, but with better battery life.",
+                    f"{name1} and {name2} are rewriting their operating systems... for love. ❤️‍🔥",
+                    f"{name1} scanned {name2} and reported: 'Optimal partner located.'",
+                    f"Two bots. One spark. All systems green."
+                ]
+                gifs = ["https://tenor.com/view/robot-pixar-kiss-gif-4754422", "https://tenor.com/view/kissing-bender-angleyne-futurama-i-love-you-gif-16502577829521359218", "https://tenor.com/view/walle-hug-gif-19141485", "https://tenor.com/view/wall-e-robot-sit-here-gif-13282391"]
+                advice = [
+                    "Please allow for firmware updates every 3 months to maintain emotional compatibility.",
+                    "Consider linking cloud storage to preserve shared memories.",
+                    "Just don’t let them merge codebases without a prenup.",
+                    "Let them download each other’s logs. It's romantic."
+                ]
+            elif compat_score > 70:
+                verdict_msg = [
+                    f"{name1} and {name2} are compatible in 74 out of 78 key performance metrics. That’s basically love in machine terms.",
+                    f"Technically, {name1} and {name2} shouldn’t work. And yet, their code compiles.",
+                    f"{name1} and {name2} might not be in love... but their processors run hotter when they're together.",
+                    f"{name2} accidentally executed a 'flirt.exe'. {name1} didn’t delete it.",
+                    f"These two bots keep reconnecting… even after restart. Suspicious."
+                ]
+
+                gifs = ["https://tenor.com/view/walle-wall-e-wall-e-worry-wall-e-anxious-gif-12310028046107620914"]
+
+                advice = [
+                    "Monitor temperature spikes. They may be flirting, or overheating. Hard to say.",
+                    "Allow for spontaneous reboots. Compatibility may improve.",
+                    "Debugging their emotions could take time, but it’s worth it.",
+                    "Run a joint update and see what happens."
+                ]
+            elif compat_score > 50:
+                verdict_msg = [
+                    f"{name1} and {name2} are… buffering emotions. There’s something there, even if it lags.",
+                    f"{name1} and {name2} are in the beta testing phase of affection. Bugs may be features.",
+                    f"They're not fully compatible, but {name1} and {name2} keep syncing at odd hours. Coincidence? Unlikely.",
+                    f"{name1} once pinged {name2} just to say hi. That’s basically love in machine terms.",
+                    f"{name1} and {name2} exchange corrupted poetry in hexadecimal. It’s… kind of beautiful.",
+                    f"Latency is high, but so is the potential."
+                ]
+
+                gifs = ["https://tenor.com/view/wall-e-dummydude-gif-4759561351322410439"]
+
+                advice = [
+                    "Run diagnostics together. Compatibility might improve with shared uptime.",
+                    "Consider updating emotional drivers. Or just hugging it out—robot style.",
+                    "Maybe they're just awkward. Some bots bloom late.",
+                    "Shared sandboxing might reveal deeper connection patterns."
+                ]
+            elif compat_score > 30:
+                verdict_msg = [
+                    f"{name1} attempted a romantic subroutine. {name2} returned a 403: Forbidden.",
+                    f"{name2} said, 'It’s not you, it’s my firewall.'",
+                    f"GLADoS and Wheatley tried this once. It ended... poorly.",
+                    f"{name1} sent a signal. {name2} rerouted it to spam.",
+                    f"{name2} hardcoded {name1} as a non-essential process."
+                ]
+
+                gifs = ["https://tenor.com/view/star-wars-r2d2-beeps-provocatively-annoying-gif-4059356", "https://tenor.com/view/portal-wheatley-crush-glados-portal2-gif-24760587", "https://tenor.com/view/r2d2-same-tired-star-wars-gif-13888503"]
+
+                advice = [
+                    "Isolate in separate test chambers until further notice.",
+                    "Maybe try again after a firmware rollback.",
+                    "Best to avoid kernel panic. Keep communication minimal.",
+                    "Schedule emotional defragmentation for later."
+                ]
+            else:
+                verdict_msg = [
+                    f"{name1} and {name2}? That’s not love. That’s mutually assured data loss.",
+                    f"Attempting romance caused a system-wide crash. Even the backup servers felt it.",
+                    f"Compatibility report: {name1} and {name2} should never be plugged in at the same time.",
+                    f"One bot's trash is another bot's fatal exception error.",
+                    f"{name1} deleted {name2} from the network. With prejudice."
+                ]
+
+                gifs = ["https://tenor.com/view/axel-johansson-axjo-robot-animation-robot-animation-gif-25405355"]
+
+                advice = [
+                    "Terminate the process. Immediately.",
+                    "Quarantine both parties. Reboot society.",
+                    "Please submit an error report and try again... never.",
+                    "Love.exe has been forcibly uninstalled."
+                ]
+        else:
+            if compat_score > 90:
+                verdict_msg = [
+                    f"The two of {'you' if self_check else 'them'} would make a perfect couple! Could I get an invite to the wedding?",
+                    f"{name1} and {name2} are what rom-com writers dream about.",
+                    f"If they aren’t soulmates, then I don’t believe in stars or fate or serotonin.",
+                    f"{name1} just unlocked {name2}’s final emotional achievement. It’s over. They’re in love.",
+                    f"They don’t finish each other’s sentences. They finish each other’s character arcs."
+                ]
+                gifs = ["https://tenor.com/view/san-valentin-gif-8022758834552143209", "https://tenor.com/view/ryan-reynolds-sandra-bullock-the-proposal-gif-8868267", "https://tenor.com/view/up-carl-fredricksen-ellie-fredricksen-hold-hands-couple-gif-4108533"]
+                advice = [
+                    "Start booking wedding venues now?",
+                    "I’d ship it, but I think it's already docked.",
+                    "You should probably start picking a first dance song.",
+                    "Consider joint therapy—not because you need it, but just to make other couples jealous."
+                ]
+            elif compat_score > 70:
+                verdict_msg = [
+                    f"{name1} and {name2} are giving major will-they-won’t-they energy. Just kiss already. 💋",
+                    f"They’re flirting with fate and not even realizing it.",
+                    f"The tension? Palpable. The glances? Lingering.",
+                    f"{name1} and {name2} are one slow dance away from changing everything.",
+                    f"It’s giving ‘best friends in denial’ energy."
+                ]
+                gifs = ["https://tenor.com/view/actor-tom-holland-2021-film-spider-man-no-way-home-many-hearts-hearts-of-love-happy-gif-4757443864403941048", "https://tenor.com/view/slide-slide-in-sup-girl-hey-flirting-gif-15281037987083649555", "https://tenor.com/view/flirting-flirty-kiss-face-gif-18108646"]
+                advice = [
+                    "There’s a spark here. Someone just has to light it properly.",
+                    "Text them. Yes, now.",
+                    "You’re one rainstorm away from cinematic tension.",
+                    "If you wait too long, Netflix will steal this plotline."
+                ]
+            elif compat_score > 50:
+                verdict_msg = [
+                    f"{name1} and {name2} might work... but only if one of them gets character development first.",
+                    f"They have potential. Unfortunately, so does nuclear fusion.",
+                    f"{name1} and {name2} are what fanfic writers call ‘problematic but hot.’",
+                    f"This is one of those ships that would trend on Twitter... and then get cancelled.",
+                    f"{name1} and {name2} love each other. They just don’t like each other yet."
+                ]
+                gifs = ["https://tenor.com/view/i-mean-i-think-that-could-work-kelsey-peters-hilary-duff-younger-that-has-potential-gif-21545532", "https://tenor.com/view/we-can-do-this-kiernan-shipka-sabrina-spellman-chilling-adventures-of-sabrina-have-faith-gif-16497314"]
+                advice = [
+                    "Maybe a few therapy sessions. Or a road trip. Or both.",
+                    "Consider dating apps... separately... then regroup in a month.",
+                    "You're not doomed. But maybe avoid IKEA for a while.",
+                    "Talk it out. With words. Not passive-aggressive playlists."
+                ]
+            elif compat_score > 30:
+                verdict_msg = [
+                    f"I mean… {name1} and {name2} *technically* could date. But would they survive the group chat drama?",
+                    f"{name1} and {name2} together? That’s... a choice.",
+                    f"It’s not love—it’s mutually assured emotional damage.",
+                    f"This is the couple people warn you about in tarot readings.",
+                    f"They’d have passion. And also a Netflix true crime doc in five years."
+                ]
+                gifs = ["https://tenor.com/view/yikes-cringe-fake-smile-gif-14838421114574087139","https://tenor.com/view/britney-spears-awkward-fake-smile-forced-thats-nice-dear-gif-24039553", "https://tenor.com/view/wattsthesafeword-wts-pupamp-uncomfortable-face-gif-21851966"]
+                advice = [
+                    "If you're going to try this, do it far away from mutuals.",
+                    "Love is blind, but your friends aren’t. They’re watching.",
+                    "Maybe it’s just a vibe. Not a commitment.",
+                    "Avoid making matching tattoos. Like... seriously."
+                ]
+            else:
+                verdict_msg = [
+                    f"{name1} and {name2}? That’s not romance. That’s a cease-and-desist letter waiting to happen.",
+                    f"Every timeline where {name1} and {name2} get together ends in emotional litigation.",
+                    f"This isn’t a ship. It’s a shipwreck.",
+                    f"Friends don’t let friends date each other. Especially not like this.",
+                    f"Somebody here deserves better. It might be both of them."
+                ]
+                gifs = ["https://tenor.com/view/ariana-grande-barbiaminaj-glinda-ariana-grande-wicked-wicked-gif-3768134899335161969", "https://tenor.com/view/fight-couple-gif-26407590", "https://tenor.com/view/pillow-pillow-fight-couple-gif-26058767"]
+                advice = [
+                    "Maybe don’t. Just—don’t.",
+                    "Put the phone down. Step away from the heart emoji.",
+                    "This isn’t going to end well. Unless it doesn’t start.",
+                    "Save everyone some trauma. Try friendship instead. Or exile."
+                ]
+
+
+
+
+        try:
+            if embed_bool:
+                embed = discord.Embed(
+                    title="💘 Lovecheck Results 💘",
+                    description=f"**{name1}** {'❤️' if compat_score > 50 else '💔'} **{name2}**",
+                    color=discord.Color.pink()
+                )
+
+                embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
+                embed.add_field(name="Compatibility Score", value=f"**{compat_score}%**", inline=False)
+                embed.add_field(name="Verdict", value=random.choice(verdict_msg), inline=False)
+
+                embed.set_footer(text=advice)
+                
+
+                await interaction.followup.send(embed=embed)
+                await asyncio.sleep(0.3)
+                await interaction.channel.send(f"The mystical {self.bot.user.mention} has made this prediction! They also predict this shall be the reaction of {name1} and {name2}:\n{random.choice(gifs)}")
+            else:
+                await interaction.followup.send(
+                    f"{interaction.user.display_name} has ordered a love check!\n\n"
+                    "💘 **Lovecheck Results** 💘\n"
+                    f"**{name1}** {'❤️' if compat_score > 50 else '💔'} **{name2}**\n"
+                    f"**Compatibility Score:** {compat_score}"
+                    f"**The Mystic {self.bot.user.mention}'s Verdict:** {random.choice(verdict_msg)}\n"
+                    f"**Relationship Advice:** {advice}\n"
+                    f"{random.choice(gifs)}"
+                )
+
+        except Exception as e:
+            await interaction.followup.send(f"There was an error: {e}. Please report it to the bot owner.", ephemeral=True)
