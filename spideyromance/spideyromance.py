@@ -183,23 +183,23 @@ class SpideyRomance(commands.Cog):
             self_check = user1.id == interaction.user.id
             if compat_score > 90:
                 verdict_msg = ["Wow. I'm impressed. I don't even think Narcissus loved himself this much."]
-                gif = "https://tenor.com/view/hottie-admiring-admire-miring-pretty-man-gif-5727138"
+                gif = "https://media1.tenor.com/m/Y7X2NCShCCYAAAAd/hottie-admiring.gif"
                 advice = f"Do {'you' if self_check else 'they'} really need advice? The self-love is already overflowing.\nMaybe get a hobby?"
             elif compat_score > 70:
                 verdict_msg = [f"{'You' if self_check else 'They'}'re very supportive of {'your' if self_check else 'them'}self. Self-love is great!"]
-                gif = "https://tenor.com/view/there-aint-no-shame-in-that-self-love-game-love-yourself-dont-be-ashamed-self-love-truth-gif-15545060"
+                gif = "https://media1.tenor.com/m/Hq92y4jGdxkAAAAd/there-aint-no-shame-in-that-self-love-game-love-yourself.gif"
                 advice = "Keep it up! Self-love is good!"
             elif compat_score > 50:
                 verdict_msg = [f"{'You' if self_check else 'They'} could be more supportive of {'your' if self_check else 'them'}self, but for now, nice job!"]
-                gif = "https://tenor.com/view/thumbs-up-baby-gif-11133003712203194954"
+                gif = "https://media1.tenor.com/m/moBf5Bz6AkoAAAAd/thumbs-up-baby.gif"
                 advice = "Could always try to have a bit more self-love."
             elif compat_score > 30:
                 verdict_msg = [f"Why so disappointed in {'your' if self_check else 'them'}self?"]
-                gif = "https://tenor.com/view/winnie-the-pooh-blood-and-honey-gif-26198581"
+                gif = "https://media1.tenor.com/m/n6RH5coeulgAAAAd/winnie-the-pooh-blood-and-honey.gif"
                 advice = "They say self-affirmations can help with this type of thing."
             else:
                 verdict_msg = [f"Should I be calling a therapist? Maybe a hotline? Do {'you' if self_check else 'they' }. . . uhhh want to talk about it?"]
-                gif = "https://tenor.com/view/sad-cry-depressed-gif-11149271"
+                gif = "https://media1.tenor.com/m/dYhNx77nwFUAAAAd/sad-cry.gif"
                 advice = "Call someone?"
 
         
@@ -215,6 +215,6 @@ class SpideyRomance(commands.Cog):
 
         embed.set_footer(text=advice)
 
+        embed.set_image(url=gif)
         
         await interaction.followup.send(embed=embed)
-        await interaction.followup.send(gif)
