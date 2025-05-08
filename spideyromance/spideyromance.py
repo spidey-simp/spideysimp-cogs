@@ -455,17 +455,18 @@ class SpideyRomance(commands.Cog):
 
                 await interaction.followup.send(embed=embed)
                 await asyncio.sleep(0.3)
-                await interaction.channel.send(f"The mystical {self.bot.user.mention} has made this prediction! They also predict this shall be the reaction of {name1} and {name2}:\n{random.choice(gifs)}")
+                await interaction.channel.send(f"The mystical {self.bot.user.mention} has made this prediction! They also predict this shall be the reaction of {name1} and {name2}:\n")
+                await interaction.channel.send(f"{random.choice(gifs)}")
             else:
                 await interaction.followup.send(
                     f"{interaction.user.display_name} has ordered a love check!\n\n"
                     "💘 **Lovecheck Results** 💘\n"
                     f"**{name1}** {'❤️' if compat_score > 50 else '💔'} **{name2}**\n"
-                    f"**Compatibility Score:** {compat_score}"
+                    f"**Compatibility Score:** {compat_score}%\n"
                     f"**The Mystic {self.bot.user.mention}'s Verdict:** {random.choice(verdict_msg)}\n"
                     f"**Relationship Advice:** {random.choice(advice)}\n"
-                    f"{random.choice(gifs)}"
                 )
+                await interaction.channel.send(f"{random.choice(gifs)}")
 
         except Exception as e:
             await interaction.followup.send(f"There was an error: {e}. Please report it to the bot owner.", ephemeral=True)
