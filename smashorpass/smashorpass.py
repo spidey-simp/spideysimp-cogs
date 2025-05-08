@@ -224,7 +224,7 @@ def update_votes(category, character_name, vote_type, user_id, image):
     return True
 
 class UserUploadsView(discord.ui.View):
-    def __init__(self, interaction, entries, target):
+    def __init__(self, interaction, entries, target: discord.User):
         super().__init__(timeout=60.0)
         self.entries = entries
         self.index = 0
@@ -233,7 +233,7 @@ class UserUploadsView(discord.ui.View):
     
     async def update_message(self):
         entry = self.entries[self.index]
-        embed = discord.Embed(title=f"Uploads by {self.target.mention}")
+        embed = discord.Embed(title=f"Uploads by {self.target.display_name}")
         embed.add_field(name="Name", value=entry["name"], inline=True)
         embed.set_image(url=entry["image"])
         
