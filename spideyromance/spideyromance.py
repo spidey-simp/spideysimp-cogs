@@ -1,5 +1,6 @@
 import random
 import discord
+import asyncio
 from redbot.core import commands
 from discord import app_commands
 
@@ -18,6 +19,8 @@ class SpideyRomance(commands.Cog):
         
         member = None
         if ctx.message.mentions:
+            member = ctx.message.mentions[0]
+        else:
             member = discord.utils.find(lambda m: m.name.lower() == target.lower(), ctx.guild.members)
         
         if member:
@@ -50,13 +53,61 @@ class SpideyRomance(commands.Cog):
         else:
             randchance = random.random()
             if randchance > .95:
-                msg_list_use = [f"{target_display} is taking out a restraining order"]
+                msg_list_use = [
+                    f"{target_display} is taking out a restraining order on {ctx.author.display_name}. 🚔",
+                    f"Your cuddle attempt triggered a legal response. {target_display} is not amused.",
+                    f"{ctx.author.mention}, you've been formally banned from the Snuggle Zone™.",
+                    f"{target_display} just lawyered up. No more hugs for you.",
+                    f"Cease and desist. {target_display} wants 500 feet of space and a security detail."
+                ]
+                if member:
+                    self.restraining_order_dict.setdefault(str(member.id), []).append(str(ctx.author.id))
+                bonus_msg = [
+                    "Damn that’s tough. 🫢",
+                    "You cuddled so hard you broke the law.",
+                    "Not everyone appreciates unprompted affection, champ.",
+                    "Your cuddle license has been revoked.",
+                    "Next time, try a wave."
+                ]
+
+            elif randchance > .8:
+                msg_list_use = [
+                    f"{target_display} doesn't seem very interested in cuddling with you, {ctx.author.mention}.",
+                    f"{target_display} side-eyed the cuddle attempt and walked away. 😬",
+                    f"{ctx.author.mention} tried to cuddle {target_display}, but it’s giving 'restraining vibe' energy.",
+                    f"{target_display} gave a thumbs up… and then ghosted.",
+                    f"{ctx.author.mention} misread the situation. Hug denied. 💔"
+                ]
+                bonus_msg = [
+                    "Maybe buy them a drink first. 🍷",
+                    "Recalibrating cuddle radar… 🛰️",
+                    "Tough crowd, huh?",
+                    "Rejection builds character. Allegedly.",
+                    "You miss 100% of the cuddles you don't shoot for—and 100% of the ones you do."
+                ]
+
+            else:
+                msg_list_use = [
+                    f"{ctx.author.mention} and {target_display} are snuggling. How sweet! ❤️",
+                    f"{ctx.author.mention} just pulled {target_display} into the warmest cuddle imaginable. ☁️",
+                    f"{ctx.author.mention} and {target_display} are now contractually obligated to be cozy. 📜🤗",
+                    f"A certified snuggle session has begun between {ctx.author.mention} and {target_display}. 🧸",
+                    f"{ctx.author.mention} is absolutely swaddling {target_display} in affection. Someone get a blanket!"
+                ]
+                bonus_msg =[
+                    "Happy cuddles! 🫶",
+                    "Wholesome levels rising dangerously. ☢️",
+                    "May this cuddle never end. (It will, of course.)",
+                    "That was so soft it registered on the Mohs scale.",
+                    "And just like that, serotonin."
+                ]
+
 
         message = random.choice(msg_list_use)
         await ctx.send(message)
 
         if bonus_msg != []:
-            await ctx.defer(1)
+            await asyncio.sleep(1)
             bonus = random.choice(bonus_msg)
             await ctx.send(bonus)
 
