@@ -221,4 +221,7 @@ class SpideyRomance(commands.Cog):
         except Exception:
             pass
         
+        embed.set_image(url="https://media.tenor.com/2cYbPvbs-KQAAAAC/bear-love-hearts.gif")
+
+
         await interaction.followup.send(embed=embed)
