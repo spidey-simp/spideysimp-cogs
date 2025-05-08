@@ -180,7 +180,9 @@ class SpideyRomance(commands.Cog):
         compat_score = random.randint(0, 100)
         
         if name1 == name2:
-            self_check = user1.id == interaction.user.id
+            self_check = (
+                (user1 and user1.id == interaction.user.id)
+                  or (person1 and person1 in {interaction.user.display_name, interaction.user.name}))
             if compat_score > 90:
                 verdict_msg = ["Wow. I'm impressed. I don't even think Narcissus loved himself this much."]
                 gif = "https://media1.tenor.com/m/Y7X2NCShCCYAAAAd/hottie-admiring.gif"
@@ -214,7 +216,9 @@ class SpideyRomance(commands.Cog):
         embed.add_field(name="Verdict", value=random.choice(verdict_msg), inline=False)
 
         embed.set_footer(text=advice)
-
-        embed.set_image(url=gif)
+        try:
+            embed.set_image(url=gif)
+        except Exception:
+            pass
         
         await interaction.followup.send(embed=embed)
