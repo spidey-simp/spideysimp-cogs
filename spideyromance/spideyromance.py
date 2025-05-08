@@ -185,23 +185,23 @@ class SpideyRomance(commands.Cog):
                   or (person1 and person1 in {interaction.user.display_name, interaction.user.name}))
             if compat_score > 90:
                 verdict_msg = ["Wow. I'm impressed. I don't even think Narcissus loved himself this much."]
-                gif = "https://media1.tenor.com/m/Y7X2NCShCCYAAAAd/hottie-admiring.gif"
+                gif = "https://tenor.com/view/hottie-admiring-admire-miring-pretty-man-gif-5727138"
                 advice = f"Do {'you' if self_check else 'they'} really need advice? The self-love is already overflowing.\nMaybe get a hobby?"
             elif compat_score > 70:
                 verdict_msg = [f"{'You' if self_check else 'They'}'re very supportive of {'your' if self_check else 'them'}self. Self-love is great!"]
-                gif = "https://media1.tenor.com/m/Hq92y4jGdxkAAAAd/there-aint-no-shame-in-that-self-love-game-love-yourself.gif"
+                gif = "https://tenor.com/view/there-aint-no-shame-in-that-self-love-game-love-yourself-dont-be-ashamed-self-love-truth-gif-15545060"
                 advice = "Keep it up! Self-love is good!"
             elif compat_score > 50:
                 verdict_msg = [f"{'You' if self_check else 'They'} could be more supportive of {'your' if self_check else 'them'}self, but for now, nice job!"]
-                gif = "https://media1.tenor.com/m/moBf5Bz6AkoAAAAd/thumbs-up-baby.gif"
+                gif = "https://tenor.com/view/thumbs-up-baby-gif-11133003712203194954"
                 advice = "Could always try to have a bit more self-love."
             elif compat_score > 30:
                 verdict_msg = [f"Why so disappointed in {'your' if self_check else 'them'}self?"]
-                gif = "https://media1.tenor.com/m/n6RH5coeulgAAAAd/winnie-the-pooh-blood-and-honey.gif"
+                gif = "https://tenor.com/view/winnie-the-pooh-blood-and-honey-gif-26198581"
                 advice = "They say self-affirmations can help with this type of thing."
             else:
                 verdict_msg = [f"Should I be calling a therapist? Maybe a hotline? Do {'you' if self_check else 'they' }. . . uhhh want to talk about it?"]
-                gif = "https://media1.tenor.com/m/dYhNx77nwFUAAAAd/sad-cry.gif"
+                gif = "https://tenor.com/view/sad-cry-depressed-gif-11149271"
                 advice = "Call someone?"
 
         
