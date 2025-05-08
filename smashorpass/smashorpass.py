@@ -224,15 +224,16 @@ def update_votes(category, character_name, vote_type, user_id, image):
     return True
 
 class UserUploadsView(discord.ui.View):
-    def __init__(self, interaction, entries):
+    def __init__(self, interaction, entries, target):
         super().__init__(timeout=60.0)
         self.entries = entries
         self.index = 0
         self.interaction = interaction
+        self.target = target
     
     async def update_message(self):
         entry = self.entries[self.index]
-        embed = discord.Embed(title=f"Uploads by {self.interaction.user.display_name}")
+        embed = discord.Embed(title=f"Uploads by {self.target.mention}")
         embed.add_field(name="Name", value=entry["name"], inline=True)
         embed.set_image(url=entry["image"])
         
@@ -395,7 +396,7 @@ class SmashOrPass(commands.Cog):
             await interaction.followup.send_message(f"❌ No uploads found for **{target_user.mention}**!", ephemeral=True)
             return
         
-        view=UserUploadsView(interaction, user_entries)
+        view=UserUploadsView(interaction, user_entries, target_user)
         await interaction.followup.send(f"Loading {target_user.mention}'s list . . . ", ephemeral=False, view=view)
         await view.update_message()
     
