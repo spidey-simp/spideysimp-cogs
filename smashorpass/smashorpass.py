@@ -100,34 +100,27 @@ def get_random_singer():
 
 
 def get_random_actor():
-
-    while True:
-        keys = load_api_keys()
-        auth = keys.get("tmdb")
-        if not auth:
-            return "API key not set.", None
-        HEADERS = {
-            "accept": "application/json",
-            "Authorization": "Bearer " + auth
-        }
+    for attempt in range(5):
         page_number = random.randint(1, 50)
-        response = requests.get(ACTOR_LIST_URL.format(page_number=page_number), headers=HEADERS)
-
-        if response.status_code != 200:
-            print(f"Error fetching actor list: {response.status_code}")
+        try:
+            response = requests.get(ACTOR_LIST_URL.format(page_number=page_number), headers=HEADERS, timeout=10)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            print(f"TMDB fetch error: {e}")
             continue
 
         actors = response.json().get("results", [])
-
         if not actors:
             continue
-    
-    
+
         actor = random.choice(actors)
         name = actor.get("name", "Unknown Actor")
-        image = f"https://image.tmdb.org/t/p/original{actor['profile_path']}" if actor.get("profile_path") else "No Image Available"
+        image = f"https://image.tmdb.org/t/p/original{actor['profile_path']}" if actor.get("profile_path") else None
 
         return name, image
+
+    return "Failed to fetch actor", None
+
 
 
 def load_json(file_path, default):
@@ -196,39 +189,48 @@ def is_blacklisted(user_id):
     return str(user_id) in blacklist
 
 def get_random_starwarscharacter():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    filename = os.path.join(script_dir, "starwars.json")
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        filename = os.path.join(script_dir, "starwars.json")
 
-    with open(filename, "r", encoding="utf-8") as file:
-        json_data = json.load(file)
-    
-    character = random.choice(json_data)
+        if not os.path.exists(filename):
+            return "Missing Star Wars data", None
 
-    name = character["name"]
-    image_url = character["image"]
-    return name, image_url
+        with open(filename, "r", encoding="utf-8") as file:
+            json_data = json.load(file)
+
+        character = random.choice(json_data)
+        name = character["name"]
+        image_url = character["image"]
+        return name, image_url
+    except Exception as e:
+        print(f"Star Wars load error: {e}")
+        return "Failed to load Star Wars character", None
+
 
 
 def get_random_superhero():
     keys = load_api_keys()
-    API_TOKEN = keys.get("superhero")
-    if not API_TOKEN:
-        return "API key not set.", None
-    
-    API_URL = f"https://superheroapi.com/api/{API_TOKEN}/"
-    character_id = random.randint(1, 731)
-    response = requests.get(f"{API_URL}/{character_id}/image")
+    token = keys.get("superhero")
+    if not token:
+        return "API key missing", None
 
-    if response.status_code == 200:
-        data = response.json()
-        if data["response"] == "success":
-            name = data["name"]
-            image_url = data["url"].replace("\\", "")
-            return name, image_url
-        else:
-            return "Error: Character not found.", None
-    else:
-        return f"Error: API request failed with status {response.status_code}", None
+    character_id = random.randint(1, 731)
+    try:
+        response = requests.get(f"https://superheroapi.com/api/{token}/{character_id}/image", timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Superhero API error: {e}")
+        return "Failed to fetch superhero", None
+
+    data = response.json()
+    if data.get("response") != "success":
+        return "Superhero not found", None
+
+    name = data["name"]
+    image_url = data["url"].replace("\\", "")
+    return name, image_url
+
 
 def update_votes(category, character_name, vote_type, user_id, image):
     """Update smash/pass count and prevent duplicate votes."""
@@ -285,6 +287,7 @@ class LeaderboardView(discord.ui.View):
         self.index = 0
         self.category = category
         self.type = type
+        self.message = None
     
     async def update_message(self):
         entry = self.sorted_data[self.index]
@@ -309,7 +312,8 @@ class LeaderboardView(discord.ui.View):
         if entry[1].get("image"):
             embed.set_image(url=entry[1].get("image", ""))
 
-        await self.interaction.edit_original_response(embed=embed, view=self)
+        if self.message:
+            await self.message.edit(embed=embed, view=self)
     
     @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.gray)
     async def previous(self, interaction:discord.Interaction, button:discord.ui.Button):
@@ -320,6 +324,17 @@ class LeaderboardView(discord.ui.View):
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.index = (self.index + 1) % len(self.sorted_data)
         await self.update_message()
+    
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        try:
+            if self.message:
+                embed = self.message.embeds[0]
+                embed.set_footer(text="⏱️ This leaderboard has timed out.")
+                await self.message.edit(embed=embed, view=self)
+        except Exception as e:
+            print(f"LeaderboardView timeout error: {e}")
 
 class CategorySelect(discord.ui.Select):
     def __init__(self, bot, user_id):
@@ -358,21 +373,35 @@ class SmashPassView(discord.ui.View):
         self.ctx = ctx
         self.image = image
         self.category = category
-    
+        self.message = None
+
     @discord.ui.button(label="Smash", style=discord.ButtonStyle.green, emoji="🔥")
     async def smash_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         update_votes(self.category, self.character_name, "smashes", interaction.user.id, self.image)
-        await interaction.response.send_message(f"{interaction.user.mention} chose **Smash** for {self.character_name}! 🔥", ephemeral=False)
-    
+        await interaction.response.send_message(
+            f"{interaction.user.mention} chose **Smash** for {self.character_name}! 🔥",
+            ephemeral=False,
+        )
+
     @discord.ui.button(label="Pass", style=discord.ButtonStyle.red, emoji="❌")
     async def pass_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         update_votes(self.category, self.character_name, "passes", interaction.user.id, self.image)
-        await interaction.response.send_message(f"{interaction.user.mention} chose **Pass** for {self.character_name}! ❌", ephemeral=False)
-    
+        await interaction.response.send_message(
+            f"{interaction.user.mention} chose **Pass** for {self.character_name}! ❌",
+            ephemeral=False,
+        )
+
     async def on_timeout(self):
         for child in self.children:
             child.disabled = True
-        await self.ctx.message.edit(view=self)
+        try:
+            if self.message:
+                embed = self.message.embeds[0]
+                embed.set_footer(text="⏱️ This interaction has timed out.")
+                await self.message.edit(embed=embed, view=self)
+        except Exception as e:
+            print(f"SmashPassView timeout error: {e}")
+
 
 class SmashOrPass(commands.Cog):
     def __init__(self, bot):
@@ -479,7 +508,7 @@ class SmashOrPass(commands.Cog):
         else:
             view = LeaderboardView("Leader", interaction, sorted_data)
 
-        await interaction.followup.send("📊 Loading leaderboard...", view=view)
+        view.message = await interaction.followup.send("📊 Loading leaderboard...", view=view)
 
         await view.update_message()
     
@@ -627,7 +656,7 @@ class SmashOrPass(commands.Cog):
         
         await interaction.response.send_message(f"{action} {user.mention} from uploading images!", ephemeral=False)
 
-    @commands.command(name="smashorpass", aliases=["sop"])
+    @commands.hybrid_command(name="smashorpass", aliases=["sop"], description="Smash or pass a random character.")
     async def smashorpass(self, ctx:commands.Context):
         """Generates an image with which a person can react smash or pass."""
         category = await self.config.member(ctx.author).category()
@@ -649,7 +678,7 @@ class SmashOrPass(commands.Cog):
         else:
             name, image = get_random_superhero()
 
-        if not image:
+        if not image or "Failed" in name:
             await ctx.send("Error fetching character. Try again!")
             return
         
@@ -658,7 +687,8 @@ class SmashOrPass(commands.Cog):
         embed.set_footer(text=f"Would you rather smash or pass {name}?")
 
         view = SmashPassView(name, category, image=image, ctx=ctx)
-        await ctx.send(embed=embed, view=view)
+        view.message = await ctx.send(embed=embed, view=view)
+
     
     @commands.command(name="sopsettings", aliases=["sops"])
     async def sopsettings(self, ctx:commands.Context):
