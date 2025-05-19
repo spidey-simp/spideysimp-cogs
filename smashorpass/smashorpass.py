@@ -733,15 +733,17 @@ class SmashOrPass(commands.Cog):
         
         if category == "Real People":
             category = random.choice(REAL_CATEGORIES)
+        
+        user_id = ctx.author.id
 
         if category == "Star Wars":
-            name, image = get_random_starwarscharacter()
+            name, image = get_random_starwarscharacter(user_id=user_id)
         elif category == "Custom":
-            name, image = get_random_custom()
+            name, image = get_random_custom(user_id=user_id)
         elif category == "Actors":
-            name, image = get_random_actor()
+            name, image = get_random_actor(user_id=user_id)
         elif category == "Singers":
-            name, image = get_random_singer()
+            name, image = get_random_singer(user_id=user_id)
         else:
             name, image = get_random_superhero()
 
