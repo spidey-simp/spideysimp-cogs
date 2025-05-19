@@ -27,6 +27,8 @@ REAL_CATEGORIES = ["Actors", "Singers"]
 
 VOTES_FILE = os.path.join(os.path.dirname(__file__), "votes.json")
 
+USER_BLACKLIST_FILE = os.path.join(os.path.dirname(__file__), "user_blacklists.json")
+
 def load_votes():
     if not os.path.exists(VOTES_FILE):
         with open(VOTES_FILE, "w", encoding="utf-8") as file:
@@ -52,6 +54,33 @@ def save_api_keys(data):
     with open(API_KEY_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
+def load_user_blacklists():
+    if not os.path.exists(USER_BLACKLIST_FILE):
+        return {}
+    with open(USER_BLACKLIST_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_user_blacklists(data):
+    with open(USER_BLACKLIST_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+
+def add_to_user_blacklist(user_id:int, category: str, name: str):
+    data = load_user_blacklists()
+    user_str = str(user_id)
+    if user_str not in data:
+        data[user_str] = {}
+    if category not in data[user_str]:
+        data[user_str][category] = []
+    if name not in data[user_str][category]:
+        data[user_str][category].append(name)
+        save_user_blacklists(data)
+        return True
+    return False
+
+def is_blacklisted_for_user(user_id: int, category: str, name: str):
+    data = load_user_blacklists()
+    return name in data.get(str(user_id), {}).get(category, [])
+
 def get_wikipedia_image(artist_name):
     url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{artist_name.replace(' ', '_')}"
     response = requests.get(url)
@@ -60,14 +89,13 @@ def get_wikipedia_image(artist_name):
         return data.get("thumbnail", {}).get("source")
     return None
 
-def get_random_singer():
+def get_random_singer(user_id=None):
     keys = load_api_keys()
     API_TOKEN = keys.get("lastfm")
     if not API_TOKEN:
         return "Key not found.", None
 
-    counter = 5
-    for attempt in range(counter):
+    for _ in range(5):
         page_number = random.randint(1, 6)
         SINGER_LIST_URL = f"http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&page={page_number}&api_key={API_TOKEN}&format=json"
         response = requests.get(SINGER_LIST_URL)
@@ -84,6 +112,10 @@ def get_random_singer():
             for _ in range(len(artists)):
                 singer = random.choice(artists)
                 name = singer.get("name")
+
+                if user_id and is_blacklisted_for_user(user_id, "Singers", name):
+                    continue
+
                 image_url = get_wikipedia_image(name)
 
                 if image_url:
@@ -99,7 +131,14 @@ def get_random_singer():
 
 
 
-def get_random_actor():
+def get_random_actor(user_id = None):
+
+    keys = load_api_keys()
+    HEADERS = {
+        "accept": "application/json",
+        "Authorization": f"Bearer {keys.get('tmdb', '')}"
+    }
+
     for attempt in range(5):
         page_number = random.randint(1, 50)
         try:
@@ -115,6 +154,9 @@ def get_random_actor():
 
         actor = random.choice(actors)
         name = actor.get("name", "Unknown Actor")
+        if user_id and is_blacklisted_for_user(user_id, "Actors", name):
+            continue
+
         image = f"https://image.tmdb.org/t/p/original{actor['profile_path']}" if actor.get("profile_path") else None
 
         return name, image
@@ -166,7 +208,7 @@ def save_custom_entry(name, image_url, user_id):
 
     return name
     
-def get_random_custom():
+def get_random_custom(user_id=None):
     """Gets a random character from custom.json"""
     if not os.path.exists(CUSTOM_FILE):
         return "No custom characters added yet!", None
@@ -176,8 +218,14 @@ def get_random_custom():
 
     if not data:
         return "No custom characters found.", None
-    character = random.choice(data)
-    return character["name"], character["image"]
+    for _ in range(5):
+        character = random.choice(data)
+        if user_id and is_blacklisted_for_user(user_id, "Custom", name=character["name"]):
+            continue
+
+        return character["name"], character["image"]
+    
+    return None, None
 
 def is_blacklisted(user_id):
     if not os.path.exists(BLACKLIST_FILE):
@@ -188,7 +236,7 @@ def is_blacklisted(user_id):
     
     return str(user_id) in blacklist
 
-def get_random_starwarscharacter():
+def get_random_starwarscharacter(user_id=None):
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         filename = os.path.join(script_dir, "starwars.json")
@@ -199,10 +247,15 @@ def get_random_starwarscharacter():
         with open(filename, "r", encoding="utf-8") as file:
             json_data = json.load(file)
 
-        character = random.choice(json_data)
-        name = character["name"]
-        image_url = character["image"]
-        return name, image_url
+        for _ in range(5):
+            character = random.choice(json_data)
+            name = character["name"]
+            if user_id and is_blacklisted_for_user(user_id, "Star Wars", name):
+                continue
+
+            image_url = character["image"]
+            return name, image_url
+        return None, None
     except Exception as e:
         print(f"Star Wars load error: {e}")
         return "Failed to load Star Wars character", None
@@ -374,6 +427,7 @@ class SmashPassView(discord.ui.View):
         self.image = image
         self.category = category
         self.message = None
+        self.user_id = ctx.author.id
 
     @discord.ui.button(label="Smash", style=discord.ButtonStyle.green, emoji="🔥")
     async def smash_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -390,6 +444,19 @@ class SmashPassView(discord.ui.View):
             f"{interaction.user.mention} chose **Pass** for {self.character_name}! ❌",
             ephemeral=False,
         )
+
+    @discord.ui.button(label="Blacklist", style=discord.ButtonStyle.gray, emoji="🚫")
+    async def blacklist_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ You can only blacklist characters on **your own post**.", ephemeral=True)
+            return
+
+        success = add_to_user_blacklist(interaction.user.id, self.category, self.character_name)
+        if success:
+            await interaction.response.send_message(f"🚫 {self.character_name} has been blacklisted. They won't appear again for you in {self.category}.", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"{self.character_name} is **already** blacklisted for you.", ephemeral=True)
+
 
     async def on_timeout(self):
         for child in self.children:
