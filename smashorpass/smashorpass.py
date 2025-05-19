@@ -386,7 +386,7 @@ class SmashOrPass(commands.Cog):
 
     @sop.command(name="apikeyuplad", description="Upload or update an API key.")
     @app_commands.describe(api="Which API this is for", key="The Actual API key")
-    @app_commands.autocomplete(api=[
+    @app_commands.choices(api=[
         app_commands.Choice(name="Superhero", value="superhero"),
         app_commands.Choice(name="tmdb", value="tmdb"),
         app_commands.Choice(name="LastFM", value="lastfm")
