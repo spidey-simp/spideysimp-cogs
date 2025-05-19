@@ -191,9 +191,17 @@ class SpideyRomance(commands.Cog):
         reflexive = "yourself" if self_check else "themself"
         possessive = "your" if self_check else "their"
 
+        bot_person_list = ["uzi", "j", "serial designation uzi", "serial designation j"]
 
-        name1_bot_check = user1.bot if user1 else False
-        name2_bot_check = user2.bot if user2 else False
+        def is_bot_entity(user, name):
+            if user and user.bot:
+                return True
+            if name and name.strip().lower() in bot_person_list:
+                return True
+            return False
+        
+        name1_bot_check = is_bot_entity(user1, person1)
+        name2_bot_check = is_bot_entity(user2, person2)
         
         if name1.strip().lower() == name2.strip().lower():
 
@@ -341,6 +349,7 @@ class SpideyRomance(commands.Cog):
                     "Best to avoid kernel panic. Keep communication minimal.",
                     "Schedule emotional defragmentation for later."
                 ]
+
             else:
                 verdict_msg = [
                     f"{name1} and {name2}? That’s not love. That’s mutually assured data loss.",
@@ -358,6 +367,69 @@ class SpideyRomance(commands.Cog):
                     "Please submit an error report and try again... never.",
                     "Love.exe has been forcibly uninstalled."
                 ]
+        elif name1_bot_check or name2_bot_check:
+            uzi_names = ["uzi", "serial designation uzi"]
+            j_names = ["j", "serial designation j"]
+
+            def is_uzi(name):
+                return name and name.strip().lower() in uzi_names
+            
+            def is_j(name, user):
+                return (name and name.strip().lower() in j_names) or (user and user.id == 1256851289103400971)
+            
+            uzi_check = is_uzi(person1) or is_uzi(person2)
+            j_check = is_j(person1, user1) or is_j(person2, user2)
+
+            if uzi_check:
+                if compat_score > 90:
+                    verdict_msg = [
+                        f"{name1} and {name2} are the exact brand of chaotic disaster that somehow *works.* Uzi would deny it—but she’s already blushing.",
+                        f"This pairing has more sparks than a power core meltdown. Uzi’s probably pretending not to care. That means it’s real."
+                    ]
+                    advice = [
+                        "Tell her she’s cool. But not too cool. She’ll get suspicious.",
+                        "If you like explosions, trauma bonding, and emotional repression? You’ve found your girl."
+                    ]
+                elif compat_score > 70:
+                    verdict_msg = [
+
+                    ]
+                elif compat_score > 50:
+                    verdict_msg = [
+                        f"There’s a spark, sure—but Uzi’s busy dealing with existential dread and body count stuff. Romance may be… delayed.",
+                        f"This ship could fly, but Uzi might accidentally sabotage it mid-air out of sheer panic."
+                    ]
+                    advice = [
+                        "Proceed with caution. And maybe a flamethrower.",
+                        "Just don’t call her cute unless you’re ready to get dismembered *flirtatiously*."
+                    ]
+            elif j_check:
+                if compat_score > 90:
+                    verdict_msg = [
+                        f"{name1} and {name2} are a picture-perfect match—if your idea of love involves murder, manipulation, and immaculate eyeliner.",
+                        f"J would deny any affection. Then destroy the evidence. But yes, she’s into you. Deeply."
+                    ]
+                    advice = [
+                        "Compliment her killing efficiency. And maybe bring her a snack. Human snacks.",
+                        "You’re probably not safe. But you’re definitely *in.*"
+                    ]
+                elif compat_score > 70:
+                    verdict_msg = [
+
+                    ]
+                elif compat_score > 50:
+                    verdict_msg = [
+                        f"J is intrigued. Mildly. That’s as close as you’re going to get without a body count.",
+                        f"There’s a mutual fascination. J’s deciding whether you’re a threat, a snack, or something worth keeping around."
+                    ]
+                    advice = [
+                        "Try flattery. But don’t seem *too* impressed. She’ll lose interest.",
+                        "If she stabs you, it’s probably foreplay."
+                    ]
+
+
+            
+
         else:
             if compat_score > 90:
                 verdict_msg = [

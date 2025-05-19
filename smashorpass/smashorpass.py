@@ -8,8 +8,7 @@ import asyncio
 import os
 import json
 from discord import app_commands
-API_TOKEN = "7da42651e96d7411de160cc921140e8b"
-API_URL = f"https://superheroapi.com/api/{API_TOKEN}/"
+
 
 CUSTOM_FILE = os.path.join(os.path.dirname(__file__), "custom.json")
 BLACKLIST_FILE = os.path.join(os.path.dirname(__file__), "blacklist.json")
@@ -17,12 +16,10 @@ MOD_CHANNEL_ID = 1287700985275355150
 
 ACTOR_LIST_URL = "https://api.themoviedb.org/3/person/popular?language=en-Us&page={page_number}"
 
-HEADERS = {
-    "accept": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI3ZWQxN2Y4NzE4Y2NjYmQ2MzgzYWM3ZTFmMjEwNzQ3ZSIsIm5iZiI6MTczOTIyOTM1Ni41NzIsInN1YiI6IjY3YWE4OGFjMDliODU1MWEwNGIwOTA5OSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.1N4OHN0YlUPqvT4w9YnjVP7yfMOl75rJWljb6eQ82BU"
-}
 
-SINGER_LIST_URL = "http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&page={page_number}&api_key=d5738e0d460367ef373d6167c5631fda&format=json"
+API_KEY_FILE = os.path.join(os.path.dirname(__file__), "api_keys.json")
+VALID_APIS = ["superhero", "tmdb", "lastfm"]
+
 
 CATEGORIES = ["Custom", "Actors", "Star Wars", "Superheroes", "Singers"]
 
@@ -45,6 +42,16 @@ def save_votes(votes):
     with open(VOTES_FILE, "w", encoding="utf-8") as file:
         json.dump(votes, file, indent=4)
 
+def load_api_keys():
+    if os.path.exists(API_KEY_FILE):
+        with open(API_KEY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_api_keys(data):
+    with open(API_KEY_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+
 def get_wikipedia_image(artist_name):
     url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{artist_name.replace(' ', '_')}"
     response = requests.get(url)
@@ -54,10 +61,17 @@ def get_wikipedia_image(artist_name):
     return None
 
 def get_random_singer():
+
+    keys = load_api_keys()
+    API_TOKEN = keys.get("lastfm")
+    if not API_TOKEN:
+        return "Key not found.", None
+    SINGER_LIST_URL = "http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&page={page_number}&api_key={API_TOKEN}&format=json"
+    
     counter = 5
     for attempt in range(counter):
         page_number = random.randint(1, 6)
-        response = requests.get(SINGER_LIST_URL.format(page_number=page_number))
+        response = requests.get(SINGER_LIST_URL.format(page_number=page_number).format(API_TOKEN=API_TOKEN))
 
         if response.status_code != 200:
             print(f"Error fetching singer list: {response.status_code}")
@@ -88,7 +102,15 @@ def get_random_singer():
 def get_random_actor():
 
     while True:
-        page_number = random.randint(1, 2)
+        keys = load_api_keys()
+        auth = keys.get("tmdb")
+        if not auth:
+            return "API key not set.", None
+        HEADERS = {
+            "accept": "application/json",
+            "Authorization": "Bearer " + auth
+        }
+        page_number = random.randint(1, 50)
         response = requests.get(ACTOR_LIST_URL.format(page_number=page_number), headers=HEADERS)
 
         if response.status_code != 200:
@@ -188,6 +210,12 @@ def get_random_starwarscharacter():
 
 
 def get_random_superhero():
+    keys = load_api_keys()
+    API_TOKEN = keys.get("superhero")
+    if not API_TOKEN:
+        return "API key not set.", None
+    
+    API_URL = f"https://superheroapi.com/api/{API_TOKEN}/"
     character_id = random.randint(1, 731)
     response = requests.get(f"{API_URL}/{character_id}/image")
 
@@ -354,9 +382,33 @@ class SmashOrPass(commands.Cog):
             category="All"
         )
     
-    @app_commands.command(name="sopappeal", description="Appeal a Smash or Pass blacklist")
+    sop = app_commands.Group(name="sop", description="Smash or Pass commands.")
+
+    @sop.command(name="apikeyuplad", description="Upload or update an API key.")
+    @app_commands.describe(api="Which API this is for", key="The Actual API key")
+    @app_commands.autocomplete(api=[
+        app_commands.Choice(name="Superhero", value="superhero"),
+        app_commands.Choice(name="tmdb", value="tmdb"),
+        app_commands.Choice(name="LastFM", value="lastfm")
+    ])
+    async def apikeyupload(self, interaction: discord.Interaction, api: str, key:str):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You must be an **admin** to set API keys.", ephemeral=True)
+            return
+
+        if api.lower() not in VALID_APIS:
+            await interaction.response.send_message(f"❌ Invalid API name. Must be one of: {', '.join(VALID_APIS)}", ephemeral=True)
+            return
+
+        keys = load_api_keys()
+        keys[api.lower()] = key
+        save_api_keys(keys)
+
+        await interaction.response.send_message(f"✅ API key for **{api}** has been saved.", ephemeral=True)
+    
+    @sop.command(name="appeal", description="Appeal a Smash or Pass blacklist")
     @app_commands.describe(reason="Explain why you should be unblacklisted")
-    async def sopappeal(self, interaction: discord.Interaction, reason: str):
+    async def appeal(self, interaction: discord.Interaction, reason: str):
         """Submits a blacklist appeal for mod review."""
         if not is_blacklisted(interaction.user.id):
             await interaction.response.send_message("❌ You are not blacklisted!", ephemeral=True)
@@ -375,9 +427,9 @@ class SmashOrPass(commands.Cog):
         await mod_channel.send(embed=embed)
         await interaction.response.send_message("✅ Your appeal has been submitted. Moderators will review it soon!", ephemeral=True)
     
-    @app_commands.command(name="soplist", description="View images uploaded by a specific user")
+    @sop.command(name="list", description="View images uploaded by a specific user")
     @app_commands.describe(user="Select a user (leave blank to see your own images)")
-    async def soplist(self, interaction: discord.Interaction, user: discord.User = None):
+    async def list(self, interaction: discord.Interaction, user: discord.User = None):
         """Shows all uploaded images by a user."""
         await interaction.response.defer()
 
@@ -400,9 +452,9 @@ class SmashOrPass(commands.Cog):
         await interaction.followup.send(f"Loading {target_user.mention}'s list . . . ", ephemeral=False, view=view)
         await view.update_message()
     
-    @app_commands.command(name="sopleaderboard", description="View the Smash or Pass leaderboard!")
+    @sop.command(name="leaderboard", description="View the Smash or Pass leaderboard!")
     @app_commands.choices(category=[app_commands.Choice(name=cat, value=cat) for cat in CATEGORIES])
-    async def sopleaderboard(self, interaction: discord.Interaction, category: str=None):
+    async def leaderboard(self, interaction: discord.Interaction, category: str=None):
         """Displays the leaderboard with a slideshow format."""
         votes = load_votes()
         
@@ -417,7 +469,7 @@ class SmashOrPass(commands.Cog):
             category_data = {name: data for cat in votes.values() for name, data in cat.items()}
         
         if not category_data:
-            await interaction.follup.send("❌ No characters have been voted on yet!", ephemeral=True)
+            await interaction.followup.send("❌ No characters have been voted on yet!", ephemeral=True)
             return
         
         sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("smashes", 0) - x[1].get("passes", 0), reverse=True)
@@ -431,9 +483,9 @@ class SmashOrPass(commands.Cog):
 
         await view.update_message()
     
-    @app_commands.command(name="soploserboard", description="View the Smash or Pass loserboard!")
+    @sop.command(name="loserboard", description="View the Smash or Pass loserboard!")
     @app_commands.choices(category=[app_commands.Choice(name=cat, value=cat) for cat in CATEGORIES])
-    async def soploserboard(self, interaction: discord.Interaction, category: str=None):
+    async def loserboard(self, interaction: discord.Interaction, category: str=None):
         """Displays the leaderboard with a slideshow format."""
         votes = load_votes()
         
@@ -465,13 +517,13 @@ class SmashOrPass(commands.Cog):
     
     
     
-    @app_commands.command(name="sopupload", description="Upload a custom character for Smash or Pass.")
+    @sop.command(name="upload", description="Upload a custom character for Smash or Pass.")
     @app_commands.describe(
         name="Enter the character's name",
         url="Enter an image URL (optional if attaching an image)",
         image="Upload an image file (optional if providing a URL)"
     )
-    async def sopupload(self, interaction: discord.Interaction, name: str, url: str = None, image: discord.Attachment = None):
+    async def upload(self, interaction: discord.Interaction, name: str, url: str = None, image: discord.Attachment = None):
         """Allow users to upload an image via a URL or file attachment."""
         if is_blacklisted(interaction.user.id):
             await interaction.response.send_message("❌ You are **blacklisted** from uploading images!", ephemeral=True)
@@ -490,13 +542,13 @@ class SmashOrPass(commands.Cog):
         new_name = save_custom_entry(name, image_url, interaction.user.id)
         await interaction.response.send_message(f"✅ **{new_name}** has been added to the custom category!", ephemeral=False)
     
-    @app_commands.command(name="sopdelete", description="Remove an uploaded character (self or mod)")
+    @sop.command(name="delete", description="Remove an uploaded character (self or mod)")
     @app_commands.describe(
         name="Delete by character name (if you're a mod, this is optional if you're deleting all images uploaded by a user)",
         user="Delete all uploads by a user (mods only)",
         fulldelete="Delete all images by this user (only applies if user is provided)"
     )
-    async def sopdelete(self, interaction: discord.Interaction, name: str = None, user: discord.User = None, fulldelete: bool = False):
+    async def delete(self, interaction: discord.Interaction, name: str = None, user: discord.User = None, fulldelete: bool = False):
         """Allows users to delete their own images and mods to remove any."""
         if not os.path.exists(CUSTOM_FILE):
             await interaction.response.send_message("No custom characters exist!", ephemeral=True)
@@ -546,9 +598,9 @@ class SmashOrPass(commands.Cog):
         
         await interaction.response.send_message(message, ephemeral=False)
     
-    @app_commands.command(name="sopblacklist", description="Blacklist/unblacklist a user from uploading images")
+    @sop.command(name="blacklist", description="Blacklist/unblacklist a user from uploading images")
     @app_commands.describe(user="Select the user to blacklist/unblacklist")
-    async def sopblacklist(self, interaction:discord.Interaction, user:discord.User):
+    async def blacklist(self, interaction:discord.Interaction, user:discord.User):
         """Toggles a user's blacklist status for uploading images."""
 
         if not interaction.user.guild_permissions.manage_permissions:
