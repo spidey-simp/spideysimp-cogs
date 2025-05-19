@@ -61,22 +61,21 @@ def get_wikipedia_image(artist_name):
     return None
 
 def get_random_singer():
-
     keys = load_api_keys()
     API_TOKEN = keys.get("lastfm")
     if not API_TOKEN:
         return "Key not found.", None
-    SINGER_LIST_URL = "http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&page={page_number}&api_key={API_TOKEN}&format=json"
-    
+
     counter = 5
     for attempt in range(counter):
         page_number = random.randint(1, 6)
-        response = requests.get(SINGER_LIST_URL.format(page_number=page_number).format(API_TOKEN=API_TOKEN))
+        SINGER_LIST_URL = f"http://ws.audioscrobbler.com/2.0/?method=chart.gettopartists&page={page_number}&api_key={API_TOKEN}&format=json"
+        response = requests.get(SINGER_LIST_URL)
 
         if response.status_code != 200:
             print(f"Error fetching singer list: {response.status_code}")
             continue
-        
+
         try:
             artists = response.json().get("artists", {}).get("artist", [])
             if not artists:
@@ -89,13 +88,14 @@ def get_random_singer():
 
                 if image_url:
                     return name, image_url
-            
+
             print(f"All artists on page {page_number} lacked a medium-sized image.")
         except (ValueError, KeyError) as e:
             print(f"Error processing JSON response: {e}")
-    
+
     print("Application was unable to find a singer after multiple attempts.")
     return None, None
+
 
 
 
