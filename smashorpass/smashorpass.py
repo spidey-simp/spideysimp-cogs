@@ -338,7 +338,7 @@ class LeaderboardView(discord.ui.View):
         embed = discord.Embed(title=f"🏆 Smash or Pass {self.type}board 🏆")
         embed.add_field(name="Name", value=entry[0])
         embed.add_field(name="Rank", value=f"#{rank}", inline=True)
-        embed.add_field(name="Votes", value=f"🔥 {entry[1]['smashes']} | ❌ {entry[1]['passes']}", inline=True)
+        embed.add_field(name="Votes", value=f"💖{entry[1]['super-smashes']} | 🔥 {entry[1]['smashes']} | ❌ {entry[1]['passes']}", inline=True)
         if uploader != "Default Category" and self.category != "All":
             embed.add_field(name="Uploader", value=uploader, inline=True)
         elif self.category == "All":
@@ -632,21 +632,23 @@ class SmashOrPass(commands.Cog):
             await interaction.followup.send("❌ No characters have been voted on yet!", ephemeral=True)
             return
         
-        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("smashes", 0) - x[1].get("passes", 0), reverse=True)
+        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("smashes", 0) + 2 * x[1].get("super-smashes", 0) - x[1].get("passes", 0), reverse=True)
 
         if category:
             view = LeaderboardView("Leader", interaction, sorted_data, category)
         else:
             view = LeaderboardView("Leader", interaction, sorted_data)
+        
+        msg = await interaction.followup.send("📊 Loading leaderboard...", view=view)
 
-        view.message = await interaction.followup.send("📊 Loading leaderboard...", view=view)
+        view.message = msg
 
         await view.update_message()
     
     @sop.command(name="loserboard", description="View the Smash or Pass loserboard!")
     @app_commands.choices(category=[app_commands.Choice(name=cat, value=cat) for cat in CATEGORIES])
     async def loserboard(self, interaction: discord.Interaction, category: str=None):
-        """Displays the leaderboard with a slideshow format."""
+        """Displays the loserboard with a slideshow format."""
         votes = load_votes()
         
         await interaction.response.defer()
@@ -663,7 +665,7 @@ class SmashOrPass(commands.Cog):
             await interaction.response.send_message("❌ No characters have been voted on yet!", ephemeral=True)
             return
         
-        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("passes", 0) - x[1].get("smashes", 0), reverse=True)
+        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("passes", 0) + 2 * x[1].get("super-smashes", 0) - x[1].get("smashes", 0), reverse=True)
 
         if category:
             view = LeaderboardView("Loser", interaction, sorted_data, category)
