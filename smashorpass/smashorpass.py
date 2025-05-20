@@ -286,56 +286,6 @@ def get_random_superhero():
     return name, image_url
 
 
-async def update_votes(self, cog: "SmashOrPass", category, character_name, vote_type, user_id, image):
-    """Update smash/pass/super-smash count and prevent duplicate votes."""
-    votes = load_votes()
-
-    if category not in votes:
-        votes[category] = {}
-
-    if character_name not in votes[category]:
-        votes[category][character_name] = {
-            "smashes": 0,
-            "passes": 0,
-            "super-smashes": 0,
-            "voters": [],
-            "super-smashers": [],
-            "image": ""
-        }
-
-    # Ensure all expected keys exist in case it's an old record
-    char_data = votes[category][character_name]
-    char_data.setdefault("smashes", 0)
-    char_data.setdefault("passes", 0)
-    char_data.setdefault("super-smashes", 0)
-    char_data.setdefault("voters", [])
-    char_data.setdefault("super-smashers", [])
-    char_data.setdefault("image", "")
-
-    if vote_type == "super-smashes":
-        last_time = cog.daily_super_smash.get(user_id)
-        now = datetime.now(timezone.utc)
-        if last_time and (now - last_time < timedelta(days=1)):
-            return False  # Already used super smash today
-
-        cog.daily_super_smash[user_id] = now
-
-        if user_id not in char_data["super-smashers"]:
-            char_data["super-smashes"] += 1
-            char_data["super-smashers"].append(user_id)
-
-    else:
-        if user_id in char_data["voters"]:
-            return False  # Already smashed or passed
-
-        char_data[vote_type] += 1
-        char_data["voters"].append(user_id)
-
-    char_data["image"] = image
-    save_votes(votes)
-    return True
-
-
 class UserUploadsView(discord.ui.View):
     def __init__(self, interaction, entries, target: discord.User):
         super().__init__(timeout=60.0)
@@ -392,8 +342,9 @@ class LeaderboardView(discord.ui.View):
             embed.add_field(name="Uploader", value=uploader, inline=True)
         elif self.category == "All":
             embed.add_field(name="Category", value=f"{char_category}")
-        if entry[1].get("image"):
-            embed.set_image(url=entry[1].get("image", ""))
+        image_url = entry[1].get("image")
+        if image_url and image_url.startswith("http"):
+            embed.set_image(url=image_url)
 
         if self.message:
             await self.message.edit(embed=embed, view=self)
@@ -535,6 +486,56 @@ class SmashOrPass(commands.Cog):
         self.daily_super_smash = {}
     
     sop = app_commands.Group(name="sop", description="Smash or Pass commands.")
+
+    async def update_votes(self, category, character_name, vote_type, user_id, image):
+        """Update smash/pass/super-smash count and prevent duplicate votes."""
+        votes = load_votes()
+
+        if category not in votes:
+            votes[category] = {}
+
+        if character_name not in votes[category]:
+            votes[category][character_name] = {
+                "smashes": 0,
+                "passes": 0,
+                "super-smashes": 0,
+                "voters": [],
+                "super-smashers": [],
+                "image": ""
+            }
+
+        # Ensure all expected keys exist in case it's an old record
+        char_data = votes[category][character_name]
+        char_data.setdefault("smashes", 0)
+        char_data.setdefault("passes", 0)
+        char_data.setdefault("super-smashes", 0)
+        char_data.setdefault("voters", [])
+        char_data.setdefault("super-smashers", [])
+        char_data.setdefault("image", "")
+
+        if vote_type == "super-smashes":
+            last_time = self.daily_super_smash.get(user_id)
+            now = datetime.now(timezone.utc)
+            if last_time and (now - last_time < timedelta(days=1)):
+                return False  # Already used super smash today
+
+            self.daily_super_smash[user_id] = now
+
+            if user_id not in char_data["super-smashers"]:
+                char_data["super-smashes"] += 1
+                char_data["super-smashers"].append(user_id)
+
+        else:
+            if user_id in char_data["voters"]:
+                return False  # Already smashed or passed
+
+            char_data[vote_type] += 1
+            char_data["voters"].append(user_id)
+
+        char_data["image"] = image
+        save_votes(votes)
+        return True
+
 
     @sop.command(name="apikeyuplad", description="Upload or update an API key.")
     @app_commands.describe(api="Which API this is for", key="The Actual API key")
@@ -812,7 +813,8 @@ class SmashOrPass(commands.Cog):
             return
         
         embed = discord.Embed(title=f"Smash or Pass: {name}")
-        embed.set_image(url=image)
+        if image and image.startswith("http"):
+            embed.set_image(url=image)
         embed.set_footer(text=f"Would you rather smash or pass {name}?")
 
         view = SmashPassView(self, name, category, image=image, ctx=ctx)
