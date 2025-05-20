@@ -9,6 +9,7 @@ import os
 import json
 from discord import app_commands
 from datetime import datetime, timedelta, timezone
+import urllib.parse
 
 
 CUSTOM_FILE = os.path.join(os.path.dirname(__file__), "custom.json")
@@ -343,10 +344,10 @@ class LeaderboardView(discord.ui.View):
         elif self.category == "All":
             embed.add_field(name="Category", value=f"{char_category}")
         image_url = entry[1].get("image")
-        if image_url and image_url.startswith("http"):
+        try:
             embed.set_image(url=image_url)
-        else:
-            embed.add_field(name="Would-be Image Link", value=image_url)
+        except discord.HTTPException:
+            embed.add_field(name="Bad image URL", value=image_url)
 
         if self.message:
             await self.message.edit(embed=embed, view=self)
@@ -815,10 +816,10 @@ class SmashOrPass(commands.Cog):
             return
         
         embed = discord.Embed(title=f"Smash or Pass: {name}")
-        if image and image.startswith("http"):
+        try:
             embed.set_image(url=image)
-        else:
-            embed.add_field(name="Would-be image URL", value=image)
+        except discord.HTTPException:
+            embed.add_field(name="Bad image URL", value=image)
         embed.set_footer(text=f"Would you rather smash or pass {name}?")
 
         view = SmashPassView(self, name, category, image=image, ctx=ctx)
