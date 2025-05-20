@@ -354,11 +354,13 @@ class LeaderboardView(discord.ui.View):
     
     @discord.ui.button(label="⬅️ Previous", style=discord.ButtonStyle.gray)
     async def previous(self, interaction:discord.Interaction, button:discord.ui.Button):
+        await interaction.response.defer()
         self.index = (self.index - 1) % len(self.sorted_data)
         await self.update_message()
     
     @discord.ui.button(label="➡️ Next", style=discord.ButtonStyle.gray)
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         self.index = (self.index + 1) % len(self.sorted_data)
         await self.update_message()
     
