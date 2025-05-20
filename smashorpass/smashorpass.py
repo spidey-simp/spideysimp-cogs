@@ -737,9 +737,9 @@ class SmashOrPass(commands.Cog):
             categories = [categories]
 
         if not category or "All" in categories:
-            category = CATEGORIES
+            categories = CATEGORIES
         elif "Real People" in categories:
-            category = REAL_CATEGORIES
+            categories = REAL_CATEGORIES
         
         category = random.choice(categories)
         
