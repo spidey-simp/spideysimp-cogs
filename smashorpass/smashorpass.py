@@ -403,16 +403,21 @@ class CategorySelect(discord.ui.Select):
             discord.SelectOption(label="Singers", description="Get people from the music field as your category."),
             discord.SelectOption(label="Real People", description="Only see categories including real people.")
         ]
-        super().__init__(placeholder="Choose your category. . .", options=options)
+        super().__init__(
+            placeholder="Choose your category. . .", 
+            options=options,
+            min_values=1,
+            max_values=len(options)
+            )
     
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.user_id:
             return await interaction.response.send_message("This isn't your menu!", ephemeral=True)
         
         category = self.values[0]
-        await self.bot.get_cog("SmashOrPass").config.member(interaction.user).category.set(category)
+        await self.bot.get_cog("SmashOrPass").config.member(interaction.user).category.set(self.values)
 
-        await interaction.response.send_message(f"Category set to **{category}**!", ephemeral=True)
+        await interaction.response.send_message(f"Categories set to **{', '.join(self.values)}**!", ephemeral=True)
 
 class CategoryView(discord.ui.View):
     def __init__(self, bot, user_id):
@@ -726,13 +731,17 @@ class SmashOrPass(commands.Cog):
     @commands.hybrid_command(name="smashorpass", aliases=["sop"], description="Smash or pass a random character.")
     async def smashorpass(self, ctx:commands.Context):
         """Generates an image with which a person can react smash or pass."""
-        category = await self.config.member(ctx.author).category()
+        categories = await self.config.member(ctx.author).category()
 
-        if category == "All":
-            category = random.choice(CATEGORIES)
+        if isinstance(categories, str):
+            categories = [categories]
+
+        if not category or "All" in categories:
+            category = CATEGORIES
+        elif "Real People" in categories:
+            category = REAL_CATEGORIES
         
-        if category == "Real People":
-            category = random.choice(REAL_CATEGORIES)
+        category = random.choice(categories)
         
         user_id = ctx.author.id
 
