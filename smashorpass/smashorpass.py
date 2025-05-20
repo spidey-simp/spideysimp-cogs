@@ -612,9 +612,11 @@ class SmashOrPass(commands.Cog):
     @app_commands.choices(category=[app_commands.Choice(name=cat, value=cat) for cat in CATEGORIES])
     async def leaderboard(self, interaction: discord.Interaction, category: str=None):
         """Displays the leaderboard with a slideshow format."""
+        await interaction.response.defer()
+        
         votes = load_votes()
         
-        await interaction.response.defer()
+        
         
         if category:
             if category not in votes:
