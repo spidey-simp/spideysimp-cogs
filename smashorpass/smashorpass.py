@@ -756,8 +756,8 @@ class SmashOrPass(commands.Cog):
         else:
             name, image = get_random_superhero()
 
-        if not image or "Failed" in name:
-            await ctx.send("Error fetching character. Try again!")
+        if not image or "Failed" in name or name is None:
+            await ctx.send(f"Error fetching character from **{category}**. Try again or continue switching categories!")
             return
         
         embed = discord.Embed(title=f"Smash or Pass: {name}")
