@@ -338,7 +338,7 @@ class LeaderboardView(discord.ui.View):
         embed = discord.Embed(title=f"🏆 Smash or Pass {self.type}board 🏆")
         embed.add_field(name="Name", value=entry[0])
         embed.add_field(name="Rank", value=f"#{rank}", inline=True)
-        embed.add_field(name="Votes", value=f"💖{entry[1]['super-smashes']} | 🔥 {entry[1]['smashes']} | ❌ {entry[1]['passes']}", inline=True)
+        embed.add_field(name="Votes", value=f"💖{entry[1].get('super-smashes', 0)} | 🔥 {entry[1]['smashes']} | ❌ {entry[1]['passes']}", inline=True)
         if uploader != "Default Category" and self.category != "All":
             embed.add_field(name="Uploader", value=uploader, inline=True)
         elif self.category == "All":
