@@ -736,7 +736,7 @@ class SmashOrPass(commands.Cog):
         if isinstance(categories, str):
             categories = [categories]
 
-        if not category or "All" in categories:
+        if not categories or "All" in categories:
             categories = CATEGORIES
         elif "Real People" in categories:
             categories = REAL_CATEGORIES
