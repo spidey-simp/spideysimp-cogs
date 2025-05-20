@@ -8,6 +8,7 @@ import asyncio
 import os
 import json
 from discord import app_commands
+from datetime import datetime, timedelta, timezone
 
 
 CUSTOM_FILE = os.path.join(os.path.dirname(__file__), "custom.json")
@@ -285,26 +286,55 @@ def get_random_superhero():
     return name, image_url
 
 
-def update_votes(category, character_name, vote_type, user_id, image):
-    """Update smash/pass count and prevent duplicate votes."""
+async def update_votes(self, cog: "SmashOrPass", category, character_name, vote_type, user_id, image):
+    """Update smash/pass/super-smash count and prevent duplicate votes."""
     votes = load_votes()
 
     if category not in votes:
         votes[category] = {}
-    
+
     if character_name not in votes[category]:
-        votes[category][character_name] = {"smashes": 0, "passes": 0, "voters": [], "image": ""}
-    
-    if user_id in votes[category][character_name]["voters"]:
-        return False
-    
-    votes[category][character_name][vote_type] += 1
-    votes[category][character_name]["voters"].append(user_id)
-    votes[category][character_name]["image"] = image
+        votes[category][character_name] = {
+            "smashes": 0,
+            "passes": 0,
+            "super-smashes": 0,
+            "voters": [],
+            "super-smashers": [],
+            "image": ""
+        }
 
+    # Ensure all expected keys exist in case it's an old record
+    char_data = votes[category][character_name]
+    char_data.setdefault("smashes", 0)
+    char_data.setdefault("passes", 0)
+    char_data.setdefault("super-smashes", 0)
+    char_data.setdefault("voters", [])
+    char_data.setdefault("super-smashers", [])
+    char_data.setdefault("image", "")
+
+    if vote_type == "super-smashes":
+        last_time = cog.daily_super_smash.get(user_id)
+        now = datetime.now(timezone.utc)
+        if last_time and (now - last_time < timedelta(days=1)):
+            return False  # Already used super smash today
+
+        cog.daily_super_smash[user_id] = now
+
+        if user_id not in char_data["super-smashers"]:
+            char_data["super-smashes"] += 1
+            char_data["super-smashers"].append(user_id)
+
+    else:
+        if user_id in char_data["voters"]:
+            return False  # Already smashed or passed
+
+        char_data[vote_type] += 1
+        char_data["voters"].append(user_id)
+
+    char_data["image"] = image
     save_votes(votes)
-
     return True
+
 
 class UserUploadsView(discord.ui.View):
     def __init__(self, interaction, entries, target: discord.User):
@@ -425,18 +455,38 @@ class CategoryView(discord.ui.View):
         self.add_item(CategorySelect(bot, user_id))
 
 class SmashPassView(discord.ui.View):
-    def __init__(self, character_name, category, image, ctx):
+    def __init__(self, cog, character_name, category, image, ctx):
         super().__init__(timeout=30)
+        self.cog = cog
         self.character_name = character_name
         self.ctx = ctx
         self.image = image
         self.category = category
         self.message = None
         self.user_id = ctx.author.id
+    
+    @discord.ui.button(label="Super-Smash", style=discord.ButtonStyle.primary, emoji="💖")
+    async def super_smash_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        vote_bool = await self.cog.update_votes(self.category, self.character_name, "super-smashes", interaction.user.id, self.image)
+        if vote_bool:
+            await interaction.response.send_message(
+                f"{interaction.user.mention} has used their daily **Super-Smash** on {self.character_name}! 💖\n"
+                "Now that's special!"
+            )
+        else:
+            super_time = self.cog.daily_super_smash.get(interaction.user.id)
+            now = datetime.now(timezone.utc)
+            difference = (super_time + timedelta(days=1)) - now
+            hours, remainder = divmod(difference.total_seconds(), 3600)
+            minutes, _ = divmod(remainder, 60)
+            await interaction.response.send_message(
+                "💔 You can only use your Super-Smash once per day!\n"
+                f"The next time it will be available is in **{int(hours)}h {int(minutes)}m**."
+            )
 
     @discord.ui.button(label="Smash", style=discord.ButtonStyle.green, emoji="🔥")
     async def smash_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        update_votes(self.category, self.character_name, "smashes", interaction.user.id, self.image)
+        await self.cog.update_votes(self.category, self.character_name, "smashes", interaction.user.id, self.image)
         await interaction.response.send_message(
             f"{interaction.user.mention} chose **Smash** for {self.character_name}! 🔥",
             ephemeral=False,
@@ -444,7 +494,7 @@ class SmashPassView(discord.ui.View):
 
     @discord.ui.button(label="Pass", style=discord.ButtonStyle.red, emoji="❌")
     async def pass_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        update_votes(self.category, self.character_name, "passes", interaction.user.id, self.image)
+        await self.cog.update_votes(self.category, self.character_name, "passes", interaction.user.id, self.image)
         await interaction.response.send_message(
             f"{interaction.user.mention} chose **Pass** for {self.character_name}! ❌",
             ephemeral=False,
@@ -480,8 +530,9 @@ class SmashOrPass(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=9237492836492)
         self.config.register_member(
-            category="All"
+            category=["All"]
         )
+        self.daily_super_smash = {}
     
     sop = app_commands.Group(name="sop", description="Smash or Pass commands.")
 
@@ -764,7 +815,7 @@ class SmashOrPass(commands.Cog):
         embed.set_image(url=image)
         embed.set_footer(text=f"Would you rather smash or pass {name}?")
 
-        view = SmashPassView(name, category, image=image, ctx=ctx)
+        view = SmashPassView(self, name, category, image=image, ctx=ctx)
         view.message = await ctx.send(embed=embed, view=view)
 
     
