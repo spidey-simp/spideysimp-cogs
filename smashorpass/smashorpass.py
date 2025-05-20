@@ -345,6 +345,8 @@ class LeaderboardView(discord.ui.View):
         image_url = entry[1].get("image")
         if image_url and image_url.startswith("http"):
             embed.set_image(url=image_url)
+        else:
+            embed.add_field(name="Would-be Image Link", value=image_url)
 
         if self.message:
             await self.message.edit(embed=embed, view=self)
@@ -815,6 +817,8 @@ class SmashOrPass(commands.Cog):
         embed = discord.Embed(title=f"Smash or Pass: {name}")
         if image and image.startswith("http"):
             embed.set_image(url=image)
+        else:
+            embed.add_field(name="Would-be image URL", value=image)
         embed.set_footer(text=f"Would you rather smash or pass {name}?")
 
         view = SmashPassView(self, name, category, image=image, ctx=ctx)
