@@ -375,6 +375,55 @@ class LeaderboardView(discord.ui.View):
         except Exception as e:
             print(f"LeaderboardView timeout error: {e}")
 
+class SupersmashesView(discord.ui.View):
+    def __init__(self, cog: commands.Cog, results: list[tuple[str,int]], timeout: int = 60):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.results = results          # List of (name, count)
+        self.index = 0
+        self.message: discord.Message = None
+
+    async def update_message(self):
+        name, count = self.results[self.index]
+        votes = load_votes()            # your helper
+        # Find the category & image URL
+        for cat, chars in votes.items():
+            if name in chars:
+                image_url = chars[name].get("image", "")
+                break
+        embed = discord.Embed(
+            title=f"💖 Super Smash #{self.index+1} of {len(self.results)}",
+            description=f"**{name}** — used **{count}** time{'s' if count>1 else ''}"
+        )
+        try:
+            embed.set_image(url=image_url)
+        except discord.HTTPException:
+            embed.add_field(name="Failed Image URL", value="image_url")
+        embed.set_footer(text=f"{self.index+1}/{len(self.results)}")
+
+        if self.message:
+            await self.message.edit(embed=embed, view=self)
+
+    @discord.ui.button(label="⬅️", style=discord.ButtonStyle.gray)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.index = (self.index - 1) % len(self.results)
+        await self.update_message()
+
+    @discord.ui.button(label="➡️", style=discord.ButtonStyle.gray)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        self.index = (self.index + 1) % len(self.results)
+        await self.update_message()
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        if self.message:
+            embed = self.message.embeds[0]
+            embed.set_footer(text="⏱️ This slideshow has timed out.")
+            await self.message.edit(embed=embed, view=self)
+
 class CategorySelect(discord.ui.Select):
     def __init__(self, bot, user_id):
         self.bot = bot
@@ -563,6 +612,39 @@ class SmashOrPass(commands.Cog):
         save_api_keys(keys)
 
         await interaction.response.send_message(f"✅ API key for **{api}** has been saved.", ephemeral=True)
+    
+    @sop.command(name="supersmashes", description="Slide through who you've Super-Smashed")
+    @app_commands.describe(user="Person to see the supersmashes of.")
+    async def supersmashes(self, interaction: discord.Interaction, user:discord.Member=None):
+        await interaction.response.defer(ephemeral=True)
+        votes = load_votes()
+        user = user or interaction.user
+        user_id = user.id
+
+        # Gather results
+        results = [
+            (name, data["super-smashes"])
+            for chars in votes.values()
+            for name, data in chars.items()
+            if user_id in data.get("super-smashers", [])
+        ]
+        if not results:
+            return await interaction.followup.send(
+                f"💔 {user.display_name} hasn't used Super-Smash yet!", ephemeral=True
+            )
+
+        view = SupersmashesView(self, results)
+        # Send the first slide
+        view.message = await interaction.followup.send(
+            embed=discord.Embed(
+                title=f"Loading {user.display_name} Super-Smashes...",
+                description="Just a moment!"
+            ),
+            view=view,
+            ephemeral=True
+        )
+        # Immediately update to the real first slide
+        await view.update_message()
     
     @sop.command(name="appeal", description="Appeal a Smash or Pass blacklist")
     @app_commands.describe(reason="Explain why you should be unblacklisted")
