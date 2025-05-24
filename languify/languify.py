@@ -12,7 +12,8 @@ class Languify(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.funny_language_set = {}
+        self.config = Config.get_conf(self, identifier=829418329)
+        self.config.register_user(language="")
     
 
     async def piratify(self, message: str = None):
@@ -20,7 +21,7 @@ class Languify(commands.Cog):
             return "Ahoy matey! It seems ye fergot yer message! Ye can't be translating nothing."
         
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"https://pirate.monkeyness.com/translate?english={message}") as resp:
+            async with session.get(f"https://pirate.monkeyness.com/api/translate?english={message}") as resp:
                 if resp.status != 200:
                     return "⚓ Cap'n the seas be stormy, and I couldn’t reach the galley."
                 return await resp.text()
@@ -44,15 +45,16 @@ class Languify(commands.Cog):
         if language not in ACCEPTED_LANGUAGES:
             await interaction.response.send_message(f"Please choose from the currently available languages: {', '.join(ACCEPTED_LANGUAGES)}")
             return
-        
-        self.funny_language_set.setdefault(str(interaction.user.id), "")
+    
 
         try:
-            self.funny_language_set[str(interaction.user.id)] = language
+            await self.config.user(interaction.user).language.set(language)
 
             await interaction.response.send_message(f"`{language.title()}` has officially been set as your new language! Use command `[p]funtranslate` or `[p]ft` to get started using it!", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"An error occured: {e}. Please report it.", ephemeral=True)
+    
+    
         
     
     @commands.command(aliases=["ft"])
@@ -66,7 +68,9 @@ class Languify(commands.Cog):
             except Exception:
                 message = None
 
-        language = self.funny_language_set.get(str(ctx.author.id)) or random.choice(ACCEPTED_LANGUAGES)
+        language = await self.config.user(ctx.author).language()
+        
+        language = language or random.choice(ACCEPTED_LANGUAGES)
 
         if language == "pirate":
             translated = await self.piratify(message=message)
@@ -87,8 +91,7 @@ class Languify(commands.Cog):
         if not taggee:
             taggee = ctx.author
 
-        self.funny_language_set.setdefault(str(ctx.author.id), "")
-        language = self.funny_language_set.get(str(ctx.author.id))
+        language = await self.config.user(ctx.author).language()
 
         if not language or language not in INSULTABLE_LANGUAGES:
             language = random.choice(INSULTABLE_LANGUAGES)
