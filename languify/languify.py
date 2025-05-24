@@ -20,14 +20,14 @@ class Languify(commands.Cog):
             return "Ahoy matey! It seems ye fergot yer message! Ye can't be translating nothing."
         
         async with aiohttp.ClientSession() as session:
-            async with session.post(f"https://pirate.monkeyness.com/translate?english={message}") as resp:
+            async with session.get(f"https://pirate.monkeyness.com/translate?english={message}") as resp:
                 if resp.status != 200:
                     return "⚓ Cap'n the seas be stormy, and I couldn’t reach the galley."
                 return await resp.text()
     
     async def pirate_insult(self):
         async with aiohttp.ClientSession() as session:
-            async with session.post("https://pirate.monkeyness.com/api/insult") as resp:
+            async with session.get("https://pirate.monkeyness.com/api/insult") as resp:
                 if resp.status != 200:
                     return "The bravest captains of the high seas could not even insult {person}."
                 return await resp.text()
