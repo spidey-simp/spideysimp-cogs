@@ -3,6 +3,7 @@ from redbot.core import commands, Config
 import discord
 from discord import app_commands
 import random
+import re
 
 ACCEPTED_LANGUAGES = ["pirate"]
 INSULTABLE_LANGUAGES = ["pirate"]
@@ -32,6 +33,13 @@ class Languify(commands.Cog):
                 if resp.status != 200:
                     return "The bravest captains of the high seas could not even insult {person}."
                 return await resp.text()
+    
+    def format_paragraph(self, text: str) -> str:
+        pattern = r'([.!?])([a-z])'
+
+        restored = re.sub(pattern, r'\1\n\n\2', text)
+
+        return restored
     
     languify = app_commands.Group(name="languify", description="Fun language commands for all your fun language needs.")
     
@@ -74,6 +82,7 @@ class Languify(commands.Cog):
 
         if language == "pirate":
             translated = await self.piratify(message=message)
+            translated = self.format_paragraph(translated)
         
         await ctx.send(translated)
     
