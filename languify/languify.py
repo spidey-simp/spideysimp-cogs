@@ -116,14 +116,13 @@ class Languify(commands.Cog):
         params = {"text": text}
 
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://valspeak.p.rapidapi.com/valspeak.json", json=payload, headers=headers, params=params) as resp:
+            async with session.post("https://valspeak.p.rapidapi.com/valspeak.json", json=payload, headers=headers, params=params) as resp:
                 if resp.status != 200:
                     return "Like I know you like want the translation, but I like totally can't do it right now."
                 
                 try:
                     data = await resp.json()
-                    return data
-                    ###return data.get("contents", {}).get("translated", "I'm like totally so sorry, but I like couldn't get you your translation. My bad girlie.")
+                    return data.get("contents", {}).get("translated", "I'm like totally sooooo sorry, but I like couldn't get you your translation. My bad girlie.")
                 except Exception:
                     return "Whoops. I like totally spilled my morning latte all over the translation panel."
 
