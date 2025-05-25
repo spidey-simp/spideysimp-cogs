@@ -153,13 +153,13 @@ class Languify(commands.Cog):
     @app_commands.choices(language=[
         app_commands.Choice(name="Pirate", value="pirate"),
         app_commands.Choice(name="Old English", value="old_english"),
-        app_commands.Choice(name="Valley Girl", value="value_girl"),
+        app_commands.Choice(name="Valley Girl", value="valley_girl"),
         app_commands.Choice(name="Random", value="random")
     ])
     async def languageset(self, interaction:discord.Interaction, language: str):
         
         if language not in ACCEPTED_LANGUAGES and language != "random":
-            await interaction.response.send_message(f"Please choose from the currently available languages: {', '.join(ACCEPTED_LANGUAGES)}")
+            await interaction.response.send_message(f"Please choose from the currently available languages: {', '.join(ACCEPTED_LANGUAGES)}", ephemeral=True)
             return
     
 
