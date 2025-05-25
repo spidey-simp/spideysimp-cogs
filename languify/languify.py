@@ -30,18 +30,24 @@ class Languify(commands.Cog):
         self.api_keys = self.load_secrets_file()
     
     def save_secrets_file(self):
+        # Always save at least a valid empty JSON object
         if not os.path.exists(SECRETS_FILE):
             with open(SECRETS_FILE, "w") as f:
-                if not self.api_keys:
-                    json.dump({}, f, indent=4)
-                else:
-                    json.dump(self.api_keys, f, indent=4)
+                json.dump({}, f, indent=4)
+        else:
+            with open(SECRETS_FILE, "w") as f:
+                json.dump(self.api_keys or {}, f, indent=4)
+
         
         
 
     def load_secrets_file(self):
-        with open(SECRETS_FILE, "r") as f:
-            return json.load(f)
+        if os.path.exists(SECRETS_FILE) and os.path.getsize(SECRETS_FILE) > 0:
+            with open(SECRETS_FILE, "r") as f:
+                return json.load(f)
+        else:
+            return {}
+
 
     async def piratify(self, message: str = None):
         if message == None:
