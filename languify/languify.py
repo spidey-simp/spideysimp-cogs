@@ -75,20 +75,20 @@ class Languify(commands.Cog):
 
     
     async def old_englishify(self, text: str) -> str:
-        key = self.api_keys.get("old_english")
+        key = self.api_keys.get("rapidapi_key")
 
         if not key:
             return "Ye Olde English API key is missing. Hast thou forgotteth to upload it?"
 
         headers = {
             "x-rapidapi-key": key,
-            "x-rapidapi-host": "orthosie-old-english-translator-v1.p.rapidapi.com"
+            "x-rapidapi-host": "shakespeare.p.rapidapi.com"
         }
 
         params = {"text": text}
 
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://orthosie-old-english-translator-v1.p.rapidapi.com/oldenglish.json", headers=headers, params=params) as resp:
+            async with session.get("https://shakespeare.p.rapidapi.com/shakespeare.json", headers=headers, params=params) as resp:
                 if resp.status != 200:
                     return "Alack! Yon translation hath failed. Perhaps tryeth again later."
                 
@@ -103,9 +103,9 @@ class Languify(commands.Cog):
     languify = app_commands.Group(name="languify", description="Fun language commands for all your fun language needs.")
 
     @languify.command(name="apis", description="Upload an api key for languify.")
-    @app_commands.describe(language="The language to save it under.")
+    @app_commands.describe(language="The API you want the key for.")
     @app_commands.choices(language=[
-        app_commands.Choice(name="Old English", value="old_english")
+        app_commands.Choice(name="RapidAPI", value="rapidapi_key")
     ])
     async def apis(self, interaction:discord.Interaction, language:str, api_key:str):
 
