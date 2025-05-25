@@ -4,9 +4,19 @@ import discord
 from discord import app_commands
 import random
 import re
+import os
+import json
 
-ACCEPTED_LANGUAGES = ["pirate"]
+ACCEPTED_LANGUAGES = ["pirate", "old_english"]
 INSULTABLE_LANGUAGES = ["pirate"]
+APIABLE_LANGUAGES = ["old_english"]
+
+
+BASE_DIR = os.path.dirname(__file__)
+SECRETS_FILE = os.path.join(BASE_DIR, "secrets.json")
+
+
+
 
 class Languify(commands.Cog):
     """Translate to a variety of fun languages."""
@@ -15,7 +25,21 @@ class Languify(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=829418329)
         self.config.register_user(language="")
+        self.save_secrets_file()
+        self.api_keys = self.load_secrets_file()
     
+    def save_secrets_file(self):
+        if not os.path.exists(SECRETS_FILE):
+            with open(SECRETS_FILE, "w") as f:
+                if not self.api_keys:
+                    json.dump({}, f, indent=4)
+                else:
+                    json.dump(self.api_keys, f, indent=4)
+        
+
+    def load_secrets_file(self):
+        with open(SECRETS_FILE, "r") as f:
+            return json.load(f)
 
     async def piratify(self, message: str = None):
         if message == None:
@@ -41,7 +65,54 @@ class Languify(commands.Cog):
 
         return restored
     
+
+    
+    async def old_englishify(self, text: str) -> str:
+        key = self.api_keys.get("old_english")
+
+        if not key:
+            return "Ye Olde English API key is missing. Hast thou forgotteth to upload it?"
+
+        headers = {
+            "x-rapidapi-key": key,
+            "x-rapidapi-host": "orthosie-old-english-translator-v1.p.rapidapi.com"
+        }
+
+        params = {"text": text}
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://orthosie-old-english-translator-v1.p.rapidapi.com/oldenglish.json", headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    return "Alack! Yon translation hath failed. Perhaps tryeth again later."
+                
+                try:
+                    data = await resp.json()
+                    return data.get("translated", "Nay, the response bore no fruit.")
+                except Exception:
+                    return "Forsooth! The scroll of knowledge returned no legible markings."
+
+
+    
     languify = app_commands.Group(name="languify", description="Fun language commands for all your fun language needs.")
+
+    @languify.command(name="apis", description="Upload an api key for languify.")
+    @app_commands.describe(language="The language to save it under.")
+    @app_commands.choices(language=[
+        app_commands.Choice(name="Old English", value="old_english")
+    ])
+    async def apis(self, interaction:discord.Interaction, language:str, api_key:str):
+
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("You have to be an administrator to use this command.", ephemeral=True)
+        
+        if language not in APIABLE_LANGUAGES:
+            return await interaction.response.send_message("That language is not one of the API-able languages.", ephemeral=True)
+        
+        self.api_keys.setdefault(language, "")
+        self.api_keys[language] = api_key
+        self.save_secrets_file()
+        await interaction.response.send(f"API key for {language} is properly set.")
+
     
     @languify.command(name="languageset", description="Choose the language to translate to.")
     @app_commands.describe(language="The language to translate to.")
@@ -83,6 +154,8 @@ class Languify(commands.Cog):
         if language == "pirate":
             translated = await self.piratify(message=message)
             translated = self.format_paragraph(translated)
+        elif language == "old_english":
+            translated = await self.old_englishify(message)
         
         await ctx.send(translated)
     
