@@ -119,17 +119,19 @@ class Languify(commands.Cog):
         self.api_keys.setdefault(language, "")
         self.api_keys[language] = api_key
         self.save_secrets_file()
-        await interaction.response.send(f"API key for {language} is properly set.")
+        await interaction.response.send_message(f"API key for {language} is properly set.")
 
     
     @languify.command(name="languageset", description="Choose the language to translate to.")
     @app_commands.describe(language="The language to translate to.")
     @app_commands.choices(language=[
-        app_commands.Choice(name="Pirate", value="pirate")
+        app_commands.Choice(name="Pirate", value="pirate"),
+        app_commands.Choice(name="Old English", value="old_english"),
+        app_commands.Choice(name="Random", value="random")
     ])
     async def languageset(self, interaction:discord.Interaction, language: str):
         
-        if language not in ACCEPTED_LANGUAGES:
+        if language not in ACCEPTED_LANGUAGES and language != "random":
             await interaction.response.send_message(f"Please choose from the currently available languages: {', '.join(ACCEPTED_LANGUAGES)}")
             return
     
@@ -157,7 +159,8 @@ class Languify(commands.Cog):
 
         language = await self.config.user(ctx.author).language()
         
-        language = language or random.choice(ACCEPTED_LANGUAGES)
+        if language == None or language == "ranodm"
+            language = random.choice(ACCEPTED_LANGUAGES)
 
         if language == "pirate":
             translated = await self.piratify(message=message)
