@@ -25,9 +25,8 @@ class Languify(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=829418329)
         self.config.register_user(language="")
-        self.api_keys = {}
-        self.save_secrets_file()
         self.api_keys = self.load_secrets_file()
+        self.save_secrets_file()
     
     def save_secrets_file(self):
         # Always save at least a valid empty JSON object
@@ -95,7 +94,7 @@ class Languify(commands.Cog):
                 
                 try:
                     data = await resp.json()
-                    return data
+                    return data.get("contents", {}).get("translated", "Nay, the response bore no fruit.")
                 except Exception:
                     return "Forsooth! The scroll of knowledge returned no legible markings."
 
@@ -119,7 +118,7 @@ class Languify(commands.Cog):
         self.api_keys.setdefault(language, "")
         self.api_keys[language] = api_key
         self.save_secrets_file()
-        await interaction.response.send_message(f"API key for {language} is properly set.")
+        await interaction.response.send_message(f"API key for {language} is properly set.", ephemeral=True)
 
     
     @languify.command(name="languageset", description="Choose the language to translate to.")
