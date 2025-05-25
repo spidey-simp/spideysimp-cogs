@@ -25,6 +25,7 @@ class Languify(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=829418329)
         self.config.register_user(language="")
+        self.api_keys = {}
         self.save_secrets_file()
         self.api_keys = self.load_secrets_file()
     
@@ -35,6 +36,7 @@ class Languify(commands.Cog):
                     json.dump({}, f, indent=4)
                 else:
                     json.dump(self.api_keys, f, indent=4)
+        
         
 
     def load_secrets_file(self):
