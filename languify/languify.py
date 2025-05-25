@@ -122,7 +122,8 @@ class Languify(commands.Cog):
                 
                 try:
                     data = await resp.json()
-                    return data.get("contents", {}).get("translated", "I'm like totally so sorry, but I like couldn't get you your translation. My bad girlie.")
+                    return data
+                    ###return data.get("contents", {}).get("translated", "I'm like totally so sorry, but I like couldn't get you your translation. My bad girlie.")
                 except Exception:
                     return "Whoops. I like totally spilled my morning latte all over the translation panel."
 
