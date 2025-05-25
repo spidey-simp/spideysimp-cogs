@@ -7,7 +7,7 @@ import re
 import os
 import json
 
-ACCEPTED_LANGUAGES = ["pirate", "old_english"]
+ACCEPTED_LANGUAGES = ["pirate", "old_english", "valley_girl"]
 INSULTABLE_LANGUAGES = ["pirate"]
 APIABLE_LANGUAGES = ["rapidapi_key"]
 
@@ -99,6 +99,33 @@ class Languify(commands.Cog):
                     return "Forsooth! The scroll of knowledge returned no legible markings."
 
 
+    async def valley_girlify(self, text:str) -> str:
+        key = self.api_keys.get("rapidapi_key")
+
+        if not key:
+            return "You like forgot to upload your key. Like you gotta do that pronto."
+
+
+        payload = {}
+        headers = {
+            "x-rapidapi-key": key,
+            "x-rapidapi-host": "valspeak.p.rapidapi.com",
+            "Content-Type": "application/json"
+        }
+
+        params = {"text": text}
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://valspeak.p.rapidapi.com/valspeak.json", json=payload, headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    return "Like I know you like want the translation, but I like totally can't do it right now."
+                
+                try:
+                    data = await resp.json()
+                    return data.get("contents", {}).get("translated", "I'm like totally so sorry, but I like couldn't get you your translation. My bad girlie.")
+                except Exception:
+                    return "Whoops. I like totally spilled my morning latte all over the translation panel."
+
     
     languify = app_commands.Group(name="languify", description="Fun language commands for all your fun language needs.")
 
@@ -126,6 +153,7 @@ class Languify(commands.Cog):
     @app_commands.choices(language=[
         app_commands.Choice(name="Pirate", value="pirate"),
         app_commands.Choice(name="Old English", value="old_english"),
+        app_commands.Choice(name="Valley Girl", value="value_girl"),
         app_commands.Choice(name="Random", value="random")
     ])
     async def languageset(self, interaction:discord.Interaction, language: str):
@@ -166,6 +194,8 @@ class Languify(commands.Cog):
             translated = self.format_paragraph(translated)
         elif language == "old_english":
             translated = await self.old_englishify(message)
+        elif language == "valley_girl":
+            translated = await self.valley_girlify(message)
         
         await ctx.send(translated)
     
