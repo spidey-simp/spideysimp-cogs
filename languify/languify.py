@@ -95,7 +95,7 @@ class Languify(commands.Cog):
                 
                 try:
                     data = await resp.json()
-                    return data.get("translated", "Nay, the response bore no fruit.")
+                    return data
                 except Exception:
                     return "Forsooth! The scroll of knowledge returned no legible markings."
 
