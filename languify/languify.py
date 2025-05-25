@@ -9,7 +9,7 @@ import json
 
 ACCEPTED_LANGUAGES = ["pirate", "old_english"]
 INSULTABLE_LANGUAGES = ["pirate"]
-APIABLE_LANGUAGES = ["old_english"]
+APIABLE_LANGUAGES = ["rapidapi_key"]
 
 
 BASE_DIR = os.path.dirname(__file__)
