@@ -106,7 +106,6 @@ class Languify(commands.Cog):
             return "You like forgot to upload your key. Like you gotta do that pronto."
 
 
-        payload = {}
         headers = {
             "x-rapidapi-key": key,
             "x-rapidapi-host": "valspeak.p.rapidapi.com",
@@ -116,7 +115,7 @@ class Languify(commands.Cog):
         params = {"text": text}
 
         async with aiohttp.ClientSession() as session:
-            async with session.post("https://valspeak.p.rapidapi.com/valspeak.json", json=payload, headers=headers, params=params) as resp:
+            async with session.post("https://valspeak.p.rapidapi.com/valspeak.json", headers=headers, params=params) as resp:
                 if resp.status != 200:
                     return "Like I know you like want the translation, but I like totally can't do it right now."
                 
