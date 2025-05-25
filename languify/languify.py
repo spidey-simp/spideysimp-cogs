@@ -159,7 +159,7 @@ class Languify(commands.Cog):
 
         language = await self.config.user(ctx.author).language()
         
-        if language == None or language == "ranodm"
+        if language == None or language == "random":
             language = random.choice(ACCEPTED_LANGUAGES)
 
         if language == "pirate":
