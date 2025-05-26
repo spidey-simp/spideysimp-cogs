@@ -286,7 +286,8 @@ class WorldOfApis(commands.Cog):
                 if resp.status != 200:
                     return await interaction.followup.send("Alas, the fates have failed to provide any advice.")
 
-                data = await resp.json()
+                text = await resp.text()
+                data = json.loads(text)
 
         if query:
             slips = data.get("slips")
