@@ -55,7 +55,8 @@ class WorldOfApis(commands.Cog):
                 if resp.status == 200:
                     data = await resp.json()
                     # Create dict: name -> id
-                    self.breed_dict = {breed["name"]: str(breed["id"]) for breed in data}
+                    self.breed_dict = {str(breed["id"]): breed["name"] for breed in data}  # ID → Name
+
                     # For autocomplete
                     self.autocomplete_list = [
                         app_commands.Choice(name=breed["name"], value=str(breed["id"])) for breed in data
@@ -191,10 +192,9 @@ class WorldOfApis(commands.Cog):
                     "Ask an admin to run `/woa initialize_dog`, or run this command without a breed for now.",
                     ephemeral=True
                 )
-            breed_id = self.breed_dict.get(breed)
-            if not breed_id:
+            if breed not in self.breed_dict:
                 return await interaction.followup.send("Breed not recognized. Please try again.", ephemeral=True)
-            breed_id_param = f"&breed_ids={breed_id}"
+            breed_id_param = f"&breed_ids={breed}"
 
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{base_url}?api_key={api}{breed_id_param}") as resp:
