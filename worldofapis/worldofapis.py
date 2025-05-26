@@ -257,7 +257,7 @@ class WorldOfApis(commands.Cog):
 
                 joke_data = await resp.json()
 
-        embed = discord.Embed(title="Here's a joke for you 🤡", color=discord.Color.green())
+        embed = discord.Embed(title="Here's a joke for you", color=discord.Color.green())
 
         if joke_data["type"] == "single":
             embed.description = joke_data["joke"]
