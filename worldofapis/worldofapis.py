@@ -35,7 +35,7 @@ class WorldOfApis(commands.Cog):
         self.bot = bot
 
         self.api_keys = self.load_json()
-        self.dog_breeds = self.bot.loop.create_task(self.load_dog_breeds())
+        self.breed_dict = {}
 
     
     def load_json(self) -> dict:
@@ -185,7 +185,13 @@ class WorldOfApis(commands.Cog):
         base_url = "https://api.thedogapi.com/v1/images/search"
         breed_id_param = ""
         if breed:
-            breed_id = self.dog_breeds.get(breed)
+            if not hasattr(self, "breed_dict") or not self.breed_dict:
+                return await interaction.followup.send(
+                    "🐕 Woah there! I want to look at dogs just as much as you! "
+                    "Ask an admin to run `/woa initialize_dog`, or run this command without a breed for now.",
+                    ephemeral=True
+                )
+            breed_id = self.breed_dict.get(breed)
             if not breed_id:
                 return await interaction.followup.send("Breed not recognized. Please try again.", ephemeral=True)
             breed_id_param = f"&breed_ids={breed_id}"
@@ -230,3 +236,12 @@ class WorldOfApis(commands.Cog):
                 embed.set_footer(text=f"Origin: {origin}")
 
         await interaction.followup.send(embed=embed)
+
+    @woa.command(name="initialize_dog", description="Initializes or refreshes the dog breed list.")
+    async def initialize_dog(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message("You do not have permission to initialize dog data.", ephemeral=True)
+
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        await self.load_dog_breeds()
+        await interaction.followup.send("Dog breeds have been initialized and are ready to go! 🐶", ephemeral=True)
