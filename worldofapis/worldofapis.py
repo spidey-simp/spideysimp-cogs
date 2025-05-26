@@ -7,6 +7,7 @@ from discord import app_commands
 import html
 import asyncio
 import random
+import urllib.parse
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -386,25 +387,34 @@ class WorldOfApis(commands.Cog):
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
-                if resp.status != 200:
-                    return await ctx.send("Failed to fetch trivia question.")
-
                 data = await resp.json()
-                if data["response_code"] != 0:
-                    return await ctx.send("No trivia questions available for that category.")
 
-                question_data = data["results"][0]
-                question = html.unescape(question_data["question"])
-                correct = html.unescape(question_data["correct_answer"])
-                incorrect = [html.unescape(ans) for ans in question_data["incorrect_answers"]]
-                options = incorrect + [correct]
-                random.shuffle(options)
+        question_data = data["results"][0]
+        question = html.unescape(urllib.parse.unquote(question_data["question"]))
+        correct = html.unescape(urllib.parse.unquote(question_data["correct_answer"])).lower()
+        incorrect = [
+            html.unescape(urllib.parse.unquote(ans)).lower()
+            for ans in question_data["incorrect_answers"]
+        ]
+        options = incorrect + [correct]
+        random.shuffle(options)
 
-                option_str = "\n".join(f"{chr(65+i)}. {opt}" for i, opt in enumerate(options))
+        option_letters = ["A", "B", "C", "D"]
+        option_map = dict(zip(option_letters, options))
+        correct_letter = next(k for k, v in option_map.items() if v == correct)
 
-                await ctx.send(f"**Trivia Time!**\n{question}\n\n{option_str}")
-                await asyncio.sleep(delay)
+        # Display the question
+        formatted_options = "\n".join([f"{l}. {o}" for l, o in option_map.items()])
+        await ctx.send(f"**Trivia Time!**\n{question}\n\n{formatted_options}")
 
-                correct_letter = chr(65 + options.index(correct))
-                await ctx.send(f"⏰ Time's up! The correct answer was: **{correct_letter}. {correct}**")
+        def check(m):
+            return (
+                m.channel == ctx.channel
+                and m.content.lower().strip() in [correct, correct_letter.lower()]
+            )
 
+        try:
+            winner = await self.bot.wait_for("message", check=check, timeout=delay)
+            await ctx.send(f"🎉 {winner.author.mention} got it right! The answer was: **{correct}**")
+        except asyncio.TimeoutError:
+            await ctx.send(f"⏰ Time’s up! The correct answer was: **{correct}**")
