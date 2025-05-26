@@ -305,5 +305,4 @@ class WorldOfApis(commands.Cog):
             description=slip["advice"],
             color=discord.Color.teal()
         )
-        embed.set_footer(text=f"Slip ID: {slip['slip_id']}")
         await interaction.followup.send(embed=embed)
