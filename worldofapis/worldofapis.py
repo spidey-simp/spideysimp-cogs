@@ -354,7 +354,9 @@ class WorldOfApis(commands.Cog):
         category="The category you want for trivia",
         answer_period="Time (in seconds) before the answer is shown",
         difficulty="Difficulty for the questions.",
-        answer_display="How answers should be displayed"
+        answer_display="How answers should be displayed",
+        mode= "Whether you want it competitive or solo.",
+        question_number="Number of questions. (Max 50)"
     )
     @app_commands.autocomplete(category=trivia_category_autocomplete)
     @app_commands.choices(
@@ -367,6 +369,10 @@ class WorldOfApis(commands.Cog):
             app_commands.Choice(name="Multiple Choice", value="choices"),
             app_commands.Choice(name="Letter Hint", value="hint"),
             app_commands.Choice(name="No Answer Shown", value="none")
+        ],
+        mode=[
+            app_commands.Choice(name="Solo", value="solo"),
+            app_commands.Choice(name="Competitive", value="competitive")
         ]
     )
     async def trivia_settings(
@@ -376,12 +382,14 @@ class WorldOfApis(commands.Cog):
         answer_period: int = None,
         difficulty: str = None,
         answer_display: str = None,
+        mode: str = None,
+        question_number:int=None
     ):
         if not category and not answer_period and not difficulty and not answer_display:
             return await interaction.response.send_message("Please choose one of the settings to alter.", ephemeral=True)
 
         user_id = str(interaction.user.id)
-        self.user_trivia_settings.setdefault(user_id, {"category": "9", "answer_period": 30, "difficulty": "easy", "answer_display": "choices"})
+        self.user_trivia_settings.setdefault(user_id, {"category": "9", "answer_period": 30, "difficulty": "easy", "answer_display": "choices", "question_number": 10})
 
         response_lines = []
 
@@ -404,6 +412,14 @@ class WorldOfApis(commands.Cog):
         if answer_period:
             self.user_trivia_settings[user_id]["answer_period"] = answer_period
             response_lines.append(f"⏱️ Answer delay set to **{answer_period} seconds**.")
+        
+        if mode:
+            self.user_trivia_settings[user_id]["mode"] = mode
+            response_lines.append(f"🎮 Mode set to **{mode.title()}**.")
+        
+        if question_number:
+            self.user_trivia_settings[user_id]["question_number"] = question_number
+            response_lines.append(f"❔ Number of questions set to **{question_number}**.")
 
         await interaction.response.send_message("\n".join(response_lines), ephemeral=True)
 
@@ -418,8 +434,8 @@ class WorldOfApis(commands.Cog):
         difficulty = settings.get("difficulty", "easy")
         delay = settings.get("answer_period", 30)
         display = settings.get("answer_display", "choices")
-        total_questions = settings.get("number_of_questions", 5)
-
+        mode = settings.get("mode", "competitive")
+        total_questions = settings.get("question_number", 10)
         score = {}
 
         def generate_hint(answer: str):
@@ -456,7 +472,11 @@ class WorldOfApis(commands.Cog):
             option_map = dict(zip(option_letters, options))
             correct_letter = next(k for k, v in option_map.items() if v == correct)
 
-            embed = discord.Embed(title=f"Question {round_num}/{total_questions}", description=question, color=discord.Color.teal())
+            embed = discord.Embed(
+                title=f"Question {round_num}/{total_questions} ({mode.title()} Mode)",
+                description=question,
+                color=discord.Color.teal()
+            )
 
             if display == "choices":
                 formatted = "\n".join([f"{l}. {o}" for l, o in option_map.items()])
@@ -468,11 +488,14 @@ class WorldOfApis(commands.Cog):
             await ctx.send(embed=embed)
 
             def check(m):
+                if m.channel != ctx.channel:
+                    return False
                 content = m.content.lower().strip()
-                return m.channel == ctx.channel and (
-                    content == correct.lower() or content == correct_letter.lower() or
-                    (m.author == ctx.author and content == "stop")
-                )
+                is_correct = content == correct.lower() or content == correct_letter.lower()
+                is_stop = content == "stop" and m.author == ctx.author
+                if mode == "solo":
+                    return m.author == ctx.author and (is_correct or is_stop)
+                return is_correct or is_stop
 
             try:
                 winner = await self.bot.wait_for("message", check=check, timeout=delay)
@@ -491,3 +514,28 @@ class WorldOfApis(commands.Cog):
             results = "\n".join([f"{user.mention}: {points} point(s)" for user, points in sorted_scores])
             winner = sorted_scores[0][0]
             await ctx.send(f"🏁 Trivia over! The winner is {winner.mention}!\n\n**Final Scores:**\n{results}")
+
+    @woa.command(name="view_triv_settings", description="View your current trivia settings.")
+    async def view_triv_settings(self, interaction: discord.Interaction):
+        user_id = str(interaction.user.id)
+        settings = self.user_trivia_settings.get(user_id)
+
+        if not settings:
+            return await interaction.response.send_message("You have no trivia settings saved.", ephemeral=True)
+
+        category_name = next((c["name"] for c in trivia_categories if str(c["id"]) == settings.get("category", "9")), "General Knowledge")
+        difficulty = settings.get("difficulty", "easy").title()
+        answer_display = settings.get("answer_display", "choices").replace("choices", "Multiple Choice").replace("hint", "Letter Hint").replace("none", "No Answer Shown")
+        mode = settings.get("mode", "competitive").title()
+        answer_period = settings.get("answer_period", 30)
+        question_number = settings.get("question_number", 10)
+
+        embed = discord.Embed(title="Your Trivia Settings", color=discord.Color.gold())
+        embed.add_field(name="📚 Category", value=category_name, inline=False)
+        embed.add_field(name="🎯 Difficulty", value=difficulty, inline=True)
+        embed.add_field(name="👁️ Answer Display", value=answer_display, inline=True)
+        embed.add_field(name="🎮 Mode", value=mode, inline=True)
+        embed.add_field(name="⏱️ Answer Delay", value=f"{answer_period} seconds", inline=True)
+        embed.add_field(name="❔ Number of Questions", value=str(question_number), inline=True)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
