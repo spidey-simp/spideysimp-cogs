@@ -271,3 +271,38 @@ class WorldOfApis(commands.Cog):
             embed.description = f"{setup}\n\n||{delivery}||"  # Spoiler tag for punchline
 
         await interaction.followup.send(embed=embed)
+
+    @woa.command(name="advice", description="Receive a random piece of advice or search for one.")
+    @app_commands.describe(query="Optional keyword to search for related advice.")
+    async def advice(self, interaction: discord.Interaction, query: str = None):
+        await interaction.response.defer(thinking=True)
+
+        url = "https://api.adviceslip.com/advice"
+        if query:
+            url = f"https://api.adviceslip.com/advice/search/{query}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    return await interaction.followup.send("Alas, the fates have failed to provide any advice.")
+
+                data = await resp.json()
+
+        if query:
+            slips = data.get("slips")
+            if not slips:
+                return await interaction.followup.send(f"No advice found for `{query}`. Even the wise cannot see all ends.")
+            slip = slips[0]  # Take the first matching result
+        else:
+            slip = data.get("slip")
+
+        if not slip:
+            return await interaction.followup.send("There was an error retrieving the advice. Perhaps it was not meant for mortal ears.")
+
+        embed = discord.Embed(
+            title="💡 Advice",
+            description=slip["advice"],
+            color=discord.Color.teal()
+        )
+        embed.set_footer(text=f"Slip ID: {slip['slip_id']}")
+        await interaction.followup.send(embed=embed)
