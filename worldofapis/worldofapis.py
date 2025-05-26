@@ -449,20 +449,23 @@ class WorldOfApis(commands.Cog):
             hint = " ".join(word[0] if word else "_" for word in words)
             return f"{len(words)} word{'s' if len(words) > 1 else ''}:\n{hint}"
 
-        for round_num in range(1, total_questions + 1):
-            while True:
-                url = f"https://opentdb.com/api.php?amount=1&category={category}&difficulty={difficulty}&encode=url3986"
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as resp:
-                        data = await resp.json()
+        url = (
+            f"https://opentdb.com/api.php?amount={total_questions}"
+            f"&category={category}&difficulty={difficulty}&type=multiple&encode=url3986"
+        )
 
-                question_data = data["results"][0]
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                data = await resp.json()
 
-                # Skip booleans if hint or none mode
-                if question_data["type"] == "boolean" and display != "choices":
-                    continue
-                break
+        if data.get("response_code") != 0 or "results" not in data:
+            await ctx.send("⚠️ Trivia API error: Could not fetch enough questions. Try again later.")
+            return
 
+        questions = data["results"]
+
+        for round_num, question_data in enumerate(questions, start=1):
+            # Unescape question/answers
             question = html.unescape(urllib.parse.unquote(question_data["question"]))
             correct = html.unescape(urllib.parse.unquote(question_data["correct_answer"]))
             incorrect = [
@@ -487,7 +490,7 @@ class WorldOfApis(commands.Cog):
                 embed.add_field(name="Options", value=formatted)
             elif display == "hint":
                 embed.add_field(name="Hint", value=generate_hint(correct))
-            # else: "none" — no answers or hints
+            # else: "none"
 
             await ctx.send(embed=embed)
 
