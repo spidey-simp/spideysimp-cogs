@@ -259,6 +259,10 @@ class WorldOfApis(commands.Cog):
 
         embed = discord.Embed(title="Here's a joke for you", color=discord.Color.green())
 
+        if joke_data.get("flags", {}).get("nsfw"):
+            embed.title += " 🔞"
+
+
         if joke_data["type"] == "single":
             embed.description = joke_data["joke"]
         else:
