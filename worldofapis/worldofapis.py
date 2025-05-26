@@ -385,7 +385,7 @@ class WorldOfApis(commands.Cog):
         mode: str = None,
         question_number:int=None
     ):
-        if not category and not answer_period and not difficulty and not answer_display:
+        if not category and not answer_period and not difficulty and not answer_display and not mode and not question_number:
             return await interaction.response.send_message("Please choose one of the settings to alter.", ephemeral=True)
 
         user_id = str(interaction.user.id)
@@ -396,10 +396,11 @@ class WorldOfApis(commands.Cog):
         valid_ids = {str(cat["id"]) for cat in trivia_categories}
         if category:
             if category not in valid_ids:
-                return await interaction.response.send_message("That is not one of the accepted categories.", ephemeral=True)
-            self.user_trivia_settings[user_id]["category"] = category
-            name = next(c["name"] for c in trivia_categories if str(c["id"]) == category)
-            response_lines.append(f"📚 Category set to **{name}**.")
+                response_lines.append("📚 Category could not be updated, because the category typed wasn't an accepted category.")
+            else:
+                self.user_trivia_settings[user_id]["category"] = category
+                name = next(c["name"] for c in trivia_categories if str(c["id"]) == category)
+                response_lines.append(f"📚 Category set to **{name}**.")
 
         if difficulty:
             self.user_trivia_settings[user_id]["difficulty"] = difficulty
@@ -418,8 +419,11 @@ class WorldOfApis(commands.Cog):
             response_lines.append(f"🎮 Mode set to **{mode.title()}**.")
         
         if question_number:
-            self.user_trivia_settings[user_id]["question_number"] = question_number
-            response_lines.append(f"❔ Number of questions set to **{question_number}**.")
+            if question_number > 50 or question_number < 0:
+                response_lines.append("❔Unable to edit number of questions. Must be a number 1-50.")
+            else:
+                self.user_trivia_settings[user_id]["question_number"] = question_number
+                response_lines.append(f"❔ Number of questions set to **{question_number}**.")
 
         await interaction.response.send_message("\n".join(response_lines), ephemeral=True)
 
