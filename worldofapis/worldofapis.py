@@ -345,7 +345,7 @@ class WorldOfApis(commands.Cog):
 
         for data in trivia_categories:
             if current.lower() in data["name"].lower():
-                category_choices.append(app_commands.Choice(name=data.get("name"), value=data.get("id")))
+                category_choices.append(app_commands.Choice(name=data.get("name"), value=str(data.get("id"))))
             
         return category_choices
         
@@ -425,7 +425,7 @@ class WorldOfApis(commands.Cog):
                 self.user_trivia_settings[user_id]["question_number"] = question_number
                 response_lines.append(f"❔ Number of questions set to **{question_number}**.")
 
-        await interaction.response.send_message("\n".join(response_lines), ephemeral=True)
+        await interaction.response.send_message("\n".join(response_lines))
 
 
     @commands.command(name="wtrivia")
@@ -542,4 +542,4 @@ class WorldOfApis(commands.Cog):
         embed.add_field(name="⏱️ Answer Delay", value=f"{answer_period} seconds", inline=True)
         embed.add_field(name="❔ Number of Questions", value=str(question_number), inline=True)
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
