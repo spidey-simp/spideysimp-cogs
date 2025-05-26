@@ -37,14 +37,14 @@ class WorldOfApis(commands.Cog):
         self.api_keys = self.load_json()
 
     
-    async def load_json(self) -> dict:
+    def load_json(self) -> dict:
         if not os.path.exists(API_KEYS):
             return {}
         else:
             with open(API_KEYS, "r") as f:
                 return json.load(f)
     
-    async def save_json(self) -> None:
+    def save_json(self) -> None:
         with open(API_KEYS, "w") as f:
             json.dump(self.api_keys, f, indent=4)
     
