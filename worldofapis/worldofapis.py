@@ -350,10 +350,17 @@ class WorldOfApis(commands.Cog):
         return category_choices
         
     @woa.command(name="trivia_settings", description="Edit your trivia settings")
-    @app_commands.describe(category="The category you want for trivia", answer_period="Time (in seconds) before the answer is shown")
+    @app_commands.describe(category="The category you want for trivia", answer_period="Time (in seconds) before the answer is shown", difficulty="Difficulty for the questions.")
     @app_commands.autocomplete(category=trivia_category_autocomplete)
-    async def trivia_settings(self, interaction: discord.Interaction, category: str = None, answer_period: int = None):
-        if not category and not answer_period:
+    @app_commands.choices(
+        difficulty=[
+            app_commands.Choice(name="Easy", value="easy"),
+            app_commands.Choice(name="Medium", value="medium"),
+            app_commands.Choice(name="Hard", value="hard")
+        ]
+    )
+    async def trivia_settings(self, interaction: discord.Interaction, category: str = None, answer_period: int = None, difficulty: str = None):
+        if not category and not answer_period and not difficulty:
             return await interaction.response.send_message("Please choose one of the settings to alter.", ephemeral=True)
 
         user_id = str(interaction.user.id)
@@ -369,6 +376,10 @@ class WorldOfApis(commands.Cog):
             category_name = next(c["name"] for c in trivia_categories if str(c["id"]) == category)
             response_lines.append(f"📚 Category set to **{category_name}**.")
 
+        if difficulty:
+            self.user_trivia_settings[str(interaction.user.id)]["difficulty"] = difficulty
+            response_mess += f"- Your difficulty to {difficulty.title()}\n"
+
         if answer_period:
             self.user_trivia_settings[user_id]["answer_period"] = answer_period
             response_lines.append(f"⏱️ Answer delay set to **{answer_period} seconds**.")
@@ -377,13 +388,15 @@ class WorldOfApis(commands.Cog):
 
     @commands.command(name="wtrivia")
     async def trivia(self, ctx):
-        """Ask a trivia question and reveal the answer after a delay."""
+        """Ask a trivia question and reveal the answer after a delay or early correct guess."""
         user_id = str(ctx.author.id)
         user_settings = self.user_trivia_settings.get(user_id, {})
-        category = user_settings.get("category", "9")
+        category = user_settings.get("category", "9")  # Default to General Knowledge
         delay = user_settings.get("answer_period", 30)
 
-        url = f"https://opentdb.com/api.php?amount=1&type=multiple&category={category}&encode=url3986"
+        difficulty = user_settings.get("difficulty", "medium")
+        url = f"https://opentdb.com/api.php?amount=1&type=multiple&category={category}&difficulty={difficulty}&encode=url3986"
+
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
@@ -391,30 +404,36 @@ class WorldOfApis(commands.Cog):
 
         question_data = data["results"][0]
         question = html.unescape(urllib.parse.unquote(question_data["question"]))
-        correct = html.unescape(urllib.parse.unquote(question_data["correct_answer"])).lower()
-        incorrect = [
-            html.unescape(urllib.parse.unquote(ans)).lower()
+        correct_display = html.unescape(urllib.parse.unquote(question_data["correct_answer"]))
+        incorrect_display = [
+            html.unescape(urllib.parse.unquote(ans))
             for ans in question_data["incorrect_answers"]
         ]
-        options = incorrect + [correct]
-        random.shuffle(options)
 
+        # Combine and shuffle options
+        all_options = incorrect_display + [correct_display]
+        random.shuffle(all_options)
+
+        # Assign letters
         option_letters = ["A", "B", "C", "D"]
-        option_map = dict(zip(option_letters, options))
-        correct_letter = next(k for k, v in option_map.items() if v == correct)
+        option_map = dict(zip(option_letters, all_options))
 
-        # Display the question
-        formatted_options = "\n".join([f"{l}. {o}" for l, o in option_map.items()])
+        # Find the correct letter
+        correct_letter = next(letter for letter, ans in option_map.items() if ans == correct_display)
+
+        # Display options
+        formatted_options = "\n".join([f"{letter}. {text}" for letter, text in option_map.items()])
         await ctx.send(f"**Trivia Time!**\n{question}\n\n{formatted_options}")
 
+        # Normalize correct answers for comparison
+        normalized_correct = correct_display.lower().strip()
+        accepted_answers = {normalized_correct, correct_letter.lower()}
+
         def check(m):
-            return (
-                m.channel == ctx.channel
-                and m.content.lower().strip() in [correct, correct_letter.lower()]
-            )
+            return m.channel == ctx.channel and m.content.lower().strip() in accepted_answers
 
         try:
             winner = await self.bot.wait_for("message", check=check, timeout=delay)
-            await ctx.send(f"🎉 {winner.author.mention} got it right! The answer was: **{correct}**")
+            await ctx.send(f"🎉 {winner.author.mention} got it right! The answer was: **{correct_display}**")
         except asyncio.TimeoutError:
-            await ctx.send(f"⏰ Time’s up! The correct answer was: **{correct}**")
+            await ctx.send(f"⏰ Time’s up! The correct answer was: **{correct_display}**")
