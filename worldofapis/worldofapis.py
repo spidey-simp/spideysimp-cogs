@@ -6,6 +6,7 @@ import os
 from discord import app_commands
 import html
 import asyncio
+import random
 
 BASE_DIR = os.path.dirname(__file__)
 
