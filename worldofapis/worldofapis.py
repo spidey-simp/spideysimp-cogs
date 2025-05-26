@@ -4,6 +4,8 @@ import aiohttp
 import json
 import os
 from discord import app_commands
+import html
+import asyncio
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -21,6 +23,34 @@ cat_breed_list = ["abys", "aege", "abob", "acur", "asho", "awir", "amau", "amis"
                   "toyg", "tang", "tvan", "ycho"
                   ]
 
+trivia_categories = [
+    {"id": 9,"name": "General Knowledge"},
+    {"id": 10,"name": "Entertainment: Books"},
+    {"id": 11,"name": "Entertainment: Film"},
+    {"id": 12,"name": "Entertainment: Music"},
+    {"id": 13,"name": "Entertainment: Musicals & Theatres"},
+    {"id": 14,"name": "Entertainment: Television"},
+    {"id": 15,"name": "Entertainment: Video Games"},
+    {"id": 16,"name": "Entertainment: Board Games"},
+    {"id": 17,"name": "Science & Nature"},
+    {"id": 18,"name": "Science: Computers"},
+    {"id": 19,"name": "Science: Mathematics"},
+    {"id": 20,"name": "Mythology"},
+    {"id": 21,"name": "Sports"},
+    {"id": 22,"name": "Geography"},
+    {"id": 23,"name": "History"},
+    {"id": 24,"name": "Politics"},
+    {"id": 25,"name": "Art"},
+    {"id": 26,"name": "Celebrities"},
+    {"id": 27,"name": "Animals"},
+    {"id": 28,"name": "Vehicles"},
+    {"id": 29,"name": "Entertainment: Comics"},
+    {"id": 30,"name": "Science: Gadgets"},
+    {"id": 31,"name": "Entertainment: Japanese Anime & Manga"},
+    {"id": 32,"name": "Entertainment: Cartoon & Animations"}
+]
+
+
 class CatLinkButton(discord.ui.Button):
     def __init__(self, wiki_url: str):
         super().__init__(label="Wikipedia", style=discord.ButtonStyle.link, url=wiki_url)
@@ -36,6 +66,7 @@ class WorldOfApis(commands.Cog):
 
         self.api_keys = self.load_json()
         self.breed_dict = {}
+        self.user_trivia_settings = {}
 
     
     def load_json(self) -> dict:
@@ -306,3 +337,73 @@ class WorldOfApis(commands.Cog):
             color=discord.Color.teal()
         )
         await interaction.followup.send(embed=embed)
+
+    async def trivia_category_autocomplete(self, interaction:discord.Interaction, current:str):
+        category_choices = []
+
+        for data in trivia_categories:
+            if current.lower() in data["name"].lower():
+                category_choices.append(app_commands.Choice(name=data.get("name"), value=data.get("id")))
+            
+        return category_choices
+        
+    @woa.command(name="trivia_settings", description="Edit your trivia settings")
+    @app_commands.describe(category="The category you want for trivia", answer_period="Time (in seconds) before the answer is shown")
+    @app_commands.autocomplete(category=trivia_category_autocomplete)
+    async def trivia_settings(self, interaction: discord.Interaction, category: str = None, answer_period: int = None):
+        if not category and not answer_period:
+            return await interaction.response.send_message("Please choose one of the settings to alter.", ephemeral=True)
+
+        user_id = str(interaction.user.id)
+        self.user_trivia_settings.setdefault(user_id, {"category": "9", "answer_period": 30})
+
+        response_lines = []
+
+        valid_ids = {str(cat["id"]) for cat in trivia_categories}
+        if category:
+            if category not in valid_ids:
+                return await interaction.response.send_message("That is not one of the accepted categories.", ephemeral=True)
+            self.user_trivia_settings[user_id]["category"] = category
+            category_name = next(c["name"] for c in trivia_categories if str(c["id"]) == category)
+            response_lines.append(f"📚 Category set to **{category_name}**.")
+
+        if answer_period:
+            self.user_trivia_settings[user_id]["answer_period"] = answer_period
+            response_lines.append(f"⏱️ Answer delay set to **{answer_period} seconds**.")
+
+        await interaction.response.send_message("\n".join(response_lines), ephemeral=True)
+
+    @commands.command(name="trivia")
+    async def trivia(self, ctx):
+        """Ask a trivia question and reveal the answer after a delay."""
+        user_id = str(ctx.author.id)
+        user_settings = self.user_trivia_settings.get(user_id, {})
+        category = user_settings.get("category", "9")
+        delay = user_settings.get("answer_period", 30)
+
+        url = f"https://opentdb.com/api.php?amount=1&type=multiple&category={category}&encode=url3986"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    return await ctx.send("Failed to fetch trivia question.")
+
+                data = await resp.json()
+                if data["response_code"] != 0:
+                    return await ctx.send("No trivia questions available for that category.")
+
+                question_data = data["results"][0]
+                question = html.unescape(question_data["question"])
+                correct = html.unescape(question_data["correct_answer"])
+                incorrect = [html.unescape(ans) for ans in question_data["incorrect_answers"]]
+                options = incorrect + [correct]
+                random.shuffle(options)
+
+                option_str = "\n".join(f"{chr(65+i)}. {opt}" for i, opt in enumerate(options))
+
+                await ctx.send(f"**Trivia Time!**\n{question}\n\n{option_str}")
+                await asyncio.sleep(delay)
+
+                correct_letter = chr(65 + options.index(correct))
+                await ctx.send(f"⏰ Time's up! The correct answer was: **{correct_letter}. {correct}**")
+
