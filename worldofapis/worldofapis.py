@@ -388,52 +388,64 @@ class WorldOfApis(commands.Cog):
 
     @commands.command(name="wtrivia")
     async def trivia(self, ctx):
-        """Ask a trivia question and reveal the answer after a delay or early correct guess."""
+        """Start a multi-question trivia match."""
         user_id = str(ctx.author.id)
-        user_settings = self.user_trivia_settings.get(user_id, {})
-        category = user_settings.get("category", "9")  # Default to General Knowledge
-        delay = user_settings.get("answer_period", 30)
+        settings = self.user_trivia_settings.get(user_id, {})
 
-        difficulty = user_settings.get("difficulty", "medium")
-        url = f"https://opentdb.com/api.php?amount=1&type=multiple&category={category}&difficulty={difficulty}&encode=url3986"
+        category = settings.get("category", "9")
+        difficulty = settings.get("difficulty", "easy")
+        delay = settings.get("answer_period", 30)
+        total_questions = settings.get("number_of_questions", 5)
 
+        score = {}
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                data = await resp.json()
+        for round_num in range(1, total_questions + 1):
+            url = f"https://opentdb.com/api.php?amount=1&type=multiple&category={category}&difficulty={difficulty}&encode=url3986"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    data = await resp.json()
 
-        question_data = data["results"][0]
-        question = html.unescape(urllib.parse.unquote(question_data["question"]))
-        correct_display = html.unescape(urllib.parse.unquote(question_data["correct_answer"]))
-        incorrect_display = [
-            html.unescape(urllib.parse.unquote(ans))
-            for ans in question_data["incorrect_answers"]
-        ]
+            question_data = data["results"][0]
+            question = html.unescape(urllib.parse.unquote(question_data["question"]))
+            correct = html.unescape(urllib.parse.unquote(question_data["correct_answer"]))
+            incorrect = [
+                html.unescape(urllib.parse.unquote(ans))
+                for ans in question_data["incorrect_answers"]
+            ]
+            options = incorrect + [correct]
+            random.shuffle(options)
 
-        # Combine and shuffle options
-        all_options = incorrect_display + [correct_display]
-        random.shuffle(all_options)
+            option_letters = ["A", "B", "C", "D"]
+            option_map = dict(zip(option_letters, options))
+            correct_letter = next(k for k, v in option_map.items() if v == correct)
 
-        # Assign letters
-        option_letters = ["A", "B", "C", "D"]
-        option_map = dict(zip(option_letters, all_options))
+            formatted_options = "\n".join([f"{l}. {o}" for l, o in option_map.items()])
+            await ctx.send(f"**Question {round_num}/{total_questions}:**\n{question}\n\n{formatted_options}")
 
-        # Find the correct letter
-        correct_letter = next(letter for letter, ans in option_map.items() if ans == correct_display)
+            def check(m):
+                content = m.content.lower().strip()
+                return m.channel == ctx.channel and (
+                    content == correct.lower() or content == correct_letter.lower() or
+                    (m.author == ctx.author and content == "stop")
+                )
 
-        # Display options
-        formatted_options = "\n".join([f"{letter}. {text}" for letter, text in option_map.items()])
-        await ctx.send(f"**Trivia Time!**\n{question}\n\n{formatted_options}")
+            try:
+                winner = await self.bot.wait_for("message", check=check, timeout=delay)
+                if winner.content.lower().strip() == "stop" and winner.author == ctx.author:
+                    await ctx.send("🛑 Trivia stopped by the game owner.")
+                    return
+                score[winner.author] = score.get(winner.author, 0) + self.points_for_difficulty(difficulty)
+                await ctx.send(f"🎉 {winner.author.mention} got it right! The answer was: **{correct}**")
+            except asyncio.TimeoutError:
+                await ctx.send(f"⏰ Time’s up! The correct answer was: **{correct}**")
 
-        # Normalize correct answers for comparison
-        normalized_correct = correct_display.lower().strip()
-        accepted_answers = {normalized_correct, correct_letter.lower()}
+        if not score:
+            await ctx.send("No one scored this round. Better luck next time!")
+        else:
+            sorted_scores = sorted(score.items(), key=lambda x: x[1], reverse=True)
+            results = "\n".join([f"{user.mention}: {points} point(s)" for user, points in sorted_scores])
+            winner = sorted_scores[0][0]
+            await ctx.send(f"🏁 Trivia over! The winner is {winner.mention}!\n\n**Final Scores:**\n{results}")
 
-        def check(m):
-            return m.channel == ctx.channel and m.content.lower().strip() in accepted_answers
-
-        try:
-            winner = await self.bot.wait_for("message", check=check, timeout=delay)
-            await ctx.send(f"🎉 {winner.author.mention} got it right! The answer was: **{correct_display}**")
-        except asyncio.TimeoutError:
-            await ctx.send(f"⏰ Time’s up! The correct answer was: **{correct_display}**")
+    def points_for_difficulty(self, diff):
+        return {"easy": 1, "medium": 2, "hard": 3}.get(diff, 1)
