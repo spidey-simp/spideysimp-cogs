@@ -7,7 +7,7 @@ import re
 import os
 import json
 
-ACCEPTED_LANGUAGES = ["pirate", "old_english", "gungan"]
+ACCEPTED_LANGUAGES = ["pirate", "old_english"]
 INSULTABLE_LANGUAGES = ["pirate"]
 APIABLE_LANGUAGES = ["rapidapi_key"]
 
@@ -99,29 +99,6 @@ class Languify(commands.Cog):
                     return "Forsooth! The scroll of knowledge returned no legible markings."
 
 
-    async def gunganify(self, text: str) -> str:
-        key = self.api_keys.get("rapidapi_key")
-
-        if not key:
-            return "Meesa no can do unless yousa givin' me da API key!"
-
-        headers = {
-            "x-rapidapi-key": key,
-            "x-rapidapi-host": "gungan.p.rapidapi.com"
-        }
-
-        params = {"text": text}
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://gungan.p.rapidapi.com/gungan.json", headers=headers, params=params) as resp:
-                if resp.status != 200:
-                    return f"O no! Meesa havin’ da troubles gettin’ translation, okeeday? Heresa the problem: {resp.status}"
-                try:
-                    data = await resp.json()
-                    return data.get("contents", {}).get("translated", "Meesa sorry, no translation found.")
-                except Exception:
-                    return "Yousa broke it! Meesa gonna cry 😭"
-
 
     
     languify = app_commands.Group(name="languify", description="Fun language commands for all your fun language needs.")
@@ -150,7 +127,6 @@ class Languify(commands.Cog):
     @app_commands.choices(language=[
         app_commands.Choice(name="Pirate", value="pirate"),
         app_commands.Choice(name="Old English", value="old_english"),
-        app_commands.Choice(name="Gungan", value="gungan"),
         app_commands.Choice(name="Random", value="random")
     ])
     async def languageset(self, interaction:discord.Interaction, language: str):
@@ -191,8 +167,6 @@ class Languify(commands.Cog):
             translated = self.format_paragraph(translated)
         elif language == "old_english":
             translated = await self.old_englishify(message)
-        elif language == "gungan":
-            translated = await self.gunganify(message)
         
         await ctx.send(translated)
     
