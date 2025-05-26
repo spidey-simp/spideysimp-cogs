@@ -115,7 +115,7 @@ class Languify(commands.Cog):
         async with aiohttp.ClientSession() as session:
             async with session.get("https://gungan.p.rapidapi.com/gungan.json", headers=headers, params=params) as resp:
                 if resp.status != 200:
-                    return "O no! Meesa havin’ da troubles gettin’ translation, okeeday?"
+                    return f"O no! Meesa havin’ da troubles gettin’ translation, okeeday? Heresa the problem: {resp.status}"
                 try:
                     data = await resp.json()
                     return data.get("contents", {}).get("translated", "Meesa sorry, no translation found.")
