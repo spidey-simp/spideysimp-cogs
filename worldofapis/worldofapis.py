@@ -185,7 +185,7 @@ class WorldOfApis(commands.Cog):
         base_url = "https://api.thedogapi.com/v1/images/search"
         breed_id_param = ""
         if breed:
-            breed_id = self.dog_breed_id_map.get(breed)
+            breed_id = self.dog_breeds.get(breed)
             if not breed_id:
                 return await interaction.followup.send("Breed not recognized. Please try again.", ephemeral=True)
             breed_id_param = f"&breed_ids={breed_id}"
