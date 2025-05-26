@@ -373,7 +373,7 @@ class WorldOfApis(commands.Cog):
 
         await interaction.response.send_message("\n".join(response_lines), ephemeral=True)
 
-    @commands.command(name="trivia")
+    @commands.command(name="wtrivia")
     async def trivia(self, ctx):
         """Ask a trivia question and reveal the answer after a delay."""
         user_id = str(ctx.author.id)
