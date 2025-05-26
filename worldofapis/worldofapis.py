@@ -506,7 +506,7 @@ class WorldOfApis(commands.Cog):
                 if winner.content.lower().strip() == "stop" and winner.author == ctx.author:
                     await ctx.send("🛑 Trivia stopped by the game owner.")
                     return
-                score[winner.author] = score.get(winner.author, 0) + self.points_for_difficulty(difficulty)
+                score[winner.author] = score.get(winner.author, 0) + 1
                 await ctx.send(f"🎉 {winner.author.mention} got it right! The answer was: **{correct}**")
             except asyncio.TimeoutError:
                 await ctx.send(f"⏰ Time’s up! The correct answer was: **{correct}**")
