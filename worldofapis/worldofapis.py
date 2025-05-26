@@ -55,10 +55,10 @@ class WorldOfApis(commands.Cog):
                 if resp.status == 200:
                     data = await resp.json()
                     # Create dict: name -> id
-                    self.breed_dict = {breed["name"]: breed["id"] for breed in data}
+                    self.breed_dict = {breed["name"]: str(breed["id"]) for breed in data}
                     # For autocomplete
                     self.autocomplete_list = [
-                        app_commands.Choice(name=breed["name"], value=breed["id"]) for breed in data
+                        app_commands.Choice(name=breed["name"], value=str(breed["id"])) for breed in data
                     ]
                 else:
                     self.breed_dict = {}
