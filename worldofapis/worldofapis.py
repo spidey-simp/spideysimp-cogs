@@ -245,3 +245,25 @@ class WorldOfApis(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
         await self.load_dog_breeds()
         await interaction.followup.send("Dog breeds have been initialized and are ready to go! 🐶", ephemeral=True)
+
+    @woa.command(name="joke", description="Get a random joke!")
+    async def joke(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True)
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://v2.jokeapi.dev/joke/Any") as resp:
+                if resp.status != 200:
+                    return await interaction.followup.send("Couldn't fetch a joke right now. Try again later!")
+
+                joke_data = await resp.json()
+
+        embed = discord.Embed(title="Here's a joke for you 🤡", color=discord.Color.green())
+
+        if joke_data["type"] == "single":
+            embed.description = joke_data["joke"]
+        else:
+            setup = joke_data["setup"]
+            delivery = joke_data["delivery"]
+            embed.description = f"{setup}\n\n||{delivery}||"  # Spoiler tag for punchline
+
+        await interaction.followup.send(embed=embed)
