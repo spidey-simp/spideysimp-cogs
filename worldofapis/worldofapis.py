@@ -350,21 +350,38 @@ class WorldOfApis(commands.Cog):
         return category_choices
         
     @woa.command(name="trivia_settings", description="Edit your trivia settings")
-    @app_commands.describe(category="The category you want for trivia", answer_period="Time (in seconds) before the answer is shown", difficulty="Difficulty for the questions.")
+    @app_commands.describe(
+        category="The category you want for trivia",
+        answer_period="Time (in seconds) before the answer is shown",
+        difficulty="Difficulty for the questions.",
+        answer_display="How answers should be displayed"
+    )
     @app_commands.autocomplete(category=trivia_category_autocomplete)
     @app_commands.choices(
         difficulty=[
             app_commands.Choice(name="Easy", value="easy"),
             app_commands.Choice(name="Medium", value="medium"),
             app_commands.Choice(name="Hard", value="hard")
+        ],
+        answer_display=[
+            app_commands.Choice(name="Multiple Choice", value="choices"),
+            app_commands.Choice(name="Letter Hint", value="hint"),
+            app_commands.Choice(name="No Answer Shown", value="none")
         ]
     )
-    async def trivia_settings(self, interaction: discord.Interaction, category: str = None, answer_period: int = None, difficulty: str = None):
-        if not category and not answer_period and not difficulty:
+    async def trivia_settings(
+        self,
+        interaction: discord.Interaction,
+        category: str = None,
+        answer_period: int = None,
+        difficulty: str = None,
+        answer_display: str = None,
+    ):
+        if not category and not answer_period and not difficulty and not answer_display:
             return await interaction.response.send_message("Please choose one of the settings to alter.", ephemeral=True)
 
         user_id = str(interaction.user.id)
-        self.user_trivia_settings.setdefault(user_id, {"category": "9", "answer_period": 30})
+        self.user_trivia_settings.setdefault(user_id, {"category": "9", "answer_period": 30, "difficulty": "easy", "answer_display": "choices"})
 
         response_lines = []
 
@@ -373,18 +390,23 @@ class WorldOfApis(commands.Cog):
             if category not in valid_ids:
                 return await interaction.response.send_message("That is not one of the accepted categories.", ephemeral=True)
             self.user_trivia_settings[user_id]["category"] = category
-            category_name = next(c["name"] for c in trivia_categories if str(c["id"]) == category)
-            response_lines.append(f"📚 Category set to **{category_name}**.")
+            name = next(c["name"] for c in trivia_categories if str(c["id"]) == category)
+            response_lines.append(f"📚 Category set to **{name}**.")
 
         if difficulty:
-            self.user_trivia_settings[str(interaction.user.id)]["difficulty"] = difficulty
-            response_mess += f"- Your difficulty to {difficulty.title()}\n"
+            self.user_trivia_settings[user_id]["difficulty"] = difficulty
+            response_lines.append(f"🎯 Difficulty set to **{difficulty.title()}**.")
+
+        if answer_display:
+            self.user_trivia_settings[user_id]["answer_display"] = answer_display
+            response_lines.append(f"👁️ Answer display mode set to **{answer_display}**.")
 
         if answer_period:
             self.user_trivia_settings[user_id]["answer_period"] = answer_period
             response_lines.append(f"⏱️ Answer delay set to **{answer_period} seconds**.")
 
         await interaction.response.send_message("\n".join(response_lines), ephemeral=True)
+
 
     @commands.command(name="wtrivia")
     async def trivia(self, ctx):
@@ -395,17 +417,32 @@ class WorldOfApis(commands.Cog):
         category = settings.get("category", "9")
         difficulty = settings.get("difficulty", "easy")
         delay = settings.get("answer_period", 30)
+        display = settings.get("answer_display", "choices")
         total_questions = settings.get("number_of_questions", 5)
 
         score = {}
 
-        for round_num in range(1, total_questions + 1):
-            url = f"https://opentdb.com/api.php?amount=1&type=multiple&category={category}&difficulty={difficulty}&encode=url3986"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url) as resp:
-                    data = await resp.json()
+        def generate_hint(answer: str):
+            words = answer.split()
+            if not words:
+                return "?"
+            hint = " ".join(word[0] if word else "_" for word in words)
+            return f"{len(words)} word{'s' if len(words) > 1 else ''}:\n{hint}"
 
-            question_data = data["results"][0]
+        for round_num in range(1, total_questions + 1):
+            while True:
+                url = f"https://opentdb.com/api.php?amount=1&category={category}&difficulty={difficulty}&encode=url3986"
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as resp:
+                        data = await resp.json()
+
+                question_data = data["results"][0]
+
+                # Skip booleans if hint or none mode
+                if question_data["type"] == "boolean" and display != "choices":
+                    continue
+                break
+
             question = html.unescape(urllib.parse.unquote(question_data["question"]))
             correct = html.unescape(urllib.parse.unquote(question_data["correct_answer"]))
             incorrect = [
@@ -419,8 +456,16 @@ class WorldOfApis(commands.Cog):
             option_map = dict(zip(option_letters, options))
             correct_letter = next(k for k, v in option_map.items() if v == correct)
 
-            formatted_options = "\n".join([f"{l}. {o}" for l, o in option_map.items()])
-            await ctx.send(f"**Question {round_num}/{total_questions}:**\n{question}\n\n{formatted_options}")
+            embed = discord.Embed(title=f"Question {round_num}/{total_questions}", description=question, color=discord.Color.teal())
+
+            if display == "choices":
+                formatted = "\n".join([f"{l}. {o}" for l, o in option_map.items()])
+                embed.add_field(name="Options", value=formatted)
+            elif display == "hint":
+                embed.add_field(name="Hint", value=generate_hint(correct))
+            # else: "none" — no answers or hints
+
+            await ctx.send(embed=embed)
 
             def check(m):
                 content = m.content.lower().strip()
@@ -446,6 +491,3 @@ class WorldOfApis(commands.Cog):
             results = "\n".join([f"{user.mention}: {points} point(s)" for user, points in sorted_scores])
             winner = sorted_scores[0][0]
             await ctx.send(f"🏁 Trivia over! The winner is {winner.mention}!\n\n**Final Scores:**\n{results}")
-
-    def points_for_difficulty(self, diff):
-        return {"easy": 1, "medium": 2, "hard": 3}.get(diff, 1)
