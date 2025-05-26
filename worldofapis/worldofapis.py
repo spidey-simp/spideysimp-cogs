@@ -35,6 +35,7 @@ class WorldOfApis(commands.Cog):
         self.bot = bot
 
         self.api_keys = self.load_json()
+        self.dog_breeds = self.bot.loop.create_task(self.load_dog_breeds())
 
     
     def load_json(self) -> dict:
@@ -47,6 +48,21 @@ class WorldOfApis(commands.Cog):
     def save_json(self) -> None:
         with open(API_KEYS, "w") as f:
             json.dump(self.api_keys, f, indent=4)
+    
+    async def load_dog_breeds(self):
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.thedogapi.com/v1/breeds") as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    # Create dict: name -> id
+                    self.breed_dict = {breed["name"]: breed["id"] for breed in data}
+                    # For autocomplete
+                    self.autocomplete_list = [
+                        app_commands.Choice(name=breed["name"], value=breed["id"]) for breed in data
+                    ]
+                else:
+                    self.breed_dict = {}
+                    self.autocomplete_list = []
     
 
     woa = app_commands.Group(name="woa", description="World of Apis commands")
@@ -149,3 +165,68 @@ class WorldOfApis(commands.Cog):
                     await interaction.followup.send(embed=embed, view=view)
                 else:
                     await interaction.followup.send(embed=embed)
+    
+    
+    async def dog_breed_autocomplete(self, interaction: discord.Interaction, current: str):
+        return [
+            choice for choice in self.autocomplete_list if current.lower() in choice.name.lower()
+        ][:25]
+
+    @woa.command(name="dog", description="See a dog with its facts.")
+    @app_commands.describe(breed="The breed of dog you want to see.")
+    @app_commands.autocomplete(breed=dog_breed_autocomplete)
+    async def dog(self, interaction: discord.Interaction, breed: str = None):
+        await interaction.response.defer(thinking=True, ephemeral=False)
+
+        api = self.api_keys.get("cat_api")
+        if not api:
+            return await interaction.followup.send("Please ask the admin to upload an API key.", ephemeral=True)
+
+        base_url = "https://api.thedogapi.com/v1/images/search"
+        breed_id_param = ""
+        if breed:
+            breed_id = self.dog_breed_id_map.get(breed)
+            if not breed_id:
+                return await interaction.followup.send("Breed not recognized. Please try again.", ephemeral=True)
+            breed_id_param = f"&breed_ids={breed_id}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{base_url}?api_key={api}{breed_id_param}") as resp:
+                if resp.status != 200:
+                    return await interaction.followup.send("Failed to fetch a dog image.")
+                data = await resp.json()
+                dog_dict = data[0]
+                image_id = dog_dict.get("id")
+
+            if not breed:
+                # No breed = no metadata. Just send image.
+                embed = discord.Embed(title="Here's a random dog!", color=discord.Color.orange())
+                embed.set_image(url=dog_dict.get("url"))
+                return await interaction.followup.send(embed=embed)
+
+            # Otherwise: Get full breed info via image ID
+            async with session.get(f"https://api.thedogapi.com/v1/images/{image_id}") as resp:
+                if resp.status != 200:
+                    return await interaction.followup.send("Failed to fetch dog metadata.")
+                dog_meta = await resp.json()
+
+        embed = discord.Embed(title="Dog Profile 🐾", color=discord.Color.orange())
+        embed.set_image(url=dog_meta.get("url"))
+
+        breeds_list = dog_meta.get("breeds")
+        if breeds_list:
+            breed_info = breeds_list[0]
+            embed.add_field(name="Breed", value=breed_info.get("name", "Unknown"))
+
+            if bred := breed_info.get("bred_for"):
+                embed.add_field(name="Bred For", value=bred, inline=False)
+            if group := breed_info.get("breed_group"):
+                embed.add_field(name="Group", value=group, inline=True)
+            if life := breed_info.get("life_span"):
+                embed.add_field(name="Life Span", value=life, inline=True)
+            if temper := breed_info.get("temperament"):
+                embed.add_field(name="Temperament", value=temper, inline=False)
+            if origin := breed_info.get("origin"):
+                embed.set_footer(text=f"Origin: {origin}")
+
+        await interaction.followup.send(embed=embed)
