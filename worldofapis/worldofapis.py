@@ -79,7 +79,7 @@ class WorldOfApis(commands.Cog):
     @app_commands.describe(breed="The breed of cat you want to see.")
     @app_commands.autocomplete(breed=cat_breed_autocomplete)
     async def cat(self, interaction:discord.Interaction, breed: str=None):
-        await interaction.response.defer(thinking=True, ephemeral=True)
+        await interaction.response.defer(thinking=True)
 
         api = self.api_keys.get("cat_api")
         if not api:
@@ -112,5 +112,8 @@ class WorldOfApis(commands.Cog):
                 embed.set_image(url=cat_dict.get("url"))
                 embed.set_footer(text="Courtesy of TheCatAPI")
 
-                view = CatView(wiki_url) if wiki_url else None
-                await interaction.followup.send(embed=embed, view=view, ephemeral=True)
+                if wiki_url:
+                    view = CatView(wiki_url)
+                    await interaction.followup.send(embed=embed, view=view)
+                else:
+                    await interaction.followup.send(embed=embed)
