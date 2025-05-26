@@ -91,26 +91,58 @@ class WorldOfApis(commands.Cog):
                     return await interaction.followup.send("Unable to find a cat :(")
                 cat_json = await resp.json()
 
-                cat_dict = cat_json[0]  # Since theCatAPI returns a list
-
+                cat_dict = cat_json[0]
                 embed = discord.Embed(title="Cat Profile", color=discord.Color.blurple())
-                breeds_list = cat_dict.get("breeds")
-
-                wiki_url = None
-
-                if breeds_list:
-                    for breed_info in breeds_list:
-                        name = breed_info.get("name")
-                        desc = breed_info.get("description")
-                        wiki_url = breed_info.get("wikipedia_url")
-
-                        if name:
-                            embed.add_field(name="Breed", value=name)
-                        if desc:
-                            embed.add_field(name="Description", value=desc)
-
                 embed.set_image(url=cat_dict.get("url"))
                 embed.set_footer(text="Courtesy of TheCatAPI")
+
+                breeds_list = cat_dict.get("breeds")
+                if breeds_list:
+                    breed_info = breeds_list[0]
+                    name = breed_info.get("name")
+                    desc = breed_info.get("description")
+                    wiki_url = breed_info.get("wikipedia_url")
+
+                    if name:
+                        embed.title = f"{name} – Cat Profile"
+                    if desc:
+                        embed.add_field(name="📝 Description", value=desc, inline=False)
+                    
+                    temperament = breed_info.get("temperament")
+                    if temperament:
+                        embed.add_field(name="😺 Temperament", value=temperament, inline=False)
+
+                    traits = {
+                        "Affection": breed_info.get("affection_level"),
+                        "Energy": breed_info.get("energy_level"),
+                        "Intelligence": breed_info.get("intelligence"),
+                        "Dog Friendly": breed_info.get("dog_friendly"),
+                        "Child Friendly": breed_info.get("child_friendly"),
+                        "Shedding": breed_info.get("shedding_level"),
+                        "Grooming Needs": breed_info.get("grooming"),
+                        "Health Issues": breed_info.get("health_issues"),
+                        "Vocalization": breed_info.get("vocalisation"),
+                    }
+                    trait_lines = [
+                        f"• **{k}**: {'⭐' * v}" for k, v in traits.items() if isinstance(v, int)
+                    ]
+                    if trait_lines:
+                        embed.add_field(name="📊 Traits", value="\n".join(trait_lines), inline=False)
+
+                    origin = breed_info.get("origin")
+                    life_span = breed_info.get("life_span")
+                    hypoallergenic = "Yes" if breed_info.get("hypoallergenic") else "No"
+                    weight = breed_info.get("weight", {}).get("imperial")
+
+                    details = []
+                    if origin: details.append(f"• **Origin**: {origin}")
+                    if life_span: details.append(f"• **Life Span**: {life_span} years")
+                    if weight: details.append(f"• **Weight**: {weight} lbs")
+                    details.append(f"• **Hypoallergenic**: {hypoallergenic}")
+
+                    if details:
+                        embed.add_field(name="📦 Additional Info", value="\n".join(details), inline=False)
+
 
                 if wiki_url:
                     view = CatView(wiki_url)
