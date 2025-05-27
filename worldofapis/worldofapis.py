@@ -52,6 +52,10 @@ trivia_categories = [
     {"id": 32,"name": "Entertainment: Cartoon & Animations"}
 ]
 
+game_categories = [
+    "mmorpg", "shooter", "strategy", "moba", "racing", "sports", "social", "sandbox", "open-world", "survival", "pvp", "pve", "pixel", "voxel", "zombie", "turn-based", "first-person", "third-Person", "top-down", "tank", "space", "sailing", "side-scroller", "superhero", "permadeath", "card", "battle-royale", "mmo", "mmofps", "mmotps", "3d", "2d", "anime", "fantasy", "sci-fi", "fighting", "action-rpg", "action", "military", "martial-arts", "flight", "low-spec", "tower-defense", "horror", "mmorts"
+]
+
 
 class CatLinkButton(discord.ui.Button):
     def __init__(self, wiki_url: str):
@@ -548,5 +552,54 @@ class WorldOfApis(commands.Cog):
         embed.add_field(name="🎮 Mode", value=mode, inline=True)
         embed.add_field(name="⏱️ Answer Delay", value=f"{answer_period} seconds", inline=True)
         embed.add_field(name="❔ Number of Questions", value=str(question_number), inline=True)
+
+        await interaction.response.send_message(embed=embed)
+
+    async def game_category_autocomplete(self, interaction:discord.Interaction, current:str):
+        return [
+            app_commands.Choice(name=category, value=category)
+            for category in game_categories
+            if current.lower() in category.lower()
+        ]
+
+
+    @woa.command(name="freetogame", description="Get a free to play game.")
+    @app_commands.describe(platform="The platform to see games for.", category="The type of category for the games to display.")
+    @app_commands.choices(platform=[
+        app_commands.Choice(name="PC", value="pc"),
+        app_commands.Choice(name="Browser", value="browser")
+    ])
+    @app_commands.autocomplete(category=game_category_autocomplete)
+    async def freetogame(self, interaction:discord.Interaction, platform: str = "pc", category:str=None):
+        """Get a random free-to-play game for the specified platform (default: PC)."""
+        valid_platforms = ["pc", "browser"]
+        if platform.lower() not in valid_platforms:
+            return await interaction.response.send_message(f"❌ Invalid platform. Choose from: {', '.join(valid_platforms)}")
+
+        url = f"https://www.freetogame.com/api/games?platform={platform.lower()}{'&category=' + category if category else ''}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    return await interaction.response.send_message("Failed to fetch game data from FreeToGame API.")
+                data = await resp.json()
+
+        if not data:
+            return await interaction.response.send_message("No games found for the specified platform.")
+
+        game = random.choice(data)
+
+        embed = discord.Embed(
+            title=game.get("title"),
+            url=game.get("game_url"),
+            description=game.get("short_description"),
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=game.get("thumbnail"))
+        embed.add_field(name="Genre", value=game.get("genre"), inline=True)
+        embed.add_field(name="Platform", value=game.get("platform"), inline=True)
+        embed.add_field(name="Publisher", value=game.get("publisher"), inline=True)
+        embed.add_field(name="Developer", value=game.get("developer"), inline=True)
+        embed.set_footer(text=f"Release Date: {game.get('release_date')}")
 
         await interaction.response.send_message(embed=embed)
