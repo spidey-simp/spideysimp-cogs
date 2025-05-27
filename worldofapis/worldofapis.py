@@ -641,7 +641,7 @@ class WorldOfApis(commands.Cog):
 
         sprite = sprite or random.choice(dicebear_sprites)
         encoded_seed = urllib.parse.quote(seed)
-        url = f"https://api.dicebear.com/6.x/{sprite_type}/svg?seed={encoded_seed}"
+        url = f"https://api.dicebear.com/6.x/{sprite}/svg?seed={encoded_seed}"
 
         embed = discord.Embed(title="🎲 DiceBear Avatar", description=f"Style: **{sprite_type}**\nSeed: `{seed}`", color=discord.Color.purple())
         embed.set_image(url=url)
