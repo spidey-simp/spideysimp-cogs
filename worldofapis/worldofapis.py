@@ -679,11 +679,18 @@ class WorldOfApis(commands.Cog):
 
     @woa.command(name="placebear", description="Summon a majestic placeholder bear image.")
     @app_commands.describe(width="Width of the bear image (max ~1000)", height="Height of the bear image (max ~1000)")
-    async def placebear(self, interaction: discord.Interaction, width: int = 400, height: int = 400):
-        if width <= 0 or height <= 0 or width > 1000 or height > 1000:
-            return await interaction.response.send_message("Bear size must be between 1 and 1000 pixels.", ephemeral=True)
-
+    @app_commands.choices(
+        size=[
+            app_commands.Choice(name="Small (300x300)", value="300x300"),
+            app_commands.Choice(name="Medium (500x500)", value="500x500"),
+            app_commands.Choice(name="Wide (800x400)", value="800x400"),
+            app_commands.Choice(name="Tall (400x800)", value="400x800")
+        ]
+    )
+    async def placebear(self, interaction: discord.Interaction, size:str):
+        width, height = map(int, size.split("x"))
         url = f"https://placebear.com/{width}/{height}"
+
         embed = discord.Embed(title="🐻 Behold, your bear!", color=discord.Color.dark_gold())
         embed.set_image(url=url)
         await interaction.response.send_message(embed=embed)
