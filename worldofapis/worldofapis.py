@@ -648,5 +648,6 @@ class WorldOfApis(commands.Cog):
             description=f"Style: **{sprite}**\nSeed: `{seed}`",
             color=discord.Color.purple()
         )
+        embed.add_field(name="Image URL", value=url, inline=True)
         embed.set_image(url=url)
         await interaction.followup.send(embed=embed)
