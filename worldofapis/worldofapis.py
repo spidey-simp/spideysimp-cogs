@@ -485,10 +485,14 @@ class WorldOfApis(commands.Cog):
                 color=discord.Color.teal()
             )
 
-            if display == "choices":
+            # If question contains "following", force display of choices
+            force_choices = "following" in question.lower()
+            actual_display = "choices" if force_choices else display
+
+            if actual_display == "choices":
                 formatted = "\n".join([f"{l}. {o}" for l, o in option_map.items()])
                 embed.add_field(name="Options", value=formatted)
-            elif display == "hint":
+            elif actual_display == "hint":
                 embed.add_field(name="Hint", value=generate_hint(correct))
             # else: "none"
 
