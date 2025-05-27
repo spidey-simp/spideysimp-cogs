@@ -56,6 +56,13 @@ game_categories = [
     "mmorpg", "shooter", "strategy", "moba", "racing", "sports", "social", "sandbox", "open-world", "survival", "pvp", "pve", "pixel", "voxel", "zombie", "turn-based", "first-person", "third-Person", "top-down", "tank", "space", "sailing", "side-scroller", "superhero", "permadeath", "card", "battle-royale", "mmo", "mmofps", "mmotps", "3d", "2d", "anime", "fantasy", "sci-fi", "fighting", "action-rpg", "action", "military", "martial-arts", "flight", "low-spec", "tower-defense", "horror", "mmorts"
 ]
 
+dicebear_sprites = [
+    "adventurer", "adventurer-neutral", "avataaars", "big-ears", "big-ears-neutral",
+    "bottts", "croodles", "croodles-neutral", "fun-emoji", "icons", "identicon",
+    "initials", "lorelei", "lorelei-neutral", "micah", "notionists", "notionists-neutral",
+    "open-peeps", "personas", "pixel-art", "pixel-art-neutral", "shapes", "thumbs"
+]
+
 
 class CatLinkButton(discord.ui.Button):
     def __init__(self, wiki_url: str):
@@ -560,7 +567,7 @@ class WorldOfApis(commands.Cog):
             app_commands.Choice(name=category, value=category)
             for category in game_categories
             if current.lower() in category.lower()
-        ]
+        ][:25]
 
 
     @woa.command(name="freetogame", description="Get a free to play game.")
@@ -603,3 +610,39 @@ class WorldOfApis(commands.Cog):
         embed.set_footer(text=f"Release Date: {game.get('release_date')}")
 
         await interaction.response.send_message(embed=embed)
+
+    async def sprite_autocomplete(self, interaction: discord.Interaction, current: str):
+        return [
+            app_commands.Choice(name=s, value=s)
+            for s in dicebear_sprites
+            if current.lower() in s.lower()
+        ][:25]
+
+    @woa.command(name="dicebear", description="Generate a DiceBear avatar based on a member, image, or link.")
+    @app_commands.describe(
+        sprite="The style of DiceBear avatar you'd like to generate.",
+        member="Use this member's ID as the seed.",
+        image="Use the name of this uploaded image as the seed.",
+        link="Use a direct image link (.jpg/.png/.gif) as the seed."
+    )
+    @app_commands.autocomplete(sprite=sprite_autocomplete)
+    async def dicebear(self, interaction: discord.Interaction, sprite: app_commands.Choice[str], member: discord.Member = None, image: discord.Attachment = None, link: str = None):
+        await interaction.response.defer()
+
+        seed = None
+        if member:
+            seed = str(member.id)
+        elif image:
+            seed = image.filename
+        elif link and any(link.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".gif"]):
+            seed = link
+        else:
+            seed = str(random.randint(1, 999999))
+
+        sprite = sprite or random.choice(dicebear_sprites)
+        encoded_seed = urllib.parse.quote(seed)
+        url = f"https://api.dicebear.com/6.x/{sprite_type}/svg?seed={encoded_seed}"
+
+        embed = discord.Embed(title="🎲 DiceBear Avatar", description=f"Style: **{sprite_type}**\nSeed: `{seed}`", color=discord.Color.purple())
+        embed.set_image(url=url)
+        await interaction.followup.send(embed=embed)
