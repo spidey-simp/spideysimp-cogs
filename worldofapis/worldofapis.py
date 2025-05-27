@@ -626,7 +626,7 @@ class WorldOfApis(commands.Cog):
         link="Use a direct image link (.jpg/.png/.gif) as the seed."
     )
     @app_commands.autocomplete(sprite=sprite_autocomplete)
-    async def dicebear(self, interaction: discord.Interaction, sprite: app_commands.Choice[str], member: discord.Member = None, image: discord.Attachment = None, link: str = None):
+    async def dicebear(self, interaction: discord.Interaction, sprite: str = None, member: discord.Member = None, image: discord.Attachment = None, link: str = None):
         await interaction.response.defer()
 
         seed = None
@@ -643,6 +643,10 @@ class WorldOfApis(commands.Cog):
         encoded_seed = urllib.parse.quote(seed)
         url = f"https://api.dicebear.com/6.x/{sprite}/svg?seed={encoded_seed}"
 
-        embed = discord.Embed(title="🎲 DiceBear Avatar", description=f"Style: **{sprite_type}**\nSeed: `{seed}`", color=discord.Color.purple())
+        embed = discord.Embed(
+            title="🎲 DiceBear Avatar",
+            description=f"Style: **{sprite}**\nSeed: `{seed}`",
+            color=discord.Color.purple()
+        )
         embed.set_image(url=url)
         await interaction.followup.send(embed=embed)
