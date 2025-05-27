@@ -678,7 +678,7 @@ class WorldOfApis(commands.Cog):
 
 
     @woa.command(name="placebear", description="Summon a majestic placeholder bear image.")
-    @app_commands.describe(width="Width of the bear image (max ~1000)", height="Height of the bear image (max ~1000)")
+    @app_commands.describe(size="The size of the beat from a few preset sizes.")
     @app_commands.choices(
         size=[
             app_commands.Choice(name="Small (300x300)", value="300x300"),
@@ -687,7 +687,7 @@ class WorldOfApis(commands.Cog):
             app_commands.Choice(name="Tall (400x800)", value="400x800")
         ]
     )
-    async def placebear(self, interaction: discord.Interaction, size:str):
+    async def placebear(self, interaction: discord.Interaction, size:str="400x400"):
         width, height = map(int, size.split("x"))
         url = f"https://placebear.com/{width}/{height}"
 
