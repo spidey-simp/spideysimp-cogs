@@ -651,3 +651,28 @@ class WorldOfApis(commands.Cog):
         embed.add_field(name="Image URL", value=url, inline=True)
         embed.set_image(url=url)
         await interaction.followup.send(embed=embed)
+    
+    @woa.command(name="insult", description="Generate a random insult. Use wisely.")
+    @app_commands.describe(user="The person you wish to insult.")
+    async def insult(self, interaction: discord.Interaction, user: discord.Member = None):
+        await interaction.response.defer()
+        
+        url = "https://evilinsult.com/generate_insult.php?lang=en&type=json"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    return await interaction.followup.send("Couldn't retrieve an insult right now. Try again later.", ephemeral=True)
+                data = await resp.json()
+        
+        insult_text = data.get("insult", "You're so bland even the API was speechless.")
+        
+        target = user.mention if user else interaction.user.mention
+        embed = discord.Embed(
+            title="💢 Insult Generator",
+            description=f"{target}, {insult_text}",
+            color=discord.Color.red()
+        )
+        
+        await interaction.followup.send(embed=embed)
+
