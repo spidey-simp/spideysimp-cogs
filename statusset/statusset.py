@@ -56,16 +56,16 @@ class StatusSet(commands.Cog):
                 discord.Game(name="Spider-Man")
             ]
 
-        while True:
-            rand_num = random.random()
-            if rand_num < .5:
-                movie_or_show = random.random()
-                if movie_or_show < .1:
-                    status = discord.Activity(type=discord.ActivityType.watching, name=random.choice(spiderman_shows))
-                else:
-                    status = discord.Activity(type=discord.ActivityType.watching, name=random.choice(spiderman_movies))
+
+        rand_num = random.random()
+        if rand_num < .5:
+            movie_or_show = random.random()
+            if movie_or_show < .1:
+                status = discord.Activity(type=discord.ActivityType.watching, name=random.choice(spiderman_shows))
             else:
-                status = random.choice(statuses)
+                status = discord.Activity(type=discord.ActivityType.watching, name=random.choice(spiderman_movies))
+        else:
+            status = random.choice(statuses)
             
-            await self.bot.change_presence(activity=status)
+        await self.bot.change_presence(activity=status)
             
