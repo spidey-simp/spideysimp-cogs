@@ -630,7 +630,7 @@ class SmashOrPass(commands.Cog):
     @sop.command(name="supersmashes", description="Slide through who you've Super-Smashed")
     @app_commands.describe(user="Person to see the supersmashes of.")
     async def supersmashes(self, interaction: discord.Interaction, user:discord.Member=None):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         votes = load_votes()
         user = user or interaction.user
         user_id = user.id
