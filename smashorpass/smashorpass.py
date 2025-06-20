@@ -338,7 +338,7 @@ class LeaderboardView(discord.ui.View):
         embed = discord.Embed(title=f"🏆 Smash or Pass {self.type}board 🏆")
         embed.add_field(name="Name", value=entry[0])
         embed.add_field(name="Rank", value=f"#{rank}", inline=True)
-        embed.add_field(name="Votes", value=f"💖{entry[1].get('super-smashes', 0)} | 🔥 {entry[1]['smashes']} | ❌ {entry[1]['passes']}", inline=True)
+        embed.add_field(name="Votes", value=f"💖{entry[1].get('super-smashes', 0)} | 🔥 {entry[1]['smashes']} | 👋 {entry[1]['hangouts']} | ❌ {entry[1]['passes']}", inline=True)
         if uploader != "Default Category" and self.category != "All":
             embed.add_field(name="Uploader", value=uploader, inline=True)
         elif self.category == "All":
@@ -496,6 +496,18 @@ class SmashPassView(discord.ui.View):
             f"{interaction.user.mention} chose **Smash** for {self.character_name}! 🔥",
             ephemeral=False,
         )
+    
+    @discord.ui.button(label="Hang Out", style=discord.ButtonStyle.blurple, emoji="👋")
+    async def hangout_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        vote_bool = await self.cog.update_votes(self.category, self.character_name, "hangouts", interaction.user.id, self.image)
+        if vote_bool:
+            await interaction.response.send_message(
+                f"{interaction.user.mention} wants to **hang out** with {self.character_name}! 👋",
+                ephemeral=False,
+            )
+        else:
+            await interaction.response.send_message("You've already interacted with this character!", ephemeral=True)
+
 
     @discord.ui.button(label="Pass", style=discord.ButtonStyle.red, emoji="❌")
     async def pass_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -553,6 +565,7 @@ class SmashOrPass(commands.Cog):
                 "smashes": 0,
                 "passes": 0,
                 "super-smashes": 0,
+                "hangouts": 0,
                 "voters": [],
                 "super-smashers": [],
                 "image": ""
@@ -563,6 +576,7 @@ class SmashOrPass(commands.Cog):
         char_data.setdefault("smashes", 0)
         char_data.setdefault("passes", 0)
         char_data.setdefault("super-smashes", 0)
+        char_data.setdefault("hangouts", 0)
         char_data.setdefault("voters", [])
         char_data.setdefault("super-smashers", [])
         char_data.setdefault("image", "")
@@ -640,8 +654,7 @@ class SmashOrPass(commands.Cog):
                 title=f"Loading {user.display_name} Super-Smashes...",
                 description="Just a moment!"
             ),
-            view=view,
-            ephemeral=True
+            view=view
         )
         # Immediately update to the real first slide
         await view.update_message()
@@ -714,7 +727,17 @@ class SmashOrPass(commands.Cog):
             await interaction.followup.send("❌ No characters have been voted on yet!", ephemeral=True)
             return
         
-        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("smashes", 0) + 2 * x[1].get("super-smashes", 0) - x[1].get("passes", 0), reverse=True)
+        sorted_data = sorted(
+            category_data.items(),
+            key=lambda x: (
+                2 * x[1].get("super-smashes", 0)
+                + 1 * x[1].get("smashes", 0)
+                + 0.5 * x[1].get("hangouts", 0)
+                - 1 * x[1].get("passes", 0)
+            ),
+            reverse=True
+        )
+
 
         if category:
             view = LeaderboardView("Leader", interaction, sorted_data, category)
@@ -747,7 +770,17 @@ class SmashOrPass(commands.Cog):
             await interaction.response.send_message("❌ No characters have been voted on yet!", ephemeral=True)
             return
         
-        sorted_data = sorted(category_data.items(), key = lambda x: x[1].get("passes", 0) + 2 * x[1].get("super-smashes", 0) - x[1].get("smashes", 0), reverse=True)
+        sorted_data = sorted(
+            category_data.items(),
+            key=lambda x: (
+                -2 * x[1].get("super-smashes", 0)
+                - 1 * x[1].get("smashes", 0)
+                - 0.5 * x[1].get("hangouts", 0)
+                + 1 * x[1].get("passes", 0)
+            ),
+            reverse=True
+        )
+
 
         if category:
             view = LeaderboardView("Loser", interaction, sorted_data, category)
