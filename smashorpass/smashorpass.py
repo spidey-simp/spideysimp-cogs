@@ -499,14 +499,12 @@ class SmashPassView(discord.ui.View):
     
     @discord.ui.button(label="Hang Out", style=discord.ButtonStyle.blurple, emoji="👋")
     async def hangout_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        vote_bool = await self.cog.update_votes(self.category, self.character_name, "hangouts", interaction.user.id, self.image)
-        if vote_bool:
-            await interaction.response.send_message(
-                f"{interaction.user.mention} wants to **hang out** with {self.character_name}! 👋",
-                ephemeral=False,
-            )
-        else:
-            await interaction.response.send_message("You've already interacted with this character!", ephemeral=True)
+        await self.cog.update_votes(self.category, self.character_name, "hangouts", interaction.user.id, self.image)
+        await interaction.response.send_message(
+            f"{interaction.user.mention} wants to **hang out** with {self.character_name}! 👋",
+            ephemeral=False,
+        )
+
 
 
     @discord.ui.button(label="Pass", style=discord.ButtonStyle.red, emoji="❌")
