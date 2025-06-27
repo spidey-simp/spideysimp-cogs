@@ -250,7 +250,7 @@ def get_random_custom(user_id=None, nsfw_bool=False):
         
         return None, None
     if nsfw_bool:
-        data = load_json(NSFW_FILE)
+        data = load_json(NSFW_FILE, [])
         if not data:
             return "No custom characters found.", None
         for _ in range(5):
@@ -742,7 +742,7 @@ class SmashOrPass(commands.Cog):
             if not channel.is_nsfw():
                 await interaction.followup.send("This channel does not allow nsfw imagery.", ephemeral=True)
                 return
-            data = load_json(NSFW_FILE)
+            data = load_json(NSFW_FILE, [])
             user_entries = [entry for entry in data if entry["user_id"] == target_user.id]
 
             if not user_entries:
