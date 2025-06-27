@@ -667,7 +667,7 @@ class SmashOrPass(commands.Cog):
         votes = load_votes()
         user = user or interaction.user
         user_id = user.id
-        channel = interaction.guild.get_channel()
+        channel = interaction.channel()
         if not channel.is_nsfw():
             await interaction.followup.send("For now supersmashes is not supported outside of nsfw channels. Just because I was too lazy to filter out for now.", ephemeral=True)
             return
@@ -738,7 +738,7 @@ class SmashOrPass(commands.Cog):
                 await interaction.followup.send_message(f"❌ No non-nsfw uploads found for **{target_user.mention}**!", ephemeral=True)
                 return
         else:
-            channel = interaction.guild.get_channel()
+            channel = interaction.channel()
             if not channel.is_nsfw():
                 await interaction.followup.send("This channel does not allow nsfw imagery.", ephemeral=True)
                 return
@@ -763,7 +763,7 @@ class SmashOrPass(commands.Cog):
         votes = load_votes()
         
         
-        leaderboard_channel = interaction.guild.get_channel()
+        leaderboard_channel = interaction.channel()
         if not leaderboard_channel.is_nsfw() and category == "NSFW":
             await interaction.followup.send("You can't look at nsfw leaderboards in a non-nsfw channel.", ephemeral=True)
             return
@@ -810,7 +810,7 @@ class SmashOrPass(commands.Cog):
         
         await interaction.response.defer()
         
-        leaderboard_channel = interaction.guild.get_channel()
+        leaderboard_channel = interaction.channel()
         if not leaderboard_channel.is_nsfw() and category == "NSFW":
             await interaction.followup.send("You can't look at nsfw leaderboards in a non-nsfw channel.", ephemeral=True)
             return
@@ -984,7 +984,7 @@ class SmashOrPass(commands.Cog):
         elif "Real People" in categories:
             categories = REAL_CATEGORIES
         
-        channel = ctx.guild.get_channel()
+        channel = ctx.channel
         if not channel.is_nsfw():
             categories = [cat for cat in categories if cat != "NSFW"]
         
