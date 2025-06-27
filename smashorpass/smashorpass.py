@@ -14,6 +14,7 @@ import urllib.parse
 
 CUSTOM_FILE = os.path.join(os.path.dirname(__file__), "custom.json")
 BLACKLIST_FILE = os.path.join(os.path.dirname(__file__), "blacklist.json")
+NSFW_FILE = os.path.join(os.path.dirname(__file__), "nsfw.json")
 MOD_CHANNEL_ID = 1287700985275355150
 
 ACTOR_LIST_URL = "https://api.themoviedb.org/3/person/popular?language=en-Us&page={page_number}"
@@ -23,7 +24,7 @@ API_KEY_FILE = os.path.join(os.path.dirname(__file__), "api_keys.json")
 VALID_APIS = ["superhero", "tmdb", "lastfm"]
 
 
-CATEGORIES = ["Custom", "Actors", "Star Wars", "Superheroes", "Singers"]
+CATEGORIES = ["Custom", "Actors", "Star Wars", "Superheroes", "Singers", "NSFW"]
 
 REAL_CATEGORIES = ["Actors", "Singers"]
 
@@ -190,44 +191,77 @@ def save_json(file_path, data):
     with open(file_path, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=4)
 
-def save_custom_entry(name, image_url, user_id):
+def save_custom_entry(name, image_url, user_id, nsfw_bool):
     """Saves the entry to custom.json"""
-    data = load_json(CUSTOM_FILE, [])
+    if not nsfw_bool:
+        data = load_json(CUSTOM_FILE, [])
 
-    if not isinstance(data, list):
-        data = []
+        if not isinstance(data, list):
+            data = []
 
-    original_name = name
-    counter = 1
-    existing_names = {entry["name"].lower() for entry in data}
-    while name.lower() in existing_names:
-        name = f"{original_name} ({counter})"
-        counter += 1
-        
-    data.append({"name": name, "image": image_url, "user_id": user_id})
+        original_name = name
+        counter = 1
+        existing_names = {entry["name"].lower() for entry in data}
+        while name.lower() in existing_names:
+            name = f"{original_name} ({counter})"
+            counter += 1
+            
+        data.append({"name": name, "image": image_url, "user_id": user_id})
 
-    save_json(CUSTOM_FILE, data)
+        save_json(CUSTOM_FILE, data)
 
-    return name
+        return name
+    else:
+        data = load_json(NSFW_FILE, [])
+
+        if not isinstance(data, list):
+            data = []
+
+        original_name = name
+        counter = 1
+        existing_names = {entry["name"].lower() for entry in data}
+        while name.lower() in existing_names:
+            name = f"{original_name} ({counter})"
+            counter += 1
+            
+        data.append({"name": name, "image": image_url, "user_id": user_id})
+
+        save_json(NSFW_FILE, data)
+
+        return name
     
-def get_random_custom(user_id=None):
+def get_random_custom(user_id=None, nsfw_bool=False):
     """Gets a random character from custom.json"""
-    if not os.path.exists(CUSTOM_FILE):
-        return "No custom characters added yet!", None
-    
-    with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
-        data = json.load(file)
+    if not nsfw_bool:
+        if not os.path.exists(CUSTOM_FILE):
+            return "No custom characters added yet!", None
+        
+        with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
 
-    if not data:
-        return "No custom characters found.", None
-    for _ in range(5):
-        character = random.choice(data)
-        if user_id and is_blacklisted_for_user(user_id, "Custom", name=character["name"]):
-            continue
+        if not data:
+            return "No custom characters found.", None
+        for _ in range(5):
+            character = random.choice(data)
+            if user_id and is_blacklisted_for_user(user_id, "Custom", name=character["name"]):
+                continue
 
-        return character["name"], character["image"]
-    
-    return None, None
+            return character["name"], character["image"]
+        
+        return None, None
+    if nsfw_bool:
+        data = load_json(NSFW_FILE)
+        if not data:
+            return "No custom characters found.", None
+        for _ in range(5):
+            character = random.choice(data)
+            if user_id and is_blacklisted_for_user(user_id, "NSFW", name=character["name"]):
+                continue
+
+            return character["name"], character["image"]
+        
+        return None, None
+
 
 def is_blacklisted(user_id):
     if not os.path.exists(BLACKLIST_FILE):
@@ -436,7 +470,8 @@ class CategorySelect(discord.ui.Select):
             discord.SelectOption(label="Custom", description="Use community uploaded characters!"),
             discord.SelectOption(label="Actors", description="Use actors for the Smash or Pass game!"),
             discord.SelectOption(label="Singers", description="Get people from the music field as your category."),
-            discord.SelectOption(label="Real People", description="Only see categories including real people.")
+            discord.SelectOption(label="Real People", description="Only see categories including real people."),
+            discord.SelectOption(label="NSFW", description="Include NSFW imagery.")
         ]
         super().__init__(
             placeholder="Choose your category. . .", 
@@ -632,6 +667,10 @@ class SmashOrPass(commands.Cog):
         votes = load_votes()
         user = user or interaction.user
         user_id = user.id
+        channel = interaction.guild.get_channel()
+        if not channel.is_nsfw():
+            await interaction.followup.send("For now supersmashes is not supported outside of nsfw channels. Just because I was too lazy to filter out for now.", ephemeral=True)
+            return
 
         # Gather results
         results = [
@@ -679,25 +718,37 @@ class SmashOrPass(commands.Cog):
         await interaction.response.send_message("✅ Your appeal has been submitted. Moderators will review it soon!", ephemeral=True)
     
     @sop.command(name="list", description="View images uploaded by a specific user")
-    @app_commands.describe(user="Select a user (leave blank to see your own images)")
-    async def list(self, interaction: discord.Interaction, user: discord.User = None):
+    @app_commands.describe(user="Select a user (leave blank to see your own images)", nsfw_bool="Whether you want to see NSFW characters or normal.")
+    async def list(self, interaction: discord.Interaction, user: discord.User = None, nsfw_bool: bool=False):
         """Shows all uploaded images by a user."""
         await interaction.response.defer()
 
         target_user = user or interaction.user
+        if not nsfw_bool:
+            if not os.path.exists(CUSTOM_FILE):
+                await interaction.followup.send("No custom characters exist!", ephemeral=True)
+                return
+            
+            with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
+                data = json.load(file)
 
-        if not os.path.exists(CUSTOM_FILE):
-            await interaction.followup.send("No custom characters exist!", ephemeral=True)
-            return
-        
-        with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
+            user_entries = [entry for entry in data if entry["user_id"] == target_user.id]
 
-        user_entries = [entry for entry in data if entry["user_id"] == target_user.id]
+            if not user_entries:
+                await interaction.followup.send_message(f"❌ No non-nsfw uploads found for **{target_user.mention}**!", ephemeral=True)
+                return
+        else:
+            channel = interaction.guild.get_channel()
+            if not channel.is_nsfw():
+                await interaction.followup.send("This channel does not allow nsfw imagery.", ephemeral=True)
+                return
+            data = load_json(NSFW_FILE)
+            user_entries = [entry for entry in data if entry["user_id"] == target_user.id]
 
-        if not user_entries:
-            await interaction.followup.send_message(f"❌ No uploads found for **{target_user.mention}**!", ephemeral=True)
-            return
+            if not user_entries:
+                await interaction.followup.send_message(f"❌ No nsfw uploads found for **{target_user.mention}**!", ephemeral=True)
+                return
+
         
         view=UserUploadsView(interaction, user_entries, target_user)
         await interaction.followup.send(f"Loading {target_user.mention}'s list . . . ", ephemeral=False, view=view)
@@ -712,14 +763,17 @@ class SmashOrPass(commands.Cog):
         votes = load_votes()
         
         
-        
-        if category:
+        leaderboard_channel = interaction.guild.get_channel()
+        if not leaderboard_channel.is_nsfw() and category == "NSFW":
+            await interaction.followup.send("You can't look at nsfw leaderboards in a non-nsfw channel.", ephemeral=True)
+            return
+        elif category:
             if category not in votes:
                 await interaction.followup.send(f"❌ No votes recorded for **{category}**!", ephemeral=True)
                 return
             category_data = votes[category]
         else:
-            category_data = {name: data for cat in votes.values() for name, data in cat.items()}
+            category_data = {name: data for cat in votes.values() for name, data in cat.items() if cat is not "NSFW"}
         
         if not category_data:
             await interaction.followup.send("❌ No characters have been voted on yet!", ephemeral=True)
@@ -756,7 +810,11 @@ class SmashOrPass(commands.Cog):
         
         await interaction.response.defer()
         
-        if category:
+        leaderboard_channel = interaction.guild.get_channel()
+        if not leaderboard_channel.is_nsfw() and category == "NSFW":
+            await interaction.followup.send("You can't look at nsfw leaderboards in a non-nsfw channel.", ephemeral=True)
+            return
+        elif category:
             if category not in votes:
                 await interaction.response.send_message(f"❌ No votes recorded for **{category}**!", ephemeral=True)
                 return
@@ -796,9 +854,10 @@ class SmashOrPass(commands.Cog):
     @app_commands.describe(
         name="Enter the character's name",
         url="Enter an image URL (optional if attaching an image)",
-        image="Upload an image file (optional if providing a URL)"
+        image="Upload an image file (optional if providing a URL)",
+        nsfw="Whether what you're uploading is nsfw or not."
     )
-    async def upload(self, interaction: discord.Interaction, name: str, url: str = None, image: discord.Attachment = None):
+    async def upload(self, interaction: discord.Interaction, name: str, url: str = None, image: discord.Attachment = None, nsfw: bool=False):
         """Allow users to upload an image via a URL or file attachment."""
         if is_blacklisted(interaction.user.id):
             await interaction.response.send_message("❌ You are **blacklisted** from uploading images!", ephemeral=True)
@@ -814,64 +873,74 @@ class SmashOrPass(commands.Cog):
             await interaction.response.send_message("❌ You must provide either an image attachment or a URL!", ephemeral=True)
             return
         
-        new_name = save_custom_entry(name, image_url, interaction.user.id)
-        await interaction.response.send_message(f"✅ **{new_name}** has been added to the custom category!", ephemeral=False)
+        new_name = save_custom_entry(name, image_url, interaction.user.id, nsfw)
+        await interaction.response.send_message(f"✅ **{new_name}** has been added to the {'custom' if not nsfw else 'nsfw'} category!", ephemeral=False)
     
     @sop.command(name="delete", description="Remove an uploaded character (self or mod)")
     @app_commands.describe(
-        name="Delete by character name (if you're a mod, this is optional if you're deleting all images uploaded by a user)",
+        name="Delete by character name (optional if deleting all uploads)",
         user="Delete all uploads by a user (mods only)",
-        fulldelete="Delete all images by this user (only applies if user is provided)"
+        fulldelete="Delete all images by this user (mods only)",
+        nsfw="Whether to delete from the NSFW list instead of the main one"
     )
-    async def delete(self, interaction: discord.Interaction, name: str = None, user: discord.User = None, fulldelete: bool = False):
-        """Allows users to delete their own images and mods to remove any."""
-        if not os.path.exists(CUSTOM_FILE):
-            await interaction.response.send_message("No custom characters exist!", ephemeral=True)
+    async def delete(
+        self,
+        interaction: discord.Interaction,
+        name: str = None,
+        user: discord.User = None,
+        fulldelete: bool = False,
+        nsfw: bool = False
+    ):
+        """Allows users to delete their own uploads or for mods to moderate uploads."""
+        target_file = NSFW_FILE if nsfw else CUSTOM_FILE
+
+        if not os.path.exists(target_file):
+            await interaction.response.send_message("No custom characters exist in this category!", ephemeral=True)
             return
-        
-        with open(CUSTOM_FILE, "r", encoding="utf-8") as file:
+
+        with open(target_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
         if user and interaction.user.guild_permissions.manage_messages:
             if fulldelete:
                 data = [entry for entry in data if entry["user_id"] != user.id]
-                message = f"✅ **All** uploads from {user.mention} have been removed! Use `/sopblacklist` to prevent them from uploading if you think that's warranted."
+                message = f"✅ **All** {'NSFW' if nsfw else 'custom'} uploads from {user.mention} have been removed!"
             elif name:
-                new_data  = []
+                new_data = []
                 found = False
                 for entry in data:
                     if entry["name"].lower() == name.lower() and entry["user_id"] == user.id:
                         found = True
                         continue
                     new_data.append(entry)
-                
                 if found:
                     data = new_data
-                    message = f"✅ **{name}** by {user.mention} has been removed!"
+                    message = f"✅ **{name}** ({'NSFW' if nsfw else 'custom'}) by {user.mention} has been removed!"
                 else:
-                    message = f"❌ No entry **{name}** found for {user.mention}."
+                    message = f"❌ No entry **{name}** found for {user.mention} in that category."
             else:
-                await interaction.response.send_message("❌ You must provide either **name** or **all:true**!", ephemeral=True)
+                await interaction.response.send_message("❌ You must provide either **name** or **fulldelete=True**!", ephemeral=True)
                 return
         else:
+            # Deleting own entry
             found = False
             new_data = []
             for entry in data:
-                if entry["name"].lower() == name.lower():
-                    if entry["user_id"] == interaction.user.id:
-                        found = True
-                        continue
+                if entry["name"].lower() == name.lower() and entry["user_id"] == interaction.user.id:
+                    found = True
+                    continue
                 new_data.append(entry)
             if found:
                 data = new_data
-                message = f"✅ Character **{name}** has been removed!"
+                message = f"✅ Your {'NSFW' if nsfw else 'custom'} character **{name}** has been removed!"
             else:
                 message = "❌ You do not have permission to delete this character."
-        
-        with open(CUSTOM_FILE, "w", encoding="utf-8") as file:
+
+        with open(target_file, "w", encoding="utf-8") as file:
             json.dump(data, file, indent=4)
-        
+
         await interaction.response.send_message(message, ephemeral=False)
+
     
     @sop.command(name="blacklist", description="Blacklist/unblacklist a user from uploading images")
     @app_commands.describe(user="Select the user to blacklist/unblacklist")
@@ -915,6 +984,15 @@ class SmashOrPass(commands.Cog):
         elif "Real People" in categories:
             categories = REAL_CATEGORIES
         
+        channel = ctx.guild.get_channel()
+        if not channel.is_nsfw():
+            categories = [cat for cat in categories if cat != "NSFW"]
+        
+        if not categories:
+            await ctx.send("Please add a non-nsfw category to your settings or run this command in a nsfw channel.")
+            return
+
+
         category = random.choice(categories)
         
         user_id = ctx.author.id
@@ -922,11 +1000,13 @@ class SmashOrPass(commands.Cog):
         if category == "Star Wars":
             name, image = get_random_starwarscharacter(user_id=user_id)
         elif category == "Custom":
-            name, image = get_random_custom(user_id=user_id)
+            name, image = get_random_custom(user_id=user_id, nsfw_bool=False)
         elif category == "Actors":
             name, image = get_random_actor(user_id=user_id)
         elif category == "Singers":
             name, image = get_random_singer(user_id=user_id)
+        elif category == "NSFW":
+            name, image = get_random_custom(user_id=user_id, nsfw_bool=True)
         else:
             name, image = get_random_superhero()
 
