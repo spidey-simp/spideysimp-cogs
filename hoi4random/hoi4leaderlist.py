@@ -84,3 +84,62 @@ COUNTRYLIST = {
     "Prince Paul, Yugoslavia": "https://en.wikipedia.org/wiki/Prince_Paul_of_Yugoslavia#/media/File:Prince_Paul_of_Yugoslavia.jpg",
     "Li Yuanhong, Yunnan": "https://en.wikipedia.org/wiki/Li_Yuanhong#/media/File:Li_Yuanhong.jpg"  
 }
+
+HISTORICAL_EMPIRES = {
+    "German Empire": {
+        "description": "Description: The German Empire reached its peak in 1914, encompassing much of Central Europe and parts of Northern Europe. It was a major European power until its defeat in World War I.\n\nScenario: Choose Germany and go through the Monarchist path to restore the glory to the German Empire. Make Bismarck proud! This is realpolitik and weltpolitik at its finest. Reclaim lost territories and bring back the glory of the Kaiserreich!",
+        "image": "https://cdn.britannica.com/04/904-050-BE947E27/German-Empire-1918.jpg",
+    },
+    "Austro-Hungarian Empire": {
+        "description": "Description: The Austro-Hungarian Empire was the last remnant of the Holy Roman Empire, existing from 1867 until its dissolution in 1918. It was a multi-ethnic empire in Central and Southeastern Europe.\n\nScenario: Choose Austria and go down either the Monarchist or Fascist path to restore the Austro-Hungarian Empire. Unite the diverse peoples under a single banner! Can you stave off ethnonationalism and restore the glory of the Habsburgs?",
+        "image": "https://i.pinimg.com/originals/03/03/df/0303dfedef611ad07008cf2af2fbfa33.jpg",
+    },
+    "Ottoman Empire": {
+        "description": "Description: The Ottoman Empire was a vast and powerful empire that lasted from 1299 to 1922, covering parts of Europe, Asia, and Africa. It was known for its cultural diversity and military prowess.\n\nScenario: Choose Turkey and go down the Authoritarian path to restore the Ottoman Empire. Reclaim lost territories and bring back the glory of the Ottomans! The Sultanate awaits you!",
+        "image": "https://www.liberatingnarratives.com/content/images/size/w1460/2022/12/Ottoman-Empire-Contraction-1.jpg",
+    },
+    "Russian Empire (Pre-Brest-Litovsk)": {
+        "description": "Description: The Russian Empire was one of the largest empires in history, existing from 1721 until the abdication of Tsar Nicholas II in 1917. It extended as far west as Poland and as far east as Alaska.\n\nScenario: Choose Russia and go down the Monarchist path to restore the Russian Empire. Reclaim lost territories and bring back the glory of the Tsars! Fulfill the dreams of Peter the Great to advance Russia into western Europe!",
+        "image": "https://www.historicpictoric.com/cdn/shop/products/563545_1wmark.jpg?v=1683485705",
+    },
+    "Qing Dynasty": {
+        "description": "Description: The Qing Dynasty was the last imperial dynasty of China, ruling from 1644 to 1912. It was known for its territorial expansion and cultural achievements.\n\nScenario: Choose ideally Manchukuo and go down its authoritarian path to restore the Qing Dynasty. Reclaim lost territories and bring back the glory of the Qing Emperors [except that one child emperor]! (You can also choose China and go down the Fascist path to restore the Qing Dynasty, but it is not recommended. *It doesn't give any ability to core the Qing territories.*)",
+        "image": "https://i.pinimg.com/originals/f8/64/67/f86467b95e21772e55931e1949d910af.jpg"
+    },
+    "Roman Empire": {
+        "description": "Description: Let's be honest, the Roman Empire is the most famous empire in history. It was a vast empire that dominated much of Europe, North Africa, and the Middle East from 27 BC to AD 476.\n\nScenario: Choose Italy and go down either the Fascist or Monarchist path to restore the Roman Empire. Bring back the Caesars and reclaim the Mediterranean!",
+        "image": "https://i.pinimg.com/originals/5a/e5/78/5ae578b225dad65524298833d65bbceb.jpg",
+    },
+    "Holy-Roman Empire": {
+        "description": "Description: Voltaire said \"The Holy Roman Empire was neither holy, nor Roman, nor an empire.\" Surely being led by emperors for centuries earns it the place of an empire? With the Pope as its spiritual leader, surely it was holy? Regardless, the Holy Roman Empire and its numerous states and principalities existed from 800 to 1806, covering much of Central Europe.\n\nScenario: Choose Germany or Austria and go down the Monarchist path to restore the Holy Roman Empire. Reclaim lost territories and bring back the glory of the HRE! Unite the Germanic peoples under a single banner!",
+        "image": "https://brilliantmaps.com/wp-content/uploads/Holly-Roman-Empire-Max.png",
+    },
+    "Napoleonic Empire": {
+        "description": "Description: Despite being short-lived, the Napoleonic Empire is probably the second-most famous empire in history second only to Rome. Napoleon Bonaparte's empire existed from 1804 to 1814, covering much of Europe and parts of North Africa.\n\nScenario: Choose France and go down the Monarchist path to restore the Napoleonic Empire. Reclaim lost territories and bring back the glory of Napoleon! Make France the dominant power in Europe once again! Fulfill the dreams of Napoleon Bonaparte to make France a superpower!",
+        "image": "https://images.squarespace-cdn.com/content/v1/5f87a249e7f9db54f33b0228/1632747832936-ORTGEKQWTVIHICHZNAB7/french+empire+2.jpeg",
+    },
+    "Byzantine Empire": {
+        "description": "Description: The Byzantine Empire was the continuation of the Roman Empire in the East during the Middle Ages. It was known for its rich culture, art, and architecture, as well as its complex political history.\n\nScenario: Choose Greece and go down the Monarchist path to restore the Byzantine Empire. Reclaim lost territories and bring back the glory of the Byzantine Emperors!",
+        "image": "https://us-static.z-dn.net/files/d86/be685da8e577f6427acaa9b55a7f3f38.png",
+    },
+    "Macedonian Empire": {
+        "description": "Description: The Macedonian Empire was established by Alexander the Great in the 4th century BC. It is known for its military conquests and the spread of Greek culture across three continents.\n\nScenario: Choose Greece and go down the Monarchist path to restore the Macedonian Empire. Reclaim lost territories and bring back the glory of Alexander the Great! Hellenize the Middle East and bring about the era of the Macedons!",
+        "image": "https://mmsdragon.org/wp-content/uploads/2021/05/main-qimg-a3c395fb8f6941e61b893df71ca61b7b.jpg",
+    },
+    "Carolingian Empire": {
+        "description": "Description: The Carolingian Empire was a Frankish state that emerged in the 8th century under the leadership of Charlemagne. It is known for its cultural and political achievements, as well as its role in the formation of modern Europe.\n\nScenario: Choose France and go down the Monarchist path to restore the Carolingian Empire. Reclaim lost territories and bring back the glory of Charlemagne!",
+        "image": "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/e3ef8fc3-b414-4e15-9071-1afbb9b834a7/dfs56a3-0bfc7d53-0f54-4538-9c7b-1909eda772ff.png/v1/fill/w_1192,h_670/charlemagne_and_the_carolingian_empire_814_by_sergiulusardu_dfs56a3-pre.png?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9NzIwIiwicGF0aCI6IlwvZlwvZTNlZjhmYzMtYjQxNC00ZTE1LTkwNzEtMWFmYmI5YjgzNGE3XC9kZnM1NmEzLTBiZmM3ZDUzLTBmNTQtNDUzOC05YzdiLTE5MDllZGE3NzJmZi5wbmciLCJ3aWR0aCI6Ijw9MTI4MCJ9XV0sImF1ZCI6WyJ1cm46c2VydmljZTppbWFnZS5vcGVyYXRpb25zIl19.mb6innGxSeeYwGouv-_VtUrH5y_B5WKMx2qdQge7Www",
+    },
+    "Achaemenid Empire": {
+        "description": "Description: The Achaemenid Empire, also known as the First Persian Empire, was the first great Persian Empire, founded by Cyrus the Great in the 6th century BC. It is known for its vast territorial expansion and cultural achievements.\n\nScenario: Choose Iran and go down the Monarchist or Fascist path to restore the Achaemenid Empire. Reclaim lost territories and bring back the glory of Cyrus the Great! Unite the Persian peoples under a single banner!",
+        "image": "https://realhistoryww.com/world_history/ancient/Maps/Map_Achaemenid_empire.jpg",
+    },
+    "Kalmar Union": {
+        "description": "Description: The Kalmar Union was a series of personal unions that united the kingdoms of Denmark, Norway, and Sweden under a single monarch in the late 14th century. It is known for its attempts to create a unified Scandinavian realm.\n\nScenario: Choose Sweden and go down the Monarchist path to restore the Kalmar Union. Reclaim lost territories and bring back the glory of the united Nordic kingdoms!",
+        "image": "https://cdn.thecollector.com/wp-content/uploads/2024/07/kalmar-union-map-1024x1024.jpg",
+    },
+    "Arab Caliphate": {
+        "description": "Description: The Arab Caliphate was a series of Islamic states that emerged in the 7th century, following the death of the Prophet Muhammad. It is known for its cultural and scientific achievements, as well as its territorial expansion across the Middle East, North Africa, and parts of Europe.\n\nScenario: Choose Iraq or any other Middle Eastern nations and go down the Monarchist or Fascist paths to restore the Arab Caliphate. Reclaim lost territories and bring back the glory of the Caliphs! Unify the Arab world under a single banner!",
+        "image": "https://smarthistory.org/wp-content/uploads/2021/12/Abbasid_Caliphate_850AD-copy.jpg"
+    }
+}
