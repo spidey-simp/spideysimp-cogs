@@ -187,15 +187,16 @@ class SpideyRPG(commands.Cog):
         if ctx.invoked_subcommand is None:
             await ctx.send("Please specify a subcommand.")
 
-    @rpg.hybrid_command(name="create_character_modal", aliases=["ccm"])
+    @rpg.command(name="create_character_modal", aliases=["ccm"])
+    @commands.hybrid_command(name="create_character_modal", with_app_command=True)
     @app_commands.describe(ctx="Creating a character using a modal form.")
     async def create_character_modal(self, ctx: commands.Context):
         """Create a character using a modal form."""
         modal = CharacterCreationModal(self.bot, self.presets, ctx)
         await ctx.send_modal(modal)
 
-
-    @rpg.hybrid_command(name="view_character", aliases=["vc"])
+    @rpg.command(name="view_character", aliases=["vc"])
+    @commands.hybrid_command(name="view_character", with_app_command=True)
     @app_commands.describe(user="The user whose character you want to view (default: yourself)")
     async def view_character(self, ctx: commands.Context, user: discord.User = None):
         if user is None:
