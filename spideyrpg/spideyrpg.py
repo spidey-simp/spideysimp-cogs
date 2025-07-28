@@ -34,23 +34,17 @@ class CharacterCreationModal(discord.ui.Modal, title="Create Your Character"):
             required=True,
             max_length=32
         )
-        self.gender = discord.ui.Select(
+        self.gender = discord.ui.TextInput(
             label="Gender",
-            placeholder="Select your character's gender.",
+            placeholder="Enter your character's gender (M, F, or O).",
             required=True,
-            options=[
-                discord.SelectOption(label="Male", value="M"),
-                discord.SelectOption(label="Female", value="F"),
-                discord.SelectOption(label="Other", value="O")
-            ]
+            max_length=1
         )
-        self.char_class = discord.ui.Select(
-            label="Class (e.g., rogue)",
-            placeholder="Must match one of the preset classes",
+        self.char_class = discord.ui.TextInput(
+            label="Class",
+            placeholder="Must match one of the preset classes (currently: rogue)",
             required=True,
-            options=[
-                discord.SelectOption(label="Rogue", value="rogue"),
-            ]
+            max_length=32
         )
         self.description = discord.ui.TextInput(
             label="Character Description",
@@ -181,23 +175,19 @@ class SpideyRPG(commands.Cog):
 
         return report
     
-    @commands.hybrid_group(name="rpg")
+    @commands.group(name="rpg")
     async def rpg(self, ctx: commands.Context):
         """RPG commands group."""
         if ctx.invoked_subcommand is None:
             await ctx.send("Please specify a subcommand.")
 
     @rpg.command(name="create_character_modal", aliases=["ccm"])
-    @commands.hybrid_command(name="create_character_modal", with_app_command=True)
-    @app_commands.describe(ctx="Creating a character using a modal form.")
     async def create_character_modal(self, ctx: commands.Context):
         """Create a character using a modal form."""
         modal = CharacterCreationModal(self.bot, self.presets, ctx)
         await ctx.send_modal(modal)
 
     @rpg.command(name="view_character", aliases=["vc"])
-    @commands.hybrid_command(name="view_character", with_app_command=True)
-    @app_commands.describe(user="The user whose character you want to view (default: yourself)")
     async def view_character(self, ctx: commands.Context, user: discord.User = None):
         if user is None:
             user = ctx.author
