@@ -205,7 +205,8 @@ class SpideyRPG(commands.Cog):
         embed.add_field(name="Description", value=character.get("description", "No description provided"), inline=False)
         embed.add_field(name="Level", value=character.get("level", 1), inline=True)
         embed.add_field(name="Experience", value=character.get("experience", 0), inline=True)
-        embed.add_field(name="Stats", value=str(character.get("stats", {})), inline=False)
+        for stat, value in character.get("stats", {}).items():
+            embed.add_field(name=stat.capitalize(), value=str(value), inline=True)
         image = character.get("image_url")
         if image:
             embed.set_image(url=image)
