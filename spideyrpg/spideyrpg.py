@@ -175,19 +175,21 @@ class SpideyRPG(commands.Cog):
 
         return report
     
-    @commands.group(name="rpg")
-    async def rpg(self, ctx: commands.Context):
+    @commands.group(name="spidey_rpg", aliases=["srpg"])
+    async def spidey_rpg(self, ctx: commands.Context):
         """RPG commands group."""
         if ctx.invoked_subcommand is None:
             await ctx.send("Please specify a subcommand.")
+    
+    rpg = app_commands.Group(name="rpg", description="RPG commands")
 
-    @rpg.command(name="create_character_modal", aliases=["ccm"])
-    async def create_character_modal(self, ctx: commands.Context):
+    @rpg.command(name="create_character_modal", description="Create a character using a modal form.")
+    async def create_character_modal(self, interaction: discord.Interaction):
         """Create a character using a modal form."""
-        modal = CharacterCreationModal(self.bot, self.presets, ctx)
-        await ctx.send_modal(modal)
+        modal = CharacterCreationModal(self.bot, self.presets, interaction)
+        await interaction.response.send_modal(modal)
 
-    @rpg.command(name="view_character", aliases=["vc"])
+    @spidey_rpg.command(name="view_character", aliases=["vc"])
     async def view_character(self, ctx: commands.Context, user: discord.User = None):
         if user is None:
             user = ctx.author
@@ -210,7 +212,7 @@ class SpideyRPG(commands.Cog):
             embed.set_image(url=image)
         await ctx.send(embed=embed)
     
-    @rpg.command(name="delete_character", aliases=["dc"])
+    @spidey_rpg.command(name="delete_character", aliases=["dc"])
     async def delete_character(self, ctx: commands.Context):
         """Delete your RPG character."""
         user_id = str(ctx.author.id)
