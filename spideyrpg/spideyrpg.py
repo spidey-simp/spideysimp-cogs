@@ -1,9 +1,10 @@
 import discord
-from discord.ext import commands, app_commands, tasks
+from discord.ext import commands, tasks
 import random
 import asyncio
 import json
 import os
+from discord import app_commands
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RPG_SAVE_FILE = os.path.join(BASE_DIR, 'rpg_save.json')
