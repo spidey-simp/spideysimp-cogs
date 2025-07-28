@@ -181,13 +181,14 @@ class SpideyRPG(commands.Cog):
 
         return report
     
-    @commands.group(name="rpg")
+    @commands.hybrid_group(name="rpg")
     async def rpg(self, ctx: commands.Context):
         """RPG commands group."""
         if ctx.invoked_subcommand is None:
             await ctx.send("Please specify a subcommand.")
 
-    @rpg.command(name="create_character_modal", aliases=["ccm"])
+    @rpg.hybrid_command(name="create_character_modal", aliases=["ccm"])
+    @app_commands.describe(ctx="Creating a character using a modal form.")
     async def create_character_modal(self, ctx: commands.Context):
         """Create a character using a modal form."""
         modal = CharacterCreationModal(self.bot, self.presets, ctx)
