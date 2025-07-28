@@ -191,12 +191,13 @@ class SpideyRPG(commands.Cog):
 
     @rpg.command(name="view_character", description="View your or another user's RPG character.")
     async def view_character(self, interaction: discord.Interaction, user: discord.User = None):
+        await interaction.response.defer(thinking=True)
         if user is None:
             user = interaction.user
 
         character = self.rpg_data.get(str(user.id))
         if not character:
-            await interaction.response.send_message(f"{user.name} does not have a character.")
+            await interaction.followup.send(f"{user.name} does not have a character.")
             return
         
         embed = discord.Embed(title=f"{user.name}'s Character", color=discord.Color.blue())
