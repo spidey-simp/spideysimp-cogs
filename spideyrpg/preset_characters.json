@@ -23,13 +23,14 @@
             "ranged": true,
             "melee": false,
             "magic": true,
-            "armor": [
+            "equipment": [
                 "Robe of Rags",
                 "Leather Sandals"
             ],
             "abilities": [
                 "Basic Fireball"
-            ]
+            ],
+            "default_image": "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/ee219434-7993-43a9-98d6-238ee165ae53/dfsxatv-d4e8f45c-a613-46ce-98bc-51a23faaf9aa.png/v1/fill/w_894,h_894,q_70,strp/mage_by_byanel_dfsxatv-pre.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9MTAyNCIsInBhdGgiOiJcL2ZcL2VlMjE5NDM0LTc5OTMtNDNhOS05OGQ2LTIzOGVlMTY1YWU1M1wvZGZzeGF0di1kNGU4ZjQ1Yy1hNjEzLTQ2Y2UtOThiYy01MWEyM2ZhYWY5YWEucG5nIiwid2lkdGgiOiI8PTEwMjQifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6aW1hZ2Uub3BlcmF0aW9ucyJdfQ.XidwRUKDJHjBNbMLFupymioM5ueElDxEMRiJbETfjRk"
         },
         "warrior": {
             "description": "A seasoned fighter, skilled in combat and able to withstand great amounts of damage.",
@@ -54,13 +55,14 @@
             "ranged": false,
             "melee": true,
             "magic": false,
-            "armor": [
+            "equipment": [
                 "Leather Armor",
                 "Raggedy Boots"
             ],
             "abilities": [
                 "Basic Slash"
-            ]
+            ],
+            "default_image": "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/48e118d3-81d4-494f-9908-5999ec492498/dfpuzv7-6ad2648f-6d66-426a-9d41-0304ad298ca7.jpg/v1/fill/w_894,h_894,q_70,strp/warrior__by_thomazdias32_dfpuzv7-pre.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9MjE3NiIsInBhdGgiOiJcL2ZcLzQ4ZTExOGQzLTgxZDQtNDk0Zi05OTA4LTU5OTllYzQ5MjQ5OFwvZGZwdXp2Ny02YWQyNjQ4Zi02ZDY2LTQyNmEtOWQ0MS0wMzA0YWQyOThjYTcuanBnIiwid2lkdGgiOiI8PTIxNzYifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6aW1hZ2Uub3BlcmF0aW9ucyJdfQ.TKy0966LjCja5HW5gD9MSfIeVNTEXuiUMWR3NvOz1Ts"
         },
         "rogue": {
             "description": "A stealthy and agile character, adept at sneaking and dealing quick, lethal strikes.",
@@ -85,13 +87,15 @@
             "ranged": true,
             "melee": true,
             "magic": false,
-            "armor": [
+            "equipment": [
                 "Leather Armor",
                 "Cloak of Shadows"
             ],
             "abilities": [
                 "Quick Strike"
-            ]
+            ],
+            "default_image": "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/384c3ac5-440c-4e62-9a1f-4002ca0009b8/dgtnglo-a0d3fcdc-1f80-4356-b4f6-257c7a29c9c8.png/v1/fill/w_730,h_1095,q_70,strp/the_rogue_1_by_sentientgateway_dgtnglo-pre.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9MTM0NCIsInBhdGgiOiJcL2ZcLzM4NGMzYWM1LTQ0MGMtNGU2Mi05YTFmLTQwMDJjYTAwMDliOFwvZGd0bmdsby1hMGQzZmNkYy0xZjgwLTQzNTYtYjRmNi0yNTdjN2EyOWM5YzgucG5nIiwid2lkdGgiOiI8PTg5NiJ9XV0sImF1ZCI6WyJ1cm46c2VydmljZTppbWFnZS5vcGVyYXRpb25zIl19.E0qG0lEWIxbyGB12H-loWObyhnh4I6aM9ZZUVV4jmgw",
+            "available": true
         },
         "elf": {
             "description": "A graceful and agile being, attuned to nature and skilled in archery.",
@@ -116,13 +120,14 @@
             "ranged": true,
             "melee": true,
             "magic": true,
-            "armor": [
+            "equipment": [
                 "Elven Armor",
                 "Soft Leather Boots"
             ],
             "abilities": [
                 "Basic Shot"
-            ]
+            ],
+            "default_image": "https://vignette3.wikia.nocookie.net/elysiumrp/images/8/82/Wood_elf.jpg/revision/latest?cb=20160527084758"
         },
         "dwarf": {
             "description": "A sturdy and resilient character, known for their craftsmanship and combat prowess.",
@@ -147,13 +152,14 @@
             "ranged": false,
             "melee": true,
             "magic": false,
-            "armor": [
+            "equipment": [
                 "Dwarven Plate Armor",
                 "Old Boots"
             ],
             "abilities": [
                 "Basic Swing"
-            ]
+            ],
+            "default_image": "https://i.pinimg.com/originals/bf/0a/f3/bf0af31807f4e14743df5af22a0f7b12.jpg"
         },
         "orc": {
             "description": "A fierce and powerful warrior, known for their brute strength and combat skills.",
@@ -178,13 +184,14 @@
             "ranged": false,
             "melee": true,
             "magic": false,
-            "armor": [
+            "equipment": [
                 "Orcish Armor",
                 "Heavy Boots"
             ],
             "abilities": [
                 "Basic Strike"
-            ]
+            ],
+            "default_image": "https://images5.alphacoders.com/366/thumb-1920-366346.jpg"
         },
         "cleric": {
             "description": "A holy warrior, capable of healing and supporting allies while also being able to fight.",
@@ -209,13 +216,14 @@
             "ranged": false,
             "melee": true,
             "magic": true,
-            "armor": [
+            "equipment": [
                 "Clerical Robes",
                 "Sturdy Sandals"
             ],
             "abilities": [
                 "Basic Prayer"
-            ]
+            ],
+            "default_image": "https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/f86f7bec-06b8-466d-93c4-76f74acf52c7/da1thah-bc2a3ecb-f51a-4120-b6ff-4bbbd74693ae.jpg/v1/fill/w_774,h_1033,q_70,strp/cleric_hi_by_ekoputeh_da1thah-pre.jpg?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOjdlMGQxODg5ODIyNjQzNzNhNWYwZDQxNWVhMGQyNmUwIiwiaXNzIjoidXJuOmFwcDo3ZTBkMTg4OTgyMjY0MzczYTVmMGQ0MTVlYTBkMjZlMCIsIm9iaiI6W1t7ImhlaWdodCI6Ijw9MTM2NiIsInBhdGgiOiJcL2ZcL2Y4NmY3YmVjLTA2YjgtNDY2ZC05M2M0LTc2Zjc0YWNmNTJjN1wvZGExdGhhaC1iYzJhM2VjYi1mNTFhLTQxMjAtYjZmZi00YmJiZDc0NjkzYWUuanBnIiwid2lkdGgiOiI8PTEwMjQifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6aW1hZ2Uub3BlcmF0aW9ucyJdfQ.Lze4oxqNWadDVn6iDKY728dCSyB64Uen0cqb2qdoOIo"
         }
     },
     "weapons": {

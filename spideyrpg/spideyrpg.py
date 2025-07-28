@@ -21,6 +21,90 @@ def save_file(filename, data):
     with open(filename, 'w') as f:
         json.dump(data, f, indent=4)
 
+class CharacterCreationModal(discord.ui.Modal, title="Create Your Character"):
+    def __init__(self, bot, presets, ctx):
+        super().__init__()
+        self.bot = bot
+        self.presets = presets
+        self.ctx = ctx  # store for access later
+
+        self.name = discord.ui.TextInput(
+            label="Character Name",
+            placeholder="Enter your character's name",
+            required=True,
+            max_length=32
+        )
+        self.gender = discord.ui.Select(
+            label="Gender",
+            placeholder="Select your character's gender.",
+            required=True,
+            options=[
+                discord.SelectOption(label="Male", value="M"),
+                discord.SelectOption(label="Female", value="F"),
+                discord.SelectOption(label="Other", value="O")
+            ]
+        )
+        self.char_class = discord.ui.Select(
+            label="Class (e.g., rogue)",
+            placeholder="Must match one of the preset classes",
+            required=True,
+            options=[
+                discord.SelectOption(label="Rogue", value="rogue"),
+            ]
+        )
+        self.description = discord.ui.TextInput(
+            label="Character Description",
+            placeholder="Describe your character (optional)",
+            required=False,
+            max_length=1000,
+            style=discord.TextStyle.paragraph
+        )
+        self.image_url = discord.ui.TextInput(
+            label="Image URL (optional)",
+            placeholder="Paste an image link (optional). Must have a .png, .jpg, or .jpeg extension.",
+            required=False,
+            max_length=500
+        )
+
+        self.add_item(self.name)
+        self.add_item(self.gender)
+        self.add_item(self.char_class)
+        self.add_item(self.description)
+        self.add_item(self.image_url)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        user_id = str(interaction.user.id)
+        if user_id in self.bot.get_cog("SpideyRPG").rpg_data:
+            await interaction.response.send_message("You already have a character.", ephemeral=True)
+            return
+
+        class_name = self.char_class.value.strip().lower()
+        if class_name not in self.presets.get("classes", {}):
+            await interaction.response.send_message(f"Invalid class: {class_name}. Please use an existing class.", ephemeral=True)
+            return
+
+        # Save character data
+        char_data = {
+            "name": self.name.value.strip(),
+            "gender": self.gender.value.strip(),
+            "class": class_name,
+            "description": self.description.value.strip() or None,
+            "level": 1,
+            "stats": self.presets["classes"][class_name].get("stats", {}),
+            "abilities": self.presets["classes"][class_name].get("abilities", []),
+            "weapons": self.presets["classes"][class_name].get("weapons", []),
+            "inventory": self.presets["classes"][class_name].get("equipment", []),
+            "passive_abilities": self.presets["classes"][class_name].get("passive_abilities", []),
+            "image_url": self.image_url.value.strip() or self.presets["classes"][class_name].get("default_image", None),
+        }
+
+        self.bot.get_cog("SpideyRPG").rpg_data[user_id] = char_data
+        save_file(RPG_SAVE_FILE, self.bot.get_cog("SpideyRPG").rpg_data)
+
+        await interaction.response.send_message(f"Character **{char_data['name']}** the **{class_name.capitalize()}** created!", ephemeral=True)
+
+
+
 class SpideyRPG(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -96,3 +180,63 @@ class SpideyRPG(commands.Cog):
             report = "✅ All RPG items are currently defined! Great job!"
 
         return report
+    
+    @commands.group(name="rpg")
+    async def rpg(self, ctx: commands.Context):
+        """RPG commands group."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send("Please specify a subcommand.")
+
+    @rpg.command(name="create_character_modal", aliases=["ccm"])
+    async def create_character_modal(self, ctx: commands.Context):
+        """Create a character using a modal form."""
+        modal = CharacterCreationModal(self.bot, self.presets, ctx)
+        await ctx.send_modal(modal)
+
+
+    @rpg.hybrid_command(name="view_character", aliases=["vc"])
+    @app_commands.describe(user="The user whose character you want to view (default: yourself)")
+    async def view_character(self, ctx: commands.Context, user: discord.User = None):
+        if user is None:
+            user = ctx.author
+
+        character = self.rpg_data.get(str(user.id))
+        if character:
+            await ctx.send(f"**Character for {user.name}:**\n{character}")
+        else:
+            await ctx.send(f"{user.name} does not have a character.")
+        
+        embed = discord.Embed(title=f"{user.name}'s Character", color=discord.Color.blue())
+        embed.add_field(name="Name", value=f"{character.get('name', 'Unknown')} the {character.get('class', 'Unknown')}", inline=True)
+        embed.add_field(name="Gender", value=character.get("gender", "Unknown"), inline=True)
+        embed.add_field(name="Description", value=character.get("description", "No description provided"), inline=False)
+        embed.add_field(name="Level", value=character.get("level", 1), inline=True)
+        embed.add_field(name="Experience", value=character.get("experience", 0), inline=True)
+        embed.add_field(name="Stats", value=str(character.get("stats", {})), inline=False)
+        image = character.get("image_url")
+        if image:
+            embed.set_image(url=image)
+        await ctx.send(embed=embed)
+    
+    @rpg.command(name="delete_character", aliases=["dc"])
+    async def delete_character(self, ctx: commands.Context):
+        """Delete your RPG character."""
+        user_id = str(ctx.author.id)
+        if user_id in self.rpg_data:
+            await ctx.send(f"Are you sure you want to delete your character, {ctx.author.name}? This action cannot be undone. Type 'yes' to confirm.")
+            def check(m):
+                return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() == 'yes'
+            try:
+                message = await self.bot.wait_for('message', check=check, timeout=30.0)
+                if message.content.lower() == 'yes':
+                    del self.rpg_data[user_id]
+                    save_file(RPG_SAVE_FILE, self.rpg_data)
+                    await ctx.send("Your character has been deleted.")
+                else:
+                    await ctx.send("Character deletion canceled.")
+                    return
+            except asyncio.TimeoutError:
+                await ctx.send("Character deletion canceled.")
+                return
+        else:
+            await ctx.send("You do not have a character to delete.")
