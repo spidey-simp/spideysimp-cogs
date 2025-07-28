@@ -1,10 +1,11 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import tasks
 import random
 import asyncio
 import json
 import os
 from discord import app_commands
+from redbot.core import Config, commands
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RPG_SAVE_FILE = os.path.join(BASE_DIR, 'rpg_save.json')
