@@ -1,0 +1,409 @@
+{
+    "classes": {
+        "mage": {
+            "description": "A master of the arcane arts, wielding powerful spells to control the elements and manipulate reality.",
+            "stats": {
+                "strength": 2,
+                "dexterity": 5,
+                "intelligence": 7,
+                "wisdom": 6,
+                "charisma": 5,
+                "magic": 8,
+                "speed": 4,
+                "health": 50
+            },
+            "weapons": [
+                "Tree Branch",
+                "Basic Spellbook"
+            ],
+            "passive_abilities": [
+                "Mana Regeneration",
+                "Elemental Affinity"
+            ],
+            "ranged": true,
+            "melee": false,
+            "magic": true,
+            "armor": [
+                "Robe of Rags",
+                "Leather Sandals"
+            ],
+            "abilities": [
+                "Basic Fireball"
+            ]
+        },
+        "warrior": {
+            "description": "A seasoned fighter, skilled in combat and able to withstand great amounts of damage.",
+            "stats": {
+                "strength": 8,
+                "dexterity": 4,
+                "intelligence": 3,
+                "wisdom": 5,
+                "charisma": 4,
+                "magic": 0,
+                "speed": 3,
+                "health": 100
+            },
+            "weapons": [
+                "Wooden Sword",
+                "Shield"
+            ],
+            "passive_abilities": [
+                "Battle Hardened",
+                "Shield Block"
+            ],
+            "ranged": false,
+            "melee": true,
+            "magic": false,
+            "armor": [
+                "Leather Armor",
+                "Raggedy Boots"
+            ],
+            "abilities": [
+                "Basic Slash"
+            ]
+        },
+        "rogue": {
+            "description": "A stealthy and agile character, adept at sneaking and dealing quick, lethal strikes.",
+            "stats": {
+                "strength": 4,
+                "dexterity": 8,
+                "intelligence": 8,
+                "wisdom": 4,
+                "charisma": 6,
+                "magic": 0,
+                "speed": 7,
+                "health": 60
+            },
+            "weapons": [
+                "Dagger",
+                "Short Bow"
+            ],
+            "passive_abilities": [
+                "Stealth",
+                "Backstab"
+            ],
+            "ranged": true,
+            "melee": true,
+            "magic": false,
+            "armor": [
+                "Leather Armor",
+                "Cloak of Shadows"
+            ],
+            "abilities": [
+                "Quick Strike"
+            ]
+        },
+        "elf": {
+            "description": "A graceful and agile being, attuned to nature and skilled in archery.",
+            "stats": {
+                "strength": 5,
+                "dexterity": 7,
+                "intelligence": 6,
+                "wisdom": 5,
+                "charisma": 6,
+                "magic": 4,
+                "speed": 6,
+                "health": 70
+            },
+            "weapons": [
+                "Old Elven Bow",
+                "Short Sword"
+            ],
+            "passive_abilities": [
+                "Keen Senses",
+                "Nature's Camouflage"
+            ],
+            "ranged": true,
+            "melee": true,
+            "magic": true,
+            "armor": [
+                "Elven Armor",
+                "Soft Leather Boots"
+            ],
+            "abilities": [
+                "Basic Shot"
+            ]
+        },
+        "dwarf": {
+            "description": "A sturdy and resilient character, known for their craftsmanship and combat prowess.",
+            "stats": {
+                "strength": 7,
+                "dexterity": 4,
+                "intelligence": 5,
+                "wisdom": 6,
+                "charisma": 3,
+                "magic": 2,
+                "speed": 3,
+                "health": 80
+            },
+            "weapons": [
+                "Broken Battle Axe",
+                "Throwing Hammer"
+            ],
+            "passive_abilities": [
+                "Stone Skin",
+                "Dwarven Resilience"
+            ],
+            "ranged": false,
+            "melee": true,
+            "magic": false,
+            "armor": [
+                "Dwarven Plate Armor",
+                "Old Boots"
+            ],
+            "abilities": [
+                "Basic Swing"
+            ]
+        },
+        "orc": {
+            "description": "A fierce and powerful warrior, known for their brute strength and combat skills.",
+            "stats": {
+                "strength": 9,
+                "dexterity": 3,
+                "intelligence": 2,
+                "wisdom": 4,
+                "charisma": 2,
+                "magic": 1,
+                "speed": 4,
+                "health": 120
+            },
+            "weapons": [
+                "Orcish Warhammer",
+                "Spiked Shield"
+            ],
+            "passive_abilities": [
+                "Fury",
+                "Intimidation"
+            ],
+            "ranged": false,
+            "melee": true,
+            "magic": false,
+            "armor": [
+                "Orcish Armor",
+                "Heavy Boots"
+            ],
+            "abilities": [
+                "Basic Strike"
+            ]
+        },
+        "cleric": {
+            "description": "A holy warrior, capable of healing and supporting allies while also being able to fight.",
+            "stats": {
+                "strength": 5,
+                "dexterity": 4,
+                "intelligence": 6,
+                "wisdom": 8,
+                "charisma": 7,
+                "magic": 5,
+                "speed": 4,
+                "health": 70
+            },
+            "weapons": [
+                "Holy Book",
+                "Tree Branch"
+            ],
+            "passive_abilities": [
+                "Divine Protection",
+                "Healing Aura"
+            ],
+            "ranged": false,
+            "melee": true,
+            "magic": true,
+            "armor": [
+                "Clerical Robes",
+                "Sturdy Sandals"
+            ],
+            "abilities": [
+                "Basic Prayer"
+            ]
+        }
+    },
+    "weapons": {
+        "magic": {
+            "Tree Branch": {
+                "type": "staff",
+                "damage": 5,
+                "magic_damage": 0,
+                "description": "A simple branch, used by mages to channel their spells.",
+                "cost": 10
+            },
+            "Basic Spellbook": {
+                "type": "book",
+                "damage": 0,
+                "magic_damage": 10,
+                "description": "A basic spellbook containing fundamental spells for mages.",
+                "cost": 15
+            },
+            "Holy Book": {
+                "type": "book",
+                "damage": 0,
+                "magic_damage": 8,
+                "description": "A sacred book that enhances the cleric's healing abilities.",
+                "cost": 20
+            }
+        },
+        "melee": {
+            "Wooden Sword": {
+                "type": "sword",
+                "damage": 8,
+                "magic_damage": 0,
+                "description": "A sturdy wooden sword, perfect for beginners.",
+                "cost": 5
+            },
+            "Shield": {
+                "type": "shield",
+                "damage": 0,
+                "magic_damage": 0,
+                "description": "A basic shield that provides protection in combat.",
+                "cost": 5
+            },
+            "Dagger": {
+                "type": "dagger",
+                "damage": 6,
+                "magic_damage": 0,
+                "description": "A sharp dagger, ideal for quick strikes.",
+                "cost": 4
+            },
+            "Orcish Warhammer": {
+                "type": "hammer",
+                "damage": 12,
+                "magic_damage": 0,
+                "description": "A heavy warhammer used by orcs, known for its devastating power.",
+                "cost": 25
+            },
+            "Spiked Shield": {
+                "type": "shield",
+                "damage": 0,
+                "magic_damage": 0,
+                "description": "A shield with spikes, used for both defense and offense.",
+                "cost": 15
+            },
+            "Dwarven Plate Armor": {
+                "type": "armor",
+                "damage": 0,
+                "magic_damage": 0,
+                "description": "Heavy armor made by dwarves, providing excellent protection.",
+                "cost": 30
+            },
+            "Divine Shield": {
+                "type": "shield",
+                "damage": 0,
+                "magic_damage": 0,
+                "description": "A shield blessed by the gods, providing divine protection.",
+                "cost": 25
+            },
+            "Short Sword": {
+                "type": "sword",
+                "damage": 7,
+                "magic_damage": 0,
+                "description": "A short sword, easy to wield and effective in close combat.",
+                "cost": 6
+            },
+            "Broken Battle Axe": {
+                "type": "axe",
+                "damage": 10,
+                "magic_damage": 0,
+                "description": "A battle axe that has seen better days, but still packs a punch.",
+                "cost": 12
+            }
+        },
+        "ranged": {
+            "Short Bow": {
+                "type": "bow",
+                "damage": 7,
+                "magic_damage": 0,
+                "description": "A short bow that allows for ranged attacks.",
+                "cost": 8
+            },
+            "Old Elven Bow": { 
+                "type": "bow",
+                "damage": 9,
+                "magic_damage": 0,
+                "description": "An ancient bow crafted by elves, known for its accuracy.",
+                "cost": 12
+            },
+            "Throwing Hammer": {
+                "type": "hammer",
+                "damage": 8,
+                "magic_damage": 0,
+                "description": "A hammer designed for throwing, useful in ranged combat.",
+                "cost": 10
+            },
+            "Basic Bow": {
+                "type": "bow",
+                "damage": 6,
+                "magic_damage": 0,
+                "description": "A basic bow for ranged attacks, suitable for beginners.",
+                "cost": 5
+            }
+        }
+    },
+    "equipment": {
+        "torso": {
+            "Robe of Rags": {
+                "type": "robe",
+                "defense": 2,
+                "magic_defense": 3,
+                "description": "A simple robe that offers basic protection.",
+                "cost": 5
+            },
+            "Leather Armor": {
+                "type": "armor",
+                "defense": 5,
+                "magic_defense": 2,
+                "description": "Light armor made of leather, offering decent protection.",
+                "cost": 15
+            }
+
+        },
+        "head": {
+            "Leather Cap": {
+                "type": "helmet",
+                "defense": 1,
+                "magic_defense": 0,
+                "description": "A simple leather cap that offers minimal protection.",
+                "cost": 3
+            },
+            "Iron Helm": {
+                "type": "helmet",
+                "defense": 3,
+                "magic_defense": 1,
+                "description": "A sturdy iron helm that provides good protection.",
+                "cost": 10
+            }
+        },
+        "legs": {
+            "Leather Pants": {
+                "type": "armor",
+                "defense": 4,
+                "magic_defense": 1,
+                "description": "Pants made of tough leather, offering decent protection.",
+                "cost": 12
+            },
+            "Iron Greaves": {
+                "type": "armor",
+                "defense": 6,
+                "magic_defense": 2,
+                "description": "Heavy greaves made of iron, providing excellent protection.",
+                "cost": 20
+            }
+        },
+        "feet": {
+            "Leather Boots": {
+                "type": "boots",
+                "defense": 2,
+                "magic_defense": 0,
+                "description": "Sturdy leather boots that offer basic protection.",
+                "cost": 8
+            },
+            "Iron Sabatons": {
+                "type": "boots",
+                "defense": 4,
+                "magic_defense": 1,
+                "description": "Heavy iron boots that provide good protection.",
+                "cost": 15
+            }
+
+        }
+    }
+}
