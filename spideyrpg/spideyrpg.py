@@ -183,22 +183,21 @@ class SpideyRPG(commands.Cog):
     
     rpg = app_commands.Group(name="rpg", description="RPG commands")
 
-    @rpg.command(name="create_character_modal", description="Create a character using a modal form.")
-    async def create_character_modal(self, interaction: discord.Interaction):
+    @rpg.command(name="create_character", description="Create a character using a modal form.")
+    async def create_character(self, interaction: discord.Interaction):
         """Create a character using a modal form."""
         modal = CharacterCreationModal(self.bot, self.presets, interaction)
         await interaction.response.send_modal(modal)
 
-    @spidey_rpg.command(name="view_character", aliases=["vc"])
-    async def view_character(self, ctx: commands.Context, user: discord.User = None):
+    @rpg.command(name="view_character", description="View your or another user's RPG character.")
+    async def view_character(self, interaction: discord.Interaction, user: discord.User = None):
         if user is None:
-            user = ctx.author
+            user = interaction.user
 
         character = self.rpg_data.get(str(user.id))
-        if character:
-            await ctx.send(f"**Character for {user.name}:**\n{character}")
-        else:
-            await ctx.send(f"{user.name} does not have a character.")
+        if not character:
+            await interaction.response.send_message(f"{user.name} does not have a character.")
+            return
         
         embed = discord.Embed(title=f"{user.name}'s Character", color=discord.Color.blue())
         embed.add_field(name="Name", value=f"{character.get('name', 'Unknown')} the {character.get('class', 'Unknown')}", inline=True)
@@ -210,7 +209,7 @@ class SpideyRPG(commands.Cog):
         image = character.get("image_url")
         if image:
             embed.set_image(url=image)
-        await ctx.send(embed=embed)
+        await interaction.followup.send(embed=embed)
     
     @spidey_rpg.command(name="delete_character", aliases=["dc"])
     async def delete_character(self, ctx: commands.Context):
