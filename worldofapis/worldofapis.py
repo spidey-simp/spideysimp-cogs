@@ -293,13 +293,16 @@ class WorldOfApis(commands.Cog):
     @woa.command(name="joke", description="Get a random joke!")
     async def joke(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://v2.jokeapi.dev/joke/Any") as resp:
-                if resp.status != 200:
-                    return await interaction.followup.send("Couldn't fetch a joke right now. Try again later!")
+        joke_find = True
+        while joke_find:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://v2.jokeapi.dev/joke/Any") as resp:
+                    if resp.status != 200:
+                        return await interaction.followup.send("Couldn't fetch a joke right now. Try again later!")
 
                 joke_data = await resp.json()
+                if not joke_data.get("flags", {}).get("racist") and not joke_data.get("flags", {}).get("sexist"):
+                    joke_find = False
 
         embed = discord.Embed(title="Here's a joke for you", color=discord.Color.green())
 
