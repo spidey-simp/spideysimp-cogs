@@ -293,29 +293,38 @@ class WorldOfApis(commands.Cog):
     @woa.command(name="joke", description="Get a random joke!")
     async def joke(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
-        joke_find = True
-        while joke_find:
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://v2.jokeapi.dev/joke/Any") as resp:
-                    if resp.status != 200:
-                        return await interaction.followup.send("Couldn't fetch a joke right now. Try again later!")
+        
+        joke_data = None
+        blocked_flags = ["racist", "sexist"]
+        
+        for _ in range(5):  # Try up to 5 times
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get("https://v2.jokeapi.dev/joke/Any") as resp:
+                        if resp.status != 200:
+                            continue
+                        data = await resp.json()
+                        
+                        if not any(data.get("flags", {}).get(flag, False) for flag in blocked_flags):
+                            joke_data = data
+                            break
+            except aiohttp.ClientError:
+                continue  # Try again silently
 
-                joke_data = await resp.json()
-                if not joke_data.get("flags", {}).get("racist") and not joke_data.get("flags", {}).get("sexist"):
-                    joke_find = False
+        if not joke_data:
+            return await interaction.followup.send("Couldn't fetch a clean joke right now. Try again later!")
 
         embed = discord.Embed(title="Here's a joke for you", color=discord.Color.green())
-
-        if joke_data.get("flags", {}).get("nsfw"):
+        
+        if joke_data.get("flags", {}).get("nsfw") or joke_data.get("flags", {}).get("explicit"):
             embed.title += " 🔞"
-
 
         if joke_data["type"] == "single":
             embed.description = joke_data["joke"]
         else:
             setup = joke_data["setup"]
             delivery = joke_data["delivery"]
-            embed.description = f"{setup}\n\n||{delivery}||"  # Spoiler tag for punchline
+            embed.description = f"{setup}\n\n||{delivery}||"
 
         await interaction.followup.send(embed=embed)
 
