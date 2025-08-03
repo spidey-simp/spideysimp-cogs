@@ -9,6 +9,7 @@ from redbot.core import commands, bank
 import matplotlib.pyplot as plt
 import humanize
 import pytz
+import copy
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "market_data.json")
@@ -17,6 +18,8 @@ SPLIT_THRESHOLD = 1000.0
 SPLIT_RATIO = 2
 MERGE_THRESHOLD = 1.5
 MERGE_RATIO = SPLIT_RATIO
+MIN_HOLD = 100
+MAX_HOLD = 50_000
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -124,6 +127,7 @@ def load_data():
     return data
 
 
+
 def save_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=4)
@@ -183,7 +187,20 @@ INDIVIDUAL_EVENTS = [
     {"message": "{affected_company} cuts costs significantly, resulting in improved profitability.", "modifier": 0.03}
 ]
 
+BASELINE_COMPANIES = {
+    "LemonTech":    {"price":120, "name":"LemonTech Inc.",    "dividend_yield":0.03,  "bankruptcy_threshold":60, "price_history":[120], "total_shares":1_000_000, "available_shares":1_000_000},
+    "NascarCorp":   {"price":90,  "name":"Nascar Corp.",      "dividend_yield":0.02,  "bankruptcy_threshold":45, "price_history":[90],  "total_shares":  800_000, "available_shares":  800_000},
+    "MM500":        {"price":50,  "name":"M&M 500 Ltd.",      "dividend_yield":0.04,  "bankruptcy_threshold":25, "price_history":[50],  "total_shares":  500_000, "available_shares":  500_000},
+    "SpideySells":  {"price":110, "name":"SpideySells Inc.",  "dividend_yield":0.015, "bankruptcy_threshold":55, "price_history":[110], "total_shares":  600_000, "available_shares":  600_000},
+    "BananaRepublic":{"price":70, "name":"Banana Republic Co.","dividend_yield":0.025,"bankruptcy_threshold":35, "price_history":[70],  "total_shares":  700_000, "available_shares":  700_000},
+}
 
+# the same defaults you inject in load_data()
+DEFAULT_INDICES = {
+    "Nascar Index":    {"value": 1000.0, "history": [1000.0]},
+    "M&M Index":       {"value":  800.0, "history": [800.0]},
+    "Dough Jones Index": {"value": 950.0, "history": [950.0]},
+}
 
 class SpideyStocks(commands.Cog):
     """A simple stock market simulation cog."""
@@ -894,3 +911,38 @@ class SpideyStocks(commands.Cog):
         embed.set_image(url="attachment://indexgraph.png")
         await ctx.send(embed=embed, file=file)
     
+
+    @commands.command(name="reset_market", hidden=True)
+    @commands.is_owner()
+    async def reset_market(self, ctx):
+        """One-time market reset: restore baseline companies & indices, hybrid-allocate shares."""
+        # 1) snapshot old totals & user holdings
+        old_totals = {sym: comp["total_shares"] for sym, comp in self.data["companies"].items()}
+        user_owners = {
+            user: {sym: shares for sym, shares in port.items() if shares > 0}
+            for user, port in self.data["portfolios"].items()
+        }
+
+        # 2) reset companies to baseline
+        self.data["companies"] = {sym: dict(props) for sym, props in BASELINE_COMPANIES.items()}
+
+        # 3) reset indices to defaults (deep copy to avoid mutation)
+        self.data["indices"] = {name: copy.deepcopy(cfg) for name, cfg in DEFAULT_INDICES.items()}
+
+        # 4) re-allocate shares hybrid-style
+        for user, holdings in user_owners.items():
+            port = self.data["portfolios"].setdefault(user, {})
+            for sym, old_shares in holdings.items():
+                if sym not in self.data["companies"]:
+                    continue
+
+                new_total = self.data["companies"][sym]["total_shares"]
+                pct       = old_shares / old_totals.get(sym, old_shares)
+                raw_grant = pct * new_total
+
+                grant = int(max(MIN_HOLD, min(MAX_HOLD, raw_grant)))
+                port[sym] = grant
+
+        # 5) persist & confirm
+        save_data(self.data)
+        await ctx.send("✅ Market reset complete: companies and indices restored; shareholders re-allocated via hybrid formula.")
