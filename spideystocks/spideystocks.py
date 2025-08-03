@@ -15,6 +15,8 @@ DATA_FILE = os.path.join(BASE_DIR, "market_data.json")
 HISTORY_LIMIT = 288
 SPLIT_THRESHOLD = 1000.0
 SPLIT_RATIO = 2
+MERGE_THRESHOLD = .5
+MERGE_RATIO = SPLIT_RATIO
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -144,7 +146,16 @@ WHOLE_MARKET_EVENTS = [
     {"message": "Unemployment figures fall, spurring renewed market optimism.", "modifier": 0.02},
     {"message": "Financial regulators ease restrictions, fueling market enthusiasm.", "modifier": 0.025},
     {"message": "International trade agreements are signed, lifting global investor confidence.", "modifier": 0.02},
-    {"message": "A major recession scare is averted, causing markets to rally.", "modifier": 0.03}
+    {"message": "A major recession scare is averted, causing markets to rally.", "modifier": 0.03},
+    {"message": "Corporate earnings disappoint across the board, shaking investor confidence.", "modifier": -0.02},
+    {"message": "Major cybersecurity breach exposes customer data, spooking the markets.", "modifier": -0.03},
+    {"message": "Unexpected default by a large insurer triggers a sector-wide sell-off.", "modifier": -0.04},
+    {"message": "Government announces hefty capital-gains tax hike, denting market enthusiasm.", "modifier": -0.03},
+    {"message": "Commodity price plunge erodes resource stocks, dragging the overall market down.", "modifier": -0.025},
+    {"message": "Regulators fine a consortium of banks for rigging rates, rattling financial shares.", "modifier": -0.035},
+    {"message": "Trade negotiations break down, reigniting tariffs and trade-war fears.", "modifier": -0.03},
+    {"message": "Inflation spikes unexpectedly, leading to concerns about consumer spending.", "modifier": -0.02},
+    {"message": "Credit-rating agencies downgrade major economies, undermining market stability.", "modifier": -0.04},
 ]
 
 SECTOR_EVENTS = [
@@ -283,6 +294,35 @@ class SpideyStocks(commands.Cog):
                         await channel.send(f"Auto–split executed for {company['name']} ({symbol}). Price: {old_price:.2f} → {company['price']:.2f}.")
         if split_count:
             save_data(self.data)
+    
+    @tasks.loop(hours=12)
+    async def auto_stock_consolidate(self):
+        merge_count = 0
+        for symbol, company in self.data["companies"].items():
+            if company["price"] <= MERGE_THRESHOLD:
+                old_price = company["price"]
+                # raise price by merge ratio
+                company["price"] = round(old_price * MERGE_RATIO, 2)
+                # shrink share counts
+                company["total_shares"]     //= MERGE_RATIO
+                company["available_shares"] //= MERGE_RATIO
+                if "npc_holdings" in company:
+                    company["npc_holdings"] //= MERGE_RATIO
+                # update user portfolios
+                for uid, portfolio in self.data["portfolios"].items():
+                    if symbol in portfolio:
+                        portfolio[symbol] //= MERGE_RATIO
+                merge_count += 1
+
+                # optional announcement
+                ch_id = self.data.get("update_channel_id")
+                if ch_id:
+                    ch = self.bot.get_channel(ch_id)
+                    await ch.send(f"Auto–merge executed for {company['name']} ({symbol}). "
+                                f"Price: {old_price:.2f} → {company['price']:.2f}.")
+
+        if merge_count:
+            save_data(self.data)
 
     @tasks.loop(minutes=5)
     async def market_check_loop(self):
@@ -347,15 +387,16 @@ class SpideyStocks(commands.Cog):
             # For example, factor = baseline_volume / volume.
             volatility_factor = baseline_volume / volume  
             # Alternatively, you might clamp this factor between, say, 0.5 and 2.
-            volatility_factor = max(0.5, min(2, volatility_factor))
-            
-            change_percent = random.uniform(-0.05, 0.05) * volatility_factor
+            volatility_factor = max(0.5, min(2.0, volatility_factor))
+            market_noise = random.uniform(-0.05, 0.05) * volatility_factor
+            delta = 1 + market_noise + scaled_modifier
             old_price = company["price"]
-            new_price = max(1.0, old_price * (1 + change_percent + scaled_modifier))
-            company["price"] = new_price  # Keep as float internally.
-            company.setdefault("price_history", []).append(new_price)
-            if len(company["price_history"]) > HISTORY_LIMIT:
-                company["price_history"].pop(0)
+            new_price = max(1.0, old_price * delta)
+            company["price"] = round(new_price, 4)  # Keep as float internally.
+            history = company.setdefault("price_history", [])
+            history.append(new_price)
+            if len(history) > HISTORY_LIMIT:
+                history.pop(0)
         save_data(self.data)
 
 
