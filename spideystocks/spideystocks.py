@@ -295,7 +295,7 @@ class SpideyStocks(commands.Cog):
         if split_count:
             save_data(self.data)
     
-    @tasks.loop(hours=12)
+    @tasks.loop(minutes=30)
     async def auto_stock_consolidate(self):
         merge_count = 0
         for symbol, company in self.data["companies"].items():
