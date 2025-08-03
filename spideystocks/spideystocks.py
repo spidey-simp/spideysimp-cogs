@@ -206,6 +206,7 @@ class SpideyStocks(commands.Cog):
         self.distribute_dividends.start()
         self.auto_stock_split.start()
         self.npc_trading.start()
+        self.auto_stock_consolidate.start()
         # Only start update tasks if the market is open.
         if not self.market_closed:
             self.bot.loop.create_task(self.market_open())
@@ -216,6 +217,7 @@ class SpideyStocks(commands.Cog):
         self.distribute_dividends.cancel()
         self.auto_stock_split.cancel()
         self.npc_trading.cancel()
+        self.auto_stock_consolidate.cancel()
         if not self.market_closed:
             self.bot.loop.create_task(self.market_close())
     
