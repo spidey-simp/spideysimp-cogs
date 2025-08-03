@@ -950,3 +950,40 @@ class SpideyStocks(commands.Cog):
         # 5) persist & confirm
         save_data(self.data)
         await ctx.send("✅ Market reset complete: companies and indices restored; shareholders re-allocated via hybrid formula.")
+
+    
+    @commands.command(name="reset_metadata", hidden=True)
+    @commands.is_owner()
+    async def reset_metadata(self, ctx):
+        """Reset only the metadata fields for all companies: category, ticker, CEO, location, employees, date_established, daily_volume, available_shares."""
+        # Default metadata values
+        DEFAULT_FIELDS = {
+            "category": "general",
+            "CEO": "Unknown",
+            "location": "Unknown",
+            "employees": 0,
+            "date_established": "Unknown",
+            "daily_volume": 100000,
+        }
+        # Mapping for category and ticker overrides
+        SECTOR_MAPPING = {
+            "LemonTech":    {"category": "tech",           "ticker": "LMN"},
+            "NascarCorp":   {"category": "entertainment",  "ticker": "NSC"},
+            "MM500":        {"category": "consumer goods", "ticker": "MM5"},
+            "SpideySells":  {"category": "tech",           "ticker": "SPS"},
+            "BananaRepublic":{"category": "consumer goods","ticker": "BNR"},
+        }
+
+        for sym, comp in self.data["companies"].items():
+            # Apply default metadata
+            for field, default in DEFAULT_FIELDS.items():
+                comp[field] = default
+            # Ensure available_shares matches total_shares
+            comp["available_shares"] = comp.get("total_shares", comp.get("available_shares", 0))
+            # Override category and ticker where specified
+            if sym in SECTOR_MAPPING:
+                comp["category"] = SECTOR_MAPPING[sym]["category"]
+                comp["ticker"]   = SECTOR_MAPPING[sym]["ticker"]
+        
+        save_data(self.data)
+        await ctx.send("✅ Company metadata reset complete.")
