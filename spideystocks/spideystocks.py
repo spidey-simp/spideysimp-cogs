@@ -659,7 +659,7 @@ class SpideyStocks(commands.Cog):
                     pct_change = 0
                 line = (f"{rank:<4} {ticker:<6} {name:<20}"
                         f"{price:>10,.2f}{pct_change:>8.2f}"
-                        f"{market_cap_str:>12.2f}{available_str:>10.2f}")
+                        f"{market_cap_str:>12}{available_str:>10}")
                 output_lines.append(line)
                 rank += 1
             output_lines.append("```")
