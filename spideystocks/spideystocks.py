@@ -916,6 +916,10 @@ class SpideyStocks(commands.Cog):
     @commands.is_owner()
     async def reset_market(self, ctx):
         """One-time market reset: restore baseline companies & indices, hybrid-allocate shares."""
+        self.market_injection = 0.0
+        self.index_modifier   = 0.0
+        self.investor_modifier= 0.0
+
         # 1) snapshot old totals & user holdings
         old_totals = {sym: comp["total_shares"] for sym, comp in self.data["companies"].items()}
         user_owners = {
