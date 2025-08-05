@@ -6,6 +6,7 @@ from redbot.core import commands
 import json
 import os
 import datetime
+from typing import List
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -576,117 +577,88 @@ class SpideyCourts(commands.Cog):
 
         await interaction.followup.send("❌ Docket entry not found.", ephemeral=True)
 
-    def extract_command_option(self, interaction: discord.Interaction, name: str):
-        for opt in interaction.data.get("options", []):
-            if opt.get("name") == name:
-                return opt.get("value")
-        return None
+    async def try_get_display_name(self, guild, user_id):
+        try:
+            member = await guild.fetch_member(user_id)
+            return member.display_name
+        except:
+            return str(user_id)
 
 
-    async def docket_entry_autocomplete(
-        self,
-        interaction: discord.Interaction,
-        current: str,
-    ) -> list[app_commands.Choice[str]]:
-        """Autocomplete for docket entry numbers."""
-        matches = []
-        case_number = ""
-        case_number = self.extract_command_option(interaction, "case_number")
-        case_data = self.court_data.get(case_number)
+    async def docket_entry_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        choices = []
 
-        if not case_data:
-            return matches
+        for case_number, case_data in self.court_data.items():
+            filings = case_data.get("filings", [])
+            for doc in filings:
+                if doc.get("author_id") != interaction.user.id:
+                    continue
+                entry = doc.get("entry")
+                if not entry:
+                    continue
 
-        filings = case_data.get("filings", [])
-        for doc in filings:
-            if doc.get("author_id") == interaction.user.id:
-                entry_num = doc.get("entry")
-                if entry_num and str(entry_num).startswith(current):
-                    matches.append(app_commands.Choice(name=f"{doc.get('document_type', 'Unknown')} #{entry_num}", value=str(entry_num)))
+                # Fetch names
+                plaintiff = await self.try_get_display_name(interaction.guild, case_data.get("plaintiff"))
+                defendant = await self.try_get_display_name(interaction.guild, case_data.get("defendant"))
+                header = f"{plaintiff} v. {defendant}"
 
-            if len(matches) >= 25:
-                break
+                label = f"{header}, {case_number} Entry {entry}"
+                value = f"{case_number};{entry}"
+                choices.append(app_commands.Choice(name=label, value=value))
 
-        return matches
+        return choices[:25]
+
 
     @court.command(name="file_exhibit", description="File an exhibit to an existing document")
     @app_commands.describe(
-        case_number="Case number (e.g., 1:25-cv-000001-SS)",
         docket_entry="Docket entry number",
-        exhibit_desc="Text description of the exhibit",
+        caption="Text description of the exhibit",
         exhibit_file="File to upload as an exhibit"
     )
-    @app_commands.autocomplete(case_number=case_autocomplete, docket_entry=docket_entry_autocomplete)
-    async def file_exhibit(self, interaction:discord.Interaction, case_number: str, docket_entry: int, exhibit_desc: str, exhibit_file: discord.Attachment):
+    @app_commands.autocomplete(docket_entry=docket_entry_autocomplete)
+    async def file_exhibit(self, interaction:discord.Interaction, docket_entry: str, exhibit_file: discord.Attachment, caption: str = "No caption provided"):
         """File an exhibit to an existing document."""
         await interaction.response.defer(ephemeral=True, thinking=True)
+
+        case_number, entry_num = docket_entry.split(";")
+        entry_num = int(entry_num)
+
 
         case_data = self.court_data.get(case_number)
         if not case_data:
             await interaction.followup.send("❌ Case not found.", ephemeral=True)
             return
-
-        filings = case_data.get("filings", [])
-        for doc in filings:
-            if doc.get("entry") == docket_entry:
-                # Save the file to the exhibits channel
-                exhibits_channel = self.bot.get_channel(EXHIBITS_CHANNEL_ID)
-                if not exhibits_channel:
-                        await interaction.followup.send("❌ Exhibits channel not found.", ephemeral=True)
-                        return
-                
-                doc.setdefault("exhibits", [])
-                exhibit_num = len(doc["exhibits"]) + 1
-                exhibit_msg = await exhibits_channel.send(
-                    f"Exhibit #{exhibit_num} for Case {case_number}, Docket Entry #{docket_entry}:\n{exhibit_desc}",
-                    file=await exhibit_file.to_file()
-                )
-
-                doc["exhibits"].append( {
-                    "exhibit_number": f"{docket_entry}-{exhibit_num}",
-                    "text": exhibit_desc,
-                    "file_url": exhibit_msg.attachments[0].url,
-                    "file_id": exhibit_msg.id,
-                    "channel_id": exhibits_channel.id,
-                    "submitted_by": interaction.user.id,
-                    "timestamp": str(datetime.datetime.now().isoformat())
-                }
-                )
-
-                save_json(COURT_FILE, self.court_data)
-                await interaction.followup.send(f"✅ Exhibit #{exhibit_num} filed successfully for Docket Entry #{docket_entry}.", ephemeral=True)
-                return
-
-        await interaction.followup.send("❌ Docket entry not found.", ephemeral=True)
-
-    @court.command(name="backfill_author_ids", description="Patch old filings by resolving and saving missing author IDs.")
-    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    async def backfill_author_ids(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
         
-        updated_count = 0
-        failed = []
+        doc = next((d for d in case_data.get("filings", []) if d.get("entry") == entry_num), None)
 
-        for case_num, case_data in self.court_data.items():
-            if not isinstance(case_data, dict) or "filings" not in case_data:
-                continue
+        
 
-            for doc in case_data["filings"]:
-                if "author" in doc and "author_id" not in doc:
-                    username = doc["author"]
-                    member = discord.utils.find(lambda m: m.name == username, interaction.guild.members)
-                    if member:
-                        doc["author_id"] = member.id
-                        updated_count += 1
-                    else:
-                        failed.append((case_num, doc.get("entry", "?"), username))
+        # Save the file to the exhibits channel
+        exhibits_channel = self.bot.get_channel(EXHIBITS_CHANNEL_ID)
+        if not exhibits_channel:
+            await interaction.followup.send("❌ Exhibits channel not found.", ephemeral=True)
+            return
+                
+        doc.setdefault("exhibits", [])
+        exhibit_num = len(doc["exhibits"]) + 1
+        exhibit_msg = await exhibits_channel.send(
+            f"Exhibit #{exhibit_num} for Case {case_number}, Docket Entry #{docket_entry}:\n{caption}",
+            file=await exhibit_file.to_file()
+        )
+
+        doc["exhibits"].append( {
+            "exhibit_number": f"{docket_entry}-{exhibit_num}",
+            "text": caption,
+            "file_url": exhibit_msg.attachments[0].url,
+            "file_id": exhibit_msg.id,
+            "channel_id": exhibits_channel.id,
+            "submitted_by": interaction.user.id,
+            "timestamp": str(datetime.datetime.now().isoformat())
+        }
+        )
 
         save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(f"✅ Exhibit #{exhibit_num} filed successfully for Docket Entry #{docket_entry}.", ephemeral=True)
 
-        response = f"✅ Added `author_id` to {updated_count} filings."
-        if failed:
-            response += f"\n⚠️ Failed to resolve {len(failed)} docs:\n" + "\n".join(
-                [f"• Case {cn}, Entry {e}: '{u}'" for cn, e, u in failed]
-            )
 
-        await interaction.followup.send(response, ephemeral=True)
+    
