@@ -126,6 +126,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
                     "entry": 1,
                     "document_type": "Complaint",
                     "author": interaction.user.name,
+                    "author_id": interaction.user.id,
                     "content": self.complaint_text.value,
                     "timestamp": interaction.created_at.isoformat()
                 }
@@ -648,3 +649,35 @@ class SpideyCourts(commands.Cog):
                 return
 
         await interaction.followup.send("❌ Docket entry not found.", ephemeral=True)
+
+    @court.command(name="backfill_author_ids", description="Patch old filings by resolving and saving missing author IDs.")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    async def backfill_author_ids(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        
+        updated_count = 0
+        failed = []
+
+        for case_num, case_data in self.court_data.items():
+            if not isinstance(case_data, dict) or "filings" not in case_data:
+                continue
+
+            for doc in case_data["filings"]:
+                if "author" in doc and "author_id" not in doc:
+                    username = doc["author"]
+                    member = discord.utils.find(lambda m: m.name == username, interaction.guild.members)
+                    if member:
+                        doc["author_id"] = member.id
+                        updated_count += 1
+                    else:
+                        failed.append((case_num, doc.get("entry", "?"), username))
+
+        save_json(COURT_FILE, self.court_data)
+
+        response = f"✅ Added `author_id` to {updated_count} filings."
+        if failed:
+            response += f"\n⚠️ Failed to resolve {len(failed)} docs:\n" + "\n".join(
+                [f"• Case {cn}, Entry {e}: '{u}'" for cn, e, u in failed]
+            )
+
+        await interaction.followup.send(response, ephemeral=True)
