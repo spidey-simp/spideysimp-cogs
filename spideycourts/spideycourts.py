@@ -191,10 +191,12 @@ class SpideyCourts(commands.Cog):
         self.bot = bot
         self.court_data = load_json(COURT_FILE)
         self.show_applicants.start()
+        self.show_cases.start()
     
     def cog_unload(self):
         """Stop the daily task when the cog is unloaded."""
         self.show_applicants.cancel()
+        self.show_cases.cancel()
     
     @tasks.loop(hours=24)
     async def show_applicants(self):
