@@ -133,8 +133,14 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
 
         summary += f"\nFiled by: {interaction.user.mention}"
 
-        await venue_channel.send(summary)
+        summary_msg = await venue_channel.send(summary)
 
+        filing_msg = await venue_channel.send(
+            f"**Complaint Document - {case_number}**\n\n{self.complaint_text.value}"
+        )
+
+        court_data[case_number]["filings"][0]["message_id"] = filing_msg.id
+        court_data[case_number]["filings"][0]["channel_id"] = filing_msg.channel.id
 
         await interaction.response.send_message(
             f"✅ Complaint filed successfully under case number `{case_number}`.",
@@ -383,5 +389,36 @@ class SpideyCourts(commands.Cog):
                 break
 
         return matches
+    
+    @court.command(name="view_docket", description="View the docket for a case")
+    @app_commands.describe(case_number="The case number to view")
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    async def view_docket(self, interaction: discord.Interaction, case_number: str):
+        """View the docket for a specific case."""
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        case_data = self.court_data.get(case_number)
 
+        if not case_data:
+            await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+            return
         
+        plaintiff_name = await self.bot.fetch_user(case_data["plaintiff"])
+        defendant_name = await self.bot.fetch_user(case_data["defendant"])
+
+        docket_text = f"**Docket for Case {plaintiff_name} v. {defendant_name}, {case_number}**\n\n"
+        docket_text += f"**Venue:** {case_data.get('venue', 'Unknown')}\n"
+        docket_text += f"**Judge:** {case_data.get('judge', 'Unknown')}\n"
+        filings = []
+        for doc in case_data.get("filings", []):
+            try:
+                link = f"https://discord.com/channels/{interaction.guild.id}/{doc.get('channel_id')}/{doc.get('message_id')}"
+            except KeyError:
+                link = "#"
+            filings.append(
+                f"**[{doc.get('entry', 1)}] [{doc.get('document_type', 'Unknown')}]({link})** by {doc.get('author', 'Unknown')} on {doc.get('timestamp', 'Unknown')}\n"
+            )
+        
+        reversed_filings = filings[::-1]
+        docket_text += "\n".join(reversed_filings) if reversed_filings else "No filings found."
+
+        await interaction.response.send_message(docket_text, ephemeral=True)
