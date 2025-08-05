@@ -63,13 +63,15 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             label="Additional Plaintiffs (optional)",
             placeholder="Enter additional plaintiffs (semi-colon separated)...",
             style=discord.TextStyle.short,
-            max_length=100
+            max_length=100,
+            required=False
         )
         self.additional_defendants = discord.ui.TextInput(
             label="Additional Defendants (optional)",
             placeholder="Enter additional defendants (semi-colon separated)...",
             style=discord.TextStyle.short,
-            max_length=100
+            max_length=100,
+            required=False
         )
         self.complaint_text = discord.ui.TextInput(
             label="Complaint Text",
@@ -78,7 +80,10 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             max_length=4000,
             required=True
         )
+        self.add_item(self.additional_plaintiffs)
+        self.add_item(self.additional_defendants)
         self.add_item(self.complaint_text)
+        
 
     async def on_submit(self, interaction: discord.Interaction):
         venue_channel_id = VENUE_CHANNEL_MAP.get(self.venue)
