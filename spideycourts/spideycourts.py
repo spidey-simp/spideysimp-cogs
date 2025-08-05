@@ -26,6 +26,14 @@ VENUE_CHANNEL_MAP = {
     "ssc": SUPREME_COURT_CHANNEL_ID
 }
 
+VENUE_NAMES = {
+    "gen_chat": "General Chat District Court",
+    "swgoh": "General SWGOH District Court",
+    "public_square": "Public Square District Court",
+    "first_circuit": "First Circuit Court of Appeals",
+    "ssc": "Supreme Court"
+}
+
 JUDGE_INITS = {
     "gen_chat": "SS",
     "swgoh": "LF",
@@ -373,16 +381,16 @@ class SpideyCourts(commands.Cog):
                     # Try resolving names for nicer autocomplete display
                     plaintiff_name = str(case_data.get("plaintiff", "Unknown"))
                     defendant_name = str(case_data.get("defendant", "Unknown"))
-
+                    guild = interaction.guild
                     try:
-                        plaintiff_user = await self.bot.fetch_user(int(case_data["plaintiff"]))
-                        plaintiff_name = plaintiff_user.name
+                        plaintiff_member = guild.get_member(case_data["plaintiff"]) or await guild.fetch_member(case_data["plaintiff"])
+                        plaintiff_name = plaintiff_member.display_name
                     except Exception:
                         pass
 
                     try:
-                        defendant_user = await self.bot.fetch_user(int(case_data["defendant"]))
-                        defendant_name = defendant_user.name
+                        defendant_member = guild.get_member(case_data["defendant"]) or await guild.fetch_member(case_data["defendant"])
+                        defendant_name = defendant_member.display_name
                     except Exception:
                         pass
 
@@ -410,11 +418,20 @@ class SpideyCourts(commands.Cog):
             await interaction.followup.send("❌ Case not found.", ephemeral=True)
             return
         
-        plaintiff_name = await self.bot.fetch_user(case_data["plaintiff"])
-        defendant_name = await self.bot.fetch_user(case_data["defendant"])
+        guild = interaction.guild
+
+        plaintiff_member = guild.get_member(case_data["plaintiff"]) or await guild.fetch_member(case_data["plaintiff"])
+        defendant_member = guild.get_member(case_data["defendant"]) or await guild.fetch_member(case_data["defendant"])
+
+        plaintiff_name = plaintiff_member.display_name
+        defendant_name = defendant_member.display_name
 
         docket_text = f"**Docket for Case {plaintiff_name} v. {defendant_name}, {case_number}**\n\n"
-        docket_text += f"**Venue:** {case_data.get('venue', 'Unknown')}\n"
+        docket_text += f"**Counsel for Plaintiff:** {case_data.get('counsel_for_plaintiff', 'Unknown')}\n"
+        docket_text += f"**Counsel for Defendant:** {case_data.get('counsel_for_defendant', 'Unknown')}\n"
+        venue = case_data.get("venue", "Unknown")
+        if venue in VENUE_NAMES:
+            docket_text += f"**Venue:** {VENUE_NAMES[venue]}\n"
         docket_text += f"**Judge:** {case_data.get('judge', 'Unknown')}\n"
         filings = []
         for doc in case_data.get("filings", []):
@@ -427,7 +444,7 @@ class SpideyCourts(commands.Cog):
             if ts:
                 try:
                     dt = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    ts = dt.strftime("%b %d, %Y at %I:%M %p UTC")
+                    ts = dt.strftime("%m/%d/%y")
                 except Exception:
                     pass
 
