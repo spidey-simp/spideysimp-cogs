@@ -589,7 +589,7 @@ class SpideyCourts(commands.Cog):
 
         filings = case_data.get("filings", [])
         for doc in filings:
-            if doc.get("author") == interaction.user.id:
+            if doc.get("author") == interaction.user.name:
                 entry_num = doc.get("entry")
                 if entry_num and str(entry_num).startswith(current):
                     matches.append(app_commands.Choice(name=f"{doc.get('document_type', 'Unknown')} #{entry_num}", value=str(entry_num)))
