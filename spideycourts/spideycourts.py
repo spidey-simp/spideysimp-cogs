@@ -522,10 +522,17 @@ class SpideyCourts(commands.Cog):
                     ts = dt.strftime("%m/%d/%y")
                 except Exception:
                     pass
+            
+            exhibits = []
+            for ex in doc.get("exhibits", []):
+                ex_link = f"https://discord.com/channels/{interaction.guild.id}/{ex['channel_id']}/{ex['file_id']}"
+                exhibits.append(f"  ↳ Exhibit {ex['exhibit_number']}: [{ex['text']}]({ex_link})\n")
 
             filings.append(
                 f"**[{doc.get('entry', 1)}] [{doc.get('document_type', 'Unknown')}]({link})** by {doc.get('author', 'Unknown')} on {ts}\n"
+                f"{''.join(exhibits) if exhibits else ''}"
             )
+            
         
         reversed_filings = filings[::-1]
         docket_text += "\n".join(reversed_filings) if reversed_filings else "No filings found."
@@ -563,6 +570,81 @@ class SpideyCourts(commands.Cog):
                 doc["message_id"] = message_id
                 save_json(COURT_FILE, self.court_data)
                 await interaction.followup.send(f"✅ Updated docket entry #{doc_num} with new link.", ephemeral=True)
+                return
+
+        await interaction.followup.send("❌ Docket entry not found.", ephemeral=True)
+
+    async def docket_entry_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        """Autocomplete for docket entry numbers."""
+        matches = []
+        case_number = interaction.data.get("options", [{}])[0].get("value", "")
+        case_data = self.court_data.get(case_number)
+
+        if not case_data:
+            return matches
+
+        filings = case_data.get("filings", [])
+        for doc in filings:
+            if doc.get("author") == interaction.user.id:
+                entry_num = doc.get("entry")
+                if entry_num and str(entry_num).startswith(current):
+                    matches.append(app_commands.Choice(name=f"{doc.get('document_type', 'Unknown')} #{entry_num}", value=str(entry_num)))
+
+            if len(matches) >= 25:
+                break
+
+        return matches
+
+    @court.command(name="file_exhibit", description="File an exhibit to an existing document")
+    @app_commands.describe(
+        case_number="Case number (e.g., 1:25-cv-000001-SS)",
+        docket_entry="Docket entry number",
+        exhibit_desc="Text description of the exhibit",
+        exhibit_file="File to upload as an exhibit"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete, docket_entry=docket_entry_autocomplete)
+    async def file_exhibit(self, interaction:discord.Interaction, case_number: str, docket_entry: int, exhibit_desc: str, exhibit_file: discord.Attachment):
+        """File an exhibit to an existing document."""
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        case_data = self.court_data.get(case_number)
+        if not case_data:
+            await interaction.followup.send("❌ Case not found.", ephemeral=True)
+            return
+
+        filings = case_data.get("filings", [])
+        for doc in filings:
+            if doc.get("entry") == docket_entry:
+                # Save the file to the exhibits channel
+                exhibits_channel = self.bot.get_channel(EXHIBITS_CHANNEL_ID)
+                if not exhibits_channel:
+                        await interaction.followup.send("❌ Exhibits channel not found.", ephemeral=True)
+                        return
+                
+                doc.setdefault("exhibits", [])
+                exhibit_num = len(doc["exhibits"]) + 1
+                exhibit_msg = await exhibits_channel.send(
+                    f"Exhibit #{exhibit_num} for Case {case_number}, Docket Entry #{docket_entry}:\n{exhibit_desc}",
+                    file=await exhibit_file.to_file()
+                )
+
+                doc["exhibits"].append( {
+                    "exhibit_number": f"{docket_entry}-{exhibit_num}",
+                    "text": exhibit_desc,
+                    "file_url": exhibit_msg.attachments[0].url,
+                    "file_id": exhibit_msg.id,
+                    "channel_id": exhibits_channel.id,
+                    "submitted_by": interaction.user.id,
+                    "timestamp": str(datetime.datetime.now().isoformat())
+                }
+                )
+
+                save_json(COURT_FILE, self.court_data)
+                await interaction.followup.send(f"✅ Exhibit #{exhibit_num} filed successfully for Docket Entry #{docket_entry}.", ephemeral=True)
                 return
 
         await interaction.followup.send("❌ Docket entry not found.", ephemeral=True)
