@@ -405,7 +405,7 @@ class SpideyCourts(commands.Cog):
         case_data = self.court_data.get(case_number)
 
         if not case_data:
-            await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+            await interaction.followup.send("❌ Case not found.", ephemeral=True)
             return
         
         plaintiff_name = await self.bot.fetch_user(case_data["plaintiff"])
@@ -427,4 +427,4 @@ class SpideyCourts(commands.Cog):
         reversed_filings = filings[::-1]
         docket_text += "\n".join(reversed_filings) if reversed_filings else "No filings found."
 
-        await interaction.response.send_message(docket_text, ephemeral=True)
+        await interaction.followup.send(docket_text, ephemeral=True)
