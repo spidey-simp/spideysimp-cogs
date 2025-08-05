@@ -17,6 +17,8 @@ GEN_SWGOH_DIST_CT_CHANNEL_ID = 1401721949134258286
 PUBLIC_SQUARE_DIST_CT_CHANNEL_ID = 1401722584566861834
 FED_JUDICIARY_ROLE_ID = 1401712141584826489
 FED_CHAMBERS_CHANNEL_ID = 1401812137780838431
+ONGOING_CASES_CHANNEL_ID = 1402401313370931371
+EXHIBITS_CHANNEL_ID = 1402400976983425075
 
 VENUE_CHANNEL_MAP = {
     "gen_chat": GEN_CHAT_DIST_CT_CHANNEL_ID,
@@ -101,17 +103,19 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
 
         extra_plaintiffs_raw = self.additional_plaintiffs.value
         extra_plaintiffs = [p.strip() for p in extra_plaintiffs_raw.split(';') if p.strip()]
+        extra_plaintiffs_formatted = [await self.resolve_party_entry(interaction.guild, p) for p in extra_plaintiffs]
         extra_defendants_raw = self.additional_defendants.value
         extra_defendants = [d.strip() for d in extra_defendants_raw.split(';') if d.strip()]
+        extra_defendants_formatted = [await self.resolve_party_entry(interaction.guild, d) for d in extra_defendants]
 
         court_data = self.bot.get_cog("SpideyCourts").court_data
         case_number = f"1:{interaction.created_at.year % 100:02d}-cv-{len(court_data)+1:06d}-{JUDGE_INITS.get(self.venue, 'SS')}"
 
         court_data[case_number] = {
             "plaintiff": self.plaintiff.id,
-            "additional_plaintiffs": extra_plaintiffs,
+            "additional_plaintiffs": extra_plaintiffs_formatted,
             "defendant": self.defendant.id,
-            "additional_defendants": extra_defendants,
+            "additional_defendants": extra_defendants_formatted,
             "counsel_for_plaintiff": interaction.user.id,
             "venue": self.venue,
             "judge": JUDGE_VENUES.get(self.venue, {}).get("name", "SS"),
@@ -136,14 +140,16 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             f"**Case Number:** `{case_number}`\n"
             f"**Plaintiff:** {self.plaintiff.mention}"
         )
+        formatted_extra_plaintiffs = [self.format_party(interaction.guild, p) for p in extra_plaintiffs_formatted]
+        formatted_extra_defendants = [self.format_party(interaction.guild, d) for d in extra_defendants_formatted]
 
         if extra_plaintiffs:
-            summary += f"\n**Additional Plaintiffs:** {', '.join(extra_plaintiffs)}"
+            summary += f"\n**Additional Plaintiffs:** {', '.join(formatted_extra_plaintiffs)}"
 
         summary += f"\n**Defendant:** {self.defendant.mention}"
 
         if extra_defendants:
-            summary += f"\n**Additional Defendants:** {', '.join(extra_defendants)}"
+            summary += f"\n**Additional Defendants:** {', '.join(formatted_extra_defendants)}"
 
         summary += f"\nFiled by: {interaction.user.mention}"
 
@@ -162,6 +168,21 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             f"✅ Complaint filed successfully under case number `{case_number}`.",
             ephemeral=True
         )
+    
+    async def resolve_party_entry(guild: discord.Guild, entry: str):
+        """Attempt to resolve a party string into a user ID. Fallback to string."""
+        name = entry.strip().lstrip("@")
+        for member in guild.members:
+            if member.name == name or member.display_name == name:
+                return member.id
+        return name  # fallback to raw string
+    
+    def format_party(guild: discord.Guild, party):
+        if isinstance(party, int):
+            member = guild.get_member(party)
+            return member.mention if member else f"<@{party}>"
+        return party
+
 
 
 
@@ -194,6 +215,30 @@ class SpideyCourts(commands.Cog):
             user = await self.bot.fetch_user(int(user_id))
             message += f"- {user.name} (ID: {user_id})\n"
         
+        await channel.send(message)
+    
+    @tasks.loop(hours=24)
+    async def show_cases(self):
+        """Daily task to show ongoing cases in the Ongoing Cases channel."""
+        if not self.court_data:
+            return
+
+        channel = self.bot.get_channel(ONGOING_CASES_CHANNEL_ID)
+        if not channel:
+            return
+        
+        ongoing_cases = [case_number for case_number, data in self.court_data.items() if data.get('status') != 'closed']
+        if not ongoing_cases:
+            return
+        
+        message = "Ongoing Court Cases:\n"
+        for case_number in ongoing_cases:
+            case_data = self.court_data[case_number]
+            plaintiff = await self.bot.fetch_user(case_data['plaintiff'])
+            defendant = await self.bot.fetch_user(case_data['defendant'])
+            most_recent_filing = case_data['filings'][-1] if case_data['filings'] else {}
+            message += f"- {case_number}: {plaintiff.name} v. {defendant.name} (Most recent filing: {most_recent_filing.get('document_type') if most_recent_filing else 'No filings'})\n"
+
         await channel.send(message)
 
     
