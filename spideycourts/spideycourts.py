@@ -119,7 +119,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             ]
         }
 
-        save_json(COURT_FILE, court_data)
+       
 
         # Try to send the summary message to the correct channel
         venue_channel = self.bot.get_channel(venue_channel_id)
@@ -147,6 +147,8 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
 
         court_data[case_number]["filings"][0]["message_id"] = filing_msg.id
         court_data[case_number]["filings"][0]["channel_id"] = filing_msg.channel.id
+
+        save_json(COURT_FILE, court_data)
 
         await interaction.response.send_message(
             f"✅ Complaint filed successfully under case number `{case_number}`.",
@@ -420,11 +422,55 @@ class SpideyCourts(commands.Cog):
                 link = f"https://discord.com/channels/{interaction.guild.id}/{doc.get('channel_id')}/{doc.get('message_id')}"
             except KeyError:
                 link = "#"
+            
+            ts = doc.get('timestamp')
+            if ts:
+                try:
+                    dt = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    ts = dt.strftime("%b %d, %Y at %I:%M %p UTC")
+                except Exception:
+                    pass
+
             filings.append(
-                f"**[{doc.get('entry', 1)}] [{doc.get('document_type', 'Unknown')}]({link})** by {doc.get('author', 'Unknown')} on {doc.get('timestamp', 'Unknown')}\n"
+                f"**[{doc.get('entry', 1)}] [{doc.get('document_type', 'Unknown')}]({link})** by {doc.get('author', 'Unknown')} on {ts}\n"
             )
         
         reversed_filings = filings[::-1]
         docket_text += "\n".join(reversed_filings) if reversed_filings else "No filings found."
 
         await interaction.followup.send(docket_text, ephemeral=True)
+
+    @court.command(name="connect_document", description="Manually update the link for a document.")
+    @app_commands.describe(
+        case_number="Case number (e.g., 1:25-cv-000001-SS)",
+        doc_num="Docket entry number",
+        link="Discord message link to connect"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    async def connect_document(self, interaction: discord.Interaction, case_number: str, doc_num: int, link: str):
+        await interaction.response.defer(ephemeral=True)
+
+        case = self.court_data.get(case_number)
+        if not case:
+            await interaction.followup.send("❌ Case not found.", ephemeral=True)
+            return
+
+        try:
+            channel_id, message_id = link.split("/")[-2:]
+            channel_id = int(channel_id)
+            message_id = int(message_id)
+        except ValueError:
+            await interaction.followup.send("❌ Invalid message link format.", ephemeral=True)
+            return
+
+        filings = case.get("filings", [])
+        for doc in filings:
+            if doc.get("entry") == doc_num:
+                doc["channel_id"] = channel_id
+                doc["message_id"] = message_id
+                save_json(COURT_FILE, self.court_data)
+                await interaction.followup.send(f"✅ Updated docket entry #{doc_num} with new link.", ephemeral=True)
+                return
+
+        await interaction.followup.send("❌ Docket entry not found.", ephemeral=True)
