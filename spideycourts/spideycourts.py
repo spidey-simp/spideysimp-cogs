@@ -222,6 +222,8 @@ class SpideyCourts(commands.Cog):
     @tasks.loop(hours=24)
     async def show_cases(self):
         """Daily task to show ongoing cases in the Ongoing Cases channel."""
+        guild = self.bot.get_guild(ONGOING_CASES_CHANNEL_ID)
+
         if not self.court_data:
             return
 
@@ -233,13 +235,16 @@ class SpideyCourts(commands.Cog):
         if not ongoing_cases:
             return
         
-        message = "Ongoing Court Cases:\n"
+        message = "**Ongoing Court Cases:**\n"
         for case_number in ongoing_cases:
             case_data = self.court_data[case_number]
-            plaintiff = await self.bot.fetch_user(case_data['plaintiff'])
-            defendant = await self.bot.fetch_user(case_data['defendant'])
+            plaintiff_member = guild.get_member(case_data["plaintiff"]) or await guild.fetch_member(case_data["plaintiff"])
+            defendant_member = guild.get_member(case_data["defendant"]) or await guild.fetch_member(case_data["defendant"])
+
+            plaintiff_name = plaintiff_member.display_name
+            defendant_name = defendant_member.display_name
             most_recent_filing = case_data['filings'][-1] if case_data['filings'] else {}
-            message += f"- {case_number}: {plaintiff.name} v. {defendant.name} (Most recent filing: {most_recent_filing.get('document_type') if most_recent_filing else 'No filings'})\n"
+            message += f"- `{plaintiff_name}` v. `{defendant_name}`, {case_number} (Most recent filing: {most_recent_filing.get('document_type') if most_recent_filing else 'No filings'})\n"
 
         await channel.send(message)
 
