@@ -7,6 +7,7 @@ import json
 import os
 import datetime
 
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 COURT_FILE = os.path.join(BASE_DIR, 'courts.json')
 SYSTEM_FILE = os.path.join(BASE_DIR, 'system.json')
@@ -575,6 +576,13 @@ class SpideyCourts(commands.Cog):
 
         await interaction.followup.send("❌ Docket entry not found.", ephemeral=True)
 
+    def extract_command_option(self, interaction: discord.Interaction, name: str):
+        for opt in interaction.data.get("options", []):
+            if opt.get("name") == name:
+                return opt.get("value")
+        return None
+
+
     async def docket_entry_autocomplete(
         self,
         interaction: discord.Interaction,
@@ -583,10 +591,7 @@ class SpideyCourts(commands.Cog):
         """Autocomplete for docket entry numbers."""
         matches = []
         case_number = ""
-        for opt in interaction.data.get("options", []):
-            if opt.get("name") == "case_number":
-                case_number = opt.get("value", "")
-                break
+        case_number = self.extract_command_option(interaction, "case_number")
         case_data = self.court_data.get(case_number)
 
         if not case_data:
