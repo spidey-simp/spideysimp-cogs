@@ -427,8 +427,8 @@ class SpideyCourts(commands.Cog):
         defendant_name = defendant_member.display_name
 
         docket_text = f"**Docket for Case {plaintiff_name} v. {defendant_name}, {case_number}**\n\n"
-        docket_text += f"**Counsel for Plaintiff:** {case_data.get('counsel_for_plaintiff', 'Unknown')}\n"
-        docket_text += f"**Counsel for Defendant:** {case_data.get('counsel_for_defendant', 'Unknown')}\n"
+        docket_text += f"**Counsel for Plaintiff:** <@{case_data.get('counsel_for_plaintiff', 'Unknown')}>\n"
+        docket_text += f"**Counsel for Defendant:** <@{case_data.get('counsel_for_defendant', 'Unknown')}>\n"
         venue = case_data.get("venue", "Unknown")
         if venue in VENUE_NAMES:
             docket_text += f"**Venue:** {VENUE_NAMES[venue]}\n"
