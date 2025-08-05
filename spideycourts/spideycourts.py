@@ -9,6 +9,7 @@ import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 COURT_FILE = os.path.join(BASE_DIR, 'courts.json')
+SYSTEM_FILE = os.path.join(BASE_DIR, 'system.json')
 
 SUPREME_COURT_CHANNEL_ID = 1302331990829174896
 FIRST_CIRCUIT_CHANNEL_ID = 1400567992726716583
@@ -222,31 +223,53 @@ class SpideyCourts(commands.Cog):
     @tasks.loop(hours=24)
     async def show_cases(self):
         """Daily task to show ongoing cases in the Ongoing Cases channel."""
-        guild = self.bot.get_guild(ONGOING_CASES_CHANNEL_ID)
-
         if not self.court_data:
             return
 
         channel = self.bot.get_channel(ONGOING_CASES_CHANNEL_ID)
         if not channel:
             return
-        
-        ongoing_cases = [case_number for case_number, data in self.court_data.items() if data.get('status') != 'closed']
+
+        # Try deleting the previous message
+        system_data = load_json(SYSTEM_FILE)
+        last_msg_id = system_data.get("last_ongoing_cases_msg_id")
+        if last_msg_id:
+            try:
+                old_msg = await channel.fetch_message(last_msg_id)
+                await old_msg.delete()
+            except discord.NotFound:
+                pass  # Already deleted or never sent
+
+        # Compose new message
+        ongoing_cases = [
+            case_number for case_number, data in self.court_data.items()
+            if data.get('status') != 'closed'
+        ]
         if not ongoing_cases:
             return
-        
+
         message = "**Ongoing Court Cases:**\n"
         for case_number in ongoing_cases:
             case_data = self.court_data[case_number]
-            plaintiff_member = guild.get_member(case_data["plaintiff"]) or await guild.fetch_member(case_data["plaintiff"])
-            defendant_member = guild.get_member(case_data["defendant"]) or await guild.fetch_member(case_data["defendant"])
+            guild = channel.guild
+            try:
+                plaintiff = await guild.fetch_member(case_data["plaintiff"])
+                defendant = await guild.fetch_member(case_data["defendant"])
+                plaintiff_name = plaintiff.display_name
+                defendant_name = defendant.display_name
+            except Exception:
+                plaintiff_name = str(case_data["plaintiff"])
+                defendant_name = str(case_data["defendant"])
 
-            plaintiff_name = plaintiff_member.display_name
-            defendant_name = defendant_member.display_name
-            most_recent_filing = case_data['filings'][-1] if case_data['filings'] else {}
-            message += f"- `{plaintiff_name}` v. `{defendant_name}`, {case_number} (Most recent filing: {most_recent_filing.get('document_type') if most_recent_filing else 'No filings'})\n"
+            latest = case_data['filings'][-1] if case_data.get('filings') else {}
+            message += f"- `{plaintiff_name}` v. `{defendant_name}`, {case_number} (Most recent: {latest.get('document_type', 'Unknown')})\n"
 
-        await channel.send(message)
+        new_msg = await channel.send(message)
+
+        # Save new message ID
+        system_data["last_ongoing_cases_msg_id"] = new_msg.id
+        save_json(SYSTEM_FILE, system_data)
+
 
     
     court = app_commands.Group(name="court", description="Court related commands")
