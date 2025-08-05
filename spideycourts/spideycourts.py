@@ -1,6 +1,7 @@
 import asyncio
 import discord
-from discord import app_commands, tasks
+from discord import app_commands
+from discord.ext import tasks
 from redbot.core import commands
 import json
 import os
