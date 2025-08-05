@@ -582,7 +582,11 @@ class SpideyCourts(commands.Cog):
     ) -> list[app_commands.Choice[str]]:
         """Autocomplete for docket entry numbers."""
         matches = []
-        case_number = interaction.data.get("options", [{}])[0].get("value", "")
+        case_number = ""
+        for opt in interaction.data.get("options", []):
+            if opt.get("name") == "case_number":
+                case_number = opt.get("value", "")
+                break
         case_data = self.court_data.get(case_number)
 
         if not case_data:
