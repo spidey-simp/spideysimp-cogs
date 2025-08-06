@@ -642,12 +642,12 @@ class SpideyCourts(commands.Cog):
         doc.setdefault("exhibits", [])
         exhibit_num = len(doc["exhibits"]) + 1
         exhibit_msg = await exhibits_channel.send(
-            f"Exhibit #{exhibit_num} for Case {case_number}, Docket Entry #{docket_entry}:\n{caption}",
+            f"Exhibit #{exhibit_num} for Case {case_number}, Docket Entry #{entry_num}:\n{caption}",
             file=await exhibit_file.to_file()
         )
 
         doc["exhibits"].append( {
-            "exhibit_number": f"{docket_entry}-{exhibit_num}",
+            "exhibit_number": f"{entry_num}-{exhibit_num}",
             "text": caption,
             "file_url": exhibit_msg.attachments[0].url,
             "file_id": exhibit_msg.id,
@@ -658,7 +658,28 @@ class SpideyCourts(commands.Cog):
         )
 
         save_json(COURT_FILE, self.court_data)
-        await interaction.followup.send(f"✅ Exhibit #{exhibit_num} filed successfully for Docket Entry #{docket_entry}.", ephemeral=True)
+        await interaction.followup.send(f"✅ Exhibit #{exhibit_num} filed successfully for Docket Entry #{entry_num}.", ephemeral=True)
 
+    @court.command(name="fix_exhibit_numbers", description="Fix malformed exhibit_number values with semicolons.")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    async def fix_exhibit_numbers(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
 
-    
+        fixed = 0
+        for case_num, case_data in self.court_data.items():
+            if not isinstance(case_data, dict):
+                continue
+            filings = case_data.get("filings", [])
+            for filing in filings:
+                exhibits = filing.get("exhibits", [])
+                for exhibit in exhibits:
+                    ex_num = exhibit.get("exhibit_number", "")
+                    if ";" in ex_num:
+                        original = ex_num
+                        cleaned = ex_num.split(";")[1]
+                        exhibit["exhibit_number"] = cleaned
+                        fixed += 1
+                        print(f"Fixed: {original} → {cleaned}")
+
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(f"✅ Fixed {fixed} exhibit numbers.", ephemeral=True)
