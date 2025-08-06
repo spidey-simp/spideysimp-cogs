@@ -785,7 +785,8 @@ class SpideyCourts(commands.Cog):
         # Format notification
         plaintiff_name = await self.try_get_display_name(interaction.guild, case.get("plaintiff"))
         defendant_name = await self.try_get_display_name(interaction.guild, case.get("defendant"))
-        venue = VENUE_CHANNEL_MAP.get(case.get("venue"), "Unknown Venue")
+        venue_id = VENUE_CHANNEL_MAP.get(case.get("venue"))
+        venue = self.bot.get_channel(venue_id).mention if venue_id else "Unknown Venue"
         service_notice = (
             f"📨 **You have been served.**\n\n"
             f"A complaint has been filed against you in the case:\n\n"
