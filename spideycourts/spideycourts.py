@@ -189,9 +189,10 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         return party
 
 class DocumentFilingModal(discord.ui.Modal, title="File another document"):
-    def __init__(self, bot, case_dict:dict, related_docs:str=None):
+    def __init__(self, bot, case_number:str, case_dict:dict, related_docs:str=None):
         super().__init__()
         self.bot = bot
+        self.case_number = case_number
         self.case_dict = case_dict
         if related_docs:
             self.related_docs = related_docs
@@ -770,7 +771,7 @@ class SpideyCourts(commands.Cog):
             await interaction.response.send_message("That kind of document should have at least one related document. Please confer with the docket to see other docket numbers.")
             return
         
-        await interaction.response.send_modal(DocumentFilingModal(bot=self.bot, case_dict=case_data, related_docs=related_docs))
+        await interaction.response.send_modal(DocumentFilingModal(bot=self.bot, case_number=case_number, case_dict=case_data, related_docs=related_docs))
         
 
     @court.command(name="serve", description="Serve a party with a complaint")
