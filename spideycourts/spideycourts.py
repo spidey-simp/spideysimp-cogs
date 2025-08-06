@@ -561,9 +561,28 @@ class SpideyCourts(commands.Cog):
         plaintiff_name = plaintiff_member.display_name
         defendant_name = defendant_member.display_name
 
+        plaintiff_id = str(case_data.get("plaintiff"))
+        defendant_id = str(case_data.get("defendant"))
+        counsel_map = case_data.get("counsel_of_record", {})
+
+        plaintiff_counsel_id = counsel_map.get(plaintiff_id)
+        defendant_counsel_id = counsel_map.get(defendant_id)
+
+        if plaintiff_counsel_id:
+            plaintiff_counsel = await self.try_get_display_name(guild, plaintiff_counsel_id)
+        else:
+            plaintiff_counsel = "<@Unknown>"
+
+        if defendant_counsel_id:
+            defendant_counsel = await self.try_get_display_name(guild, defendant_counsel_id)
+        else:
+            defendant_counsel = "<@Unknown>"
+
+
+
         docket_text = f"**Docket for Case {plaintiff_name} v. {defendant_name}, {case_number}**\n\n"
-        docket_text += f"**Counsel for Plaintiff:** <@{case_data.get('counsel_for_plaintiff', 'Unknown')}>\n"
-        docket_text += f"**Counsel for Defendant:** <@{case_data.get('counsel_for_defendant', 'Unknown')}>\n"
+        docket_text += f"**Counsel for Plaintiff:** {plaintiff_counsel}\n"
+        docket_text += f"**Counsel for Defendant:** {defendant_counsel}\n"
         venue = case_data.get("venue", "Unknown")
         if venue in VENUE_NAMES:
             docket_text += f"**Venue:** {VENUE_NAMES[venue]}\n"
