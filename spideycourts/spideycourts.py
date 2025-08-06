@@ -840,3 +840,46 @@ class SpideyCourts(commands.Cog):
         save_json(COURT_FILE, self.court_data)
 
         await interaction.followup.send(f"✅ {defendant.display_name} has been served via {method.name}. Docket updated (Entry {entry_num}).", ephemeral=True)
+
+    @court.command(name="notice_of_appearance", description="File a Notice of Appearance in a case")
+    @app_commands.describe(
+        case_number="The case in which you are appearing",
+        party="The party you are representing (must be named in the case)"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    async def notice_of_appearance(self, interaction: discord.Interaction, case_number: str, party: discord.Member):
+        await interaction.response.defer(ephemeral=True)
+
+        case = self.court_data.get(case_number)
+        if not case:
+            await interaction.followup.send("❌ Case not found.", ephemeral=True)
+            return
+
+        valid_parties = [case.get("plaintiff"), case.get("defendant")] + case.get("additional_defendants", [])
+        if str(party.id) not in map(str, valid_parties):
+            await interaction.followup.send("❌ That user is not a listed party in this case.", ephemeral=True)
+            return
+
+        # Save appearance
+        counsel_map = case.setdefault("counsel_of_record", {})
+        counsel_map[str(party.id)] = interaction.user.id
+
+        # Add to docket
+        filings = case.setdefault("filings", [])
+        entry = len(filings) + 1
+        timestamp = datetime.now(UTC).isoformat()
+        party_name = await self.try_get_display_name(interaction.guild, party.id)
+        author_name = await self.try_get_display_name(interaction.guild, interaction.user.id)
+
+        filings.append({
+            "entry": entry,
+            "document_type": "Notice of Appearance",
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "content": f"{author_name} appeared on behalf of {party_name}.",
+            "timestamp": timestamp
+        })
+
+        save_json(COURT_FILE, self.court_data)
+
+        await interaction.followup.send(f"✅ {author_name} has appeared on behalf of {party_name} in {case_number}.", ephemeral=True)
