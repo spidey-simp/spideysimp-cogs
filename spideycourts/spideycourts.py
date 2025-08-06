@@ -766,6 +766,7 @@ class SpideyCourts(commands.Cog):
         app_commands.Choice(name="Direct Message", value="dm"),
         app_commands.Choice(name="Both", value="both")
     ])
+    @app_commands.autocomplete(case_number=case_autocomplete)
     async def serve(self, interaction: discord.Interaction, case_number: str, defendant: discord.Member, method: app_commands.Choice[str]):
         await interaction.response.defer(ephemeral=True)
 
