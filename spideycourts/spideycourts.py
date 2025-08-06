@@ -770,7 +770,7 @@ class SpideyCourts(commands.Cog):
             await interaction.response.send_message("That kind of document should have at least one related document. Please confer with the docket to see other docket numbers.")
             return
         
-        await interaction.response.send_modal(DocumentFilingModal(bot=self, case_dict=case_data, related_docs=related_docs))
+        await interaction.response.send_modal(DocumentFilingModal(bot=self.bot, case_dict=case_data, related_docs=related_docs))
         
 
     @court.command(name="serve", description="Serve a party with a complaint")
