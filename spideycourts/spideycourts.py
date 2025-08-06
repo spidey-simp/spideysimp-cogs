@@ -5,7 +5,7 @@ from discord.ext import tasks
 from redbot.core import commands
 import json
 import os
-import datetime
+from datetime import datetime, UTC
 from typing import List
 
 
@@ -22,6 +22,7 @@ FED_JUDICIARY_ROLE_ID = 1401712141584826489
 FED_CHAMBERS_CHANNEL_ID = 1401812137780838431
 ONGOING_CASES_CHANNEL_ID = 1402401313370931371
 EXHIBITS_CHANNEL_ID = 1402400976983425075
+COURT_STEPS_CHANNEL_ID = 1402482794650931231
 
 VENUE_CHANNEL_MAP = {
     "gen_chat": GEN_CHAT_DIST_CT_CHANNEL_ID,
@@ -187,8 +188,64 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             return member.mention if member else f"<@{party}>"
         return party
 
+class DocumentFilingModal(discord.ui.Modal, title="File another document"):
+    def __init__(self, bot, case_dict:dict, related_docs:str=None):
+        super().__init__()
+        self.bot = bot
+        self.case_dict = case_dict
+        if related_docs:
+            self.related_docs = related_docs
 
+        self.doc_title = discord.ui.TextInput(
+            label="Input the title of your document",
+            style=discord.TextStyle.short,
+            required=True,
+            placeholder="Document name such as Motion to Dismiss"
+        )
 
+        self.doc_contents = discord.ui.TextInput(
+            label="The contents of the document",
+            placeholder="Enter the contents",
+            required=True,
+            style=discord.TextStyle.paragraph
+        )
+        self.add_item(self.doc_title)
+        self.add_item(self.doc_contents)
+        
+    async def on_submit(self, interaction: discord.Interaction):
+        filings = self.case_dict.setdefault("filings", [])
+        entry_num = len(filings) + 1
+        timestamp = datetime.now(UTC).isoformat()
+
+        new_doc = {
+            "entry": entry_num,
+            "document_type": self.doc_title.value,
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "content": self.doc_contents.value,
+            "timestamp": timestamp
+        }
+
+        if self.related_docs:
+            formatted_related = [int(x.strip()) for x in self.related_docs.split(";") if x.strip().isdigit()]
+            new_doc["related_docs"] = formatted_related
+
+        filings.append(new_doc)
+
+        # Try to send message to court channel
+        venue = self.case_dict.get("venue")
+        channel_id = VENUE_CHANNEL_MAP.get(venue)
+        court_channel = self.bot.get_channel(channel_id)
+        message = await court_channel.send(
+            f"**{self.doc_title.value} - {self.case_number}**\n\n{self.doc_contents.value}"
+        )
+
+        new_doc["message_id"] = message.id
+        new_doc["channel_id"] = message.channel.id
+
+        save_json(COURT_FILE, self.bot.get_cog("SpideyCourts").court_data)
+
+        await interaction.response.send_message(f"✅ Document filed as docket entry #{entry_num}.", ephemeral=True)
 
 class SpideyCourts(commands.Cog):
     def __init__(self, bot):
@@ -521,7 +578,7 @@ class SpideyCourts(commands.Cog):
             ts = doc.get('timestamp')
             if ts:
                 try:
-                    dt = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
                     ts = dt.strftime("%m/%d/%y")
                 except Exception:
                     pass
@@ -531,8 +588,13 @@ class SpideyCourts(commands.Cog):
                 ex_link = f"https://discord.com/channels/{interaction.guild.id}/{ex['channel_id']}/{ex['file_id']}"
                 exhibits.append(f"  ↳ Exhibit {ex['exhibit_number']}: [{ex['text']}]({ex_link})\n")
 
+            related_docs = doc.get("related_docs", [])
+            related_str = ""
+            if related_docs:
+                related_str = " (Related to: " + ", ".join(f"Entry {r}" for r in related_docs) + ")"
+
             filings.append(
-                f"**[{doc.get('entry', 1)}] [{doc.get('document_type', 'Unknown')}]({link})** by {doc.get('author', 'Unknown')} on {ts}\n"
+                f"**[{doc.get('entry', 1)}] [{doc.get('document_type', 'Unknown')}]({link})** by {doc.get('author', 'Unknown')} on {ts}{related_str}\n"
                 f"{''.join(exhibits) if exhibits else ''}"
             )
             
@@ -653,33 +715,126 @@ class SpideyCourts(commands.Cog):
             "file_id": exhibit_msg.id,
             "channel_id": exhibits_channel.id,
             "submitted_by": interaction.user.id,
-            "timestamp": str(datetime.datetime.now().isoformat())
+            "timestamp": str(datetime.now(UTC).isoformat())
         }
         )
 
         save_json(COURT_FILE, self.court_data)
         await interaction.followup.send(f"✅ Exhibit #{exhibit_num} filed successfully for Docket Entry #{entry_num}.", ephemeral=True)
 
-    @court.command(name="fix_exhibit_numbers", description="Fix malformed exhibit_number values with semicolons.")
+
+    @court.command(name="file_document", description="File other documents for a case.")
+    @app_commands.describe(
+        case_number="The case to file a document for",
+        document_type="What type of document",
+        related_docs="Any docs related to this one (separate with ;)"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.choices(document_type=[
+        app_commands.Choice(name="Motion", value="motion"),
+        app_commands.Choice(name="Response", value="response"),
+        app_commands.Choice(name="Reply", value="reply"),
+        app_commands.Choice(name="Countermotion", value="countermotion"),
+        app_commands.Choice(name="Amendment", value="amended"),
+        app_commands.Choice(name="Supplement", value="supplemental"),
+        app_commands.Choice(name="Other (answer, etc.)", value="other")
+    ])
+    async def file_document(self, interaction:discord.Interaction, case_number:str, document_type:str, related_docs:str=None):
+
+        case_data = self.court_data[case_number]
+        if not case_data:
+            await interaction.response.send_message("No case data found for that case number.", ephemeral=True)
+            return
+        
+        related_doc_reqs = ["motion", "response", "reply", "countermotion", "amended", "supplemental"]
+        if document_type in related_doc_reqs and not related_docs:
+            await interaction.response.send_message("That kind of document should have at least one related document. Please confer with the docket to see other docket numbers.")
+            return
+        
+        await interaction.response.send_modal(DocumentFilingModal(bot=self, case_dict=case_data, related_docs=related_docs))
+        
+
+    @court.command(name="serve", description="Serve a party with a complaint")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    async def fix_exhibit_numbers(self, interaction: discord.Interaction):
+    @app_commands.describe(
+        case_number="The case number to serve",
+        defendant="The defendant being served",
+        method="The method of service"
+    )
+    @app_commands.choices(method=[
+        app_commands.Choice(name="Mention in court channel", value="mention"),
+        app_commands.Choice(name="Direct Message", value="dm"),
+        app_commands.Choice(name="Both", value="both")
+    ])
+    async def serve(self, interaction: discord.Interaction, case_number: str, defendant: discord.Member, method: app_commands.Choice[str]):
         await interaction.response.defer(ephemeral=True)
 
-        fixed = 0
-        for case_num, case_data in self.court_data.items():
-            if not isinstance(case_data, dict):
-                continue
-            filings = case_data.get("filings", [])
-            for filing in filings:
-                exhibits = filing.get("exhibits", [])
-                for exhibit in exhibits:
-                    ex_num = exhibit.get("exhibit_number", "")
-                    if ";" in ex_num:
-                        original = ex_num
-                        cleaned = ex_num.split(";")[1]
-                        exhibit["exhibit_number"] = cleaned
-                        fixed += 1
-                        print(f"Fixed: {original} → {cleaned}")
+        # Validate case
+        case = self.court_data.get(case_number)
+        if not case:
+            await interaction.followup.send("❌ Case not found.", ephemeral=True)
+            return
+
+        # Validate defendant
+        valid_parties = [case.get("defendant")] + case.get("additional_defendants", [])
+        if defendant.id not in valid_parties:
+            await interaction.followup.send("❌ This user is not listed as a defendant in the case.", ephemeral=True)
+            return
+
+        # Format notification
+        plaintiff_name = await self.try_get_display_name(interaction.guild, case.get("plaintiff"))
+        defendant_name = await self.try_get_display_name(interaction.guild, case.get("defendant"))
+        venue = VENUE_CHANNEL_MAP.get(case.get("venue"), "Unknown Venue")
+        service_notice = (
+            f"📨 **You have been served.**\n\n"
+            f"A complaint has been filed against you in the case:\n\n"
+            f"`{plaintiff_name} v. {defendant_name}`\n"
+            f"Case Number: `{case_number}`\n"
+            f"Venue: {venue}\n\n"
+            f"You are required to respond within 72 hours. Failure to respond may result in a default judgment."
+        )
+
+        # Notify defendant
+        served_publicly = False
+        if method.value in ["mention", "both"]:
+            channel_id = COURT_STEPS_CHANNEL_ID  # public place to post
+            channel = self.bot.get_channel(channel_id)
+            if channel:
+                await channel.send(f"{defendant.mention}\n{service_notice}")
+                served_publicly = True
+
+        if method.value in ["dm", "both"]:
+            try:
+                await defendant.send(service_notice)
+            except discord.Forbidden:
+                if not served_publicly:
+                    await interaction.followup.send("❌ Could not DM the defendant and no public mention made.", ephemeral=True)
+                    return
+
+        # Record service
+        service_data = case.setdefault("service", {})
+        service_data[str(defendant.id)] = {
+            "method": method.value,
+            "served_at": datetime.now(UTC).isoformat(),
+            "served_by": interaction.user.id
+        }
+
+        # Update status
+        case["status"] = "ready_for_response"
+
+        # Add docket entry
+        filings = case.setdefault("filings", [])
+        entry_num = len(filings) + 1
+        timestamp = datetime.now(UTC).isoformat()
+        filings.append({
+            "entry": entry_num,
+            "document_type": "Proof of Service",
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "content": f"Served {defendant.display_name} via {method.name}.",
+            "timestamp": timestamp
+        })
 
         save_json(COURT_FILE, self.court_data)
-        await interaction.followup.send(f"✅ Fixed {fixed} exhibit numbers.", ephemeral=True)
+
+        await interaction.followup.send(f"✅ {defendant.display_name} has been served via {method.name}. Docket updated (Entry {entry_num}).", ephemeral=True)
