@@ -165,13 +165,14 @@ class SpideyCasino(commands.Cog):
     @app_commands.describe(bet="Optional wager (ties to your own economy system)")
     async def blackjack(self, interaction: discord.Interaction, bet: int = None):
         
-        if not await bank.can_spend(interaction.user, bet):
-            currency = await bank.get_currency_name(interaction.guild)
-            balance = await bank.get_balance(interaction.user)
-            await interaction.response.send_message(f"Your bet of {bet} {currency} exceeds your account balance of `{balance} {currency}.`", ephemeral=True)
-            return
+        if bet: 
+            if not await bank.can_spend(interaction.user, bet):
+                currency = await bank.get_currency_name(interaction.guild)
+                balance = await bank.get_balance(interaction.user)
+                await interaction.response.send_message(f"Your bet of {bet} {currency} exceeds your account balance of `{balance} {currency}.`", ephemeral=True)
+                return
 
-        await bank.withdraw_credits(interaction.user, bet)
+            await bank.withdraw_credits(interaction.user, bet)
 
         deck = Deck(num_decks=4, rng=self.rng)
         player = Hand()
