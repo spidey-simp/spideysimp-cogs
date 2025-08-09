@@ -206,10 +206,10 @@ class SpideyCasino(commands.Cog):
                 if bet:
                     await bank.deposit_credits(interaction.user, bet)
                     payout_done = True
-            await interaction.response.send_message(embed=view.render_embed(reveal_dealer=True), view=view, ephemeral=True)
+            await interaction.response.send_message(embed=view.render_embed(reveal_dealer=True), view=view, ephemeral=False)
             return
 
-        await interaction.response.send_message(embed=view.render_embed(reveal_dealer=False), view=view, ephemeral=True)
+        await interaction.response.send_message(embed=view.render_embed(reveal_dealer=False), view=view, ephemeral=False)
 
         # wait on completion
         try:
