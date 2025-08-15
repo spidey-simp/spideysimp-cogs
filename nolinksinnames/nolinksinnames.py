@@ -39,23 +39,31 @@ class NoLinksInNames(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         await self.check_name(member)
     
-    @commands.cog(name="guildlinkcheck", aliases=["glc"])
+    @commands.command(name="guildlinkcheck", aliases=["glc"])
+    @commands.mod_or_permissions(manage_guild=True)
     async def guildlinkcheck(self, ctx: commands.Context):
-        """Runs a guild wide check to make sure everyone has no links in their names."""
+        """Runs a guild-wide check to ensure no display names contain links."""
         changed_members = []
 
         for member in ctx.guild.members:
-            if name_contains_link(member.display_name):
+            name_to_check = member.display_name or ""
+            if name_contains_link(name_to_check):
                 try:
                     await member.edit(nick=member.name)
                     changed_members.append(member)
+                    try:
+                        await member.send(
+                            "Your nickname was reset because it included a link. Please use a name without ads or links."
+                        )
+                    except discord.Forbidden:
+                        pass
                 except discord.Forbidden:
-                    continue
+                    continue  # Skip if the bot can't edit them
 
-        
         if changed_members:
             member_list = "\n- " + "\n- ".join(m.display_name for m in changed_members)
-            await ctx.send(f"The following members had links in their names and were renamed:{member_list}")
+            await ctx.send(
+                f"The following members had links in their names and were renamed:{member_list}"
+            )
         else:
             await ctx.send("No linked names found.")
-
