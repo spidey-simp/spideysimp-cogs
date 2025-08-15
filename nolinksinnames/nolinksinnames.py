@@ -18,17 +18,20 @@ class NoLinksInNames(commands.Cog):
     
     async def check_name(self, member: discord.Member):
         name_to_check = member.display_name or ""
-        user_name = member.name
         if name_contains_link(name_to_check):
             try:
-                await member.edit(nick=user_name)
+                await member.edit(nick=member.name)
+                try:
+                    await member.send(
+                        "Your nickname was reset because it included a link. Please use a name without ads or links."
+                    )
+                except discord.Forbidden:
+                    pass  # DMs are off
             except discord.Forbidden:
-                pass  # Bot lacks permissions
-            # Optional: Send warning
-            try:
-                await member.send("Your nickname was reset because it included a link. Please use a name without ads or links.")
-            except discord.Forbidden:
-                pass  # Can't DM
+                pass  # Bot can't edit this user
+            except discord.HTTPException:
+                pass  # Catch all for any weird API hiccups
+
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
@@ -55,10 +58,13 @@ class NoLinksInNames(commands.Cog):
                         await member.send(
                             "Your nickname was reset because it included a link. Please use a name without ads or links."
                         )
-                    except discord.Forbidden:
+                    except discord.Forbidden or discord.HTTPException:
                         pass
                 except discord.Forbidden:
                     continue  # Skip if the bot can't edit them
+                except discord.HTTPException as e:
+                    print(f"Failed to edit or DM {member}: {e}")
+
 
         if changed_members:
             member_list = "\n- " + "\n- ".join(m.display_name for m in changed_members)
