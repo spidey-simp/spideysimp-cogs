@@ -18,6 +18,8 @@ class NoLinksInNames(commands.Cog):
     
     async def check_name(self, member: discord.Member):
         name_to_check = member.display_name or ""
+        if member.bot:
+            return
         if name_contains_link(name_to_check):
             try:
                 await member.edit(nick=member.name)
@@ -49,6 +51,8 @@ class NoLinksInNames(commands.Cog):
         changed_members = []
 
         for member in ctx.guild.members:
+            if member.bot:
+                continue
             name_to_check = member.display_name or ""
             if name_contains_link(name_to_check):
                 try:
