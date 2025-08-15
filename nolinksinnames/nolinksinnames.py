@@ -3,7 +3,7 @@ from redbot.core import commands
 import re
 
 LINK_REGEX = re.compile(
-    r"(https?:\/\/)?(www\.)?[\w\-]+\.(com|net|org|gg|xyz|link|store|live|info|to)(\/\S*)?",
+    r"(https?:\/\/)?(www\.)?[\w\-]+\.(com|net|org|io|gg|xyz|live|store|link|io)(\/\S*)?",
     re.IGNORECASE,
 )
 
