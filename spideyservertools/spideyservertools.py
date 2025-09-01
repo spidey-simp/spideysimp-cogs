@@ -1,6 +1,7 @@
 import discord
 from redbot.core import commands, Config
-from discord.ext import tasks, app_commands
+from discord import app_commands
+from discord.ext import tasks
 import os
 import json
 from datetime import datetime
