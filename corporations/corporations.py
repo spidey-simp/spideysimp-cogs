@@ -81,11 +81,14 @@ class Corporations(commands.Cog):
     
     def cog_unload(self):
         save_corporations(self.data)
+
     
-    @commands.hybrid_command(name="corpindex", with_app_command=True, description="List all registered corporations.")
-    async def corpindex(self, ctx: commands.Context):
+    corp = app_commands.Group(name="corp", description="Commands for managing your corporation.")
+
+    @corp.command(name="index", description="List all registered corporations.")
+    async def corpindex(self, interaction: discord.Interaction):
         if not self.data:
-            await ctx.send("No corporations are registered yet.")
+            await interaction.response.send_message("No corporations are registered yet.")
             return
 
         embed = discord.Embed(title="Registered Corporations", color=discord.Color.gold())
@@ -95,8 +98,8 @@ class Corporations(commands.Cog):
                 value=f"CEO: <@{comp['CEO']}>\nLand: {comp.get('land', 'None')}\nOffice: {comp.get('office', 'Not built')}",
                 inline=False
             )
-        await ctx.send(embed=embed)
-    
+        await interaction.response.send_message(embed=embed)
+
     @commands.hybrid_command(name="research_new_product", with_app_command=True, description="Start a new research project for your corporation.")
     async def research_new_product(self, ctx: commands.Context, company: str, budget: int, time_assigned: int, workers_assigned: int = 0):
         if ctx.interaction:
@@ -235,7 +238,7 @@ class Corporations(commands.Cog):
 
         return base_time + additional_overhead
     
-    @app_commands.command(name="check_project_progress", description="Check progress of a project your company started.")
+    @corp.command(name="check_project_progress", description="Check progress of a project your company started.")
     @app_commands.describe(company="Which company to see the projects of!", project="Choose a project to check the progress of!")
     async def check_project_progress(self, interaction: discord.Interaction, company: str, project: str):
         await interaction.response.defer(ephemeral=True)
@@ -361,7 +364,7 @@ class Corporations(commands.Cog):
         else:
             return "Research update: Status unknown."
     
-    @app_commands.command(name="create_product", description="Take a pending product and make it so!")
+    @corp.command(name="create_product", description="Take a pending product and make it so!")
     @app_commands.describe(company="The name of the company to make the product for!", project="The project id!", name="The name to give your product!", scrapit = "Actually I want to trash it - True = Trash the product.")
     async def create_product(self, interaction:discord.Interaction, company: str, project: str, name: str=None, scrapit: bool=False):
         await interaction.response.defer()
@@ -430,7 +433,7 @@ class Corporations(commands.Cog):
         return [app_commands.Choice(name=p, value=p) for p in filtered[:25]]
     
 
-    @app_commands.command(name="product_info", description="Show details and stats for a product.")
+    @corp.command(name="product_info", description="Show details and stats for a product.")
     @app_commands.describe(company="The company that owns the product", product="The product to view")
     @app_commands.autocomplete(company=company_autocomplete, product=product_autocomplete)
     async def product_info(self, interaction: discord.Interaction, company: str, product: str):
@@ -497,7 +500,7 @@ class Corporations(commands.Cog):
         return choices
     
 
-    @app_commands.command(name="start_manufacturing", description="Start manufacturing a product for your company.")
+    @corp.command(name="start_manufacturing", description="Start manufacturing a product for your company.")
     @app_commands.describe(company="The company to list the product for.", product="The product to begin manufacturing.", manufacture_location="The manufacture location for the product.", quantity="The quantity to manufacture.")
     @app_commands.autocomplete(company=company_autocomplete, product=product_autocomplete)
     async def start_manufacturing(self, interaction:discord.Interaction, company:str, product:str, manufacture_location:str, quantity:int=None):
@@ -543,7 +546,7 @@ class Corporations(commands.Cog):
         await ctx.send(f"Project {project} for company {company} has been fixed!")
 
 
-    @app_commands.command(
+    @corp.command(
     name="landoptions",
     description="View available HQ land options or state info for your corporation."
     )
@@ -648,7 +651,7 @@ class Corporations(commands.Cog):
         return chunks
 
     
-    @app_commands.command(name="setcorpdetails",
+    @corp.command(name="setcorpdetails",
                            description="Set initial corp details.")
     @app_commands.describe(option="Select what detail you would like to set.",
                         company="The name (or identifier) of your corporation",
@@ -918,7 +921,7 @@ class Corporations(commands.Cog):
 
 
     
-    @app_commands.command(name="companyinfo", description="View your corporation's details.")
+    @corp.command(name="companyinfo", description="View your corporation's details.")
     @app_commands.describe(company="The Company you want to see the info for!")
     async def companyinfo(self, interaction: discord.Interaction, company: str):
         """
