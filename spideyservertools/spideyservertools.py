@@ -29,6 +29,7 @@ STATUS_EMOJI = {
     "done": "🟢",
 }
 
+FIELD_LIMIT = 1024
 
 def load_settings():
     if not os.path.exists(SETTINGS_FILE):
@@ -307,42 +308,60 @@ class SpideyServerTools(commands.Cog):
     
     cogsgrp = app_commands.Group(name="cogs", description="Cog status tracker")
 
+
+
+    def _chunk_lines(self, lines: list[str], title: str):
+        """Yield (name, value) field tuples under the 1024-char limit."""
+        chunk = []
+        length = 0
+        chunks = []
+        for line in lines:
+            ln = len(line) + 1  # +1 for newline
+            if length + ln > FIELD_LIMIT:
+                chunks.append("\n".join(chunk))
+                chunk, length = [line], ln
+            else:
+                chunk.append(line)
+                length += ln
+        if chunk:
+            chunks.append("\n".join(chunk))
+
+        for i, val in enumerate(chunks, 1):
+            name = f"{title} ({i}/{len(chunks)})" if len(chunks) > 1 else title
+            yield name, val
+
+
     async def _render_tracker_embed(self):
         tracker = self.settings.setdefault("cog_tracker", {})
-        items = tracker.setdefault("items", {})  # {name: {status, note, updated_by, updated_at}}
+        items = tracker.setdefault("items", {})
 
-        by_status = {s: [] for s in STATUS_CHOICES}
+        by_status = {"planned": [], "in_progress": [], "stalled": [], "done": []}
         for name, meta in items.items():
             st = meta.get("status", "planned")
-            note = meta.get("note", "")
+            note = meta.get("note", "") or "no note"
             when = meta.get("updated_at", "—")
-            who = meta.get("updated_by", "unknown")
-            by_status.setdefault(st, []).append((name, note, when, who))
+            who  = meta.get("updated_by", "unknown")
+            line = f"**{name}** — _{note}_ • updated {when}"  # drop “by” if it’s always you
+            by_status.setdefault(st, []).append(line)
 
         embed = discord.Embed(
             title="🗂️ Cog Status Tracker",
             description="A quick view of project states. Use `/cogs add` and `/cogs update`.",
             timestamp=datetime.utcnow(),
         )
-
         total = sum(len(v) for v in by_status.values())
         embed.set_footer(text=f"{total} tracked | last render")
 
-        for st in STATUS_CHOICES:
-            rows = by_status.get(st, [])
-            if not rows:
+        # Add fields, chunking any that overflow
+        for st, lines in by_status.items():
+            if not lines:
                 continue
-            lines = []
-            for name, note, when, who in rows:
-                bullet = f"**{name}** — _{note or 'no note'}_  •  updated {when}  •  by <@{who}>"
-                lines.append(bullet)
-            emoji = STATUS_EMOJI.get(st, "•")
-            embed.add_field(
-                name=f"{emoji} {st.replace('_',' ').title()}  ({len(rows)})",
-                value="\n".join(lines)[:1024],
-                inline=False,
-            )
+            title = f"{STATUS_EMOJI.get(st,'•')} {st.replace('_',' ').title()}  ({len(lines)})"
+            for name, val in self._chunk_lines(lines, title):
+                embed.add_field(name=name, value=val, inline=False)
+
         return embed
+
 
     async def _ensure_tracker_message(self, guild: discord.Guild):
         tracker = self.settings.setdefault("cog_tracker", {})
