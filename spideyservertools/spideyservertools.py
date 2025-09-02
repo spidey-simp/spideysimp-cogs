@@ -21,6 +21,14 @@ tzs_accepted = {
     "Asia/Tokyo": "Japan Standard Time",
 }
 
+STATUS_CHOICES = ["planned", "in_progress", "stalled", "done"]
+STATUS_EMOJI = {
+    "planned": "🛠️",
+    "in_progress": "🟡",
+    "stalled": "💤",
+    "done": "🟢",
+}
+
 
 def load_settings():
     if not os.path.exists(SETTINGS_FILE):
@@ -295,3 +303,137 @@ class SpideyServerTools(commands.Cog):
             msg.append(f"**Remote {ctx.guild.name}:** {rgl}")
 
         await ctx.send("\n".join(msg))
+
+    
+    cogsgrp = app_commands.Group(name="cogs", description="Cog status tracker")
+
+    async def _render_tracker_embed(self):
+        tracker = self.settings.setdefault("cog_tracker", {})
+        items = tracker.setdefault("items", {})  # {name: {status, note, updated_by, updated_at}}
+
+        by_status = {s: [] for s in STATUS_CHOICES}
+        for name, meta in items.items():
+            st = meta.get("status", "planned")
+            note = meta.get("note", "")
+            when = meta.get("updated_at", "—")
+            who = meta.get("updated_by", "unknown")
+            by_status.setdefault(st, []).append((name, note, when, who))
+
+        embed = discord.Embed(
+            title="🗂️ Cog Status Tracker",
+            description="A quick view of project states. Use `/cogs add` and `/cogs update`.",
+            timestamp=datetime.utcnow(),
+        )
+
+        total = sum(len(v) for v in by_status.values())
+        embed.set_footer(text=f"{total} tracked | last render")
+
+        for st in STATUS_CHOICES:
+            rows = by_status.get(st, [])
+            if not rows:
+                continue
+            lines = []
+            for name, note, when, who in rows:
+                bullet = f"**{name}** — _{note or 'no note'}_  •  updated {when}  •  by <@{who}>"
+                lines.append(bullet)
+            emoji = STATUS_EMOJI.get(st, "•")
+            embed.add_field(
+                name=f"{emoji} {st.replace('_',' ').title()}  ({len(rows)})",
+                value="\n".join(lines)[:1024],
+                inline=False,
+            )
+        return embed
+
+    async def _ensure_tracker_message(self, guild: discord.Guild):
+        tracker = self.settings.setdefault("cog_tracker", {})
+        chan_id = tracker.get("channel_id")
+        msg_id = tracker.get("message_id")
+        if not chan_id:
+            return None, None
+
+        channel = guild.get_channel(chan_id) or await self.bot.fetch_channel(chan_id)
+        embed = await self._render_tracker_embed()
+
+        message = None
+        if msg_id:
+            try:
+                message = await channel.fetch_message(msg_id)
+                await message.edit(embed=embed)
+                return channel, message
+            except Exception:
+                pass  # message was deleted or invalid
+
+        # create fresh message
+        message = await channel.send(embed=embed)
+        tracker["message_id"] = message.id
+        save_settings(self.settings)
+        return channel, message
+
+    async def _status_autocomplete(self, interaction: discord.Interaction, current: str):
+        current = (current or "").lower()
+        return [
+            app_commands.Choice(name=s.replace("_", " ").title(), value=s)
+            for s in STATUS_CHOICES
+            if current in s
+        ][:25]
+
+    @cogsgrp.command(name="set_channel", description="Set the channel that shows the cog tracker.")
+    @app_commands.describe(channel="Text channel where the tracker embed lives")
+    async def cogs_set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Admin only.", ephemeral=True)
+            return
+        tracker = self.settings.setdefault("cog_tracker", {})
+        tracker["channel_id"] = channel.id
+        tracker.pop("message_id", None)  # force re-create
+        save_settings(self.settings)
+        await self._ensure_tracker_message(interaction.guild)
+        await interaction.response.send_message(f"Tracker channel set to {channel.mention}.")
+
+    @cogsgrp.command(name="add", description="Track a new cog/project.")
+    @app_commands.describe(name="Short identifier", status="planned/in_progress/stalled/done", note="Optional note")
+    @app_commands.autocomplete(status=_status_autocomplete)
+    async def cogs_add(self, interaction: discord.Interaction, name: str, status: str, note: str | None = None):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Admin only.", ephemeral=True)
+            return
+        if status not in STATUS_CHOICES:
+            await interaction.response.send_message("Invalid status.", ephemeral=True)
+            return
+        tracker = self.settings.setdefault("cog_tracker", {})
+        items = tracker.setdefault("items", {})
+        items[name] = {
+            "status": status,
+            "note": (note or "").strip(),
+            "updated_by": str(interaction.user.id),
+            "updated_at": datetime.utcnow().strftime("%Y-%m-%d"),
+        }
+        save_settings(self.settings)
+        await self._ensure_tracker_message(interaction.guild)
+        await interaction.response.send_message(f"Added **{name}** as {STATUS_EMOJI[status]} {status.replace('_',' ')}.", ephemeral=True)
+
+    @cogsgrp.command(name="update", description="Update status/note for a tracked cog.")
+    @app_commands.describe(name="Identifier to update", status="planned/in_progress/stalled/done", note="Optional note")
+    @app_commands.autocomplete(status=_status_autocomplete)
+    async def cogs_update(self, interaction: discord.Interaction, name: str, status: str | None = None, note: str | None = None):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Admin only.", ephemeral=True)
+            return
+        tracker = self.settings.setdefault("cog_tracker", {})
+        items = tracker.setdefault("items", {})
+        if name not in items:
+            await interaction.response.send_message("Unknown cog name.", ephemeral=True)
+            return
+        if status:
+            if status not in STATUS_CHOICES:
+                await interaction.response.send_message("Invalid status.", ephemeral=True)
+                return
+            items[name]["status"] = status
+        if note is not None:
+            items[name]["note"] = note.strip()
+        items[name]["updated_by"] = str(interaction.user.id)
+        items[name]["updated_at"] = datetime.utcnow().strftime("%Y-%m-%d")
+
+        save_settings(self.settings)
+        await self._ensure_tracker_message(interaction.guild)
+        await interaction.response.send_message("Updated.", ephemeral=True)
