@@ -236,30 +236,62 @@ class SpideyServerTools(commands.Cog):
     
     @commands.is_owner()
     @commands.command()
-    async def prune_appcmds(self, ctx, scope: str = "global"):
-        """Prune unknown app commands from Discord (global or guild)."""
+    async def slash_nuke(self, ctx, scope: str = "global"):
+        """
+        PURGE stale application commands.
+        Usage: [p]slash_nuke           -> global
+               [p]slash_nuke guild     -> this guild only
+               [p]slash_nuke allguilds -> all guilds the bot is in
+        """
         app_id = (await self.bot.application_info()).id
-        tree = self.bot.tree
+        scope = scope.lower()
 
-        if scope.lower() == "global":
-            remote = await tree.fetch_commands()  # global on Discord
-            local = {cmd.name for cmd in tree.get_commands()}  # top-level locals
-            removed = 0
-            for cmd in remote:
-                if cmd.name not in local:
-                    await self.bot.http.delete_global_command(app_id, cmd.id)
-                    removed += 1
-            await ctx.send(f"Pruned {removed} unknown **global** commands.")
-
-        elif scope.lower() == "guild":
-            guild = ctx.guild
-            remote = await tree.fetch_commands(guild=guild)
-            local = {cmd.name for cmd in tree.get_commands()}  # top-level locals
-            removed = 0
-            for cmd in remote:
-                if cmd.name not in local:
-                    await self.bot.http.delete_guild_command(app_id, guild.id, cmd.id)
-                    removed += 1
-            await ctx.send(f"Pruned {removed} unknown commands for **{guild.name}**.")
+        if scope == "global":
+            await self.bot.http.bulk_upsert_global_commands(app_id, [])
+            await ctx.send("✅ Purged **global** app commands.")
+        elif scope == "guild":
+            g = ctx.guild
+            await self.bot.http.bulk_upsert_guild_commands(app_id, g.id, [])
+            await ctx.send(f"✅ Purged app commands for **{g.name}**.")
+        elif scope == "allguilds":
+            for g in list(self.bot.guilds):
+                await self.bot.http.bulk_upsert_guild_commands(app_id, g.id, [])
+            await ctx.send(f"✅ Purged app commands for **{len(self.bot.guilds)}** guild(s).")
         else:
-            await ctx.send("Usage: `[p]prune_appcmds` or `[p]prune_appcmds guild`")
+            await ctx.send("Usage: `[p]slash_nuke` | `[p]slash_nuke guild` | `[p]slash_nuke allguilds`")
+            return
+
+    @commands.is_owner()
+    @commands.command()
+    async def slash_resync(self, ctx):
+        """Re-sync current local tree (global + this guild)."""
+        # Global sync
+        global_cmds = await self.bot.tree.sync()
+        # Guild sync (fast register for this guild)
+        guild_cmds = []
+        if ctx.guild:
+            guild_cmds = await self.bot.tree.sync(guild=ctx.guild)
+
+        await ctx.send(
+            f"🔁 Re-synced. Global: {len(global_cmds)} | Guild({ctx.guild and ctx.guild.name}): {len(guild_cmds)}"
+        )
+
+    @commands.is_owner()
+    @commands.command()
+    async def slash_audit(self, ctx):
+        """List remote vs local top-level commands so you can verify cleanup."""
+        app_id = (await self.bot.application_info()).id
+        local = {c.name for c in self.bot.tree.get_commands()}  # current local top-level
+        remote_global = await self.bot.tree.fetch_commands()
+        rg = ", ".join(sorted(c.name for c in remote_global)) or "—"
+        lg = ", ".join(sorted(local)) or "—"
+
+        msg = [f"**Local (top-level):** {lg}",
+               f"**Remote Global:** {rg}"]
+
+        if ctx.guild:
+            remote_guild = await self.bot.tree.fetch_commands(guild=ctx.guild)
+            rgl = ", ".join(sorted(c.name for c in remote_guild)) or "—"
+            msg.append(f"**Remote {ctx.guild.name}:** {rgl}")
+
+        await ctx.send("\n".join(msg))
