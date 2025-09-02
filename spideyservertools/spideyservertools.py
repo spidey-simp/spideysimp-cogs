@@ -456,3 +456,46 @@ class SpideyServerTools(commands.Cog):
         save_settings(self.settings)
         await self._ensure_tracker_message(interaction.guild)
         await interaction.response.send_message("Updated.", ephemeral=True)
+
+
+
+    @cogsgrp.command(name="refresh", description="Refresh the cog tracker embed(s).")
+    @app_commands.describe(
+        recreate="Post new message(s) instead of editing existing ones (use if IDs are stale)."
+    )
+    async def cogs_refresh(self, interaction: discord.Interaction, recreate: bool = False):
+        # admin gate
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Admin only.", ephemeral=True)
+            return
+
+        tracker = self.settings.setdefault("cog_tracker", {})
+        chan_id = tracker.get("channel_id")
+        if not chan_id:
+            await interaction.response.send_message(
+                "Tracker channel not set. Use `/cogs set_channel` first.",
+                ephemeral=True,
+            )
+            return
+
+        # If you're using the split-per-status approach, we store "message_ids" as a dict.
+        # Otherwise we store a single "message_id".
+        is_split = isinstance(tracker.get("message_ids"), dict)
+
+        if recreate:
+            # Blow away saved IDs so we force-create fresh messages.
+            if is_split:
+                tracker["message_ids"] = {}
+            else:
+                tracker.pop("message_id", None)
+            save_settings(self.settings)
+
+        # Re-render and upsert message(s)
+        try:
+            if is_split:
+                await self._ensure_tracker_messages(interaction.guild)
+            else:
+                await self._ensure_tracker_message(interaction.guild)
+            await interaction.response.send_message("✅ Tracker refreshed.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ Refresh failed: `{e}`", ephemeral=True)
