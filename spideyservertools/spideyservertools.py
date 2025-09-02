@@ -233,3 +233,33 @@ class SpideyServerTools(commands.Cog):
             return
 
         await interaction.response.send_modal(QOTDModal(self))
+    
+    @commands.is_owner()
+    @commands.command()
+    async def prune_appcmds(self, ctx, scope: str = "global"):
+        """Prune unknown app commands from Discord (global or guild)."""
+        app_id = (await self.bot.application_info()).id
+        tree = self.bot.tree
+
+        if scope.lower() == "global":
+            remote = await tree.fetch_commands()  # global on Discord
+            local = {cmd.name for cmd in tree.get_commands()}  # top-level locals
+            removed = 0
+            for cmd in remote:
+                if cmd.name not in local:
+                    await self.bot.http.delete_global_command(app_id, cmd.id)
+                    removed += 1
+            await ctx.send(f"Pruned {removed} unknown **global** commands.")
+
+        elif scope.lower() == "guild":
+            guild = ctx.guild
+            remote = await tree.fetch_commands(guild=guild)
+            local = {cmd.name for cmd in tree.get_commands()}  # top-level locals
+            removed = 0
+            for cmd in remote:
+                if cmd.name not in local:
+                    await self.bot.http.delete_guild_command(app_id, guild.id, cmd.id)
+                    removed += 1
+            await ctx.send(f"Pruned {removed} unknown commands for **{guild.name}**.")
+        else:
+            await ctx.send("Usage: `[p]prune_appcmds` or `[p]prune_appcmds guild`")
