@@ -28,6 +28,13 @@ STATUS_EMOJI = {
     "stalled": "💤",
     "done": "🟢",
 }
+SUG_STATUSES = {
+    "planned":      ("🛠️ Planned",      0x808080),
+    "in_progress":  ("🟡 In Progress",   0xF1C40F),
+    "resolved":     ("🟢 Resolved",      0x2ECC71),
+    "rejected":     ("🔴 Rejected",      0xE74C3C),
+}
+
 
 FIELD_LIMIT = 1024
 
@@ -493,9 +500,161 @@ class SpideyServerTools(commands.Cog):
         # Re-render and upsert message(s)
         try:
             if is_split:
-                await self._ensure_tracker_messages(interaction.guild)
+                await self._ensure_tracker_message(interaction.guild)
             else:
                 await self._ensure_tracker_message(interaction.guild)
             await interaction.response.send_message("✅ Tracker refreshed.", ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(f"⚠️ Refresh failed: `{e}`", ephemeral=True)
+
+    
+    def _now_str(self):
+        return datetime.utcnow().strftime("%Y-%m-%d")
+
+    def _guild_sug_store(self, guild_id: int):
+        store = self.settings.setdefault("cog_suggestions", {})
+        g = store.setdefault(str(guild_id), {})
+        g.setdefault("counter", 0)
+        g.setdefault("channel_id", None)
+        g.setdefault("items", {})  # id -> dict
+        return g
+
+    def _render_suggestion_embed(self, data: dict) -> discord.Embed:
+        """data keys: id, cog, title, desc, status, created_by, created_at, updated_by, updated_at"""
+        label, color = SUG_STATUSES.get(data["status"], ("❓ Unknown", 0x95A5A6))
+        embed = discord.Embed(
+            title=f"Feature Suggestion • #{data['id']} • {data['cog']}",
+            description=(data["title"] if data["title"] else "No title"),
+            color=color,
+            timestamp=datetime.utcnow(),
+        )
+        if data.get("desc"):
+            embed.add_field(name="Details", value=data["desc"][:1024], inline=False)
+        embed.add_field(name="Status", value=label, inline=True)
+        embed.add_field(name="Last Updated", value=data.get("updated_at") or data["created_at"], inline=True)
+        submitter = data.get("created_by")
+        if submitter:
+            embed.set_footer(text=f"Submitted by @{submitter} • use /cogs suggest_status to update")
+        return embed
+
+    async def _suggest_status_autocomplete(self, interaction: discord.Interaction, current: str):
+        current = (current or "").lower()
+        return [
+            app_commands.Choice(name=label, value=key)
+            for key, (label, _) in SUG_STATUSES.items()
+            if current in key or current in label.lower()
+        ][:25]
+
+    # optionally, autocomplete cog names from your tracker (if you use it)
+    async def _cogname_autocomplete(self, interaction: discord.Interaction, current: str):
+        tracker = self.settings.get("cog_tracker", {})
+        items = tracker.get("items", {}) if isinstance(tracker.get("items"), dict) else {}
+        names = sorted(items.keys())
+        cur = (current or "").lower()
+        return [app_commands.Choice(name=n, value=n) for n in names if cur in n.lower()][:25]
+
+    # -------- Commands --------
+
+    cogsgrp = app_commands.Group(name="cogs", description="Cog status & suggestions")
+
+    @cogsgrp.command(name="set_suggestions_channel", description="Set the channel where cog suggestions are logged.")
+    @app_commands.describe(channel="Text channel for suggestion logs")
+    async def set_suggestions_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Admin only.", ephemeral=True); return
+        g = self._guild_sug_store(interaction.guild_id)
+        g["channel_id"] = channel.id
+        save_settings(self.settings)
+        await interaction.response.send_message(f"Suggestions will be logged in {channel.mention}.", ephemeral=True)
+
+    @cogsgrp.command(name="suggest", description="Suggest a feature/update for a cog.")
+    @app_commands.describe(
+        cog="Which cog the suggestion is for",
+        title="Short title of the suggestion",
+        details="Optional details"
+    )
+    @app_commands.autocomplete(cog=_cogname_autocomplete)
+    async def suggest(self, interaction: discord.Interaction, cog: str, title: str, details: str | None = None):
+        g = self._guild_sug_store(interaction.guild_id)
+        chan_id = g.get("channel_id")
+        if not chan_id:
+            await interaction.response.send_message("Suggestions channel not set. Ask an admin to run `/cogs set_suggestions_channel`.", ephemeral=True)
+            return
+
+        channel = interaction.guild.get_channel(chan_id) or await self.bot.fetch_channel(chan_id)
+
+        g["counter"] += 1
+        sug_id = g["counter"]
+        data = {
+            "id": sug_id,
+            "cog": cog.strip(),
+            "title": title.strip(),
+            "desc": (details or "").strip(),
+            "status": "planned",  # default
+            "created_by": str(interaction.user.name),
+            "created_at": self._now_str(),
+            "updated_by": str(interaction.user.name),
+            "updated_at": self._now_str(),
+            "message_id": None,
+        }
+
+        embed = self._render_suggestion_embed(data)
+
+        try:
+            msg = await channel.send(embed=embed)
+            data["message_id"] = msg.id
+            g["items"][str(sug_id)] = data
+            save_settings(self.settings)
+            await interaction.response.send_message(f"✅ Logged suggestion **#{sug_id}** in {channel.mention}.", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"⚠️ Failed to post suggestion: `{e}`", ephemeral=True)
+
+    @cogsgrp.command(name="suggest_status", description="Update the status of a suggestion.")
+    @app_commands.describe(
+        suggestion_id="ID number shown in the suggestion title",
+        status="New status",
+        note="Optional new title/desc note to add or replace"
+    )
+    @app_commands.autocomplete(status=_suggest_status_autocomplete)
+    async def suggest_status(self, interaction: discord.Interaction, suggestion_id: int, status: str, note: str | None = None):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Admin only.", ephemeral=True); return
+
+        g = self._guild_sug_store(interaction.guild_id)
+        items = g.get("items", {})
+        data = items.get(str(suggestion_id))
+        if not data:
+            await interaction.response.send_message("Unknown suggestion ID.", ephemeral=True); return
+
+        if status not in SUG_STATUSES:
+            await interaction.response.send_message("Invalid status. Use planned / in_progress / resolved / rejected.", ephemeral=True); return
+
+        data["status"] = status
+        if note:
+            # if you want to *replace* title/desc, adjust here. For now, this updates the description line.
+            data["desc"] = note.strip()
+        data["updated_by"] = str(interaction.user.name)
+        data["updated_at"] = self._now_str()
+
+        # Try to edit the original message; recreate if it's gone
+        chan_id = g.get("channel_id")
+        if not chan_id:
+            await interaction.response.send_message("Suggestions channel not set.", ephemeral=True); return
+        channel = interaction.guild.get_channel(chan_id) or await self.bot.fetch_channel(chan_id)
+
+        embed = self._render_suggestion_embed(data)
+
+        try:
+            if data.get("message_id"):
+                msg = await channel.fetch_message(data["message_id"])
+                await msg.edit(embed=embed)
+            else:
+                msg = await channel.send(embed=embed)
+                data["message_id"] = msg.id
+        except Exception:
+            # message was deleted or can't be fetched; post a fresh one
+            msg = await channel.send(embed=embed)
+            data["message_id"] = msg.id
+
+        save_settings(self.settings)
+        await interaction.response.send_message(f"Updated suggestion **#{suggestion_id}** → {SUG_STATUSES[status][0]}.", ephemeral=True)
