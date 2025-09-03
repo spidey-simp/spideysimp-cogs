@@ -334,11 +334,32 @@ class SpideyCourts(commands.Cog):
             latest = case_data['filings'][-1] if case_data.get('filings') else {}
             message += f"- `{plaintiff_name}` v. `{defendant_name}`, {case_number} (Most recent: {latest.get('document_type', 'Unknown')})\n"
 
-        new_msg = await channel.send(message)
+        meta = self.court_data.setdefault("_meta", {})
+        msg_id = meta.get("ongoing_cases_msg_id")  # if you used system.json before, use that key instead
 
-        # Save new message ID
-        system_data["last_ongoing_cases_msg_id"] = new_msg.id
-        save_json(SYSTEM_FILE, system_data)
+        try:
+            if msg_id:
+                # edit existing message (no new notification)
+                existing = await channel.fetch_message(int(msg_id))
+                await existing.edit(content=message, allowed_mentions=discord.AllowedMentions.none())
+            else:
+                # first time: send and remember id
+                new_msg = await channel.send(message, allowed_mentions=discord.AllowedMentions.none())
+                meta["ongoing_cases_msg_id"] = new_msg.id
+                save_json(COURT_FILE, self.court_data)
+
+        except (discord.NotFound, discord.Forbidden):
+            # if it was deleted or inaccessible, post a fresh one and save its id
+            new_msg = await channel.send(message, allowed_mentions=discord.AllowedMentions.none())
+            meta["ongoing_cases_msg_id"] = new_msg.id
+            save_json(COURT_FILE, self.court_data)
+        
+    @show_cases.before_loop
+    async def _ready(self):
+        await self.bot.wait_until_ready()
+
+
+
 
 
     
