@@ -2,6 +2,7 @@ import asyncio
 import discord
 from discord import app_commands
 from discord.ext import tasks
+from discord import Object
 from redbot.core import commands
 import json
 import os
@@ -52,6 +53,14 @@ JUDGE_VENUES = {
     "public_square": {"name": "Shadows", "id": 1325115385871204386}
 }
 
+PROCEEDING_TYPES = [
+"Trial",
+"Status Conference",
+"Oral Argument",
+"Evidentiary Hearing",
+"Settlement Conference",
+"Other"
+]
 
 def load_json(file_path):
     """Load JSON data from a file."""
@@ -903,3 +912,100 @@ class SpideyCourts(commands.Cog):
         save_json(COURT_FILE, self.court_data)
 
         await interaction.followup.send(f"✅ {author_name} has appeared on behalf of {party_name} in {case_number}.", ephemeral=True)
+
+    
+    @court.command(name="schedule", description="Schedule a conference, hearing, or trial")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    @app_commands.describe(
+        case_number="The case you're scheduling for (e.g., 1:25-cv-000001-SS)",
+        event_type="Type of proceeding",
+        date="Date (MM/DD/YY)",
+        time="Time (HH:MM AM/PM, server time)",
+        notes="Optional notes for the parties"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.choices(event_type=[app_commands.Choice(name=t, value=t) for t in PROCEEDING_TYPES])
+    async def schedule(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        event_type: app_commands.Choice[str],
+        date: str,
+        time: str,
+        notes: str | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        # Validate case
+        case = self.court_data.get(case_number)
+        if not case:
+            await interaction.followup.send("❌ Case not found.", ephemeral=True)
+            return
+
+        # Parse date/time (server-local input), store as ISO string for record
+        try:
+            local_dt = datetime.strptime(f"{date} {time}", "%m/%d/%y %I:%M %p")
+        except ValueError:
+            await interaction.followup.send("❌ Invalid date/time. Use MM/DD/YY and HH:MM AM/PM.", ephemeral=True)
+            return
+
+        # Names + venue mention
+        plaintiff_name = await self.try_get_display_name(interaction.guild, case.get("plaintiff"))
+        defendant_name = await self.try_get_display_name(interaction.guild, case.get("defendant"))
+        venue_id = VENUE_CHANNEL_MAP.get(case.get("venue"))
+        venue_mention = self.bot.get_channel(venue_id).mention if venue_id else "Unknown Venue"
+
+        # Public notice on courthouse steps
+        steps_ch = self.bot.get_channel(COURT_STEPS_CHANNEL_ID)
+        notice = (
+            f"📅 **{event_type.value} Scheduled**\n\n"
+            f"**Case:** {plaintiff_name} v. {defendant_name}\n"
+            f"**Case No.:** `{case_number}`\n"
+            f"**Proceeding:** {event_type.value}\n"
+            f"**Date:** {local_dt.strftime('%m/%d/%y')}\n"
+            f"**Time:** {local_dt.strftime('%I:%M %p')}\n"
+            f"**Location:** {venue_mention}"
+        )
+        if notes:
+            notice += f"\n**Notes:** {notes}"
+
+        msg = None
+        if steps_ch:
+            msg = await steps_ch.send(notice)
+
+        # Persist lightweight schedule record (optional but handy)
+        schedule_list = case.setdefault("schedule", [])
+        schedule_list.append({
+            "event_type": event_type.value,
+            "scheduled_for_local": local_dt.strftime("%m/%d/%y %I:%M %p"),
+            "notes": notes,
+            "created_by": interaction.user.id,
+            "created_at": datetime.now(UTC).isoformat(),
+            "message_id": msg.id if msg else None,
+            "channel_id": steps_ch.id if steps_ch else None,
+        })
+
+        # Docket entry (one line; detail lives in the notice we just posted)
+        filings = case.setdefault("filings", [])
+        entry = len(filings) + 1
+        filings.append({
+            "entry": entry,
+            "document_type": f"{event_type.value} Scheduled",
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "message_id": msg.id if msg else None,
+            "channel_id": steps_ch.id if steps_ch else None,
+            # Keep a compact summary so your current /view_docket prints something meaningful:
+            "related_docs": [],  # optional
+            "content": f"Set for {local_dt.strftime('%m/%d/%y at %I:%M %p')}" + (f" | Notes: {notes}" if notes else "")
+        })
+
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(
+            f"✅ Scheduled **{event_type.value}** for `{case_number}` on {local_dt.strftime('%m/%d/%y at %I:%M %p')}. "
+            f"Docket entry #{entry} added.",
+            ephemeral=True
+        )
+
+        
