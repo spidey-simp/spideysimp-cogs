@@ -183,6 +183,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             ephemeral=True
         )
     
+    @staticmethod
     async def resolve_party_entry(guild: discord.Guild, entry: str):
         """Attempt to resolve a party string into a user ID. Fallback to string."""
         name = entry.strip().lstrip("@")
@@ -191,6 +192,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
                 return member.id
         return name  # fallback to raw string
     
+    @staticmethod
     def format_party(guild: discord.Guild, party):
         if isinstance(party, int):
             member = guild.get_member(party)
@@ -203,8 +205,7 @@ class DocumentFilingModal(discord.ui.Modal, title="File another document"):
         self.bot = bot
         self.case_number = case_number
         self.case_dict = case_dict
-        if related_docs:
-            self.related_docs = related_docs
+        self.related_docs = related_docs
 
         self.doc_title = discord.ui.TextInput(
             label="Input the title of your document",
@@ -300,39 +301,33 @@ class SpideyCourts(commands.Cog):
         if not channel:
             return
 
-        # Try deleting the previous message
-        system_data = load_json(SYSTEM_FILE)
-        last_msg_id = system_data.get("last_ongoing_cases_msg_id")
-        if last_msg_id:
-            try:
-                old_msg = await channel.fetch_message(last_msg_id)
-                await old_msg.delete()
-            except discord.NotFound:
-                pass  # Already deleted or never sent
-
         # Compose new message
-        ongoing_cases = [
-            case_number for case_number, data in self.court_data.items()
-            if data.get('status') != 'closed'
-        ]
-        if not ongoing_cases:
+        ongoing = []
+        for case_number, data in self.court_data.items():
+            if case_number.startswith("_"):
+                continue
+            if not isinstance(data, dict):
+                continue
+            # must look like a case
+            if "plaintiff" not in data or "defendant" not in data or "filings" not in data:
+                continue
+            if data.get("status") == "closed":
+                continue
+            ongoing.append((case_number, data))
+
+        if not ongoing:
             return
 
         message = "**Ongoing Court Cases:**\n"
-        for case_number in ongoing_cases:
-            case_data = self.court_data[case_number]
-            guild = channel.guild
+        for case_number, case_data in ongoing:
             try:
-                plaintiff = await guild.fetch_member(case_data["plaintiff"])
-                defendant = await guild.fetch_member(case_data["defendant"])
-                plaintiff_name = plaintiff.display_name
-                defendant_name = defendant.display_name
+                p = await channel.guild.fetch_member(case_data["plaintiff"])
+                d = await channel.guild.fetch_member(case_data["defendant"])
+                pn, dn = p.display_name, d.display_name
             except Exception:
-                plaintiff_name = str(case_data["plaintiff"])
-                defendant_name = str(case_data["defendant"])
-
+                pn, dn = str(case_data.get("plaintiff", "Unknown")), str(case_data.get("defendant", "Unknown"))
             latest = case_data['filings'][-1] if case_data.get('filings') else {}
-            message += f"- `{plaintiff_name}` v. `{defendant_name}`, {case_number} (Most recent: {latest.get('document_type', 'Unknown')})\n"
+            message += f"- `{pn}` v. `{dn}`, {case_number} (Most recent: {latest.get('document_type', 'Unknown')})\n"
 
         meta = self.court_data.setdefault("_meta", {})
         msg_id = meta.get("ongoing_cases_msg_id")  # if you used system.json before, use that key instead
@@ -390,7 +385,7 @@ class SpideyCourts(commands.Cog):
         self.court_data[user_id] = {'status': 'pending', 'context': context}
         if bar_number:
             self.court_data[user_id]['bar_number'] = bar_number
-        await interaction.response.send_message("Your application has been submitted and is pending review.", ephemeral=True)
+        await interaction.followup.send("Your application has been submitted and is pending review.", ephemeral=True)
         save_json(COURT_FILE, self.court_data)
     
     @court.command(name="view_applicants", description="View all court applicants")
@@ -742,8 +737,10 @@ class SpideyCourts(commands.Cog):
             return
         
         doc = next((d for d in case_data.get("filings", []) if d.get("entry") == entry_num), None)
+        if not doc:
+            await interaction.followup.send("❌ Docket entry not found for that case.", ephemeral=True)
+            return
 
-        
 
         # Save the file to the exhibits channel
         exhibits_channel = self.bot.get_channel(EXHIBITS_CHANNEL_ID)
@@ -791,10 +788,12 @@ class SpideyCourts(commands.Cog):
     ])
     async def file_document(self, interaction:discord.Interaction, case_number:str, document_type:str, related_docs:str=None):
 
-        case_data = self.court_data[case_number]
+        case_data = self.court_data.get(case_number)
         if not case_data:
             await interaction.response.send_message("No case data found for that case number.", ephemeral=True)
             return
+
+        case_data = self.court_data[case_number]
         
         related_doc_reqs = ["motion", "response", "reply", "countermotion", "amended", "supplemental"]
         if document_type in related_doc_reqs and not related_docs:
@@ -828,9 +827,10 @@ class SpideyCourts(commands.Cog):
 
         # Validate defendant
         valid_parties = [case.get("defendant")] + case.get("additional_defendants", [])
-        if defendant.id not in valid_parties:
+        if str(defendant.id) not in map(str, valid_parties):
             await interaction.followup.send("❌ This user is not listed as a defendant in the case.", ephemeral=True)
             return
+
 
         # Format notification
         plaintiff_name = await self.try_get_display_name(interaction.guild, case.get("plaintiff"))
