@@ -8,6 +8,7 @@ import json
 import os
 from datetime import datetime, UTC
 from typing import List
+import textwrap
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1110,10 +1111,30 @@ class SpideyCourts(commands.Cog):
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         case_number="Case number",
-        text="Judgment text (e.g., Dismissed with prejudice; costs to Plaintiff)"
+        judgment_text="Short judgment text (e.g., Dismissed; costs to Defendant)",
+        prejudice="If dismissal, choose prejudice (ignored otherwise)"
     )
     @app_commands.autocomplete(case_number=case_autocomplete)
-    async def enter_judgment(self, interaction: discord.Interaction, case_number: str, text: str):
+    @app_commands.choices(judgment_type=[
+        app_commands.Choice(name="Dismissal", value="Dismissal"),
+        app_commands.Choice(name="Default Judgment", value="Default Judgment"),
+        app_commands.Choice(name="Summary Judgment", value="Summary Judgment"),
+        app_commands.Choice(name="Consent Judgment", value="Consent Judgment"),
+        app_commands.Choice(name="Bench Verdict", value="Bench Verdict"),
+        app_commands.Choice(name="Declaratory Judgment", value="Declaratory Judgment"),
+    ])
+    @app_commands.choices(prejudice=[
+        app_commands.Choice(name="With Prejudice", value="with prejudice"),
+        app_commands.Choice(name="Without Prejudice", value="without prejudice"),
+    ])
+    async def enter_judgment(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        judgment_type: app_commands.Choice[str],
+        judgment_text: str,
+        prejudice: app_commands.Choice[str] | None = None,
+    ):
         await interaction.response.defer(ephemeral=True)
 
         case = self.court_data.get(case_number)
@@ -1121,9 +1142,9 @@ class SpideyCourts(commands.Cog):
             return await interaction.followup.send("❌ Case not found.", ephemeral=True)
 
         steps = self.bot.get_channel(COURT_STEPS_CHANNEL_ID)
-        msg = None
-        if steps:
-            msg = await steps.send(f"⚖️ **Judgment Entered**\n\n`{case_number}`\n{text}")
+        tail = f" ({prejudice.value})" if (judgment_type.value == "Dismissal" and prejudice) else ""
+        body = f"⚖️ **Judgment Entered**\n\n`{case_number}`\n**Type:** {judgment_type.value}{tail}\n{textwrap.shorten(judgment_text, 180)}"
+        msg = await steps.send(body) if steps else None
 
         filings = case.setdefault("filings", [])
         entry = len(filings) + 1
@@ -1135,12 +1156,13 @@ class SpideyCourts(commands.Cog):
             "timestamp": datetime.now(UTC).isoformat(),
             "message_id": (msg.id if msg else None),
             "channel_id": (steps.id if steps else None),
-            "content": text
+            "content": f"{judgment_type.value}{tail} — {judgment_text}"
         })
 
         case["status"] = "closed"
         save_json(COURT_FILE, self.court_data)
-        await interaction.followup.send(f"✅ Judgment entered (Entry {entry}). Case marked **closed**.", ephemeral=True)
+        await interaction.followup.send(f"✅ {judgment_type.value} entered (Entry {entry}). Case **closed**.", ephemeral=True)
+
 
     
     @court.command(name="file_appeal", description="File a Notice of Appeal (or petition to the Supreme Server Court).")
@@ -1331,3 +1353,228 @@ class SpideyCourts(commands.Cog):
         save_json(COURT_FILE, self.court_data)
         await interaction.followup.send(f"✅ Disposition recorded for `{appellate_case}`.", ephemeral=True)
 
+
+    @court.command(name="pocket_dep", description="Pocket courtroom deputy: quick announcements/actions.")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    @app_commands.describe(
+        instruction="What should the deputy do?",
+        case_number="Case number (needed for introduce / call_case / confirm_schedule)",
+        person="User to act on (needed for swear_witness)",
+        affirm="Use 'affirm' in the oath instead of 'swear' (default: False)",
+        pace_seconds="Optional pause between prompts; default 7s for oaths, 3s otherwise",
+        text="For 'minute_order': the announcement text (e.g., 'dismissing the action without prejudice')"
+    )
+    @app_commands.choices(instruction=[
+        app_commands.Choice(name="Introduce the Judge", value="introduce"),
+        app_commands.Choice(name="Call the Case", value="call_case"),
+        app_commands.Choice(name="Swear in Witness", value="swear_witness"),
+        app_commands.Choice(name="Recess", value="recess"),
+        app_commands.Choice(name="Adjourn", value="adjourn"),
+        app_commands.Choice(name="Confirm Schedule", value="confirm_schedule"),
+        app_commands.Choice(name="Minute Order", value="minute_order"),
+    ])
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    async def pocket_dep(
+        self,
+        interaction: discord.Interaction,
+        instruction: app_commands.Choice[str],
+        case_number: str | None = None,
+        person: discord.Member | None = None,
+        affirm: bool = False,
+        pace_seconds: float | None = None,
+        text: str | None = None,
+    ):
+        # Ephemeral ack so we can post publicly + sleep
+        await interaction.response.defer(ephemeral=True)
+
+        # Defaults: a smidge longer where users need to respond
+        default_pause = 7.0 if instruction.value == "swear_witness" else 3.0
+        pause = float(pace_seconds) if pace_seconds is not None else default_pause
+
+        async def _need_case() -> dict | None:
+            if not case_number:
+                await interaction.followup.send("❌ Please provide a case_number for this instruction.", ephemeral=True)
+                return None
+            c = self.court_data.get(case_number)
+            if not c:
+                await interaction.followup.send("❌ Case not found.", ephemeral=True)
+                return None
+            return c
+
+        # INTRODUCE
+        if instruction.value == "introduce":
+            case = await _need_case()
+            if not case:
+                return
+            judge_name = None
+            jid = case.get("judge_id")
+            if jid:
+                judge_name = await self.try_get_display_name(interaction.guild, jid)
+            judge_name = judge_name or case.get("judge") or "the Court"
+
+            await interaction.channel.send(f"🔨 **Bang! Bang! Bang!** All rise for the Honorable **{judge_name}**!")
+            await asyncio.sleep(pause)  # slightly longer pause
+            await interaction.channel.send("You may be seated.")
+            return await interaction.followup.send("✅ Introduced.", ephemeral=True)
+
+        # CALL CASE
+        if instruction.value == "call_case":
+            case = await _need_case()
+            if not case:
+                return
+            pl = await self.try_get_display_name(interaction.guild, case.get("plaintiff"))
+            df = await self.try_get_display_name(interaction.guild, case.get("defendant"))
+            await interaction.channel.send(
+                f"🗂️ Calling case `{case_number}`: **{pl} v. {df}**.\n"
+                f"Counsel, please state your appearances for the record."
+            )
+            return await interaction.followup.send("✅ Case called.", ephemeral=True)
+
+        # SWEAR WITNESS
+        if instruction.value == "swear_witness":
+            if not person:
+                return await interaction.followup.send("❌ Please provide the witness in `person`.", ephemeral=True)
+            style = "affirm" if affirm else "swear"
+            await interaction.channel.send(f"✋ {person.mention}, please raise your right hand.")
+            await asyncio.sleep(2.0)
+            await interaction.channel.send(
+                f"Do you solemnly **{style}** that the testimony you shall give in this matter "
+                f"will be the **truth, the whole truth, and nothing but the truth**?"
+            )
+            await asyncio.sleep(pause)  # longer window so they can reply “I do.”
+            await interaction.channel.send("Please answer: **“I do.”**")
+            return await interaction.followup.send("✅ Witness oath prompted.", ephemeral=True)
+
+        # RECESS
+        if instruction.value == "recess":
+            await interaction.channel.send("🔔 All rise. The Court will take a brief recess.")
+            await asyncio.sleep(pause)
+            await interaction.channel.send("You may be seated. (Recess.)")
+            return await interaction.followup.send("✅ Recess announced.", ephemeral=True)
+
+        # ADJOURN
+        if instruction.value == "adjourn":
+            await interaction.channel.send("🔔 All rise. This Court is **adjourned**.")
+            await asyncio.sleep(pause)
+            await interaction.channel.send("You may be seated.")
+            return await interaction.followup.send("✅ Adjournment announced.", ephemeral=True)
+
+        # CONFIRM SCHEDULE (pull most recent from case['schedule'])
+        if instruction.value == "confirm_schedule":
+            case = await _need_case()
+            if not case:
+                return
+            schedule = case.get("schedule", [])
+            if not schedule:
+                return await interaction.followup.send("❌ No scheduled events found for this case.", ephemeral=True)
+            last = schedule[-1]
+            kind = last.get("event_type", "Proceeding")
+            when = last.get("scheduled_for_local") or "TBD"
+            await interaction.channel.send(f"📣 **{kind}** is scheduled for **{when}**.")
+            return await interaction.followup.send("✅ Schedule confirmed.", ephemeral=True)
+
+        # MINUTE ORDER (free-form deputy confirmation)
+        if instruction.value == "minute_order":
+            # need a case number to docket it
+            if not case_number:
+                return await interaction.followup.send("❌ Provide `case_number` to docket the minute order.", ephemeral=True)
+            case = self.court_data.get(case_number)
+            if not case:
+                return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+            if not text:
+                return await interaction.followup.send("❌ Provide `text` for the minute order announcement.", ephemeral=True)
+
+            # Public announcement in the current channel
+            msg = await interaction.channel.send(f"📝 A minute order has been issued {text.strip()}.")
+
+            # Docket entry
+            filings = case.setdefault("filings", [])
+            entry = len(filings) + 1
+            filings.append({
+                "entry": entry,
+                "document_type": "Minute Order",
+                "author": interaction.user.name,
+                "author_id": interaction.user.id,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "message_id": msg.id,
+                "channel_id": msg.channel.id,
+                "content": text.strip()
+            })
+
+            save_json(COURT_FILE, self.court_data)
+            return await interaction.followup.send(
+                f"✅ Minute order announced and docketed as Entry {entry}.",
+                ephemeral=True
+            )
+
+        await interaction.followup.send("❌ Unknown instruction.", ephemeral=True)
+    
+    async def _party_is_in_case(self, case: dict, party: int) -> bool:
+        ids = [case.get("plaintiff"), case.get("defendant")] + case.get("additional_defendants", []) + case.get("additional_plaintiffs", [])
+        return str(party) in map(str, ids)
+
+    @court.command(name="substitute_counsel", description="Substitute counsel for a specific party.")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    @app_commands.describe(case_number="Case number", party="Party represented", new_counsel="New counsel user")
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    async def substitute_counsel(self, interaction: discord.Interaction, case_number: str, party: discord.Member, new_counsel: discord.Member):
+        await interaction.response.defer(ephemeral=True)
+
+        case = self.court_data.get(case_number)
+        if not case:
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+        if not await self._party_is_in_case(case, party.id):
+            return await interaction.followup.send("❌ That user is not a party in this case.", ephemeral=True)
+
+        # Use your per-party counsel map (or per-side fields if you prefer)
+        cofr = case.setdefault("counsel_of_record", {})
+        prev = cofr.get(str(party.id))
+        cofr[str(party.id)] = new_counsel.id
+
+        # Docket entry
+        filings = case.setdefault("filings", [])
+        entry = len(filings) + 1
+        filings.append({
+            "entry": entry,
+            "document_type": "Substitution of Counsel",
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "content": f"{(await self.try_get_display_name(interaction.guild, party.id))}: {('from ' + (await self.try_get_display_name(interaction.guild, prev)) + ' ') if prev else ''}to {new_counsel.display_name}"
+        })
+
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send("✅ Substitution recorded.", ephemeral=True)
+
+    @court.command(name="withdraw_counsel", description="Withdraw as counsel for a specific party.")
+    @app_commands.describe(case_number="Case number", party="Party represented")
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    async def withdraw_counsel(self, interaction: discord.Interaction, case_number: str, party: discord.Member):
+        await interaction.response.defer(ephemeral=True)
+
+        case = self.court_data.get(case_number)
+        if not case:
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+        if not await self._party_is_in_case(case, party.id):
+            return await interaction.followup.send("❌ That user is not a party in this case.", ephemeral=True)
+
+        cofr = case.setdefault("counsel_of_record", {})
+        current = cofr.get(str(party.id))
+        if current != interaction.user.id and not any(r.id == FED_JUDICIARY_ROLE_ID for r in interaction.user.roles):
+            return await interaction.followup.send("❌ Only current counsel or a judge may withdraw.", ephemeral=True)
+
+        cofr.pop(str(party.id), None)
+
+        filings = case.setdefault("filings", [])
+        entry = len(filings) + 1
+        filings.append({
+            "entry": entry,
+            "document_type": "Withdrawal of Counsel",
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "content": f"{(await self.try_get_display_name(interaction.guild, party.id))}: {interaction.user.display_name} withdrawn"
+        })
+
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send("✅ Withdrawal recorded.", ephemeral=True)
