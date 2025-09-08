@@ -531,4 +531,4 @@ class SpideyGov(commands.Cog):
         if len(shown) < len(slice_keys): footer_bits.append("…truncated")
         embed.set_footer(text=" ".join(footer_bits))
 
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed, ephemeral=False)
