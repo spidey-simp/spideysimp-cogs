@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 import discord
 from discord import app_commands
@@ -11,41 +12,7 @@ from typing import List
 import textwrap
 import io
 
-def _chunk_text(s: str, limit: int = 1900):
-    # chunk by paragraphs first, then wrap if needed
-    chunks = []
-    for para in s.split("\n\n"):
-        para = para.strip()
-        if not para:
-            continue
-        if len(para) <= limit:
-            chunks.append(para)
-            continue
-        # long paragraph → wrap by words
-        for wrapped in textwrap.wrap(para, width=limit, replace_whitespace=False, drop_whitespace=False):
-            chunks.append(wrapped)
-    return chunks
 
-async def _post_long_filing(self, court_channel: discord.TextChannel, title: str, case_number: str, author: discord.Member, content: str):
-    # 1) short header in channel
-    header = await court_channel.send(
-        f"**{title} — {case_number}**\nFiled by {author.mention}. Full text in thread ⤵️",
-        allowed_mentions=discord.AllowedMentions.none()
-    )
-    # 2) create thread and stream content
-    thread = await header.create_thread(
-        name=f"{case_number} • Entry (pending) — {title}",
-        auto_archive_duration=10080  # 7 days
-    )
-    for chunk in _chunk_text(content, 1900):
-        await thread.send(chunk)
-
-    # 3) attach canonical .txt
-    file_bytes = io.BytesIO(content.encode("utf-8"))
-    safe_case = case_number.replace(":", "_")
-    await thread.send(file=discord.File(fp=file_bytes, filename=f"{safe_case}_{title.replace(' ', '_')}.txt"))
-
-    return header, thread
 
 
 
@@ -239,7 +206,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         return party
 
 class DocumentFilingModal(discord.ui.Modal, title="File another document"):
-    def __init__(self, bot, case_number:str, case_dict:dict, related_docs:str=None):
+    def __init__(self, bot: commands.Bot, case_number:str, case_dict:dict, related_docs:str=None):
         super().__init__()
         self.bot = bot
         self.case_number = case_number
@@ -283,9 +250,18 @@ class DocumentFilingModal(discord.ui.Modal, title="File another document"):
         filings.append(new_doc)
 
         # Try to send message to court channel
+        cog = self.bot.get_cog("SpideyCourts")
+        if not cog:
+            await interaction.response.send_message("Internal error: courts cog not loaded.", ephemeral=True)
+            return
+
         venue = self.case_dict.get("venue")
         channel_id = VENUE_CHANNEL_MAP.get(venue)
         court_channel = self.bot.get_channel(channel_id)
+        if not court_channel:
+            await interaction.response.send_message("❌ Venue channel not found.", ephemeral=True)
+            return
+
         content = self.doc_contents.value or ""
         title = self.doc_title.value or "Document"
 
@@ -296,7 +272,7 @@ class DocumentFilingModal(discord.ui.Modal, title="File another document"):
             )
             thread_id = None
         else:
-            message, thread = await _post_long_filing(
+            message, thread = await cog._post_long_filing(
                 court_channel=court_channel,
                 title=title,
                 case_number=self.case_number,
@@ -305,13 +281,14 @@ class DocumentFilingModal(discord.ui.Modal, title="File another document"):
             )
             thread_id = thread.id
 
-        # save IDs for docket linking
+        # save IDs
         new_doc["message_id"] = message.id
         new_doc["channel_id"] = message.channel.id
         if thread_id:
             new_doc["thread_id"] = thread_id
 
-        save_json(COURT_FILE, self.bot.get_cog("SpideyCourts").court_data)
+        save_json(COURT_FILE, cog.court_data)  # use the cog you already fetched
+
 
         await interaction.response.send_message(f"✅ Document filed as docket entry #{entry_num}.", ephemeral=True)
 
@@ -410,9 +387,41 @@ class SpideyCourts(commands.Cog):
     async def _ready(self):
         await self.bot.wait_until_ready()
 
+    def _chunk_text(s: str, limit: int = 1900):
+        # chunk by paragraphs first, then wrap if needed
+        chunks = []
+        for para in s.split("\n\n"):
+            para = para.strip()
+            if not para:
+                continue
+            if len(para) <= limit:
+                chunks.append(para)
+                continue
+            # long paragraph → wrap by words
+            for wrapped in textwrap.wrap(para, width=limit, replace_whitespace=False, drop_whitespace=False):
+                chunks.append(wrapped)
+        return chunks
 
+    async def _post_long_filing(self, court_channel: discord.TextChannel, title: str, case_number: str, author: discord.Member, content: str):
+        # 1) short header in channel
+        header = await court_channel.send(
+            f"**{title} — {case_number}**\nFiled by {author.mention}. Full text in thread ⤵️",
+            allowed_mentions=discord.AllowedMentions.none()
+        )
+        # 2) create thread and stream content
+        thread = await header.create_thread(
+            name=f"{case_number} • Entry (pending) — {title}",
+            auto_archive_duration=10080  # 7 days
+        )
+        for chunk in _chunk_text(content, 1900):
+            await thread.send(chunk)
 
+        # 3) attach canonical .txt
+        file_bytes = io.BytesIO(content.encode("utf-8"))
+        safe_case = case_number.replace(":", "_")
+        await thread.send(file=discord.File(fp=file_bytes, filename=f"{safe_case}_{title.replace(' ', '_')}.txt"))
 
+        return header, thread
 
     
     court = app_commands.Group(name="court", description="Court related commands")
