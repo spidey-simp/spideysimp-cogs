@@ -293,6 +293,98 @@ class DocumentFilingModal(discord.ui.Modal, title="File another document"):
 
         await interaction.followup.send(f"✅ Document filed as docket entry #{entry_num}.", ephemeral=True)
 
+class OrderModal(discord.ui.Modal, title="Issue Order / Opinion"):
+    def __init__(self, bot: commands.Bot, case_number: str, order_type: str, related_entry: int | None, outcome: str | None):
+        super().__init__()
+        self.bot = bot
+        self.case_number = case_number
+        self.order_type = order_type
+        self.related_entry = related_entry
+        self.outcome = outcome
+
+        self.body = discord.ui.TextInput(
+            label="Order / Opinion Text",
+            style=discord.TextStyle.paragraph,
+            placeholder="Write the order or opinion here…",
+            required=True,
+            max_length=4000,
+        )
+        self.add_item(self.body)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Always ACK fast; use followups later
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        cog = self.bot.get_cog("SpideyCourts")
+        if not cog:
+            return await interaction.followup.send("❌ Courts cog not loaded.", ephemeral=True)
+
+        case = cog.court_data.get(self.case_number)
+        if not case:
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+
+        # venue channel
+        venue_key = case.get("venue")
+        ch_id = VENUE_CHANNEL_MAP.get(venue_key)
+        venue_ch = self.bot.get_channel(ch_id) if ch_id else None
+        if not venue_ch:
+            return await interaction.followup.send("❌ Venue channel not found.", ephemeral=True)
+
+        title = f"{self.order_type} — {self.case_number}"
+        content = self.body.value or ""
+
+        # Post with long-text safety (thread + .txt for > 1800)
+        try:
+            if len(content) <= 1800:
+                msg = await venue_ch.send(
+                    f"**{title}**\n\n{content}",
+                    allowed_mentions=discord.AllowedMentions.none()
+                )
+                thread_id = None
+            else:
+                msg, thread = await cog._post_long_filing(
+                    court_channel=venue_ch,
+                    title=title,
+                    case_number=self.case_number,
+                    author=interaction.user,
+                    content=content,
+                )
+                thread_id = thread.id
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Failed to post the order: {e}", ephemeral=True)
+
+        # Docket entry
+        filings = case.setdefault("filings", [])
+        entry = len(filings) + 1
+        doc = {
+            "entry": entry,
+            "document_type": self.order_type,
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "message_id": msg.id,
+            "channel_id": msg.channel.id,
+            "content": (f"Outcome: {self.outcome}" if self.outcome else None),
+        }
+        if thread_id:
+            doc["thread_id"] = thread_id
+        if self.related_entry:
+            doc["related_docs"] = [self.related_entry]
+
+        filings.append(doc)
+
+        # If it resolves a motion, mark it
+        if self.related_entry:
+            rel = next((d for d in filings if d.get("entry") == self.related_entry), None)
+            if rel:
+                rel["resolved"] = True
+                if self.outcome:
+                    rel["ruling_outcome"] = self.outcome
+
+        save_json(COURT_FILE, cog.court_data)
+        await interaction.followup.send(f"✅ {self.order_type} docketed as Entry {entry}.", ephemeral=True)
+
+
 class SpideyCourts(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -1097,14 +1189,11 @@ class SpideyCourts(commands.Cog):
         )
 
     
-    @court.command(name="order", description="Issue an Order / Opinion (and optionally resolve a motion).")
+    @court.command(name="order", description="Issue an Order / Opinion (optionally resolves a motion).")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         case_number="Case number (e.g., 1:25-cv-000001-SS)",
-        order_type="Order, Opinion, or Opinion & Order",
-        text="Body of the order/opinion",
-        related_entry="Optional: Docket entry this resolves (e.g., a motion)",
-        outcome="Optional: Result (Granted, Denied, Partial, Other)"
+        related_entry="Optional docket entry this resolves (e.g., a motion)",
     )
     @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.choices(order_type=[
@@ -1123,54 +1212,29 @@ class SpideyCourts(commands.Cog):
         interaction: discord.Interaction,
         case_number: str,
         order_type: app_commands.Choice[str],
-        text: str,
         related_entry: int | None = None,
         outcome: app_commands.Choice[str] | None = None,
     ):
-        await interaction.response.defer(ephemeral=True)
-
+        # (Optional) Only the assigned judge may issue orders
         case = self.court_data.get(case_number)
         if not case:
-            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+            await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+            return
+        cid = case.get("judge_id")
+        if cid and int(cid) != interaction.user.id:
+            await interaction.response.send_message("❌ Only the assigned judge may issue orders in this case.", ephemeral=True)
+            return
 
-        # Post to venue
-        venue_id = VENUE_CHANNEL_MAP.get(case.get("venue"))
-        venue_ch = self.bot.get_channel(venue_id)
-        if not venue_ch:
-            return await interaction.followup.send("❌ Venue channel not found.", ephemeral=True)
+        await interaction.response.send_modal(
+            OrderModal(
+                bot=self.bot,
+                case_number=case_number,
+                order_type=order_type.value,
+                related_entry=related_entry,
+                outcome=(outcome.value if outcome else None),
+            )
+        )
 
-        header = f"**{order_type.value} — {case_number}**"
-        if related_entry:
-            header += f"\n(Related to Entry {related_entry}" + (f", Outcome: {outcome.value})" if outcome else ")")
-
-        msg = await venue_ch.send(f"{header}\n\n{text}")
-
-        # Add to docket
-        filings = case.setdefault("filings", [])
-        entry = len(filings) + 1
-        filings.append({
-            "entry": entry,
-            "document_type": order_type.value,
-            "author": interaction.user.name,
-            "author_id": interaction.user.id,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "message_id": msg.id,
-            "channel_id": venue_ch.id,
-            "related_docs": ([related_entry] if related_entry else []),
-            "content": (f"Outcome: {outcome.value}" if outcome else None)
-        })
-
-        # If resolving a motion, mark it resolved (non-breaking; ignored if not found)
-        if related_entry:
-            for d in filings:
-                if d.get("entry") == related_entry:
-                    d["resolved"] = True
-                    if outcome:
-                        d["ruling_outcome"] = outcome.value
-                    break
-
-        save_json(COURT_FILE, self.court_data)
-        await interaction.followup.send(f"✅ {order_type.value} filed as docket entry #{entry}.", ephemeral=True)
 
 
     @court.command(name="enter_judgment", description="Enter final judgment and close the case.")
