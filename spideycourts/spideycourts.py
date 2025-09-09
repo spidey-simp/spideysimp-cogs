@@ -448,11 +448,11 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
         self.parenthetical_override = parenthetical_override
 
         self.summary = discord.ui.TextInput(
-            label="Syllabus / Summary (optional; not part of the opinion)",
+            label="Syllabus / Summary (optional)",
             style=discord.TextStyle.paragraph,
             required=False,
             max_length=1500,
-            placeholder="(Supreme: Syllabus) (Others: brief summary of issues/holdings)"
+            placeholder="(Supreme: Syllabus) (Others: summary)"
         )
         self.add_item(self.summary)
 
