@@ -796,7 +796,7 @@ class SpideyCourts(commands.Cog):
 
         case_data = self.court_data[case_number]
         
-        related_doc_reqs = ["motion", "response", "reply", "countermotion", "amended", "supplemental"]
+        related_doc_reqs = ["response", "reply", "countermotion", "amended", "supplemental"]
         if document_type in related_doc_reqs and not related_docs:
             await interaction.response.send_message("That kind of document should have at least one related document. Please confer with the docket to see other docket numbers.")
             return
