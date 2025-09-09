@@ -387,7 +387,7 @@ class SpideyCourts(commands.Cog):
     async def _ready(self):
         await self.bot.wait_until_ready()
 
-    def _chunk_text(s: str, limit: int = 1900):
+    def _chunk_text(self, s: str, limit: int = 1900):
         # chunk by paragraphs first, then wrap if needed
         chunks = []
         for para in s.split("\n\n"):
@@ -413,7 +413,7 @@ class SpideyCourts(commands.Cog):
             name=f"{case_number} • Entry (pending) — {title}",
             auto_archive_duration=10080  # 7 days
         )
-        for chunk in _chunk_text(content, 1900):
+        for chunk in self._chunk_text(content, 1900):
             await thread.send(chunk)
 
         # 3) attach canonical .txt
