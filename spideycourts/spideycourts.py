@@ -11,8 +11,7 @@ from datetime import datetime, UTC
 from typing import List
 import textwrap
 import io
-
-
+import re
 
 
 
@@ -30,6 +29,9 @@ FED_CHAMBERS_CHANNEL_ID = 1401812137780838431
 ONGOING_CASES_CHANNEL_ID = 1402401313370931371
 EXHIBITS_CHANNEL_ID = 1402400976983425075
 COURT_STEPS_CHANNEL_ID = 1402482794650931231
+DIST_REPORTER_FORUM_ID = 1415079896161718375
+CIRCUIT_REPORTER_FORUM_ID = 1415080169965879478
+SUPREME_REPORTER_FORUM_ID = 1415080326761287761
 
 VENUE_CHANNEL_MAP = {
     "gen_chat": GEN_CHAT_DIST_CT_CHANNEL_ID,
@@ -67,6 +69,57 @@ PROCEEDING_TYPES = [
 "Settlement Conference",
 "Other"
 ]
+
+REPORTER_KEY = "_reporter"
+
+# How big a “page” is (must be < 2000)
+TARGET_CHARS_PER_PAGE = 1400
+
+# Map your court venues to a reporter “tier”
+VENUE_TO_REPORTER = {
+    # district courts
+    "gen_chat": "district",
+    "public_square": "district",
+    "swgoh": "district",
+    # circuit
+    "first_circuit": "circuit",
+    # supreme
+    "ssc": "supreme",
+}
+
+# Reporter abbreviations + their forum channel
+REPORTERS = {
+    "district": {"abbr": "SPIDEYLAW", "forum_id": DIST_REPORTER_FORUM_ID},
+    "circuit":  {"abbr": "F.",         "forum_id": CIRCUIT_REPORTER_FORUM_ID},
+    "supreme":  {"abbr": "S.R.",       "forum_id": SUPREME_REPORTER_FORUM_ID},
+}
+
+# Bluebook-ish court parentheticals (you can tweak anytime)
+COURT_PAREN = {
+    # Supreme — not used (S.R. itself implies Supreme), kept here for completeness
+    "ssc": {"long": "S.S.C.", "short": "S.S.C."},
+
+    # Circuit
+    "first_circuit": {"long": "1st Cir.", "short": "1st Cir."},
+
+    # Districts — customize these to your taste
+    "gen_chat":      {"long": "D. Gen. Chat", "short": "D.G.C."},
+    "public_square": {"long": "D. Pub. Sq.",  "short": "D.P.S."},
+    "swgoh":         {"long": "D. SWGOH",     "short": "D.SWGOH"},
+}
+
+DEFAULT_PAREN_STYLE = "long"
+
+CITE_MULTI_RX = re.compile(
+    r"""^\s*
+        (\d+)\s*                        # volume
+        (S\.?R\.?|F\.|SPIDEYLAW)\s+     # reporter abbr
+        (\d+)\s*                        # page (or first page)
+        (?:,\s*(\d+))?                  # optional pin page
+        (?:\s*\([^)]*\))?               # optional trailing parenthetical (ignored)
+        \s*$""",
+    re.IGNORECASE | re.VERBOSE
+)
 
 def load_json(file_path):
     """Load JSON data from a file."""
@@ -384,6 +437,130 @@ class OrderModal(discord.ui.Modal, title="Issue Order / Opinion"):
         save_json(COURT_FILE, cog.court_data)
         await interaction.followup.send(f"✅ {self.order_type} docketed as Entry {entry}.", ephemeral=True)
 
+class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
+    def __init__(self, bot: commands.Bot, case_number: str, entry: int, reporter_key: str | None, paren_style: str, parenthetical_override: str | None):
+        super().__init__()
+        self.bot = bot
+        self.case_number = case_number
+        self.entry = entry
+        self.reporter_key = reporter_key
+        self.paren_style = paren_style
+        self.parenthetical_override = parenthetical_override
+
+        self.headnotes = discord.ui.TextInput(
+            label="Headnotes (not part of the opinion)",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=1000
+        )
+        self.keywords = discord.ui.TextInput(
+            label="Keywords (comma-separated)",
+            style=discord.TextStyle.short,
+            required=False,
+            max_length=200
+        )
+        self.add_item(self.headnotes)
+        self.add_item(self.keywords)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        cog = self.bot.get_cog("SpideyCourts")
+        if not cog:
+            return await interaction.followup.send("❌ Courts cog not loaded.", ephemeral=True)
+
+        case = cog.court_data.get(self.case_number)
+        if not case:
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+
+        rep_key = self.reporter_key or cog._get_reporter_for_case(case)
+        rep_conf = REPORTERS.get(rep_key)
+        rep_root = cog._ensure_reporter()
+        rep_bucket = rep_root[rep_key]
+
+        # Pull the opinion text from docket (thread-based long text preferred)
+        opinion = await cog._gather_opinion_text_from_docket(case, self.entry)
+        if not opinion:
+            return await interaction.followup.send("❌ Couldn’t locate the opinion text for that entry.", ephemeral=True)
+
+        # Forum channel
+        forum = cog.bot.get_channel(rep_conf["forum_id"])
+        if not forum or str(getattr(forum, "type", "")).lower() != "forum":
+            return await interaction.followup.send("❌ Reporter forum not found.", ephemeral=True)
+
+        # Caption & citation
+        guild = interaction.guild
+        pl = await cog.try_get_display_name(guild, case.get("plaintiff"))
+        df = await cog.try_get_display_name(guild, case.get("defendant"))
+        caption = f"{pl} v. {df}"
+
+        vol = rep_bucket["current_volume"]
+        first_page = rep_bucket["current_page"]
+        year = datetime.now(UTC).year
+
+        court_paren = cog._court_parenthetical(
+            case=case,
+            reporter_key=rep_key,
+            style=self.paren_style,
+            override=self.parenthetical_override
+        )
+        citation = cog._make_citation(rep_conf["abbr"], vol, first_page, year, court_paren=court_paren)
+
+        # Starter post with headnotes
+        starter = f"**{caption}**\n`{citation}`\n\n"
+        if str(self.headnotes.value or "").strip():
+            starter += f"**Headnotes (not part of the opinion)**\n{self.headnotes.value.strip()}\n\n"
+        if str(self.keywords.value or "").strip():
+            starter += f"*Keywords:* {self.keywords.value.strip()}\n\n"
+        starter += "*Opinion follows in paginated messages below.*"
+
+        # Create forum thread
+        thread = await forum.create_thread(
+            name=f"{caption} — {citation}",
+            content=starter,
+            allowed_mentions=discord.AllowedMentions.none()
+        )
+
+        # Paginate and post pages
+        pages = cog._paginate_for_reporter(opinion, TARGET_CHARS_PER_PAGE)
+        page_message_ids = []
+        for pg in pages:
+            m = await thread.send(pg, allowed_mentions=discord.AllowedMentions.none())
+            page_message_ids.append(m.id)
+
+        # Record in reporter
+        rep_bucket["opinions"].append({
+            "case_number": self.case_number,
+            "entry": self.entry,
+            "caption": caption,
+            "year": year,
+            "volume": vol,
+            "first_page": first_page,
+            "pages": len(pages),
+            "thread_id": thread.id,
+            "page_message_ids": page_message_ids,
+            "headnotes": (self.headnotes.value or "").strip(),
+            "keywords": [k.strip() for k in (self.keywords.value or "").split(",") if k.strip()],
+        })
+        rep_bucket["current_page"] = first_page + len(pages)
+        cog.court_data[REPORTER_KEY] = rep_root
+        save_json(COURT_FILE, cog.court_data)
+
+        # Optional: docket that it was published
+        filings = case.setdefault("filings", [])
+        filings.append({
+            "entry": len(filings) + 1,
+            "document_type": "Reporter Publication",
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "content": f"Published as {citation} ({rep_key})",
+            "channel_id": rep_conf["forum_id"],
+            "message_id": page_message_ids[0] if page_message_ids else None,
+        })
+        save_json(COURT_FILE, cog.court_data)
+
+        await interaction.followup.send(f"✅ Published as `{citation}` in **{rep_conf['abbr']}**.", ephemeral=True)
+
 
 class SpideyCourts(commands.Cog):
     def __init__(self, bot):
@@ -479,6 +656,120 @@ class SpideyCourts(commands.Cog):
     @show_cases.before_loop
     async def _ready(self):
         await self.bot.wait_until_ready()
+
+    def _ensure_reporter(self):
+        """
+        Ensure reporter buckets exist in self.court_data[REPORTER_KEY].
+        Structure:
+        {
+        "_reporter": {
+            "district": {"current_volume":1,"current_page":1,"opinions":[]},
+            "circuit":  {"current_volume":1,"current_page":1,"opinions":[]},
+            "supreme":  {"current_volume":1,"current_page":1,"opinions":[]}
+        }
+        }
+        """
+        root = self.court_data.setdefault(REPORTER_KEY, {})
+        for key in REPORTERS.keys():
+            root.setdefault(key, {"current_volume": 1, "current_page": 1, "opinions": []})
+        return root
+
+    def _get_reporter_for_case(self, case: dict) -> str:
+        return VENUE_TO_REPORTER.get(case.get("venue"), "district")
+
+    def _paginate_for_reporter(self, text: str, max_chars: int = TARGET_CHARS_PER_PAGE):
+        """Split opinion text into fake 'pages' and prefix each with [*n]."""
+        chunks, page, buf = [], 1, ""
+        paras = [p.strip() for p in (text or "").split("\n\n")]
+        for para in paras:
+            if not para:
+                continue
+            parts = textwrap.wrap(para, width=max_chars, replace_whitespace=False, drop_whitespace=False)
+            for part in parts:
+                if len(buf) + len(part) + 2 > max_chars:
+                    chunks.append(f"[*{page}]\n{buf.strip()}")
+                    page += 1
+                    buf = part + "\n\n"
+                else:
+                    buf += part + "\n\n"
+        if buf.strip():
+            chunks.append(f"[*{page}]\n{buf.strip()}")
+        return chunks
+
+    async def _gather_opinion_text_from_docket(self, case: dict, entry_num: int) -> str | None:
+        """
+        Pulls long opinion text from the filing's thread (preferred), else uses the 'content' field.
+        Assumes your long-text filings/orders posted chunks as bot messages in the thread.
+        """
+        doc = next((d for d in case.get("filings", []) if d.get("entry") == entry_num), None)
+        if not doc:
+            return None
+        thread_id = doc.get("thread_id")
+        if thread_id:
+            thread = self.bot.get_channel(int(thread_id))
+            if thread and hasattr(thread, "history"):
+                parts = []
+                async for m in thread.history(limit=200, oldest_first=True):
+                    if m.author == self.bot.user and not m.attachments:
+                        parts.append(m.content)
+                if parts:
+                    return "\n\n".join(parts).strip()
+        return (doc.get("content") or "").strip() or None
+
+    def _needs_court_parenthetical(self, reporter_key: str) -> bool:
+        # Supreme reporter (S.R.) does NOT include a court name in the parenthetical
+        return reporter_key in ("district", "circuit")
+
+    def _auto_district_parenthetical(self, venue_key: str, style: str) -> str:
+        """Fallback if COURT_PAREN lacks a specific district entry."""
+        raw = (globals().get("VENUE_NAMES", {}) or {}).get(venue_key, venue_key or "District Court")
+        words = re.findall(r"[A-Za-z]+", raw)
+        if not words:
+            return "D. Dist. Ct."
+        abbrev_map = {"General":"Gen.", "Public":"Pub.", "Square":"Sq.", "District":"", "Court":""}
+        long_parts = [abbrev_map.get(w, w) for w in words if abbrev_map.get(w, w) != ""]
+        long_txt = "D. " + " ".join(long_parts)
+        if style == "long":
+            return long_txt
+        initials = "".join(w[0] for w in long_parts if w and w[0].isalpha()).upper()
+        return f"D.{'.'.join(list(initials))}."
+
+    def _court_parenthetical(self, case: dict, reporter_key: str, style: str = DEFAULT_PAREN_STYLE, override: str | None = None) -> str | None:
+        if not self._needs_court_parenthetical(reporter_key):
+            return None  # Supreme: no court name in parenthetical
+        if override:
+            return override.strip()
+        key = case.get("venue")
+        if reporter_key == "circuit":
+            key = key or "first_circuit"
+        if key in COURT_PAREN:
+            return COURT_PAREN[key]["short" if style == "short" else "long"]
+        if reporter_key == "district":
+            return self._auto_district_parenthetical(key or "", style)
+        return "Ct. App."
+
+    def _make_citation(self, abbr: str, vol: int, first_page: int, year: int, court_paren: str | None = None, pin: int | None = None) -> str:
+        """
+        Build a reporter citation.
+        Supreme:  1 S.R. 1 (2025)
+        Circuit:  3 F. 245 (1st Cir. 2026)
+        District: 1 SPIDEYLAW 1 (D. Gen. Chat 2025)
+        With pin: 1 S.R. 1, 5 (2025)
+        """
+        core = f"{vol} {abbr} {first_page}"
+        if pin is not None:
+            core += f", {pin}"
+        if court_paren:
+            return f"{core} ({court_paren} {year})"
+        return f"{core} ({year})"
+
+    def _abbr_to_reporter_key(self, abbr: str) -> str | None:
+        a = abbr.strip().upper().replace(" ", "")
+        if a in ("S.R.", "SR", "S.R"): return "supreme"
+        if a in ("F.", "F"):           return "circuit"
+        if a == "SPIDEYLAW":           return "district"
+        return None
+
 
     def _chunk_text(self, s: str, limit: int = 1900):
         # chunk by paragraphs first, then wrap if needed
@@ -1708,3 +1999,108 @@ class SpideyCourts(commands.Cog):
 
         save_json(COURT_FILE, self.court_data)
         await interaction.followup.send("✅ Withdrawal recorded.", ephemeral=True)
+
+    @court.command(name="reporter_publish", description="Publish a docketed opinion to the appropriate Reporter.")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.choices(reporter_override=[
+        app_commands.Choice(name="District (SPIDEYLAW)", value="district"),
+        app_commands.Choice(name="Circuit (F.)", value="circuit"),
+        app_commands.Choice(name="Supreme (S.R.)", value="supreme"),
+    ])
+    @app_commands.choices(paren_style=[
+        app_commands.Choice(name="Long (e.g., D. Gen. Chat)", value="long"),
+        app_commands.Choice(name="Short (e.g., D.G.C.)", value="short"),
+    ])
+    @app_commands.describe(
+        case_number="Case number",
+        entry="Docket entry number containing the opinion/order",
+        reporter_override="Optional: force a specific reporter",
+        paren_style="Optional: long/short parenthetical style",
+        parenthetical_override="Optional: custom court name (ignored for S.R.)"
+    )
+    async def reporter_publish(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        entry: int,
+        reporter_override: app_commands.Choice[str] | None = None,
+        paren_style: app_commands.Choice[str] | None = None,
+        parenthetical_override: str | None = None,
+    ):
+        case = self.court_data.get(case_number)
+        if not case:
+            await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+            return
+        # Optional guard: only assigned judge may publish
+        cid = case.get("judge_id")
+        if cid and int(cid) != interaction.user.id:
+            await interaction.response.send_message("❌ Only the assigned judge may publish this opinion.", ephemeral=True)
+            return
+
+        await interaction.response.send_modal(ReporterPublishModal(
+            bot=self.bot,
+            case_number=case_number,
+            entry=entry,
+            reporter_key=(reporter_override.value if reporter_override else None),
+            paren_style=(paren_style.value if paren_style else DEFAULT_PAREN_STYLE),
+            parenthetical_override=parenthetical_override
+        ))
+
+
+    @court.command(name="reporter_cite", description="Open a Reporter citation (SPIDEYLAW / F. / S.R.).")
+    @app_commands.describe(citation="e.g., '1 S.R. 5' or '1 SPIDEYLAW 1, 5'")
+    async def reporter_cite(self, interaction: discord.Interaction, citation: str):
+        await interaction.response.defer(ephemeral=True)
+        m = CITE_MULTI_RX.match(citation or "")
+        if not m:
+            return await interaction.followup.send("❌ Bad citation. Try `1 S.R. 5`, `1 F. 22`, or `1 SPIDEYLAW 100`.", ephemeral=True)
+
+        vol = int(m.group(1))
+        rep_key = self._abbr_to_reporter_key(m.group(2))
+        primary_page = int(m.group(3))
+        pin_page = (int(m.group(4)) if m.group(4) else None)
+
+        rep_root = self.court_data.get(REPORTER_KEY) or {}
+        bucket = rep_root.get(rep_key) or {}
+        opinions = bucket.get("opinions", [])
+
+        # If pin_page provided, primary_page is the opinion's first page; jump to pin_page within it
+        if pin_page is not None:
+            for op in opinions:
+                if op.get("volume") == vol and op.get("first_page") == primary_page:
+                    first = op.get("first_page")
+                    total = op.get("pages", 0)
+                    if not (first <= pin_page < first + total):
+                        return await interaction.followup.send("❌ Pin page out of range for that opinion.", ephemeral=True)
+                    idx = pin_page - first
+                    thread_id = op.get("thread_id")
+                    msg_id = (op.get("page_message_ids") or [None])[idx]
+                    thread = self.bot.get_channel(int(thread_id)) if thread_id else None
+                    if thread and msg_id:
+                        url = f"https://discord.com/channels/{thread.guild.id}/{thread.id}/{msg_id}"
+                        return await interaction.followup.send(f"🔗 {citation} → {url}", ephemeral=True)
+                    if thread:
+                        url = f"https://discord.com/channels/{thread.guild.id}/{thread.id}"
+                        return await interaction.followup.send(f"🔗 {citation} → {url}", ephemeral=True)
+            return await interaction.followup.send("❌ Opinion not found for that start page.", ephemeral=True)
+
+        # Otherwise treat primary_page as a global page in the volume
+        for op in opinions:
+            if op.get("volume") != vol:
+                continue
+            first = op.get("first_page", 0)
+            total = op.get("pages", 0)
+            if first <= primary_page < first + total:
+                idx = primary_page - first
+                thread_id = op.get("thread_id")
+                msg_id = (op.get("page_message_ids") or [None])[idx]
+                thread = self.bot.get_channel(int(thread_id)) if thread_id else None
+                if thread and msg_id:
+                    url = f"https://discord.com/channels/{thread.guild.id}/{thread.id}/{msg_id}"
+                    return await interaction.followup.send(f"🔗 {citation} → {url}", ephemeral=True)
+                if thread:
+                    url = f"https://discord.com/channels/{thread.guild.id}/{thread.id}"
+                    return await interaction.followup.send(f"🔗 {citation} → {url}", ephemeral=True)
+
+        await interaction.followup.send("❌ Citation not found in the Reporter.", ephemeral=True)
