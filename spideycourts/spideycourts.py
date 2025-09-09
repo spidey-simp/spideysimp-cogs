@@ -521,21 +521,34 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
 
         starter += "*Opinion follows in paginated messages below.*"
 
-        # Create forum thread
-        thread = await forum.create_thread(
+        pages = cog._paginate_for_reporter(opinion, TARGET_CHARS_PER_PAGE)
+        num_pages = len(pages)
+        if num_pages == 0:
+            return await interaction.followup.send("❌ Opinion text is empty.", ephemeral=True)
+
+        # Create thread (works with Thread or ThreadWithMessage)
+        created = await forum.create_thread(
             name=f"{caption} — {citation}",
             content=starter,
             allowed_mentions=discord.AllowedMentions.none()
         )
+        thread = getattr(created, "thread", created)
+        starter_msg = getattr(created, "message", None)
 
-        # Paginate and post pages
-        pages = cog._paginate_for_reporter(opinion, TARGET_CHARS_PER_PAGE)
         page_message_ids = []
-        for pg in pages:
-            m = await thread.send(pg, allowed_mentions=discord.AllowedMentions.none())
-            page_message_ids.append(m.id)
+        try:
+            for pg in pages:
+                m = await thread.send(pg, allowed_mentions=discord.AllowedMentions.none())
+                page_message_ids.append(m.id)
+        except Exception as e:
+            # abort and clean up — DO NOT advance pointers
+            try:
+                await thread.delete(reason=f"Reporter publish failed: {e}")
+            except Exception:
+                pass
+            return await interaction.followup.send(f"❌ Failed while posting pages: {e}", ephemeral=True)
 
-        # Record in reporter
+        # --- COMMIT ONLY AFTER SUCCESS ---
         rep_bucket["opinions"].append({
             "case_number": self.case_number,
             "entry": self.entry,
@@ -543,13 +556,14 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
             "year": year,
             "volume": vol,
             "first_page": first_page,
-            "pages": len(pages),
+            "pages": num_pages,
             "thread_id": thread.id,
+            "starter_message_id": (starter_msg.id if starter_msg else None),
             "page_message_ids": page_message_ids,
-            "headnotes": (self.headnotes.value or "").strip(),
             "keywords": [k.strip() for k in (self.keywords.value or "").split(",") if k.strip()],
         })
-        rep_bucket["current_page"] = first_page + len(pages)
+        rep_bucket["current_page"] = first_page + num_pages  # advance pointer now that it's real
+
         cog.court_data[REPORTER_KEY] = rep_root
         save_json(COURT_FILE, cog.court_data)
 
@@ -2112,3 +2126,29 @@ class SpideyCourts(commands.Cog):
                     return await interaction.followup.send(f"🔗 {citation} → {url}", ephemeral=True)
 
         await interaction.followup.send("❌ Citation not found in the Reporter.", ephemeral=True)
+
+    @court.command(name="reporter_preview", description="Preview citation and page count before publishing.")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.choices(reporter_override=[
+        app_commands.Choice(name="District (SPIDEYLAW)", value="district"),
+        app_commands.Choice(name="Circuit (F.)", value="circuit"),
+        app_commands.Choice(name="Supreme (S.R.)", value="supreme"),
+    ])
+    async def reporter_preview(self, interaction: discord.Interaction, case_number: str, entry: int, reporter_override: app_commands.Choice[str] | None = None):
+        await interaction.response.defer(ephemeral=True)
+        case = self.court_data.get(case_number)
+        if not case:
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+        rep_key = reporter_override.value if reporter_override else self._get_reporter_for_case(case)
+        rep_root = self._ensure_reporter(); bucket = rep_root[rep_key]
+        opinion = await self._gather_opinion_text_from_docket(case, entry)
+        if not opinion:
+            return await interaction.followup.send("❌ Couldn’t locate opinion text.", ephemeral=True)
+        pages = self._paginate_for_reporter(opinion, TARGET_CHARS_PER_PAGE)
+        num = len(pages)
+        vol, first_page, year = bucket["current_volume"], bucket["current_page"], datetime.now(UTC).year
+        abbr = REPORTERS[rep_key]["abbr"]
+        paren = self._court_parenthetical(case, rep_key)
+        cite = self._make_citation(abbr, vol, first_page, year, court_paren=paren)
+        await interaction.followup.send(f"📘 **Preview**: will publish as `{cite}` and use **{num} page(s)** (ending at p. {first_page+num-1}).", ephemeral=True)
