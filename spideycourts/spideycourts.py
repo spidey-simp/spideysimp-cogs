@@ -583,6 +583,52 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
 
         await interaction.followup.send(f"✅ Published as `{citation}` in **{rep_conf['abbr']}**.", ephemeral=True)
 
+class DocketView(discord.ui.View):
+    def __init__(self, pages: list[str], user_id: int):
+        super().__init__(timeout=300)
+        self.pages = pages
+        self.index = 0
+        self.user_id = user_id
+        # disable prev on first render
+        self.prev_button.disabled = True
+        if len(self.pages) == 1:
+            self.next_button.disabled = True
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        # Only the invoker can page
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Only the requester can use these controls.", ephemeral=True)
+            return False
+        return True
+
+    def _content(self) -> str:
+        footer = f"\n\n— Page {self.index+1}/{len(self.pages)} —"
+        return self.pages[self.index] + footer
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.index > 0:
+            self.index -= 1
+        self.prev_button.disabled = (self.index == 0)
+        self.next_button.disabled = (self.index >= len(self.pages)-1)
+        await interaction.response.edit_message(content=self._content(), view=self, allowed_mentions=discord.AllowedMentions.none())
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.index < len(self.pages)-1:
+            self.index += 1
+        self.prev_button.disabled = (self.index == 0)
+        self.next_button.disabled = (self.index >= len(self.pages)-1)
+        await interaction.response.edit_message(content=self._content(), view=self, allowed_mentions=discord.AllowedMentions.none())
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger)
+    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        await interaction.response.edit_message(content="(closed)", view=self)
+        self.stop()
+
 
 class SpideyCourts(commands.Cog):
     def __init__(self, bot):
@@ -679,6 +725,88 @@ class SpideyCourts(commands.Cog):
     async def _ready(self):
         await self.bot.wait_until_ready()
 
+    def _short_date(self, iso: str) -> str:
+        try:
+            dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+            return dt.strftime("%m/%d/%y")
+        except Exception:
+            return iso[:10]
+
+    def _entry_link(self, doc: dict) -> str | None:
+        ch_id = doc.get("channel_id")
+        msg_id = doc.get("message_id")
+        if not ch_id or not msg_id:
+            return None
+        # Prefer thread if present
+        thread_id = doc.get("thread_id")
+        channel_id = thread_id or ch_id
+        guild_id = getattr(self.bot.guilds[0], "id", 0) if self.bot.guilds else 0
+        return f"https://discord.com/channels/{guild_id}/{channel_id}/{msg_id}"
+
+    def _format_docket_lines(self, case_number: str, case: dict, viewer: discord.Member) -> list[str]:
+        """Build per-entry lines (newest first). Keeps exhibits under their parent."""
+        lines = []
+        filings = list(case.get("filings", []))
+        filings.sort(key=lambda d: d.get("entry", 0), reverse=True)
+
+        # (Optional sealed visibility—comment out if you don't use sealing)
+        judge_role_id = FED_JUDICIARY_ROLE_ID
+        is_judge = any(r.id == judge_role_id for r in getattr(viewer, "roles", []))
+        party_ids = set()
+        for k in ("plaintiff", "defendant"):
+            if case.get(k):
+                party_ids.add(int(case[k]))
+        for k in ("additional_plaintiffs", "additional_defendants"):
+            for pid in case.get(k, []) or []:
+                party_ids.add(int(pid))
+
+        for doc in filings:
+            # Sealed logic (hide content for non-privileged)
+            sealed = doc.get("sealed")
+            can_see = is_judge or (viewer.id in party_ids) or (viewer.id == doc.get("author_id"))
+            ts = self._short_date(doc.get("timestamp", ""))
+
+            if sealed and not can_see:
+                lines.append(f"[{doc.get('entry')}] [SEALED] — filed {ts}")
+                continue
+
+            author = doc.get("author") or "Unknown"
+            head = f"[{doc.get('entry')}] {doc.get('document_type','Document')} by {author} on {ts}"
+            # Related docs tag (single-line, compact)
+            if doc.get("related_docs"):
+                head += f" (Related to: Entry {', '.join(str(x) for x in doc['related_docs'])})"
+
+            url = self._entry_link(doc)
+            if url:
+                head += f" — <{url}>"
+
+            lines.append(head)
+
+            # Exhibits (keep under parent, not reversed)
+            for ex in doc.get("exhibits", []):
+                ex_desc = ex.get("description", "")
+                ex_num = ex.get("number") or ex.get("exhibit_number") or "1"
+                lines.append(f"    ↳ Exhibit {case_number};{doc.get('entry')}-{ex_num}: {ex_desc}")
+
+        return lines
+
+    def _build_docket_pages(self, header: str, lines: list[str], max_chars: int = 1900) -> list[str]:
+        """Pack lines into pages under the limit (header repeated each page)."""
+        pages, buf = [], ""
+        for ln in lines:
+            piece = (ln + "\n")
+            # new page if adding would overflow
+            if len(header) + len(buf) + len(piece) > max_chars:
+                pages.append(header + buf.rstrip())
+                buf = ""
+            buf += piece
+        if buf.strip():
+            pages.append(header + buf.rstrip())
+        if not pages:
+            pages = [header + "_No filings yet._"]
+        return pages
+
+
     def _ensure_reporter(self):
         """
         Ensure reporter buckets exist in self.court_data[REPORTER_KEY].
@@ -715,7 +843,7 @@ class SpideyCourts(commands.Cog):
                 else:
                     buf += part + "\n\n"
         if buf.strip():
-            chunks.append(f"[*{page}]\n{buf.strip()}")
+            chunks.append(f"`[*{page}]`\n{buf.strip()}")
         return chunks
 
     async def _gather_opinion_text_from_docket(self, case: dict, entry_num: int) -> str | None:
@@ -1039,87 +1167,52 @@ class SpideyCourts(commands.Cog):
 
         return matches
     
-    @court.command(name="view_docket", description="View the docket for a case")
-    @app_commands.describe(case_number="The case number to view")
+    @court.command(name="view_docket", description="View the docket for a case (paginated).")
     @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.describe(case_number="Case number")
     async def view_docket(self, interaction: discord.Interaction, case_number: str):
-        """View the docket for a specific case."""
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        case_data = self.court_data.get(case_number)
+        await interaction.response.defer(ephemeral=False)
 
-        if not case_data:
-            await interaction.followup.send("❌ Case not found.", ephemeral=True)
-            return
-        
+        case = self.court_data.get(case_number)
+        if not case:
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+
+        # Header: caption, counsel, venue, judge (names)
         guild = interaction.guild
+        pl = await self.try_get_display_name(guild, case.get("plaintiff"))
+        df = await self.try_get_display_name(guild, case.get("defendant"))
+        venue_name = VENUE_NAMES.get(case.get("venue"), case.get("venue"))
+        judge = await self.try_get_display_name(guild, case.get("judge_id")) or case.get("judge") or "Unknown"
 
-        plaintiff_member = guild.get_member(case_data["plaintiff"]) or await guild.fetch_member(case_data["plaintiff"])
-        defendant_member = guild.get_member(case_data["defendant"]) or await guild.fetch_member(case_data["defendant"])
+        counsel_pl = None
+        counsel_df = None
+        cor = case.get("counsel_of_record", {})
+        if cor:
+            pid = cor.get("plaintiff")
+            did = cor.get("defendant")
+            counsel_pl = await self.try_get_display_name(guild, int(pid)) if pid else None
+            counsel_df = await self.try_get_display_name(guild, int(did)) if did else None
 
-        plaintiff_name = plaintiff_member.display_name
-        defendant_name = defendant_member.display_name
+        header = (
+            f"**Docket for Case {pl} v. {df}, {case_number}**\n\n"
+            f"Counsel for Plaintiff: {counsel_pl or '<@Unknown>'}\n"
+            f"Counsel for Defendant: {counsel_df or '<@Unknown>'}\n"
+            f"Venue: {venue_name}\n"
+            f"Judge: {judge}\n"
+        )
+        header += "\n"  # spacer
 
-        plaintiff_id = str(case_data.get("plaintiff"))
-        defendant_id = str(case_data.get("defendant"))
-        counsel_map = case_data.get("counsel_of_record", {})
+        # Lines & pages
+        lines = self._format_docket_lines(case_number, case, interaction.user)
+        pages = self._build_docket_pages(header, lines, max_chars=1900)
 
-        plaintiff_counsel_id = counsel_map.get(plaintiff_id)
-        defendant_counsel_id = counsel_map.get(defendant_id)
+        view = self.DocketView(pages=pages, user_id=interaction.user.id)
+        await interaction.followup.send(
+            content=view._content(),
+            view=view,
+            allowed_mentions=discord.AllowedMentions.none()
+        )
 
-        if plaintiff_counsel_id:
-            plaintiff_counsel = await self.try_get_display_name(guild, plaintiff_counsel_id)
-        else:
-            plaintiff_counsel = "<@Unknown>"
-
-        if defendant_counsel_id:
-            defendant_counsel = await self.try_get_display_name(guild, defendant_counsel_id)
-        else:
-            defendant_counsel = "<@Unknown>"
-
-
-
-        docket_text = f"**Docket for Case {plaintiff_name} v. {defendant_name}, {case_number}**\n\n"
-        docket_text += f"**Counsel for Plaintiff:** {plaintiff_counsel}\n"
-        docket_text += f"**Counsel for Defendant:** {defendant_counsel}\n"
-        venue = case_data.get("venue", "Unknown")
-        if venue in VENUE_NAMES:
-            docket_text += f"**Venue:** {VENUE_NAMES[venue]}\n"
-        docket_text += f"**Judge:** {case_data.get('judge', 'Unknown')}\n"
-        filings = []
-        for doc in case_data.get("filings", []):
-            try:
-                link = f"https://discord.com/channels/{interaction.guild.id}/{doc.get('channel_id')}/{doc.get('message_id')}"
-            except KeyError:
-                link = "#"
-            
-            ts = doc.get('timestamp')
-            if ts:
-                try:
-                    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    ts = dt.strftime("%m/%d/%y")
-                except Exception:
-                    pass
-            
-            exhibits = []
-            for ex in doc.get("exhibits", []):
-                ex_link = f"https://discord.com/channels/{interaction.guild.id}/{ex['channel_id']}/{ex['file_id']}"
-                exhibits.append(f"  ↳ Exhibit {ex['exhibit_number']}: [{ex['text']}]({ex_link})\n")
-
-            related_docs = doc.get("related_docs", [])
-            related_str = ""
-            if related_docs:
-                related_str = " (Related to: " + ", ".join(f"Entry {r}" for r in related_docs) + ")"
-
-            filings.append(
-                f"**[{doc.get('entry', 1)}] [{doc.get('document_type', 'Unknown')}]({link})** by {doc.get('author', 'Unknown')} on {ts}{related_str}\n"
-                f"{''.join(exhibits) if exhibits else ''}"
-            )
-            
-        
-        reversed_filings = filings[::-1]
-        docket_text += "\n".join(reversed_filings) if reversed_filings else "No filings found."
-
-        await interaction.followup.send(docket_text, ephemeral=True)
 
     @court.command(name="connect_document", description="Manually update the link for a document.")
     @app_commands.describe(
