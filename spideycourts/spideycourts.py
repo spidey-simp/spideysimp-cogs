@@ -230,6 +230,7 @@ class DocumentFilingModal(discord.ui.Modal, title="File another document"):
         self.add_item(self.doc_contents)
         
     async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
         filings = self.case_dict.setdefault("filings", [])
         entry_num = len(filings) + 1
         timestamp = datetime.now(UTC).isoformat()
@@ -252,14 +253,14 @@ class DocumentFilingModal(discord.ui.Modal, title="File another document"):
         # Try to send message to court channel
         cog = self.bot.get_cog("SpideyCourts")
         if not cog:
-            await interaction.response.send_message("Internal error: courts cog not loaded.", ephemeral=True)
+            await interaction.followup.send("Internal error: courts cog not loaded.", ephemeral=True)
             return
 
         venue = self.case_dict.get("venue")
         channel_id = VENUE_CHANNEL_MAP.get(venue)
         court_channel = self.bot.get_channel(channel_id)
         if not court_channel:
-            await interaction.response.send_message("❌ Venue channel not found.", ephemeral=True)
+            await interaction.followup.send("❌ Venue channel not found.", ephemeral=True)
             return
 
         content = self.doc_contents.value or ""
@@ -290,7 +291,7 @@ class DocumentFilingModal(discord.ui.Modal, title="File another document"):
         save_json(COURT_FILE, cog.court_data)  # use the cog you already fetched
 
 
-        await interaction.response.send_message(f"✅ Document filed as docket entry #{entry_num}.", ephemeral=True)
+        await interaction.followup.send(f"✅ Document filed as docket entry #{entry_num}.", ephemeral=True)
 
 class SpideyCourts(commands.Cog):
     def __init__(self, bot):
