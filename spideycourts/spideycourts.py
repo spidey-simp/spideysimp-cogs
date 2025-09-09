@@ -447,20 +447,24 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
         self.paren_style = paren_style
         self.parenthetical_override = parenthetical_override
 
-        self.headnotes = discord.ui.TextInput(
-            label="Headnotes (not part of the opinion)",
+        self.summary = discord.ui.TextInput(
+            label="Syllabus / Summary (optional; not part of the opinion)",
             style=discord.TextStyle.paragraph,
             required=False,
-            max_length=1000
+            max_length=1500,
+            placeholder="(Supreme: Syllabus) (Others: brief summary of issues/holdings)"
         )
+        self.add_item(self.summary)
+
+        # (Keep your keywords/tags field if you want)
         self.keywords = discord.ui.TextInput(
             label="Keywords (comma-separated)",
             style=discord.TextStyle.short,
             required=False,
             max_length=200
         )
-        self.add_item(self.headnotes)
         self.add_item(self.keywords)
+
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -507,10 +511,14 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
 
         # Starter post with headnotes
         starter = f"**{caption}**\n`{citation}`\n\n"
-        if str(self.headnotes.value or "").strip():
-            starter += f"**Headnotes (not part of the opinion)**\n{self.headnotes.value.strip()}\n\n"
+
+        label = "Syllabus" if rep_key == "supreme" else "Summary"
+        if str(self.summary.value or "").strip():
+            starter += f"**{label} (not part of the opinion)**\n{self.summary.value.strip()}\n\n"
+
         if str(self.keywords.value or "").strip():
             starter += f"*Keywords:* {self.keywords.value.strip()}\n\n"
+
         starter += "*Opinion follows in paginated messages below.*"
 
         # Create forum thread
