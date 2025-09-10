@@ -752,13 +752,7 @@ class SpideyCourts(commands.Cog):
         # (Optional sealed visibility—comment out if you don't use sealing)
         judge_role_id = FED_JUDICIARY_ROLE_ID
         is_judge = any(r.id == judge_role_id for r in getattr(viewer, "roles", []))
-        party_ids = set()
-        for k in ("plaintiff", "defendant"):
-            if case.get(k):
-                party_ids.add(int(case[k]))
-        for k in ("additional_plaintiffs", "additional_defendants"):
-            for pid in case.get(k, []) or []:
-                party_ids.add(int(pid))
+        party_ids = self._collect_party_ids(case)
 
         for doc in filings:
             # Sealed logic (hide content for non-privileged)
@@ -956,6 +950,45 @@ class SpideyCourts(commands.Cog):
         await thread.send(file=discord.File(fp=file_bytes, filename=f"{safe_case}_{title.replace(' ', '_')}.txt"))
 
         return header, thread
+    
+    MENTION_RX = re.compile(r"<@!?(?P<id>\d+)>")
+
+    def _coerce_user_id(self, val) -> int | None:
+        """Return numeric user id if extractable (int, <@id>, '123'), else None."""
+        if val is None:
+            return None
+        if isinstance(val, int):
+            return val
+        if isinstance(val, str):
+            s = val.strip()
+            if s.isdigit():
+                return int(s)
+            m = MENTION_RX.match(s)
+            if m:
+                return int(m.group("id"))
+        return None
+
+    def _collect_party_ids(self, case: dict) -> set[int]:
+        """Collect all numeric IDs for sealing/visibility checks."""
+        ids: set[int] = set()
+        for key in ("plaintiff", "defendant"):
+            pid = self._coerce_user_id(case.get(key))
+            if pid:
+                ids.add(pid)
+        for key in ("additional_plaintiffs", "additional_defendants"):
+            for v in (case.get(key) or []):
+                pid = self._coerce_user_id(v)
+                if pid:
+                    ids.add(pid)
+        # optional: include counsel-of-record values if present
+        cor = case.get("counsel_of_record") or {}
+        if isinstance(cor, dict):
+            for v in cor.values():
+                pid = self._coerce_user_id(v)
+                if pid:
+                    ids.add(pid)
+        return ids
+
 
     
     court = app_commands.Group(name="court", description="Court related commands")
