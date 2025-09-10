@@ -12,6 +12,7 @@ from typing import List
 import textwrap
 import io
 import re
+import random
 
 
 
@@ -32,6 +33,7 @@ COURT_STEPS_CHANNEL_ID = 1402482794650931231
 DIST_REPORTER_FORUM_ID = 1415079896161718375
 CIRCUIT_REPORTER_FORUM_ID = 1415080169965879478
 SUPREME_REPORTER_FORUM_ID = 1415080326761287761
+GOVERNMENT_ROLE_ID = 1302324304712695909
 
 VENUE_CHANNEL_MAP = {
     "gen_chat": GEN_CHAT_DIST_CT_CHANNEL_ID,
@@ -726,6 +728,26 @@ class SpideyCourts(commands.Cog):
     @show_cases.before_loop
     async def _ready(self):
         await self.bot.wait_until_ready()
+
+    def _eligible_juror_members(
+        self,
+        guild: discord.Guild,
+        pool_role: discord.Role,
+        exclude_ids: set[int],
+    ) -> list[discord.Member]:
+        """Pool = role members minus bots, judiciary, excluded."""
+        judiciary_role = guild.get_role(FED_JUDICIARY_ROLE_ID)
+        out = []
+        for m in pool_role.members:
+            if m.bot:
+                continue
+            if m.id in exclude_ids:
+                continue
+            if judiciary_role and judiciary_role in m.roles:
+                continue
+            out.append(m)
+        return out
+
 
     def _short_date(self, iso: str) -> str:
         try:
@@ -2357,3 +2379,150 @@ class SpideyCourts(commands.Cog):
         self.court_data[REPORTER_KEY] = rep_root
         save_json(COURT_FILE, self.court_data)
         await interaction.followup.send(f"✅ Retracted. Page pointer reset to **p. {start}**.", ephemeral=True)
+
+    @court.command(name="jury_select", description="Summon a random jury from the government pool.")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.describe(
+        case_number="Case number (e.g., 1:25-cv-000001-SS)",
+        size="Number of jurors to summon (default 12)",
+        alternates="Number of alternates (default 2)",
+        replace="Replace existing panel if one already exists",
+        pool_role="Override the default pool (defaults to GOVERNMENT_ROLE_ID)"
+    )
+    async def jury_select(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        size: int = 12,
+        alternates: int = 2,
+        replace: bool = False,
+        pool_role: discord.Role | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        guild = interaction.guild
+        if not guild:
+            return await interaction.followup.send("❌ Must be used in a guild.", ephemeral=True)
+
+        case = self.court_data.get(case_number)
+        if not case:
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+
+        # Only the assigned judge may run this (optional but recommended)
+        cid = case.get("judge_id")
+        if cid and int(cid) != interaction.user.id:
+            return await interaction.followup.send("❌ Only the assigned judge may select jurors.", ephemeral=True)
+
+        # Decide pool role
+        role = pool_role or guild.get_role(GOVERNMENT_ROLE_ID)
+        if not role:
+            return await interaction.followup.send("❌ Government role not found.", ephemeral=True)
+
+        # Build exclusions: parties, counsel, judge, bot, invoker
+        exclude_ids = self._collect_party_ids(case)
+        if cid:
+            exclude_ids.add(int(cid))
+        exclude_ids.add(self.bot.user.id)
+        exclude_ids.add(interaction.user.id)
+
+        # Candidates
+        candidates = self._eligible_juror_members(guild, role, exclude_ids)
+        needed = max(0, size) + max(0, alternates)
+        if not candidates:
+            return await interaction.followup.send("❌ No eligible members in the pool.", ephemeral=True)
+
+        if len(candidates) < needed:
+            # don’t fail; just trim the target numbers
+            if len(candidates) <= 0:
+                return await interaction.followup.send("❌ No eligible members after exclusions.", ephemeral=True)
+            # shrink alternates first, then panel
+            short = needed - len(candidates)
+            take_alts = max(0, alternates - short)
+            # if still short, reduce size
+            remaining_short = max(0, short - alternates)
+            take_size = max(1, size - remaining_short)  # at least 1 juror
+            size, alternates = take_size, take_alts
+
+        # Respect existing panel unless replace=True
+        jury = case.setdefault("jury", {})
+        if jury.get("panel") and not replace:
+            return await interaction.followup.send(
+                "⚠️ Panel already exists. Pass `replace=True` to overwrite.", ephemeral=True
+            )
+
+        picks = random.sample(candidates, k=size + alternates)
+        panel_members = picks[:size]
+        alt_members = picks[size:]
+
+        # Save jury info
+        jury["panel"] = [m.id for m in panel_members]
+        jury["alternates"] = [m.id for m in alt_members]
+        jury["pool_role_id"] = role.id
+        jury["summoned_at"] = datetime.now(UTC).isoformat()
+        jury.setdefault("summons_log", [])
+        jury.setdefault("responses", {})  # future: accept/decline tracking
+        case["jury"] = jury
+        save_json(COURT_FILE, self.court_data)
+
+        # Notify each pick: DM first; fallback to courthouse steps mention
+        dm_ok = 0
+        public_ok = 0
+        steps_ch = self.bot.get_channel(COURT_STEPS_CHANNEL_ID)
+        for m in panel_members + alt_members:
+            method = "dm"
+            channel_id = None
+            message_id = None
+            try:
+                dm = await m.send(
+                    f"📨 **Jury Summons**\nYou are summoned for jury service in **{case_number}**.\n"
+                    f"Venue: {VENUE_NAMES.get(case.get('venue'), case.get('venue'))}\n"
+                    f"Presiding Judge: {await self.try_get_display_name(guild, case.get('judge_id')) or 'Unknown'}\n\n"
+                    f"Please be available for voir dire and further instructions.",
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+                dm_ok += 1
+                channel_id = dm.channel.id
+            except Exception:
+                method = "public"
+                if isinstance(steps_ch, discord.TextChannel):
+                    msg = await steps_ch.send(
+                        f"{m.mention} — You are summoned for jury service in **{case_number}**. "
+                        f"Please see the court channels for details.",
+                        allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False)
+                    )
+                    public_ok += 1
+                    channel_id = steps_ch.id
+                    message_id = msg.id
+
+            jury["summons_log"].append({
+                "user_id": m.id,
+                "method": method,
+                "channel_id": channel_id,
+                "message_id": message_id,
+                "timestamp": datetime.now(UTC).isoformat(),
+            })
+
+        # Optional: docket entry
+        filings = case.setdefault("filings", [])
+        filings.append({
+            "entry": len(filings) + 1,
+            "document_type": "Jury Summons Issued",
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "content": f"Summoned {len(panel_members)} jurors and {len(alt_members)} alternates from @{role.name}.",
+        })
+        save_json(COURT_FILE, self.court_data)
+
+        # Summarize
+        def fmt_list(members: list[discord.Member]) -> str:
+            return ", ".join([m.display_name for m in members]) or "—"
+
+        await interaction.followup.send(
+            f"✅ **Jury summoned** for {case_number}\n"
+            f"Jurors ({len(panel_members)}): {fmt_list(panel_members)}\n"
+            f"Alternates ({len(alt_members)}): {fmt_list(alt_members)}\n"
+            f"DMs delivered: {dm_ok} · Public fallbacks: {public_ok}",
+            ephemeral=True
+        )
