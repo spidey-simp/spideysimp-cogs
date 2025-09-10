@@ -784,9 +784,9 @@ class SpideyCourts(commands.Cog):
 
             # Exhibits (keep under parent, not reversed)
             for ex in doc.get("exhibits", []):
-                ex_desc = ex.get("description", "")
+                ex_desc = ex.get("text", "")
                 ex_num = ex.get("number") or ex.get("exhibit_number") or "1"
-                lines.append(f"    ↳ Exhibit {doc.get('entry')}: {ex_desc}")
+                lines.append(f"    ↳ Exhibit {ex_num}: {ex_desc}")
 
         return lines
 
