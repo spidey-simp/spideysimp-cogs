@@ -8,6 +8,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import re
 import random
+import asyncio
+from datetime import timedelta
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(BASE_DIR, 'settings.json')
@@ -38,6 +40,8 @@ SUG_STATUSES = {
 EMOJI_CREATORS = 1287650335896371230
 
 FIELD_LIMIT = 1024
+
+EMOJI_PATTERN = re.compile(r"<a?:\w+:(\d+)>")
 
 def load_settings():
     if not os.path.exists(SETTINGS_FILE):
@@ -656,3 +660,180 @@ class SpideyServerTools(commands.Cog):
 
         save_settings(self.settings)
         await interaction.response.send_message(f"Updated suggestion **#{suggestion_id}** → {SUG_STATUSES[status][0]}.", ephemeral=True)
+
+    audit = app_commands.Group(name="audit", description="Server usage audits")
+
+    def _guild_tz(self):
+        tzname = self.settings.get("timezone", "UTC")
+        try:
+            return ZoneInfo(tzname)
+        except Exception:
+            return ZoneInfo("UTC")
+
+    async def _iter_text_channels(self, guild: discord.Guild):
+        for ch in guild.text_channels:
+            # skip channels we can’t read
+            perms = ch.permissions_for(guild.me)
+            if not (perms.read_message_history and perms.read_messages):
+                continue
+            yield ch
+
+    @audit.command(name="emoji", description="Show least-used custom emojis over a recent window.")
+    @app_commands.describe(days="Lookback window in days (default 30)",
+                           sample_per_channel="Max messages to scan per channel (default 200)",
+                           include_reactions="Also count emoji reactions (default True)",
+                           limit="How many least-used to show (default 10)")
+    async def audit_emoji(self,
+                          interaction: discord.Interaction,
+                          days: int = 30,
+                          sample_per_channel: int = 200,
+                          include_reactions: bool = True,
+                          limit: int = 10):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        guild = interaction.guild
+        if not guild:
+            return await interaction.followup.send("Run this in a server.", ephemeral=True)
+
+        # Map of emoji_id -> {name, count}
+        custom = {e.id: {"name": e.name, "animated": e.animated, "count": 0} for e in guild.emojis}
+        if not custom:
+            return await interaction.followup.send("This server has no custom emojis.", ephemeral=True)
+
+        cutoff = datetime.now(tz=self._guild_tz()) - timedelta(days=days)
+        scanned_msgs = 0
+
+        for ch in await self._iter_text_channels(guild).__anext__,:
+            pass  # dummy to satisfy linter
+
+        async for ch in self._iter_text_channels(guild):
+            try:
+                async for msg in ch.history(limit=sample_per_channel, oldest_first=False, after=cutoff):
+                    scanned_msgs += 1
+                    # count occurrences in message content
+                    for match in EMOJI_PATTERN.finditer(msg.content):
+                        eid = int(match.group(1))
+                        if eid in custom:
+                            custom[eid]["count"] += 1
+                    # count reactions (no extra HTTP calls; counts included)
+                    if include_reactions and msg.reactions:
+                        for r in msg.reactions:
+                            # Reaction.emoji can be PartialEmoji (has .id for custom)
+                            eid = getattr(r.emoji, "id", None)
+                            if eid in custom and r.count:
+                                custom[eid]["count"] += r.count
+                await asyncio.sleep(0)  # cooperative yield
+            except discord.Forbidden:
+                continue
+            except Exception:
+                continue
+
+        # Sort ascending (least used first), then by name
+        rows = sorted(custom.items(), key=lambda kv: (kv[1]["count"], kv[1]["name"].lower()))
+        top = rows[:max(1, limit)]
+
+        # Build a compact report
+        lines = []
+        for eid, meta in top:
+            style = "a" if meta["animated"] else ""
+            lines.append(f"<{style}:{meta['name']}:{eid}> — **{meta['count']}**")
+
+        embed = discord.Embed(
+            title="Emoji Audit (Least Used)",
+            description=f"Lookback: **{days}d**, Sample/Channel: **{sample_per_channel}**, "
+                        f"Reactions: **{'Yes' if include_reactions else 'No'}**\n"
+                        f"Scanned messages: **{scanned_msgs}**",
+            timestamp=datetime.utcnow()
+        )
+        embed.add_field(name="Bottom emojis", value="\n".join(lines) or "_No data_", inline=False)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @audit.command(name="channels", description="List stale and quiet channels in the recent window.")
+    @app_commands.describe(
+        days="Lookback window in days (default 30)",
+        sample_per_channel="Max messages to scan per channel (default 200)",
+        used_threshold="Treat channel as 'used' once it reaches this many msgs (default 100)",
+        limit="How many to show per list (default 10)"
+    )
+    async def audit_channels(
+        self,
+        interaction: discord.Interaction,
+        days: int = 30,
+        sample_per_channel: int = 200,
+        used_threshold: int = 100,
+        limit: int = 10,
+    ):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        guild = interaction.guild
+        if not guild:
+            return await interaction.followup.send("Run this in a server.", ephemeral=True)
+
+        cutoff = datetime.now(tz=self._guild_tz()) - timedelta(days=days)
+        last_activity: dict[int, datetime | None] = {}
+        msg_counts: dict[int, int] = {}
+        hit_threshold: dict[int, bool] = {}
+
+        async for ch in self._iter_text_channels(guild):
+            cid = ch.id
+            last_activity[cid] = None
+            msg_counts[cid] = 0
+            hit_threshold[cid] = False
+            try:
+                # quick last-message probe
+                async for last_msg in ch.history(limit=1, oldest_first=False):
+                    last_activity[cid] = last_msg.created_at
+
+                # only need to scan up to the smaller of sample_per_channel and used_threshold
+                target = used_threshold if used_threshold and used_threshold > 0 else sample_per_channel
+                scan_limit = min(sample_per_channel, max(1, target))
+
+                async for msg in ch.history(limit=scan_limit, oldest_first=False, after=cutoff):
+                    msg_counts[cid] += 1
+                    if used_threshold and msg_counts[cid] >= used_threshold:
+                        hit_threshold[cid] = True
+                        break  # short-circuit: this channel is "used" enough
+
+                await asyncio.sleep(0)
+            except discord.Forbidden:
+                continue
+            except Exception:
+                continue
+
+        # Helper to show names
+        def ch_name(cid: int) -> str:
+            ch = guild.get_channel(cid)
+            return ch.mention if ch else f"<#{cid}>"
+
+        # Stale: oldest last_activity first (None = oldest)
+        stale_sorted = sorted(
+            last_activity.items(),
+            key=lambda kv: (kv[1] is not None, kv[1] or datetime.fromtimestamp(0, tz=self._guild_tz()))
+        )[:max(1, limit)]
+
+        # Quiet: only channels that did NOT hit threshold, fewest messages first
+        quiet_candidates = {cid: cnt for cid, cnt in msg_counts.items() if not hit_threshold.get(cid)}
+        quiet_sorted = sorted(quiet_candidates.items(), key=lambda kv: kv[1])[:max(1, limit)]
+
+        # Build lines
+        stale_lines = [
+            f"{ch_name(cid)} — last msg: **{(ts.strftime('%Y-%m-%d') if ts else '—')}**"
+            for cid, ts in stale_sorted
+        ]
+        quiet_lines = [
+            f"{ch_name(cid)} — msgs: **{cnt}**"
+            for cid, cnt in quiet_sorted
+        ]
+
+        embed = discord.Embed(
+            title="Channel Audit",
+            description=(
+                f"Window: **{days}d** • Sample/Channel: **{sample_per_channel}** • "
+                f"Used threshold: **{used_threshold}** (channels ≥ threshold are excluded from 'Quiet')"
+            ),
+            timestamp=datetime.utcnow(),
+        )
+        embed.add_field(name="Stale (oldest activity)", value="\n".join(stale_lines) or "_No data_", inline=False)
+        embed.add_field(name="Quiet (< threshold msgs in window)", value="\n".join(quiet_lines) or "_No data_", inline=False)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
