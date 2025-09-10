@@ -833,7 +833,7 @@ class SpideyCourts(commands.Cog):
             parts = textwrap.wrap(para, width=max_chars, replace_whitespace=False, drop_whitespace=False)
             for part in parts:
                 if len(buf) + len(part) + 2 > max_chars:
-                    chunks.append(f"[*{page}]\n{buf.strip()}")
+                    chunks.append(f"`[*{page}]`\n{buf.strip()}")
                     page += 1
                     buf = part + "\n\n"
                 else:
