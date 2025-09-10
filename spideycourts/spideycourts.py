@@ -13,6 +13,8 @@ import textwrap
 import io
 import re
 import random
+from dataclasses import dataclass, asdict
+import time, uuid
 
 
 
@@ -110,6 +112,12 @@ COURT_PAREN = {
     "swgoh":         {"long": "D. SWGOH",     "short": "D.SWGOH"},
 }
 
+GOV_DEFAULTS = {
+    "country": "The Spidey Republic",
+    # "state": "State of ???",
+    # "city":  "City of ???",
+}
+
 DEFAULT_PAREN_STYLE = "long"
 
 MENTION_RX = re.compile(r"<@!?(?P<id>\d+)>")
@@ -137,130 +145,175 @@ def save_json(file_path, data):
     with open(file_path, 'w', encoding='utf-8') as file:
         json.dump(data, file, indent=4)
 
+@dataclass
+class Party:
+    id: int | None            # Discord user id if user, else None
+    name: str                 # Display text (org/class name, or user display at time of entry)
+    kind: str                 # "user" | "org" | "class" | "state" | "text"
+    pid: str = ""             # stable internal party id (uuid4), set on creation
+    attorneys: list[int] = None  # list of Discord user ids
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        if d["attorneys"] is None: d["attorneys"] = []
+        return d
+
+def _now() -> int: return int(time.time())
+
+def _uuid() -> str: return uuid.uuid4().hex
+
 class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
-    def __init__(self, bot, venue: str, plaintiff: discord.Member, defendant: discord.Member):
+    def __init__(
+        self,
+        bot,
+        venue: str,
+        plaintiff: str | int | discord.Member | None,
+        defendant: str | int | discord.Member,
+        *,
+        criminal: bool = False,
+        government: str | None = None,
+    ):
         super().__init__()
         self.bot = bot
         self.venue = venue
         self.plaintiff = plaintiff
         self.defendant = defendant
+        self.criminal = bool(criminal)
+        self.government = government
 
-        self.additional_plaintiffs = discord.ui.TextInput(
-            label="Additional Plaintiffs (optional)",
-            placeholder="Enter additional plaintiffs (semi-colon separated)...",
+        self.statutes_at_issue = discord.ui.TextInput(
+            label="Statutes at Issue (optional)",
+            placeholder="Enter statutes at issue (semi-colon separated).",
             style=discord.TextStyle.short,
-            max_length=100,
-            required=False
+            max_length=200,
+            required=False,
         )
         self.additional_defendants = discord.ui.TextInput(
             label="Additional Defendants (optional)",
-            placeholder="Enter additional defendants (semi-colon separated)...",
+            placeholder="Enter additional defendants (semi-colon separated).",
             style=discord.TextStyle.short,
             max_length=100,
-            required=False
+            required=False,
         )
         self.complaint_text = discord.ui.TextInput(
             label="Complaint Text",
-            placeholder="Enter the facts and legal basis for your complaint...",
+            placeholder="Enter the facts and legal basis for your complaint.",
             style=discord.TextStyle.paragraph,
             max_length=1800,
-            required=True
+            required=True,
         )
-        self.add_item(self.additional_plaintiffs)
+        self.add_item(self.statutes_at_issue)
         self.add_item(self.additional_defendants)
         self.add_item(self.complaint_text)
-        
 
-    async def on_submit(self, interaction: discord.Interaction):
-        venue_channel_id = VENUE_CHANNEL_MAP.get(self.venue)
-        if not venue_channel_id:
-            await interaction.response.send_message("❌ Invalid venue selected.", ephemeral=True)
-            return
-
-        extra_plaintiffs_raw = self.additional_plaintiffs.value
-        extra_plaintiffs = [p.strip() for p in extra_plaintiffs_raw.split(';') if p.strip()]
-        extra_plaintiffs_formatted = [await self.resolve_party_entry(interaction.guild, p) for p in extra_plaintiffs]
-        extra_defendants_raw = self.additional_defendants.value
-        extra_defendants = [d.strip() for d in extra_defendants_raw.split(';') if d.strip()]
-        extra_defendants_formatted = [await self.resolve_party_entry(interaction.guild, d) for d in extra_defendants]
-
-        court_data = self.bot.get_cog("SpideyCourts").court_data
-        case_number = f"1:{interaction.created_at.year % 100:02d}-cv-{len(court_data)+1:06d}-{JUDGE_INITS.get(self.venue, 'SS')}"
-
-        court_data[case_number] = {
-            "plaintiff": self.plaintiff.id,
-            "additional_plaintiffs": extra_plaintiffs_formatted,
-            "defendant": self.defendant.id,
-            "additional_defendants": extra_defendants_formatted,
-            "counsel_for_plaintiff": interaction.user.id,
-            "venue": self.venue,
-            "judge": JUDGE_VENUES.get(self.venue, {}).get("name", "SS"),
-            "judge_id": JUDGE_VENUES.get(self.venue, {}).get("id", 684457913250480143),
-            "filings": [
-                {
-                    "entry": 1,
-                    "document_type": "Complaint",
-                    "author": interaction.user.name,
-                    "author_id": interaction.user.id,
-                    "content": self.complaint_text.value,
-                    "timestamp": interaction.created_at.isoformat()
-                }
-            ]
-        }
-
-       
-
-        # Try to send the summary message to the correct channel
-        venue_channel = self.bot.get_channel(venue_channel_id)
-        summary = (
-            f"📁 **New Complaint Filed**\n"
-            f"**Case Number:** `{case_number}`\n"
-            f"**Plaintiff:** {self.plaintiff.mention}"
-        )
-        formatted_extra_plaintiffs = [self.format_party(interaction.guild, p) for p in extra_plaintiffs_formatted]
-        formatted_extra_defendants = [self.format_party(interaction.guild, d) for d in extra_defendants_formatted]
-
-        if extra_plaintiffs:
-            summary += f"\n**Additional Plaintiffs:** {', '.join(formatted_extra_plaintiffs)}"
-
-        summary += f"\n**Defendant:** {self.defendant.mention}"
-
-        if extra_defendants:
-            summary += f"\n**Additional Defendants:** {', '.join(formatted_extra_defendants)}"
-
-        summary += f"\nFiled by: {interaction.user.mention}"
-
-        summary_msg = await venue_channel.send(summary)
-
-        filing_msg = await venue_channel.send(
-            f"**Complaint Document - {case_number}**\n\n{self.complaint_text.value}"
-        )
-
-        court_data[case_number]["filings"][0]["message_id"] = filing_msg.id
-        court_data[case_number]["filings"][0]["channel_id"] = filing_msg.channel.id
-
-        save_json(COURT_FILE, court_data)
-
-        await interaction.response.send_message(
-            f"✅ Complaint filed successfully under case number `{case_number}`.",
-            ephemeral=True
-        )
-    
     @staticmethod
-    async def resolve_party_entry(guild: discord.Guild, entry: str):
-        """Attempt to resolve a party string into a user ID. Fallback to string."""
-        name = entry.strip().lstrip("@")
+    async def resolve_party_entry(guild: discord.Guild, entry):
+        """Resolve to user id if possible; else keep text."""
+        if isinstance(entry, discord.Member): return entry.id
+        if isinstance(entry, int): return entry
+        s = str(entry or "").strip()
+        m = MENTION_RX.match(s)
+        if m: return int(m.group("id"))
+        name = s.lstrip("@")
         for member in guild.members:
             if member.name == name or member.display_name == name:
                 return member.id
-        return name  # fallback to raw string
-    
+        return s  # text/org/class
+
     @staticmethod
     def format_party(guild: discord.Guild, party):
         if isinstance(party, int):
             member = guild.get_member(party)
             return member.mention if member else f"<@{party}>"
-        return party
+        return party  # string/org/class/etc.
+
+    async def on_submit(self, interaction: discord.Interaction):
+        venue_channel_id = VENUE_CHANNEL_MAP.get(self.venue)
+        if not venue_channel_id:
+            return await interaction.response.send_message("❌ Invalid venue selected.", ephemeral=True)
+
+        # 1) Resolve parties FIRST
+        pl_val = None
+        if not self.criminal:
+            pl_val = await self.resolve_party_entry(interaction.guild, self.plaintiff)
+        df_val = await self.resolve_party_entry(interaction.guild, self.defendant)
+
+        extras_raw = self.additional_defendants.value
+        extras = [d.strip() for d in extras_raw.split(";") if d.strip()]
+        extra_vals = [await self.resolve_party_entry(interaction.guild, d) for d in extras]
+
+        # 2) Case number with proper type
+        typ = "cr" if self.criminal else "cv"
+        court_data = self.bot.get_cog("SpideyCourts").court_data
+        case_number = f"1:{interaction.created_at.year % 100:02d}-{typ}-{len(court_data)+1:06d}-{JUDGE_INITS.get(self.venue, 'SS')}"
+
+        # 3) Initial case dict (always include filings[0])
+        judge_name = JUDGE_VENUES.get(self.venue, {}).get("name", "SS")
+        judge_id   = JUDGE_VENUES.get(self.venue, {}).get("id", 684457913250480143)
+
+        if self.criminal:
+            gov_name = (self.government and GOV_DEFAULTS.get(self.government.lower(), self.government)) or GOV_DEFAULTS["country"]
+            plaintiff_stored = gov_name
+            counsel_pl = None  # prosecutor optional to store separately later
+            case_type = "criminal"
+            is_criminal = True
+        else:
+            plaintiff_stored = pl_val
+            counsel_pl = interaction.user.id
+            case_type = "civil"
+            is_criminal = False
+
+        court_data[case_number] = {
+            "plaintiff": plaintiff_stored,
+            "defendant": df_val,
+            "additional_plaintiffs": [],           # kept for legacy tools; real edits via clerk cmds
+            "additional_defendants": extra_vals,
+            "counsel_for_plaintiff": counsel_pl,
+            "venue": self.venue,
+            "judge": judge_name,
+            "judge_id": judge_id,
+            "case_type": case_type,
+            "is_criminal": is_criminal,
+            "filings": [{
+                "entry": 1,
+                "document_type": "Complaint" if not self.criminal else "Criminal Complaint",
+                "author": interaction.user.name,
+                "author_id": interaction.user.id,
+                "content": (("**Statutes at issue:** " + self.statutes_at_issue.value + "\n\n") if self.statutes_at_issue.value.strip() else "") + self.complaint_text.value,
+                "timestamp": interaction.created_at.isoformat(),
+            }],
+        }
+
+        # 4) Compose summary ONCE using formatted parties
+        venue_channel = self.bot.get_channel(venue_channel_id)
+        if self.criminal:
+            prose_pl = plaintiff_stored  # string
+            header = "📁 **New Criminal Complaint Filed**"
+            lines = [
+                f"**Case Number:** `{case_number}`",
+                f"**Prosecution:** {prose_pl}",
+                f"**Defendant:** {self.format_party(interaction.guild, df_val)}",
+            ]
+        else:
+            header = "📁 **New Complaint Filed**"
+            lines = [
+                f"**Case Number:** `{case_number}`",
+                f"**Plaintiff:** {self.format_party(interaction.guild, pl_val)}",
+                f"**Defendant:** {self.format_party(interaction.guild, df_val)}",
+            ]
+        if extra_vals:
+            lines.append("**Additional Defendants:** " + ", ".join(self.format_party(interaction.guild, v) for v in extra_vals))
+        lines.append(f"Filed by: {interaction.user.mention}")
+
+        summary = header + "\n" + "\n".join(lines)
+        await venue_channel.send(summary)
+
+        filing_msg = await venue_channel.send(f"**Complaint Document - {case_number}**\n\n{self.complaint_text.value}")
+        court_data[case_number]["filings"][0]["message_id"] = filing_msg.id
+        court_data[case_number]["filings"][0]["channel_id"] = filing_msg.channel.id
+
+        save_json(COURT_FILE, court_data)
+        await interaction.response.send_message(f"✅ Complaint filed under `{case_number}`.", ephemeral=True)
 
 class DocumentFilingModal(discord.ui.Modal, title="File another document"):
     def __init__(self, bot: commands.Bot, case_number:str, case_dict:dict, related_docs:str=None):
@@ -497,9 +550,7 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
 
         # Caption & citation
         guild = interaction.guild
-        pl = await cog.try_get_display_name(guild, case.get("plaintiff"))
-        df = await cog.try_get_display_name(guild, case.get("defendant"))
-        caption = f"{pl} v. {df}"
+        caption = await cog._caption_from_parties(guild, case)
 
         vol = rep_bucket["current_volume"]
         first_page = rep_bucket["current_page"]
@@ -669,58 +720,38 @@ class SpideyCourts(commands.Cog):
     
     @tasks.loop(hours=24)
     async def show_cases(self):
-        """Daily task to show ongoing cases in the Ongoing Cases channel."""
-        if not self.court_data:
-            return
-
+        if not self.court_data: return
         channel = self.bot.get_channel(ONGOING_CASES_CHANNEL_ID)
-        if not channel:
-            return
+        if not channel: return
 
-        # Compose new message
         ongoing = []
         for case_number, data in self.court_data.items():
-            if case_number.startswith("_"):
-                continue
-            if not isinstance(data, dict):
-                continue
-            # must look like a case
-            if "plaintiff" not in data or "defendant" not in data or "filings" not in data:
-                continue
-            if data.get("status") == "closed":
-                continue
+            if case_number.startswith("_"): continue
+            if not isinstance(data, dict): continue
+            if data.get("status") == "closed": continue
+            if "plaintiff" not in data or "defendant" not in data or "filings" not in data: continue
+            # NEW: normalize legacy -> parties so caption renders
+            await self._normalize_case(channel.guild, data)
             ongoing.append((case_number, data))
 
-        if not ongoing:
-            return
-
+        if not ongoing: return
         message = "**Ongoing Court Cases:**\n"
         for case_number, case_data in ongoing:
-            try:
-                p = await channel.guild.fetch_member(case_data["plaintiff"])
-                d = await channel.guild.fetch_member(case_data["defendant"])
-                pn, dn = p.display_name, d.display_name
-            except Exception:
-                pn, dn = str(case_data.get("plaintiff", "Unknown")), str(case_data.get("defendant", "Unknown"))
             latest = case_data['filings'][-1] if case_data.get('filings') else {}
-            message += f"- `{pn}` v. `{dn}`, {case_number} (Most recent: {latest.get('document_type', 'Unknown')})\n"
+            cap = await self._caption_from_parties(channel.guild, case_data)
+            message += f"- `{cap}`, {case_number} (Most recent: {latest.get('document_type', 'Unknown')})\n"
 
         meta = self.court_data.setdefault("_meta", {})
-        msg_id = meta.get("ongoing_cases_msg_id")  # if you used system.json before, use that key instead
-
+        msg_id = meta.get("ongoing_cases_msg_id")
         try:
             if msg_id:
-                # edit existing message (no new notification)
                 existing = await channel.fetch_message(int(msg_id))
                 await existing.edit(content=message, allowed_mentions=discord.AllowedMentions.none())
             else:
-                # first time: send and remember id
                 new_msg = await channel.send(message, allowed_mentions=discord.AllowedMentions.none())
                 meta["ongoing_cases_msg_id"] = new_msg.id
                 save_json(COURT_FILE, self.court_data)
-
         except (discord.NotFound, discord.Forbidden):
-            # if it was deleted or inaccessible, post a fresh one and save its id
             new_msg = await channel.send(message, allowed_mentions=discord.AllowedMentions.none())
             meta["ongoing_cases_msg_id"] = new_msg.id
             save_json(COURT_FILE, self.court_data)
@@ -1018,6 +1049,131 @@ class SpideyCourts(commands.Cog):
         return ids
 
 
+
+    async def _party_label(self, guild: discord.Guild, value) -> str:
+        """
+        Return a display-ready label for a party that may be:
+        - int / numeric str → Discord user id
+        - raw string → org/class text
+        """
+        # Try to coerce discord user id first
+        def _maybe_int(x):
+            try:
+                return int(str(x))
+            except Exception:
+                return None
+
+        pid = _maybe_int(value)
+        if pid:
+            return await self.try_get_display_name(guild, pid)
+        return str(value or "Unknown")
+
+    async def _caption(self, guild: discord.Guild, case: dict) -> str:
+        """
+        Compute the caption using optional overrides:
+        case["caption"] = {"style": "v"|"in_re", "left": "...", "right": "...?"}
+        """
+        cap = case.get("caption") or {}
+        style = (cap.get("style") or case.get("caption_style") or "v").lower()
+
+        left = cap.get("left")
+        right = cap.get("right")
+
+        if not left:
+            left = await self._party_label(guild, case.get("plaintiff"))
+
+        if style == "in_re":
+            return f"In re {left}"
+
+        if not right:
+            right = await self._party_label(guild, case.get("defendant"))
+
+        return f"{left} v. {right}"
+    
+    async def _normalize_case(self, guild: discord.Guild, case: dict) -> None:
+        # 1) If new structure is missing, build from legacy fields
+        parties = case.setdefault("parties", {})
+        if "plaintiffs" not in parties or "defendants" not in parties:
+            plaintiffs = []
+            defendants = []
+            # Legacy singletons
+            legacy_pl = case.get("plaintiff")
+            legacy_df = case.get("defendant")
+            # Legacy lists
+            legacy_pls = case.get("additional_plaintiffs", []) or []
+            legacy_dfs = case.get("additional_defendants", []) or []
+
+            async def _mk_party(x, default_kind="org"):
+                # @mention / id ⇒ user; else text ⇒ org/class/text
+                uid = await self._maybe_user_id(x)
+                if uid:
+                    disp = await self.try_get_display_name(guild, uid)
+                    return Party(id=uid, name=disp, kind="user", pid=_uuid()).to_dict()
+                s = str(x).strip()
+                kind = default_kind
+                low = s.lower()
+                if low.startswith("class:"):
+                    s = s.split(":",1)[1].strip(); kind="class"
+                elif low.startswith("org:"):
+                    s = s.split(":",1)[1].strip(); kind="org"
+                elif low.startswith("state:"):
+                    s = s.split(":",1)[1].strip(); kind="state"
+                return Party(id=None, name=s, kind=kind, pid=_uuid()).to_dict()
+
+            if legacy_pl: plaintiffs.append(await _mk_party(legacy_pl))
+            for x in legacy_pls: plaintiffs.append(await _mk_party(x))
+            if legacy_df: defendants.append(await _mk_party(legacy_df))
+            for x in legacy_dfs: defendants.append(await _mk_party(x))
+
+            parties["plaintiffs"] = plaintiffs or []
+            parties["defendants"] = defendants or []
+
+        # Ensure attorneys array + pid exists
+        for side in ("plaintiffs", "defendants"):
+            clean = []
+            for p in parties.get(side, []):
+                p.setdefault("pid", _uuid())
+                p.setdefault("attorneys", [])
+                clean.append(p)
+            parties[side] = clean
+
+
+    async def _maybe_user_id(self, value) -> int | None:
+        try:
+            s = str(value).strip()
+            if s.startswith("<@") and s.endswith(">"):
+                return int("".join(c for c in s if c.isdigit()))
+            return int(s)
+        except Exception:
+            return None
+
+    async def _party_dict_label(self, guild: discord.Guild, p: dict) -> str:
+        # Refresh label for users to current display; keep org/class as saved
+        if p.get("kind") == "user" and p.get("id"):
+            disp = await self.try_get_display_name(guild, int(p["id"]))
+            if disp and disp != p.get("name"):
+                p["name"] = disp
+        return p.get("name") or "Unknown"
+
+    async def _caption_from_parties(self, guild: discord.Guild, case: dict) -> str:
+        cap = (case.get("caption") or {}).copy()
+        style = (cap.get("style") or "v").lower()
+        parties = case.get("parties", {})
+        pls = parties.get("plaintiffs", [])
+        dfs = parties.get("defendants", [])
+
+        if style == "in_re":
+            left = cap.get("left")
+            if not left:
+                left = await self._party_dict_label(guild, pls[0]) if pls else "Matter"
+            return f"In re {left}"
+
+        # "v." style
+        left = cap.get("left") or (await self._party_dict_label(guild, pls[0]) if pls else "Unknown")
+        right = cap.get("right") or (await self._party_dict_label(guild, dfs[0]) if dfs else "Unknown")
+        return f"{left} v. {right}"
+
+
     
     court = app_commands.Group(name="court", description="Court related commands")
 
@@ -1156,24 +1312,52 @@ class SpideyCourts(commands.Cog):
 
     
     @court.command(name="file_complaint", description="File a new complaint")
-    @app_commands.describe(plaintiff="Plaintiff's name", defendant="Defendant's name", venue="Venue for the complaint")
+    @app_commands.describe(
+        plaintiff="Plaintiff (ignored if criminal=True)",
+        plaintiff_user="Plaintiff is a discord member",
+        defendant="Defendant",
+        defendant_user="Defendant is a discord member",
+        venue="Venue for the complaint",
+        criminal="Is this a criminal complaint?",
+        government="Government name or level (e.g. 'country' to use default)"
+    )
     @app_commands.choices(
         venue=[
             app_commands.Choice(name="General Chat District Court", value="gen_chat"),
             app_commands.Choice(name="SWGOH District Court", value="swgoh"),
             app_commands.Choice(name="Public Square District Court", value="public_square"),
             app_commands.Choice(name="First Circuit", value="first_circuit"),
-            app_commands.Choice(name="Supreme Court", value="ssc")
+            app_commands.Choice(name="Supreme Court", value="ssc"),
         ]
     )
-    async def file_complaint(self, interaction: discord.Interaction, plaintiff: discord.Member, defendant: discord.Member, venue: str):
-        """File a new complaint."""
-        if plaintiff == defendant:
-            await interaction.response.send_message("❌ Plaintiff and defendant cannot be the same person.", ephemeral=True)
-            return
-        
+    async def file_complaint(
+        self,
+        interaction: discord.Interaction,
+        venue: str,
+        plaintiff: str | None = None,
+        defendant: str | None = None,
+        plaintiff_user: discord.Member | None = None,
+        defendant_user: discord.Member | None = None,
+        criminal: bool = False,
+        government: str | None = None,
+    ):
+        # basic validation (civil must have distinct sides)
+        if not criminal:
+            if (plaintiff is None and plaintiff_user is None):
+                return await interaction.response.send_message("❌ Civil filing requires distinct plaintiff and defendant.", ephemeral=True)
+        if defendant is None and defendant_user is None:
+            return await interaction.response.send_message("❌ Defendant is required.", ephemeral=True)
+
+        # merge text+member into one display string per side
+        if plaintiff_user:
+            plaintiff = plaintiff_user.display_name if not plaintiff else f"{plaintiff_user.display_name} and {plaintiff}"
+        if defendant_user:
+            defendant = defendant_user.display_name if not defendant else f"{defendant_user.display_name} and {defendant}"
+
         await interaction.response.send_modal(
-            ComplaintFilingModal(self.bot, venue, plaintiff, defendant)
+            ComplaintFilingModal(
+                self.bot, venue, plaintiff, defendant, criminal=criminal, government=government
+            )
         )
 
     async def case_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
@@ -1240,8 +1424,6 @@ class SpideyCourts(commands.Cog):
 
         # Header: caption, counsel, venue, judge (names)
         guild = interaction.guild
-        pl = await self.try_get_display_name(guild, case.get("plaintiff"))
-        df = await self.try_get_display_name(guild, case.get("defendant"))
         venue_name = VENUE_NAMES.get(case.get("venue"), case.get("venue"))
         judge = await self.try_get_display_name(guild, case.get("judge_id")) or case.get("judge") or "Unknown"
 
@@ -1254,8 +1436,10 @@ class SpideyCourts(commands.Cog):
             counsel_pl = await self.try_get_display_name(guild, int(pid)) if pid else None
             counsel_df = await self.try_get_display_name(guild, int(did)) if did else None
 
+        caption = await self._caption_from_parties(guild, case)
+
         header = (
-            f"**Docket for Case {pl} v. {df}, {case_number}**\n\n"
+            f"**Docket for Case {caption}, {case_number}**\n\n"
             f"Counsel for Plaintiff: {counsel_pl or '<@Unknown>'}\n"
             f"Counsel for Defendant: {counsel_df or '<@Unknown>'}\n"
             f"Venue: {venue_name}\n"
@@ -2019,10 +2203,9 @@ class SpideyCourts(commands.Cog):
             case = await _need_case()
             if not case:
                 return
-            pl = await self.try_get_display_name(interaction.guild, case.get("plaintiff"))
-            df = await self.try_get_display_name(interaction.guild, case.get("defendant"))
+            cap = await self._caption_from_parties(interaction.guild, case)
             await interaction.channel.send(
-                f"🗂️ Calling case `{case_number}`: **{pl} v. {df}**.\n"
+                f"🗂️ Calling case `{case_number}`: **{cap}**.\n"
                 f"Counsel, please state your appearances for the record."
             )
             return await interaction.followup.send("✅ Case called.", ephemeral=True)
@@ -2526,3 +2709,241 @@ class SpideyCourts(commands.Cog):
             f"DMs delivered: {dm_ok} · Public fallbacks: {public_ok}",
             ephemeral=True
         )
+
+    @court.command(name="set_caption", description="Set or clear a custom case caption (class, org, In re, etc.)")
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.choices(style=[
+        app_commands.Choice(name="v.", value="v"),
+        app_commands.Choice(name="In re", value="in_re"),
+    ])
+    @app_commands.describe(
+        case_number="Case number",
+        style="Caption style",
+        left="Left side text (e.g., class name, @user, org)",
+        right="Right side text (omit for In re)",
+        reset="Clear custom caption (revert to default)"
+    )
+    async def set_caption(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        style: app_commands.Choice[str],
+        left: str,
+        right: str | None = None,
+        reset: bool = False,
+    ):
+        await interaction.response.defer(ephemeral=True)
+        case = self.court_data.get(case_number)
+        if not case:
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+
+        if reset:
+            case.pop("caption", None)
+            save_json(COURT_FILE, self.court_data)
+            return await interaction.followup.send("✅ Caption reset to default.", ephemeral=True)
+
+        if style.value == "v" and not right:
+            return await interaction.followup.send("❌ For the “v.” style, please provide `right`.", ephemeral=True)
+
+        case["caption"] = {"style": style.value, "left": left.strip(), "right": (right.strip() if right else None)}
+        save_json(COURT_FILE, self.court_data)
+        cap = await self._caption(interaction.guild, case)
+        await interaction.followup.send(f"✅ Caption set to: **{cap}**", ephemeral=True)
+
+    
+    @court.command(name="parties", description="View parties and attorneys for a case")
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    async def parties_cmd(self, interaction: discord.Interaction, case_number: str):
+        case = self.court_data.get(case_number)
+        if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+        cap = await self._caption_from_parties(interaction.guild, case)
+
+        def _fmt_side(side):
+            rows = []
+            for p in case["parties"].get(side, []):
+                attys = [f"<@{aid}>" for aid in (p.get("attorneys") or [])]
+                rows.append(f"- **{p['name']}** *(kind: {p['kind']})*  " + (f"Attorneys: {', '.join(attys)}" if attys else ""))
+            return "\n".join(rows) or "_(none)_"
+
+        msg = (
+            f"**{cap}** — `{case_number}`\n\n"
+            f"**Plaintiffs**\n{_fmt_side('plaintiffs')}\n\n"
+            f"**Defendants**\n{_fmt_side('defendants')}"
+        )
+        await interaction.response.send_message(msg, ephemeral=True)
+
+    @court.command(name="add_party", description="Clerk: add a party (plaintiff/defendant)")
+    @app_commands.choices(side=[
+        app_commands.Choice(name="Plaintiff", value="plaintiffs"),
+        app_commands.Choice(name="Defendant", value="defendants"),
+    ])
+    @app_commands.describe(party="@user, or 'org: Acme Corp', or 'class: Residents of...'", reason="Short clerk note")
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    async def add_party(
+        self, interaction: discord.Interaction, case_number: str,
+        side: app_commands.Choice[str], party: str, reason: str
+    ):
+        case = self.court_data.get(case_number)
+        if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+
+        # Build Party
+        uid = await self._maybe_user_id(party)
+        if uid:
+            name = await self.try_get_display_name(interaction.guild, uid)
+            p = Party(id=uid, name=name, kind="user", pid=_uuid(), attorneys=[]).to_dict()
+        else:
+            s = party.strip()
+            kind, name = "org", s
+            low = s.lower()
+            if low.startswith("class:"): kind, name = "class", s.split(":",1)[1].strip()
+            elif low.startswith("org:"):  kind, name = "org",   s.split(":",1)[1].strip()
+            elif low.startswith("state:"):kind, name = "state", s.split(":",1)[1].strip()
+            p = Party(id=None, name=name, kind=kind, pid=_uuid(), attorneys=[]).to_dict()
+
+        old_caption = await self._caption_from_parties(interaction.guild, case)
+        case["parties"][side.value].append(p)
+        new_caption = await self._caption_from_parties(interaction.guild, case)
+
+        self._docket_clerk_notice(case, f"Party added to **{side.name}**: {p['name']}. Reason: {reason}", old_caption, new_caption)
+        save_json(COURT_FILE, self.court_data)
+        await interaction.response.send_message(f"✅ Added **{p['name']}** to **{side.name}**.", ephemeral=True)
+
+    @court.command(name="remove_party", description="Clerk: remove a party (plaintiff/defendant)")
+    @app_commands.choices(side=[
+        app_commands.Choice(name="Plaintiff", value="plaintiffs"),
+        app_commands.Choice(name="Defendant", value="defendants"),
+    ])
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    @app_commands.describe(party_name="Exact saved party name (see /court parties)", reason="Short clerk note")
+    async def remove_party(self, interaction: discord.Interaction, case_number: str, side: app_commands.Choice[str], party_name: str, reason: str):
+        case = self.court_data.get(case_number)
+        if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+
+        lst = case["parties"][side.value]
+        idx = next((i for i,p in enumerate(lst) if p["name"] == party_name), None)
+        if idx is None: return await interaction.response.send_message("❌ Party not found (use /court parties).", ephemeral=True)
+
+        
+        old_caption = await self._caption_from_parties(interaction.guild, case)
+        removed = lst.pop(idx)
+        new_caption = await self._caption_from_parties(interaction.guild, case)
+
+        self._docket_clerk_notice(case, f"Party removed from **{side.name}**: {removed['name']}. Reason: {reason}", old_caption, new_caption)
+        save_json(COURT_FILE, self.court_data)
+        await interaction.response.send_message(f"🗑️ Removed **{removed['name']}** from **{side.name}**.", ephemeral=True)
+
+
+    @court.command(name="replace_party", description="Clerk: replace a party with another (caption will update)")
+    @app_commands.choices(side=[
+        app_commands.Choice(name="Plaintiff", value="plaintiffs"),
+        app_commands.Choice(name="Defendant", value="defendants"),
+    ])
+    @app_commands.describe(old_name="Exact saved party name", new_party="@user or 'org:/class:/state:' prefix", reason="Clerk note (why)")
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    async def replace_party(self, interaction: discord.Interaction, case_number: str, side: app_commands.Choice[str], old_name: str, new_party: str, reason: str):
+        case = self.court_data.get(case_number)
+        if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+
+        lst = case["parties"][side.value]
+        idx = next((i for i,p in enumerate(lst) if p["name"] == old_name), None)
+        if idx is None: return await interaction.response.send_message("❌ Party not found.", ephemeral=True)
+
+        old_p = lst[idx]
+
+        # Build replacement party
+        uid = await self._maybe_user_id(new_party)
+        if uid:
+            name = await self.try_get_display_name(interaction.guild, uid)
+            new_p = Party(id=uid, name=name, kind="user", pid=_uuid(), attorneys=[]).to_dict()
+        else:
+            s = new_party.strip()
+            kind, name = "org", s
+            low = s.lower()
+            if low.startswith("class:"): kind, name = "class", s.split(":",1)[1].strip()
+            elif low.startswith("org:"):  kind, name = "org",   s.split(":",1)[1].strip()
+            elif low.startswith("state:"):kind, name = "state", s.split(":",1)[1].strip()
+            new_p = Party(id=None, name=name, kind=kind, pid=_uuid(), attorneys=[]).to_dict()
+
+        # (optional) carry over attorneys
+        new_p["attorneys"] = old_p.get("attorneys", []).copy()
+
+        old_caption = await self._caption_from_parties(interaction.guild, case)
+        lst[idx] = new_p
+        new_caption = await self._caption_from_parties(interaction.guild, case)
+
+        self._docket_clerk_notice(
+            case,
+            f"Party **{old_p['name']}** replaced by **{new_p['name']}** on **{side.name}**. Reason: {reason}",
+            old_caption, new_caption
+        )
+        save_json(COURT_FILE, self.court_data)
+        await interaction.response.send_message(f"🔁 Replaced **{old_p['name']}** → **{new_p['name']}**.", ephemeral=True)
+
+    def _find_party(self, case: dict, side: str, party_name: str) -> dict | None:
+        for p in case["parties"].get(side, []):
+            if p["name"] == party_name: return p
+        return None
+
+    @court.command(name="set_attorney", description="Clerk: add an attorney to a party")
+    @app_commands.choices(side=[
+        app_commands.Choice(name="Plaintiff", value="plaintiffs"),
+        app_commands.Choice(name="Defendant", value="defendants"),
+    ])
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    async def set_attorney(self, interaction: discord.Interaction, case_number: str, side: app_commands.Choice[str], party_name: str, attorney: discord.Member):
+        case = self.court_data.get(case_number)
+        if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+
+        p = self._find_party(case, side.value, party_name)
+        if not p: return await interaction.response.send_message("❌ Party not found.", ephemeral=True)
+
+        p.setdefault("attorneys", [])
+        if attorney.id not in p["attorneys"]:
+            p["attorneys"].append(attorney.id)
+
+        self._docket_clerk_notice(case, f"Attorney <@{attorney.id}> added for **{party_name}** ({side.name}).", await self._caption_from_parties(interaction.guild, case), await self._caption_from_parties(interaction.guild, case))
+        save_json(COURT_FILE, self.court_data)
+        await interaction.response.send_message(f"✅ Added <@{attorney.id}> for **{party_name}**.", ephemeral=True)
+
+    @court.command(name="remove_attorney", description="Clerk: remove an attorney from a party")
+    @app_commands.choices(side=[
+        app_commands.Choice(name="Plaintiff", value="plaintiffs"),
+        app_commands.Choice(name="Defendant", value="defendants"),
+    ])
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    async def remove_attorney(self, interaction: discord.Interaction, case_number: str, side: app_commands.Choice[str], party_name: str, attorney: discord.Member):
+        case = self.court_data.get(case_number)
+        if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+
+        p = self._find_party(case, side.value, party_name)
+        if not p: return await interaction.response.send_message("❌ Party not found.", ephemeral=True)
+        try:
+            p["attorneys"].remove(attorney.id)
+        except ValueError:
+            return await interaction.response.send_message("ℹ️ That attorney isn’t listed for this party.", ephemeral=True)
+
+        self._docket_clerk_notice(case, f"Attorney <@{attorney.id}> removed for **{party_name}** ({side.name}).", await self._caption_from_parties(interaction.guild, case), await self._caption_from_parties(interaction.guild, case))
+        save_json(COURT_FILE, self.court_data)
+        await interaction.response.send_message(f"🗑️ Removed <@{attorney.id}> for **{party_name}**.", ephemeral=True)
+
+    def _docket_clerk_notice(self, case: dict, body: str, old_caption: str, new_caption: str):
+        entry = {
+            "entry": len(case.setdefault("filings", [])) + 1,
+            "document_type": "Clerk Notice",
+            "author": "Clerk",
+            "author_id": 0,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "content": f"{body}\n\n**Old caption:** {old_caption}\n**New caption:** {new_caption}",
+        }
+        case["filings"].append(entry)
