@@ -767,14 +767,14 @@ class SpideyCourts(commands.Cog):
                 continue
 
             author = doc.get("author") or "Unknown"
-            head = f"[{doc.get('entry')}] {doc.get('document_type','Document')} by {author} on {ts}"
+            url = self._entry_link(doc)
+            head = f"[{doc.get('entry')}] {doc.get('document_type','Document')}<{url}> by {author} on {ts}"
             # Related docs tag (single-line, compact)
             if doc.get("related_docs"):
                 head += f" (Related to: Entry {', '.join(str(x) for x in doc['related_docs'])})"
 
-            url = self._entry_link(doc)
-            if url:
-                head += f" — <{url}>"
+            
+            
 
             lines.append(head)
 
