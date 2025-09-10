@@ -669,14 +669,25 @@ class SpideyServerTools(commands.Cog):
             return ZoneInfo(tzname)
         except Exception:
             return ZoneInfo("UTC")
+    
+    # Helper: is this channel private (hidden from @everyone)?
+    def _is_private(self, guild: discord.Guild, ch: discord.TextChannel) -> bool:
+        try:
+            return not ch.permissions_for(guild.default_role).view_channel
+        except Exception:
+            return True  # treat unknown as private
 
-    def _iter_text_channels(self, guild: discord.Guild):
+
+    def _iter_text_channels(self, guild: discord.Guild, include_private: bool = False):
         for ch in guild.text_channels:
+            # skip private unless explicitly included
+            if not include_private and self._is_private(guild, ch):
+                continue
+            # skip if the bot can’t read history/messages
             perms = ch.permissions_for(guild.me)
-            if perms.read_message_history and perms.read_messages:
+            if perms.read_messages and perms.read_message_history:
                 yield ch
 
-    EMOJI_PATTERN = re.compile(r"<a?:\w+:(\d+)>")  # custom emoji IDs
 
     @audit.command(name="emoji", description="Show least-used custom emojis over a recent window.")
     @app_commands.describe(days="Lookback window in days (default 30)",
@@ -689,7 +700,7 @@ class SpideyServerTools(commands.Cog):
                         sample_per_channel: int = 200,
                         include_reactions: bool = True,
                         limit: int = 10):
-        await interaction.response.defer(thinking=True, ephemeral=True)
+        await interaction.response.defer(thinking=True, ephemeral=False)
 
         guild = interaction.guild
         if not guild:
@@ -747,7 +758,8 @@ class SpideyServerTools(commands.Cog):
         days="Lookback window in days (default 30)",
         sample_per_channel="Max messages to scan per channel (default 200)",
         used_threshold="Treat channel as 'used' once it reaches this many msgs (default 100)",
-        limit="How many to show per list (default 10)"
+        include_private="Include channels hidden from @everyone (default False)",
+        limit="How many to show per list (default 10)",
     )
     async def audit_channels(
         self,
@@ -755,30 +767,28 @@ class SpideyServerTools(commands.Cog):
         days: int = 30,
         sample_per_channel: int = 200,
         used_threshold: int = 100,
+        include_private: bool = False,
         limit: int = 10,
     ):
-        await interaction.response.defer(thinking=True, ephemeral=True)
+        await interaction.response.defer(thinking=True, ephemeral=False)
 
         guild = interaction.guild
         if not guild:
             return await interaction.followup.send("Run this in a server.", ephemeral=True)
 
         cutoff = datetime.now(tz=self._guild_tz()) - timedelta(days=days)
-        last_activity: dict[int, datetime | None] = {}
-        msg_counts: dict[int, int] = {}
-        hit_threshold: dict[int, bool] = {}
+        last_activity, msg_counts, hit_threshold = {}, {}, {}
 
-        for ch in self._iter_text_channels(guild):
+        for ch in self._iter_text_channels(guild, include_private=include_private):
             cid = ch.id
             last_activity[cid] = None
             msg_counts[cid] = 0
             hit_threshold[cid] = False
             try:
-                # quick last-message probe
+                # last message probe
                 async for last_msg in ch.history(limit=1, oldest_first=False):
                     last_activity[cid] = last_msg.created_at
 
-                # only need to scan up to the smaller of sample_per_channel and used_threshold
                 target = used_threshold if used_threshold and used_threshold > 0 else sample_per_channel
                 scan_limit = min(sample_per_channel, max(1, target))
 
@@ -786,8 +796,7 @@ class SpideyServerTools(commands.Cog):
                     msg_counts[cid] += 1
                     if used_threshold and msg_counts[cid] >= used_threshold:
                         hit_threshold[cid] = True
-                        break  # short-circuit: this channel is "used" enough
-
+                        break
                 await asyncio.sleep(0)
             except discord.Forbidden:
                 continue
