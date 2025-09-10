@@ -1241,7 +1241,7 @@ class SpideyCourts(commands.Cog):
         lines = self._format_docket_lines(case_number, case, interaction.user)
         pages = self._build_docket_pages(header, lines, max_chars=1900)
 
-        view = self.DocketView(pages=pages, user_id=interaction.user.id)
+        view = DocketView(pages=pages, user_id=interaction.user.id)
         await interaction.followup.send(
             content=view._content(),
             view=view,
