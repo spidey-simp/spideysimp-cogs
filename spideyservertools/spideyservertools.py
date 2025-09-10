@@ -35,6 +35,7 @@ SUG_STATUSES = {
     "rejected":     ("🔴 Rejected",      0xE74C3C),
 }
 
+EMOJI_CREATORS = 1287650335896371230
 
 FIELD_LIMIT = 1024
 
@@ -242,11 +243,8 @@ class SpideyServerTools(commands.Cog):
     
 
     @qotd.command(name="upload", description="Upload QOTD questions (semicolon-separated).")
+    @app_commands.checks.has_role(EMOJI_CREATORS, admin_bypass=True)
     async def qotd_upload(self, interaction: discord.Interaction):
-            # admin gate if you want:
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("Admin only.", ephemeral=True)
-            return
 
         await interaction.response.send_modal(QOTDModal(self))
     
