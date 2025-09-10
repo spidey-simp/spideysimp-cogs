@@ -2280,3 +2280,76 @@ class SpideyCourts(commands.Cog):
         paren = self._court_parenthetical(case, rep_key)
         cite = self._make_citation(abbr, vol, first_page, year, court_paren=paren)
         await interaction.followup.send(f"📘 **Preview**: will publish as `{cite}` and use **{num} page(s)** (ending at p. {first_page+num-1}).", ephemeral=True)
+
+
+    @court.command(name="reporter_retract", description="Retract a published opinion (last-only to preserve page numbering).")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    @app_commands.describe(
+        citation="e.g., '1 F. 12' or '1 S.R. 1' (preferred)",
+        thread_id="Alternative: the reporter thread ID"
+    )
+    async def reporter_retract(self, interaction: discord.Interaction, citation: str | None = None, thread_id: str | None = None):
+        await interaction.response.defer(ephemeral=True)
+
+        rep_root = self._ensure_reporter()
+        target_bucket = None
+        idx = None
+        op = None
+
+        # Find by citation if provided
+        if citation:
+            m = CITE_MULTI_RX.match(citation or "")
+            if not m:
+                return await interaction.followup.send("❌ Bad citation. Try `1 S.R. 1` or `1 F. 22` or `1 SPIDEYLAW 100`.", ephemeral=True)
+            vol = int(m.group(1))
+            rep_key = self._abbr_to_reporter_key(m.group(2))
+            first_page = int(m.group(3))
+            if not rep_key:
+                return await interaction.followup.send("❌ Unknown reporter abbr.", ephemeral=True)
+            bucket = rep_root.get(rep_key) or {}
+            opinions = bucket.get("opinions", [])
+            for i, o in enumerate(opinions):
+                if o.get("volume") == vol and o.get("first_page") == first_page:
+                    target_bucket, idx, op = bucket, i, o
+                    break
+            if not op:
+                return await interaction.followup.send("❌ Citation not found in the reporter.", ephemeral=True)
+
+        # Or find by thread id
+        elif thread_id:
+            for key, bucket in rep_root.items():
+                if key not in ("district", "circuit", "supreme"):  # skip non-buckets
+                    continue
+                opinions = bucket.get("opinions", [])
+                for i, o in enumerate(opinions):
+                    if str(o.get("thread_id")) == str(thread_id):
+                        target_bucket, idx, op = bucket, i, o
+                        break
+                if op:
+                    break
+            if not op:
+                return await interaction.followup.send("❌ Thread not found in any reporter.", ephemeral=True)
+        else:
+            return await interaction.followup.send("Provide either `citation` or `thread_id`.", ephemeral=True)
+
+        # Only allow retracting the last published opinion to protect page numbering
+        if idx != len(target_bucket["opinions"]) - 1:
+            return await interaction.followup.send("❌ Can only retract the most recent opinion in that reporter (to preserve citations).", ephemeral=True)
+
+        # Delete the forum thread
+        thread = self.bot.get_channel(int(op.get("thread_id")))
+        if thread:
+            try:
+                await thread.delete(reason="Reporter retract")
+            except Exception:
+                pass
+
+        # Roll back the pointer and remove the opinion
+        start = op.get("first_page", target_bucket["current_page"])
+        num = op.get("pages", 0)
+        target_bucket["current_page"] = start
+        target_bucket["opinions"].pop()
+
+        self.court_data[REPORTER_KEY] = rep_root
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(f"✅ Retracted. Page pointer reset to **p. {start}**.", ephemeral=True)
