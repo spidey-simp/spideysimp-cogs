@@ -243,7 +243,7 @@ class SpideyServerTools(commands.Cog):
     
 
     @qotd.command(name="upload", description="Upload QOTD questions (semicolon-separated).")
-    @app_commands.checks.has_role(EMOJI_CREATORS, admin_bypass=True)
+    @app_commands.checks.has_role(EMOJI_CREATORS)
     async def qotd_upload(self, interaction: discord.Interaction):
 
         await interaction.response.send_modal(QOTDModal(self))
