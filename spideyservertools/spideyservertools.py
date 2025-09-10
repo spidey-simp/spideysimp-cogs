@@ -670,32 +670,31 @@ class SpideyServerTools(commands.Cog):
         except Exception:
             return ZoneInfo("UTC")
 
-    async def _iter_text_channels(self, guild: discord.Guild):
+    def _iter_text_channels(self, guild: discord.Guild):
         for ch in guild.text_channels:
-            # skip channels we can’t read
             perms = ch.permissions_for(guild.me)
-            if not (perms.read_message_history and perms.read_messages):
-                continue
-            yield ch
+            if perms.read_message_history and perms.read_messages:
+                yield ch
+
+    EMOJI_PATTERN = re.compile(r"<a?:\w+:(\d+)>")  # custom emoji IDs
 
     @audit.command(name="emoji", description="Show least-used custom emojis over a recent window.")
     @app_commands.describe(days="Lookback window in days (default 30)",
-                           sample_per_channel="Max messages to scan per channel (default 200)",
-                           include_reactions="Also count emoji reactions (default True)",
-                           limit="How many least-used to show (default 10)")
+                        sample_per_channel="Max messages to scan per channel (default 200)",
+                        include_reactions="Also count emoji reactions (default True)",
+                        limit="How many least-used to show (default 10)")
     async def audit_emoji(self,
-                          interaction: discord.Interaction,
-                          days: int = 30,
-                          sample_per_channel: int = 200,
-                          include_reactions: bool = True,
-                          limit: int = 10):
+                        interaction: discord.Interaction,
+                        days: int = 30,
+                        sample_per_channel: int = 200,
+                        include_reactions: bool = True,
+                        limit: int = 10):
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         guild = interaction.guild
         if not guild:
             return await interaction.followup.send("Run this in a server.", ephemeral=True)
 
-        # Map of emoji_id -> {name, count}
         custom = {e.id: {"name": e.name, "animated": e.animated, "count": 0} for e in guild.emojis}
         if not custom:
             return await interaction.followup.send("This server has no custom emojis.", ephemeral=True)
@@ -703,50 +702,45 @@ class SpideyServerTools(commands.Cog):
         cutoff = datetime.now(tz=self._guild_tz()) - timedelta(days=days)
         scanned_msgs = 0
 
-        for ch in await self._iter_text_channels(guild).__anext__,:
-            pass  # dummy to satisfy linter
-
-        async for ch in self._iter_text_channels(guild):
+        # >>> FIX: iterate channels properly (no __anext__)
+        for ch in self._iter_text_channels(guild):  # or: async for ch in self._iter_text_channels(guild):
             try:
                 async for msg in ch.history(limit=sample_per_channel, oldest_first=False, after=cutoff):
                     scanned_msgs += 1
-                    # count occurrences in message content
+                    # count in-content custom emojis
                     for match in EMOJI_PATTERN.finditer(msg.content):
                         eid = int(match.group(1))
                         if eid in custom:
                             custom[eid]["count"] += 1
-                    # count reactions (no extra HTTP calls; counts included)
+                    # count reactions (custom only)
                     if include_reactions and msg.reactions:
                         for r in msg.reactions:
-                            # Reaction.emoji can be PartialEmoji (has .id for custom)
                             eid = getattr(r.emoji, "id", None)
                             if eid in custom and r.count:
                                 custom[eid]["count"] += r.count
-                await asyncio.sleep(0)  # cooperative yield
+                await asyncio.sleep(0)
             except discord.Forbidden:
                 continue
             except Exception:
                 continue
 
-        # Sort ascending (least used first), then by name
         rows = sorted(custom.items(), key=lambda kv: (kv[1]["count"], kv[1]["name"].lower()))
         top = rows[:max(1, limit)]
-
-        # Build a compact report
         lines = []
         for eid, meta in top:
-            style = "a" if meta["animated"] else ""
-            lines.append(f"<{style}:{meta['name']}:{eid}> — **{meta['count']}**")
+            prefix = "a" if meta["animated"] else ""
+            lines.append(f"<{prefix}:{meta['name']}:{eid}> — **{meta['count']}**")
 
         embed = discord.Embed(
             title="Emoji Audit (Least Used)",
-            description=f"Lookback: **{days}d**, Sample/Channel: **{sample_per_channel}**, "
-                        f"Reactions: **{'Yes' if include_reactions else 'No'}**\n"
+            description=f"Lookback **{days}d** • Sample/Channel **{sample_per_channel}** • "
+                        f"Reactions **{'Yes' if include_reactions else 'No'}**\n"
                         f"Scanned messages: **{scanned_msgs}**",
             timestamp=datetime.utcnow()
         )
         embed.add_field(name="Bottom emojis", value="\n".join(lines) or "_No data_", inline=False)
         await interaction.followup.send(embed=embed, ephemeral=True)
+
 
     @audit.command(name="channels", description="List stale and quiet channels in the recent window.")
     @app_commands.describe(
@@ -774,7 +768,7 @@ class SpideyServerTools(commands.Cog):
         msg_counts: dict[int, int] = {}
         hit_threshold: dict[int, bool] = {}
 
-        async for ch in self._iter_text_channels(guild):
+        for ch in self._iter_text_channels(guild):
             cid = ch.id
             last_activity[cid] = None
             msg_counts[cid] = 0
@@ -836,4 +830,4 @@ class SpideyServerTools(commands.Cog):
         embed.add_field(name="Stale (oldest activity)", value="\n".join(stale_lines) or "_No data_", inline=False)
         embed.add_field(name="Quiet (< threshold msgs in window)", value="\n".join(quiet_lines) or "_No data_", inline=False)
 
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed, ephemeral=False)
