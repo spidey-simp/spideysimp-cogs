@@ -110,6 +110,8 @@ COURT_PAREN = {
 
 DEFAULT_PAREN_STYLE = "long"
 
+MENTION_RX = re.compile(r"<@!?(?P<id>\d+)>")
+
 CITE_MULTI_RX = re.compile(
     r"""^\s*
         (\d+)\s*                        # volume
@@ -951,7 +953,7 @@ class SpideyCourts(commands.Cog):
 
         return header, thread
     
-    MENTION_RX = re.compile(r"<@!?(?P<id>\d+)>")
+   
 
     def _coerce_user_id(self, val) -> int | None:
         """Return numeric user id if extractable (int, <@id>, '123'), else None."""
