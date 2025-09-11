@@ -107,9 +107,9 @@ COURT_PAREN = {
     "first_circuit": {"long": "1st Cir.", "short": "1st Cir."},
 
     # Districts — customize these to your taste
-    "gen_chat":      {"long": "D. Gen. Chat", "short": "D.G.C."},
-    "public_square": {"long": "D. Pub. Sq.",  "short": "D.P.S."},
-    "swgoh":         {"long": "D. SWGOH",     "short": "D.SWGOH"},
+    "gen_chat":      {"long": "D. Commons", "short": "D.C."},
+    "public_square": {"long": "D. Dist. Parker",  "short": "D.D.P."},
+    "swgoh":         {"long": "D. Gaming",     "short": "D.G."},
 }
 
 GOV_DEFAULTS = {
@@ -1194,9 +1194,9 @@ class SpideyCourts(commands.Cog):
     )
     @app_commands.choices(
         venue=[
-            app_commands.Choice(name="General Chat District Court", value="gen_chat"),
-            app_commands.Choice(name="SWGOH District Court", value="swgoh"),
-            app_commands.Choice(name="Public Square District Court", value="public_square"),
+            app_commands.Choice(name="Commons District Court", value="gen_chat"),
+            app_commands.Choice(name="Gaming District Court", value="swgoh"),
+            app_commands.Choice(name="District of Parker District Court", value="public_square"),
             app_commands.Choice(name="First Circuit", value="first_circuit"),
             app_commands.Choice(name="Supreme Court", value="ssc"),
         ]
