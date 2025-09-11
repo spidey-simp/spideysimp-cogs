@@ -46,9 +46,9 @@ VENUE_CHANNEL_MAP = {
 }
 
 VENUE_NAMES = {
-    "gen_chat": "General Chat District Court",
-    "swgoh": "General SWGOH District Court",
-    "public_square": "Public Square District Court",
+    "gen_chat": "Commons District Court",
+    "swgoh": "Gaming District Court",
+    "public_square": "District of Parker District Court",
     "first_circuit": "First Circuit Court of Appeals",
     "ssc": "Supreme Court"
 }
