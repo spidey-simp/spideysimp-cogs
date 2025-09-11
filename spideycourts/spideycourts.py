@@ -1181,135 +1181,6 @@ class SpideyCourts(commands.Cog):
         return any(role.id == FED_JUDICIARY_ROLE_ID for role in interaction.user.roles)
 
 
-    @court.command(name="apply_for_creds", description="Apply for court credentials")
-    @app_commands.describe(context="Reason for applying", bar_number="Bar number (if applicable)")
-    @app_commands.choices(
-        context=[
-            app_commands.Choice(name="General Inquiry", value="general_inquiry"),
-            app_commands.Choice(name="Attorney", value="attorney"),
-            app_commands.Choice(name="Pro Se", value="pro_se"),
-            app_commands.Choice(name="Other", value="other")
-        ]
-    )
-    async def apply_for_creds(self, interaction: discord.Interaction, context: str, bar_number: str = None):
-        """Apply for court credentials."""
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        user_id = str(interaction.user.id)
-        if user_id in self.court_data:
-            await interaction.followup.send("You have already applied for court credentials.", ephemeral=True)
-            return
-        
-        self.court_data[user_id] = {'status': 'pending', 'context': context}
-        if bar_number:
-            self.court_data[user_id]['bar_number'] = bar_number
-        await interaction.followup.send("Your application has been submitted and is pending review.", ephemeral=True)
-        save_json(COURT_FILE, self.court_data)
-    
-    @court.command(name="view_applicants", description="View all court applicants")
-    async def view_applicants(self, interaction: discord.Interaction):
-        """View all court applicants."""
-        await interaction.response.defer(ephemeral=True, thinking=True)
-
-        if not self.is_judge(interaction):
-            await interaction.followup.send("You do not have permission to view applicants.", ephemeral=True)
-            return
-        if not self.court_data:
-            await interaction.followup.send("No applicants found.", ephemeral=True)
-            return
-        
-        applicants = []
-        for user_id, data in self.court_data.items():
-            user = await self.bot.fetch_user(int(user_id))
-            status = data.get('status', 'unknown')
-            context = data.get('context', 'N/A')
-            bar_number = data.get('bar_number', 'N/A')
-            applicants.append(f"{user.name} (ID: {user_id}) - Status: {status}, Context: {context}, Bar Number: {bar_number}")
-        
-        response = "\n".join(applicants)
-        await interaction.followup.send(f"Applicants:\n{response}", ephemeral=True)
-
-
-    async def pending_applicants_autocomplete(
-        self,
-        interaction: discord.Interaction,
-        current: str,
-    ) -> list[app_commands.Choice[str]]:
-        matches = []
-        for user_id, data in self.court_data.items():
-            if data.get("status") != "pending":
-                continue
-
-            try:
-                user = await self.bot.fetch_user(int(user_id))
-                if current.lower() in user.name.lower():
-                    matches.append(app_commands.Choice(name=user.name, value=str(user.id)))
-            except discord.NotFound:
-                continue  # User might’ve left server or changed ID
-
-            if len(matches) >= 25:  # Discord limit
-                break
-
-        return matches
-
-
-    @court.command(name="grant_creds", description="Grant court credentials to an applicant")
-    @app_commands.describe(user="The user to grant credentials to")
-    @app_commands.autocomplete(user=pending_applicants_autocomplete)
-    async def grant_creds(self, interaction: discord.Interaction, user: str):
-        """Grant court credentials to an applicant."""
-        await interaction.response.defer(ephemeral=True, thinking=True)
-
-        if not self.is_judge(interaction):
-            await interaction.followup.send("You do not have permission to view applicants.", ephemeral=True)
-            return
-        
-        user_id = str(user)
-        if user_id not in self.court_data:
-            await interaction.followup.send("User has not applied for court credentials.", ephemeral=True)
-            return
-
-        self.court_data[user_id]['status'] = 'granted'
-        save_json(COURT_FILE, self.court_data)
-
-        try:
-            user_obj = await self.bot.fetch_user(int(user_id))
-            await interaction.followup.send(f"Granted court credentials to {user_obj.name}.", ephemeral=True)
-            try:
-                await user_obj.send("You have been granted court credentials. Please check the court channels for more information.")
-            except discord.Forbidden:
-                await interaction.followup.send(f"Granted credentials, but could not DM {user_obj.name}.", ephemeral=True)
-        except discord.NotFound:
-            await interaction.followup.send(f"Granted credentials, but could not DM or resolve username.", ephemeral=True)
-
-    @court.command(name="deny_creds", description="Deny court credentials to an applicant")
-    @app_commands.describe(user="The user to deny credentials to", reason="Reason for denial")
-    @app_commands.autocomplete(user=pending_applicants_autocomplete)
-    async def deny_creds(self, interaction: discord.Interaction, user: str, reason: str):
-        """Deny court credentials to an applicant."""
-        await interaction.response.defer(ephemeral=True, thinking=True)
-
-        if not self.is_judge(interaction):
-            await interaction.followup.send("You do not have permission to view applicants.", ephemeral=True)
-            return
-
-        user_id = str(user)
-        if user_id not in self.court_data:
-            await interaction.followup.send("User has not applied for court credentials.", ephemeral=True)
-            return
-
-        self.court_data[user_id]['status'] = 'denied'
-        save_json(COURT_FILE, self.court_data)
-
-        try:
-            user_obj = await self.bot.fetch_user(int(user_id))
-            await interaction.followup.send(f"Denied court credentials to {user_obj.name}.", ephemeral=True)
-            try:
-                await user_obj.send(f"You have been denied court credentials. Reason: {reason}")
-            except discord.Forbidden:
-                await interaction.followup.send(f"Denied credentials, but could not DM {user_obj.name}.", ephemeral=True)
-        except discord.NotFound:
-            await interaction.followup.send(f"Denied credentials, but could not DM or resolve username.", ephemeral=True)
-
     
     @court.command(name="file_complaint", description="File a new complaint")
     @app_commands.describe(
@@ -2293,71 +2164,75 @@ class SpideyCourts(commands.Cog):
         ids = [case.get("plaintiff"), case.get("defendant")] + case.get("additional_defendants", []) + case.get("additional_plaintiffs", [])
         return str(party) in map(str, ids)
 
-    @court.command(name="substitute_counsel", description="Substitute counsel for a specific party.")
+    @court.command(name="counsel", description="Substitute or withdraw as counsel for a specific party.")
+    @app_commands.choices(action=[
+        app_commands.Choice(name="Substitute", value="substitute"),
+        app_commands.Choice(name="Withdraw", value="withdraw"),
+    ])
+    @app_commands.describe(
+        case_number="Case number",
+        action="Choose substitute or withdraw",
+        party="Party represented (user)",
+        new_counsel="New counsel user (required for Substitute)"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    @app_commands.describe(case_number="Case number", party="Party represented", new_counsel="New counsel user")
-    @app_commands.autocomplete(case_number=case_autocomplete)
-    async def substitute_counsel(self, interaction: discord.Interaction, case_number: str, party: discord.Member, new_counsel: discord.Member):
+    async def counsel(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        action: app_commands.Choice[str],
+        party: discord.Member,
+        new_counsel: discord.Member | None = None
+    ):
         await interaction.response.defer(ephemeral=True)
-
         case = self.court_data.get(case_number)
         if not case:
             return await interaction.followup.send("❌ Case not found.", ephemeral=True)
         if not await self._party_is_in_case(case, party.id):
             return await interaction.followup.send("❌ That user is not a party in this case.", ephemeral=True)
 
-        # Use your per-party counsel map (or per-side fields if you prefer)
-        cofr = case.setdefault("counsel_of_record", {})
-        prev = cofr.get(str(party.id))
-        cofr[str(party.id)] = new_counsel.id
-
-        # Docket entry
         filings = case.setdefault("filings", [])
         entry = len(filings) + 1
-        filings.append({
-            "entry": entry,
-            "document_type": "Substitution of Counsel",
-            "author": interaction.user.name,
-            "author_id": interaction.user.id,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "content": f"{(await self.try_get_display_name(interaction.guild, party.id))}: {('from ' + (await self.try_get_display_name(interaction.guild, prev)) + ' ') if prev else ''}to {new_counsel.display_name}"
-        })
 
-        save_json(COURT_FILE, self.court_data)
-        await interaction.followup.send("✅ Substitution recorded.", ephemeral=True)
+        if action.value == "substitute":
+            if new_counsel is None:
+                return await interaction.followup.send("❌ For Substitute, provide `new_counsel`.", ephemeral=True)
+            cofr = case.setdefault("counsel_of_record", {})
+            prev = cofr.get(str(party.id))
+            cofr[str(party.id)] = new_counsel.id
+            filings.append({
+                "entry": entry,
+                "document_type": "Substitution of Counsel",
+                "author": interaction.user.name,
+                "author_id": interaction.user.id,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "content": f"{(await self.try_get_display_name(interaction.guild, party.id))}: "
+                        f"{('from ' + (await self.try_get_display_name(interaction.guild, prev)) + ' ') if prev else ''}"
+                        f"to {new_counsel.display_name}"
+            })
+            save_json(COURT_FILE, self.court_data)
+            return await interaction.followup.send("✅ Substitution recorded.", ephemeral=True)
 
-    @court.command(name="withdraw_counsel", description="Withdraw as counsel for a specific party.")
-    @app_commands.describe(case_number="Case number", party="Party represented")
-    @app_commands.autocomplete(case_number=case_autocomplete)
-    async def withdraw_counsel(self, interaction: discord.Interaction, case_number: str, party: discord.Member):
-        await interaction.response.defer(ephemeral=True)
+        if action.value == "withdraw":
+            cofr = case.get("counsel_of_record", {})
+            if str(party.id) not in cofr:
+                return await interaction.followup.send("❌ No counsel of record to withdraw.", ephemeral=True)
+            prev = cofr.pop(str(party.id), None)
+            filings.append({
+                "entry": entry,
+                "document_type": "Withdrawal of Counsel",
+                "author": interaction.user.name,
+                "author_id": interaction.user.id,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "content": f"{(await self.try_get_display_name(interaction.guild, party.id))}: "
+                        f"withdrew { (await self.try_get_display_name(interaction.guild, prev)) if prev else 'counsel' }"
+            })
+            save_json(COURT_FILE, self.court_data)
+            return await interaction.followup.send("✅ Withdrawal recorded.", ephemeral=True)
 
-        case = self.court_data.get(case_number)
-        if not case:
-            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
-        if not await self._party_is_in_case(case, party.id):
-            return await interaction.followup.send("❌ That user is not a party in this case.", ephemeral=True)
+        return await interaction.followup.send("❌ Unknown action.", ephemeral=True)
 
-        cofr = case.setdefault("counsel_of_record", {})
-        current = cofr.get(str(party.id))
-        if current != interaction.user.id and not any(r.id == FED_JUDICIARY_ROLE_ID for r in interaction.user.roles):
-            return await interaction.followup.send("❌ Only current counsel or a judge may withdraw.", ephemeral=True)
-
-        cofr.pop(str(party.id), None)
-
-        filings = case.setdefault("filings", [])
-        entry = len(filings) + 1
-        filings.append({
-            "entry": entry,
-            "document_type": "Withdrawal of Counsel",
-            "author": interaction.user.name,
-            "author_id": interaction.user.id,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "content": f"{(await self.try_get_display_name(interaction.guild, party.id))}: {interaction.user.display_name} withdrawn"
-        })
-
-        save_json(COURT_FILE, self.court_data)
-        await interaction.followup.send("✅ Withdrawal recorded.", ephemeral=True)
 
     @court.command(name="reporter_publish", description="Publish a docketed opinion to the appropriate Reporter.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
@@ -2773,123 +2648,116 @@ class SpideyCourts(commands.Cog):
         )
         await interaction.response.send_message(msg, ephemeral=True)
 
-    @court.command(name="add_party", description="Clerk: add a party (plaintiff/defendant)")
+    @court.command(name="party", description="Manage parties (add / remove / replace)")
+    @app_commands.choices(action=[
+        app_commands.Choice(name="Add", value="add"),
+        app_commands.Choice(name="Remove", value="remove"),
+        app_commands.Choice(name="Replace", value="replace"),
+    ])
     @app_commands.choices(side=[
         app_commands.Choice(name="Plaintiff", value="plaintiffs"),
         app_commands.Choice(name="Defendant", value="defendants"),
     ])
-    @app_commands.describe(party="@user, or 'org: Acme Corp', or 'class: Residents of...'", reason="Short clerk note")
+    @app_commands.describe(
+        case_number="Case number",
+        action="Choose add, remove, or replace",
+        side="Which side to modify",
+        party="@user or 'org:/class:/state:' (for Add)",
+        party_name="Exact saved party name (for Remove)",
+        old_name="Exact saved party name (for Replace)",
+        new_party="@user or 'org:/class:/state:' (for Replace)",
+        reason="Short clerk/judge note"
+    )
     @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    async def add_party(
-        self, interaction: discord.Interaction, case_number: str,
-        side: app_commands.Choice[str], party: str, reason: str
+    async def party(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        action: app_commands.Choice[str],
+        side: app_commands.Choice[str],
+        party: str | None = None,
+        party_name: str | None = None,
+        old_name: str | None = None,
+        new_party: str | None = None,
+        reason: str | None = None,
     ):
         case = self.court_data.get(case_number)
-        if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
+        if not case:
+            return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
         await self._normalize_case(interaction.guild, case)
 
-        # Build Party
-        uid = await self._maybe_user_id(party)
-        if uid:
-            name = await self.try_get_display_name(interaction.guild, uid)
-            p = Party(id=uid, name=name, kind="user", pid=_uuid(), attorneys=[]).to_dict()
-        else:
-            s = party.strip()
-            kind, name = "org", s
-            low = s.lower()
-            if low.startswith("class:"): kind, name = "class", s.split(":",1)[1].strip()
-            elif low.startswith("org:"):  kind, name = "org",   s.split(":",1)[1].strip()
-            elif low.startswith("state:"):kind, name = "state", s.split(":",1)[1].strip()
-            p = Party(id=None, name=name, kind=kind, pid=_uuid(), attorneys=[]).to_dict()
+        # ADD
+        if action.value == "add":
+            if not party or not reason:
+                return await interaction.response.send_message("❌ For Add, provide `party` and `reason`.", ephemeral=True)
+            uid = await self._maybe_user_id(party)
+            if uid:
+                name = await self.try_get_display_name(interaction.guild, uid)
+                p = Party(id=uid, name=name, kind="user", pid=_uuid(), attorneys=[]).to_dict()
+            else:
+                s = party.strip()
+                kind, name = "org", s
+                low = s.lower()
+                if low.startswith("class:"): kind, name = "class", s.split(":",1)[1].strip()
+                elif low.startswith("org:"):  kind, name = "org",   s.split(":",1)[1].strip()
+                elif low.startswith("state:"):kind, name = "state", s.split(":",1)[1].strip()
+                p = Party(id=None, name=name, kind=kind, pid=_uuid(), attorneys=[]).to_dict()
 
-        old_caption = await self._caption_from_parties(interaction.guild, case)
-        case["parties"][side.value].append(p)
-        new_caption = await self._caption_from_parties(interaction.guild, case)
+            old_caption = await self._caption_from_parties(interaction.guild, case)
+            case["parties"][side.value].append(p)
+            new_caption = await self._caption_from_parties(interaction.guild, case)
+            self._docket_clerk_notice(case, f"Party added to **{side.name}**: {p['name']}. Reason: {reason}", old_caption, new_caption)
+            save_json(COURT_FILE, self.court_data)
+            return await interaction.response.send_message(f"✅ Added **{p['name']}** to **{side.name}**.", ephemeral=True)
 
-        self._docket_clerk_notice(case, f"Party added to **{side.name}**: {p['name']}. Reason: {reason}", old_caption, new_caption)
-        save_json(COURT_FILE, self.court_data)
-        await interaction.response.send_message(f"✅ Added **{p['name']}** to **{side.name}**.", ephemeral=True)
+        # REMOVE
+        if action.value == "remove":
+            if not party_name or not reason:
+                return await interaction.response.send_message("❌ For Remove, provide `party_name` and `reason`.", ephemeral=True)
+            lst = case["parties"][side.value]
+            idx = next((i for i,p in enumerate(lst) if p["name"] == party_name), None)
+            if idx is None:
+                return await interaction.response.send_message("❌ Party not found (use /court parties).", ephemeral=True)
+            removed = lst.pop(idx)
+            old_caption = await self._caption_from_parties(interaction.guild, case)
+            new_caption = await self._caption_from_parties(interaction.guild, case)
+            self._docket_clerk_notice(case, f"Party removed from **{side.name}**: {removed['name']}. Reason: {reason}", old_caption, new_caption)
+            save_json(COURT_FILE, self.court_data)
+            return await interaction.response.send_message(f"🗑️ Removed **{removed['name']}** from **{side.name}**.", ephemeral=True)
 
-    @court.command(name="remove_party", description="Clerk: remove a party (plaintiff/defendant)")
-    @app_commands.choices(side=[
-        app_commands.Choice(name="Plaintiff", value="plaintiffs"),
-        app_commands.Choice(name="Defendant", value="defendants"),
-    ])
-    @app_commands.autocomplete(case_number=case_autocomplete)
-    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    @app_commands.describe(party_name="Exact saved party name (see /court parties)", reason="Short clerk note")
-    async def remove_party(self, interaction: discord.Interaction, case_number: str, side: app_commands.Choice[str], party_name: str, reason: str):
-        case = self.court_data.get(case_number)
-        if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
-        await self._normalize_case(interaction.guild, case)
+        # REPLACE
+        if action.value == "replace":
+            if not old_name or not new_party or not reason:
+                return await interaction.response.send_message("❌ For Replace, provide `old_name`, `new_party`, and `reason`.", ephemeral=True)
+            lst = case["parties"][side.value]
+            idx = next((i for i,p in enumerate(lst) if p["name"] == old_name), None)
+            if idx is None:
+                return await interaction.response.send_message("❌ Party not found.", ephemeral=True)
+            old_p = lst[idx]
 
-        lst = case["parties"][side.value]
-        idx = next((i for i,p in enumerate(lst) if p["name"] == party_name), None)
-        if idx is None: return await interaction.response.send_message("❌ Party not found (use /court parties).", ephemeral=True)
+            uid = await self._maybe_user_id(new_party)
+            if uid:
+                name = await self.try_get_display_name(interaction.guild, uid)
+                new_p = Party(id=uid, name=name, kind="user", pid=_uuid(), attorneys=[]).to_dict()
+            else:
+                s = new_party.strip()
+                kind, name = "org", s
+                low = s.lower()
+                if low.startswith("class:"): kind, name = "class", s.split(":",1)[1].strip()
+                elif low.startswith("org:"):  kind, name = "org",   s.split(":",1)[1].strip()
+                elif low.startswith("state:"):kind, name = "state", s.split(":",1)[1].strip()
+                new_p = Party(id=None, name=name, kind=kind, pid=_uuid(), attorneys=[]).to_dict()
 
-        
-        old_caption = await self._caption_from_parties(interaction.guild, case)
-        removed = lst.pop(idx)
-        new_caption = await self._caption_from_parties(interaction.guild, case)
+            old_caption = await self._caption_from_parties(interaction.guild, case)
+            lst[idx] = new_p
+            new_caption = await self._caption_from_parties(interaction.guild, case)
+            self._docket_clerk_notice(case, f"Party replaced on **{side.name}**: {old_p['name']} → {new_p['name']}. Reason: {reason}", old_caption, new_caption)
+            save_json(COURT_FILE, self.court_data)
+            return await interaction.response.send_message(f"🔁 Replaced **{old_p['name']}** with **{new_p['name']}** on **{side.name}**.", ephemeral=True)
 
-        self._docket_clerk_notice(case, f"Party removed from **{side.name}**: {removed['name']}. Reason: {reason}", old_caption, new_caption)
-        save_json(COURT_FILE, self.court_data)
-        await interaction.response.send_message(f"🗑️ Removed **{removed['name']}** from **{side.name}**.", ephemeral=True)
+        return await interaction.response.send_message("❌ Unknown action.", ephemeral=True)
 
-
-    @court.command(name="replace_party", description="Clerk: replace a party with another (caption will update)")
-    @app_commands.choices(side=[
-        app_commands.Choice(name="Plaintiff", value="plaintiffs"),
-        app_commands.Choice(name="Defendant", value="defendants"),
-    ])
-    @app_commands.describe(old_name="Exact saved party name", new_party="@user or 'org:/class:/state:' prefix", reason="Clerk note (why)")
-    @app_commands.autocomplete(case_number=case_autocomplete)
-    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    async def replace_party(self, interaction: discord.Interaction, case_number: str, side: app_commands.Choice[str], old_name: str, new_party: str, reason: str):
-        case = self.court_data.get(case_number)
-        if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
-        await self._normalize_case(interaction.guild, case)
-
-        lst = case["parties"][side.value]
-        idx = next((i for i,p in enumerate(lst) if p["name"] == old_name), None)
-        if idx is None: return await interaction.response.send_message("❌ Party not found.", ephemeral=True)
-
-        old_p = lst[idx]
-
-        # Build replacement party
-        uid = await self._maybe_user_id(new_party)
-        if uid:
-            name = await self.try_get_display_name(interaction.guild, uid)
-            new_p = Party(id=uid, name=name, kind="user", pid=_uuid(), attorneys=[]).to_dict()
-        else:
-            s = new_party.strip()
-            kind, name = "org", s
-            low = s.lower()
-            if low.startswith("class:"): kind, name = "class", s.split(":",1)[1].strip()
-            elif low.startswith("org:"):  kind, name = "org",   s.split(":",1)[1].strip()
-            elif low.startswith("state:"):kind, name = "state", s.split(":",1)[1].strip()
-            new_p = Party(id=None, name=name, kind=kind, pid=_uuid(), attorneys=[]).to_dict()
-
-        # (optional) carry over attorneys
-        new_p["attorneys"] = old_p.get("attorneys", []).copy()
-
-        old_caption = await self._caption_from_parties(interaction.guild, case)
-        lst[idx] = new_p
-        new_caption = await self._caption_from_parties(interaction.guild, case)
-
-        self._docket_clerk_notice(
-            case,
-            f"Party **{old_p['name']}** replaced by **{new_p['name']}** on **{side.name}**. Reason: {reason}",
-            old_caption, new_caption
-        )
-        save_json(COURT_FILE, self.court_data)
-        await interaction.response.send_message(f"🔁 Replaced **{old_p['name']}** → **{new_p['name']}**.", ephemeral=True)
-
-    def _find_party(self, case: dict, side: str, party_name: str) -> dict | None:
-        for p in case["parties"].get(side, []):
-            if p["name"] == party_name: return p
-        return None
 
     @court.command(name="set_attorney", description="Clerk: add an attorney to a party")
     @app_commands.choices(side=[
