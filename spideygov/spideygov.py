@@ -6,6 +6,7 @@ import json
 import os
 import re
 import asyncio
+import random
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,6 +15,15 @@ SENATORS = 1327053499405701142
 REPRESENTATIVES = 1327053334036742215
 SENATE = 1302330234422562887
 HOUSE = 1302330037365772380
+
+CITIZENSHIP = {
+    "commons": 1415927703340716102,
+    "gaming": 1415928304757637175,
+    "dp": 1415928367730921482,
+    "crazy_times": 1415928481505738792,
+    "user_themed": 1415928541740142672
+}
+CITIZENSHIP_IDS = set(CITIZENSHIP.values())
 
 def load_federal_registry():
     """Load the federal registry from a JSON file."""
@@ -532,3 +542,37 @@ class SpideyGov(commands.Cog):
         embed.set_footer(text=" ".join(footer_bits))
 
         await interaction.response.send_message(embed=embed, ephemeral=False)
+
+    @commands.command(name="citizenship_assign")
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    async def citizenship_assign(self, ctx: commands.Context):
+
+        guild = ctx.guild
+        if not guild:
+            return await ctx.send("This command can only be used in a server.")
+
+        assigned = skipped = 0
+        await ctx.send("Starting automatic citizenship assignment…")
+
+        for member in guild.members:
+            if member.bot:
+                continue
+            # skip if they already have any citizenship role
+            if any(r.id in CITIZENSHIP_IDS for r in member.roles):
+                skipped += 1
+                continue
+
+            role_id = random.choice(tuple(CITIZENSHIP_IDS))
+            role = guild.get_role(role_id)
+            if not role:
+                continue
+
+            try:
+                await member.add_roles(role, reason="Automatic citizenship assignment")
+                assigned += 1
+                await asyncio.sleep(0.5)  # gentle rate-limit buffer; tune as needed
+            except (discord.Forbidden, discord.HTTPException) as e:
+                await ctx.send(f"Failed to assign {role.name} to {member.mention}: {e}")
+
+        await ctx.send(f"Done. Assigned: {assigned}. Already had one: {skipped}.")
