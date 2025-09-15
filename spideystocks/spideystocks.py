@@ -5,6 +5,7 @@ import random
 import io
 from datetime import datetime, timedelta, timezone
 from discord.ext import commands, tasks
+from discord import app_commands
 from redbot.core import commands, bank
 import matplotlib.pyplot as plt
 import humanize
@@ -610,14 +611,14 @@ class SpideyStocks(commands.Cog):
         save_data(self.data)
 
 
+    stocks = app_commands.Group(name="stocks", description="Stock market related commands.")
 
-
-    @commands.hybrid_command(name="setupdatechannel", with_app_command=True, description="Set the channel for hourly market updates (admin only).")
-    @commands.admin_or_permissions(administrator=True)
-    async def setupdatechannel(self, ctx: commands.Context, channel: discord.TextChannel):
+    @stocks.command(name="setupdatechannel", description="Set the channel for hourly market updates (admin only).")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setupdatechannel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         self.data["update_channel_id"] = channel.id
         save_data(self.data)
-        await ctx.send(f"Stock market update channel set to {channel.mention}.")
+        await interaction.response.send_message(f"Stock market update channel set to {channel.mention}.")
 
 
     def abbreviate_number(self, num):
@@ -634,8 +635,8 @@ class SpideyStocks(commands.Cog):
 
 
 
-    @commands.hybrid_command(name="stockstatus", with_app_command=True, description="View current stock prices and your portfolio, grouped by category.")
-    async def stockstatus(self, ctx: commands.Context):
+    @stocks.command(name="status", description="View current stock prices and your portfolio.")
+    async def stockstatus(self, interaction: discord.Interaction):
         # Group companies by category
         grouped = {}
         for symbol, company in self.data["companies"].items():
@@ -682,7 +683,7 @@ class SpideyStocks(commands.Cog):
             output_lines.append("```")
         
         # Process the caller's portfolio
-        user_id = str(ctx.author.id)
+        user_id = str(interaction.author.id)
         portfolio = self.data["portfolios"].get(user_id, {})
         if portfolio:
             output_lines.append("\n**Your Portfolio:**")
@@ -705,14 +706,13 @@ class SpideyStocks(commands.Cog):
             output_lines.append(f"\nTotal Portfolio Value: {self.abbreviate_number(int(total_value))} credits")
         else:
             output_lines.append("\nYou currently do not own any shares.")
-        
-        await ctx.send("\n".join(output_lines))
+
+        await interaction.response.send_message("\n".join(output_lines))
 
 
     
-    @commands.hybrid_command(name="indexstatus", with_app_command=True, 
-                           description="View current market indices with percent changes.")
-    async def indexstatus(self, ctx: commands.Context):
+    @stocks.command(name="index_status", description="View current market indices with percent changes.")
+    async def indexstatus(self, interaction: discord.Interaction):
         message = "**Market Indices:**\n"
         indices = self.data.get("indices", {})
         if indices:
@@ -726,11 +726,12 @@ class SpideyStocks(commands.Cog):
                     message += f"{index_name}: {current_value:.1f}\n"
         else:
             message += "No indices available."
-        await ctx.send(message)
+        await interaction.response.send_message(message)
     
-    @commands.hybrid_command(name="forcesellall", with_app_command=True, description="Force sell all shares from a user's portfolio (admin only).")
-    @commands.admin_or_permissions(administrator=True)
-    async def forcesellall(self, ctx: commands.Context, target: discord.Member):
+    @stocks.command(name="forcesellall", description="Force sell all shares from a user's portfolio (admin only).")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(target="The user whose shares you want to force sell.")
+    async def forcesellall(self, interaction: discord.Interaction, target: discord.Member):
         """
         Force sells all shares from the target user's portfolio.
         Sold shares are removed from the user's portfolio (and not re-added to available_shares),
@@ -738,7 +739,7 @@ class SpideyStocks(commands.Cog):
         """
         user_id = str(target.id)
         if user_id not in self.data["portfolios"] or not self.data["portfolios"][user_id]:
-            await ctx.send(f"{target.mention} does not have any shares to sell.")
+            await interaction.response.send_message(f"{target.mention} does not have any shares to sell.")
             return
 
         total_credits = 0
@@ -759,19 +760,18 @@ class SpideyStocks(commands.Cog):
         await bank.deposit_credits(target, int(total_credits))
         
         details_text = "\n".join(details)
-        await ctx.send(f"Force sold all shares from {target.mention}:\n{details_text}\nTotal credits received: ${total_credits:.2f}")
+        await interaction.response.send_message(f"Force sold all shares from {target.mention}:\n{details_text}\nTotal credits received: ${total_credits:.2f}")
 
-    
-    @commands.hybrid_command(name="inject_market", with_app_command=True, description="Inject a boost into the overall market indices (admin only).")
-    @commands.admin_or_permissions(administrator=True)
-    async def inject_market(self, ctx: commands.Context, injection: float):
+    @stocks.command(name="inject_market", description="Inject a boost into the overall market indices (admin only).")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def inject_market(self, interaction: discord.Interaction, injection: float):
         """
         Inject money into the overall market.
         The injection is given as a decimal percentage (e.g., 0.01 for a 1% boost).
         This temporarily increases the investor modifier.
         """
         self.market_injection += injection
-        await ctx.send(f"Market injection increased by {injection:.2%}. Current market injection: {self.market_injection:.2%}")
+        await interaction.response.send_message(f"Market injection increased by {injection:.2%}. Current market injection: {self.market_injection:.2%}", ephemeral=True)
 
 
     
@@ -782,46 +782,61 @@ class SpideyStocks(commands.Cog):
             if company.get("ticker", "").upper() == ticker:
                 return symbol, company
         return None, None
+    
+    async def ticker_autocomplete(self, interaction: discord.Interaction, current: str):
+        current = current.strip().upper()
+        suggestions = []
+        for symbol, company in self.data["companies"].items():
+            ticker = company.get("ticker", "").upper()
+            if ticker.startswith(current):
+                suggestions.append(app_commands.Choice(name=f"{ticker} - {company.get('name', '')}", value=ticker))
+            if len(suggestions) >= 25:
+                break
+        return suggestions
 
-    @commands.hybrid_command(name="stockbuy", with_app_command=True, description="Buy shares in a company by ticker.")
-    async def stockbuy(self, ctx: commands.Context, ticker: str, shares: int = 1):
-        if ctx.interaction:
-            await ctx.defer()
+    @stocks.command(name="buy", description="Buy shares in a company by ticker.")
+    @app_commands.autocomplete(ticker=ticker_autocomplete)
+    @app_commands.describe(ticker="The ticker symbol of the company.", shares="Number of shares to buy (default 1).")
+    async def stockbuy(self, interaction: discord.Interaction, ticker: str, shares: int = 1):
+        if interaction:
+            await interaction.response.defer()
         symbol, company = self.get_company_by_ticker(ticker)
         if symbol is None or company is None:
-            await ctx.send("That ticker does not exist.")
+            await interaction.response.send_message("That ticker does not exist.")
             return
         
         if shares > company.get("available_shares", 0):
-            await ctx.send("Not enough shares available for purchase.")
+            await interaction.response.send_message("Not enough shares available for purchase.")
             return
         total_cost = company["price"] * shares
         total_cost = int(total_cost)
-        if not await bank.can_spend(ctx.author, total_cost):
-            await ctx.send("You don't have enough credits to buy these shares.")
+        if not await bank.can_spend(interaction.user, total_cost):
+            await interaction.response.send_message("You don't have enough credits to buy these shares.")
             return
-        
-        await bank.withdraw_credits(ctx.author, total_cost)
-        user_id = str(ctx.author.id)
+
+        await bank.withdraw_credits(interaction.user, total_cost)
+        user_id = str(interaction.user.id)
         self.data["portfolios"].setdefault(user_id, {})
         self.data["portfolios"][user_id][symbol] = self.data["portfolios"][user_id].get(symbol, 0) + shares
         company["available_shares"] -= shares
         save_data(self.data)
         price = company['price']
-        await ctx.send(f"You bought {shares} shares of {company['name']} (Ticker: {company.get('ticker')}) at ${price:.2f} each for {total_cost} credits.")
+        await interaction.response.send_message(f"You bought {shares} shares of {company['name']} (Ticker: {company.get('ticker')}) at ${price:.2f} each for {total_cost} credits.")
 
-    @commands.hybrid_command(name="stocksell", with_app_command=True, description="Sell shares in a company by ticker.")
-    async def stocksell(self, ctx: commands.Context, ticker: str, shares: int):
-        if ctx.interaction:
-            await ctx.defer()
+    @stocks.command(name="sell", description="Sell shares in a company by ticker.")
+    @app_commands.autocomplete(ticker=ticker_autocomplete)
+    @app_commands.describe(ticker="The ticker symbol of the company.", shares="Number of shares to sell (default 1).")
+    async def stocksell(self, interaction: discord.Interaction, ticker: str, shares: int=1):
+        if interaction:
+            await interaction.response.defer()
         symbol, company = self.get_company_by_ticker(ticker)
         if symbol is None or company is None:
-            await ctx.send("That ticker does not exist.")
+            await interaction.response.send_message("That ticker does not exist.")
             return
 
-        user_id = str(ctx.author.id)
+        user_id = str(interaction.user.id)
         if user_id not in self.data["portfolios"] or symbol not in self.data["portfolios"][user_id] or self.data["portfolios"][user_id][symbol] < shares:
-            await ctx.send("You don't have enough shares to sell.")
+            await interaction.response.send_message("You don't have enough shares to sell.")
             return
         
         total_value = company["price"] * shares
@@ -831,16 +846,18 @@ class SpideyStocks(commands.Cog):
             del self.data["portfolios"][user_id][symbol]
         company["available_shares"] += shares
         save_data(self.data)
-        await bank.deposit_credits(ctx.author, total_value)
+        await bank.deposit_credits(interaction.user, total_value)
         price = company['price']
-        await ctx.send(f"You sold {shares} shares of {company['name']} (Ticker: {company.get('ticker')}) at ${price:.2f} each for {total_value} credits.")
+        await interaction.response.send_message(f"You sold {shares} shares of {company['name']} (Ticker: {company.get('ticker')}) at ${price:.2f} each for {total_value} credits.")
 
-    @commands.hybrid_command(name="stockgraph", with_app_command=True, description="Display a line graph of a stock's price history by ticker.")
-    async def stockgraph(self, ctx: commands.Context, ticker: str):
+    @stocks.command(name="stock_graph", description="Display a line graph of a stock's price history by ticker.")
+    @app_commands.autocomplete(ticker=ticker_autocomplete)
+    @app_commands.describe(ticker="The ticker symbol of the company.")
+    async def stockgraph(self, interaction: discord.Interaction, ticker: str):
         ticker = ticker.strip()
         symbol, company = self.get_company_by_ticker(ticker)
         if symbol is None or company is None:
-            await ctx.send("That ticker does not exist.")
+            await interaction.response.send_message("That ticker does not exist.")
             return
         
         price_history = company.get("price_history", [company["price"]])
@@ -866,11 +883,22 @@ class SpideyStocks(commands.Cog):
             color=discord.Color.green()
         )
         embed.set_image(url="attachment://stockgraph.png")
-        await ctx.send(embed=embed, file=file)
+        await interaction.response.send_message(embed=embed, file=file)
 
+    async def index_name_autocomplete(self, interaction: discord.Interaction, current: str):
+        current = current.strip().lower()
+        suggestions = []
+        for index_name in self.data.get("indices", {}).keys():
+            if index_name.lower().startswith(current):
+                suggestions.append(app_commands.Choice(name=index_name, value=index_name))
+            if len(suggestions) >= 25:
+                break
+        return suggestions
     
-    @commands.hybrid_command(name="indexgraph", with_app_command=True, description="Display a line graph of a market index's history.")
-    async def indexgraph(self, ctx: commands.Context, index_name: str):
+    @stocks.command(name="index_graph", description="Display a line graph of a market index's history.")
+    @app_commands.describe(index_name="The name of the market index (e.g., 'Dough Jones Index').")
+    @app_commands.autocomplete(index_name=index_name_autocomplete)
+    async def indexgraph(self, interaction: discord.Interaction, index_name: str):
         """
         Display the history of a market index as a line graph.
         Example: /indexgraph "Dough Jones Index"
@@ -878,13 +906,13 @@ class SpideyStocks(commands.Cog):
         index_name = index_name.strip()
         indices = self.data.get("indices", {})
         if index_name not in indices:
-            await ctx.send("That index does not exist. Please check the index name.")
+            await interaction.response.send_message("That index does not exist. Please check the index name.")
             return
 
         index = indices[index_name]
         history = index.get("history", [])
         if not history:
-            await ctx.send("No history data available for this index.")
+            await interaction.response.send_message("No history data available for this index.")
             return
 
         # Generate a line graph for the index history.
@@ -909,7 +937,7 @@ class SpideyStocks(commands.Cog):
             color=discord.Color.blue()
         )
         embed.set_image(url="attachment://indexgraph.png")
-        await ctx.send(embed=embed, file=file)
+        await interaction.response.send_message(embed=embed, file=file)
     
 
     @commands.command(name="reset_market", hidden=True)
