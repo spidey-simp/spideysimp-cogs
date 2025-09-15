@@ -970,7 +970,7 @@ class SpideyGov(commands.Cog):
         items = sorted(((int(k), v) for k, v in secs.items() if k.isdigit()), key=lambda kv: kv[0])
         for snum, sd in items:
             sec_head = sd.get("heading") or ""
-            block = f"**Section {snum}" + (f" — {sec_head}" if sec_head else "") + f"**\n{(sd.get('text') or '').strip()}\n\n"
+            block = f"**Section {snum}" + (f". {sec_head}" if sec_head else "") + f"**\n{(sd.get('text') or '').strip()}\n\n"
             if used + len(block) > BUDGET:
                 break
             parts.append(block); used += len(block)
