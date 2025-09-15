@@ -642,3 +642,29 @@ class SpideyGov(commands.Cog):
             embed.add_field(name="Governor", value=governor_name, inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=False)
+
+    @government.command(name="citizenship_rates", description="View citizenship role assignment rates")
+    async def citizenship_rates(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if not guild:
+            return await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+
+        total_members = sum(1 for m in guild.members if not m.bot)
+        with_role = {key: 0 for key in CITIZENSHIP.keys()}
+        for member in guild.members:
+            if member.bot:
+                continue
+            for key, role_id in CITIZENSHIP.items():
+                if any(r.id == role_id for r in member.roles):
+                    with_role[key] += 1
+
+        embed = discord.Embed(
+            title="Citizenship Role Assignment Rates",
+            description=f"Out of {total_members} non-bot members:",
+            color=discord.Color.green()
+        )
+        for key, count in with_role.items():
+            percentage = (count / total_members * 100) if total_members > 0 else 0
+            embed.add_field(name=CATEGORIES[key]["name"], value=f"{count} members ({percentage:.2f}%)", inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=False)
