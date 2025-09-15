@@ -30,26 +30,27 @@ CATEGORIES = {
         "name": "Commons",
         "description": "The general use category for the server.",
         "role_id": CITIZENSHIP["commons"],
-        "channels": [1287645024309477462, 1344125633441042493, 1287709146631770235, 1414817395943673939,
-                    1332886275312713829,  1287648108150259775, 1340613486387925043, 1288258765984104459,
-                    1287646120104689716, 1322464624540651551, 1409967822020542464]
     },
     "gaming": {
         "name": "Gaming",
         "description": "The gaming category for the server.",
         "role_id": CITIZENSHIP["gaming"],
-        "channels": [1287811331411415112, 1287810900392411207, 1307888607645929493, 1296113226052009984,
-                    1340615229989715999, 1300884399176286368]
     },
     "dp": {
         "name": "Spideyton, District of Parker",
         "description": "The location of the federal government!",
         "role_id": CITIZENSHIP["dp"],
-        "channels": [1334216429884407808, 1302324081097445498, 1302332277237485588, 1302330503399084144, 
-                    1302330037365772380, 1302330234422562887,]
+    },
+    "crazy_times": {
+        "name": "Crazy Times",
+        "description": "A category for all things wild and wacky.",
+        "role_id": CITIZENSHIP["crazy_times"],
+    },
+    "user_themed": {
+        "name": "User Themed",
+        "description": "A category for user-created channels.",
+        "role_id": CITIZENSHIP["user_themed"],
     }
-    "crazy_times":
-    "user_themed":
 }
 
 def load_federal_registry():
@@ -608,3 +609,34 @@ class SpideyGov(commands.Cog):
     @app_commands.describe(
         category="The category to view info about"
     )
+    @app_commands.choices(category=[
+        app_commands.Choice(name="Commons", value="commons"),
+        app_commands.Choice(name="Gaming", value="gaming"),
+        app_commands.Choice(name="Spideyton, District of Parker", value="dp"),
+        app_commands.Choice(name="Crazy Times", value="crazy_times"),
+        app_commands.Choice(name="User Themed", value="user_themed"),
+    ])
+    async def view_category_info(self, interaction: discord.Interaction, category: app_commands.Choice[str]):
+        cat_key = category.value
+        cat_info = CATEGORIES.get(cat_key)
+        if not cat_info:
+            return await interaction.response.send_message("Category not found.", ephemeral=True)
+
+        role = interaction.guild.get_role(cat_info["role_id"]) if interaction.guild else None
+        role_mention = role.mention if role else "Role not found"
+
+        embed = discord.Embed(
+            title=f"Category: {cat_info['name']}",
+            description=cat_info["description"],
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Associated Role", value=role_mention, inline=False)
+        categories = self.federal_registry.setdefault("categories", {})
+        categories.setdefault(cat_key, {})
+        governor = categories[cat_key].get("governor")
+        if governor:
+            member = interaction.guild.get_member(governor) if interaction.guild else None
+            governor_name = member.display_name if member else f"User ID {governor}"
+            embed.add_field(name="Governor", value=governor_name, inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=False)
