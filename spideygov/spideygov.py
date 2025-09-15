@@ -959,7 +959,7 @@ class SpideyGov(commands.Cog):
             if not sd:
                 return await interaction.response.send_message(f"Section {section} not found in {title_head}.", ephemeral=True)
             sec_head = sd.get("heading") or ""
-            sec_title = f"Section {section}" + (f" — {sec_head}" if sec_head else "")
+            sec_title = f"Section {section}" + (f". {sec_head}" if sec_head else "")
             embed = discord.Embed(title=f"Constitution — {title_line}", description=f"**{sec_title}**\n{sd.get('text','')}", color=discord.Color.gold())
             return await interaction.response.send_message(embed=embed, ephemeral=False)
 
