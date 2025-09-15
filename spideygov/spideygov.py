@@ -631,6 +631,8 @@ class SpideyGov(commands.Cog):
             color=discord.Color.blue()
         )
         embed.add_field(name="Associated Role", value=role_mention, inline=False)
+        citizenship = [m for m in interaction.guild.members if CITIZENSHIP_IDS.intersection(r.id for r in m.roles)] if interaction.guild else []
+        embed.add_field(name="Total Citizens", value=str(len(citizenship)), inline=False)
         categories = self.federal_registry.setdefault("categories", {})
         categories.setdefault(cat_key, {})
         governor = categories[cat_key].get("governor")
