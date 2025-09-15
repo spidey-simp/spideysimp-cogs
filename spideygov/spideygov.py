@@ -976,7 +976,7 @@ class SpideyGov(commands.Cog):
             parts.append(block); used += len(block)
         if not parts and items:
             snum, sd = items[0]
-            head = f"**Section {snum}" + (f" — {sd.get('heading')}" if sd.get('heading') else "") + "**\n"
+            head = f"**Section {snum}" + (f". {sd.get('heading')}" if sd.get('heading') else "") + "**\n"
             room = max(0, BUDGET - len(head) - 3)
             parts = [head + (sd.get('text') or "")[:room] + "..."]
 
