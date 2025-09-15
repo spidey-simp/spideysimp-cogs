@@ -943,7 +943,7 @@ class SpideyGov(commands.Cog):
             return await interaction.response.send_message(f"{'Article' if is_article else 'Amendment'} {number} not found.", ephemeral=True)
 
         top_heading = node.get("heading") or ""
-        title_head = fmt_article(number, style_val) if is_article else fmt_amendment(number, style_val)
+        title_head = fmt_article(number) if is_article else fmt_amendment(number, style_val)
         title_line = f"{title_head}" + (f" — {top_heading}" if top_heading else "")
 
         secs = node.get("sections", {})
