@@ -605,7 +605,7 @@ class SpideyGov(commands.Cog):
 
         await ctx.send(f"Done. Assigned: {assigned}. Already had one: {skipped}.")
     
-    @government.command(name="view_category_info", descrtiption="View info about a category")
+    @government.command(name="view_category_info", description="View info about a category")
     @app_commands.describe(
         category="The category to view info about"
     )
