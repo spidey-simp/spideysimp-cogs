@@ -154,7 +154,7 @@ class ConstitutionUploadModal(discord.ui.Modal, title="Upload Constitution Text"
         self.target = target_node
 
         self.section = discord.ui.TextInput(
-            label="Section number (optional, leave blank for single-body Article/Amendment)",
+            label="Section number (optional)",
             required=False,
             placeholder="e.g., 1",
             style=discord.TextStyle.short,
