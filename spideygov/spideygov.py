@@ -25,6 +25,33 @@ CITIZENSHIP = {
 }
 CITIZENSHIP_IDS = set(CITIZENSHIP.values())
 
+CATEGORIES = {
+    "commons": {
+        "name": "Commons",
+        "description": "The general use category for the server.",
+        "role_id": CITIZENSHIP["commons"],
+        "channels": [1287645024309477462, 1344125633441042493, 1287709146631770235, 1414817395943673939,
+                    1332886275312713829,  1287648108150259775, 1340613486387925043, 1288258765984104459,
+                    1287646120104689716, 1322464624540651551, 1409967822020542464]
+    },
+    "gaming": {
+        "name": "Gaming",
+        "description": "The gaming category for the server.",
+        "role_id": CITIZENSHIP["gaming"],
+        "channels": [1287811331411415112, 1287810900392411207, 1307888607645929493, 1296113226052009984,
+                    1340615229989715999, 1300884399176286368]
+    },
+    "dp": {
+        "name": "Spideyton, District of Parker",
+        "description": "The location of the federal government!",
+        "role_id": CITIZENSHIP["dp"],
+        "channels": [1334216429884407808, 1302324081097445498, 1302332277237485588, 1302330503399084144, 
+                    1302330037365772380, 1302330234422562887,]
+    }
+    "crazy_times":
+    "user_themed":
+}
+
 def load_federal_registry():
     """Load the federal registry from a JSON file."""
     if not os.path.exists(FED_REGISTRY_FILE):
@@ -576,3 +603,8 @@ class SpideyGov(commands.Cog):
                 await ctx.send(f"Failed to assign {role.name} to {member.mention}: {e}")
 
         await ctx.send(f"Done. Assigned: {assigned}. Already had one: {skipped}.")
+    
+    @government.command(name="view_category_info", descrtiption="View info about a category")
+    @app_commands.describe(
+        category="The category to view info about"
+    )
