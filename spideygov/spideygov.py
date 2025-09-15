@@ -140,60 +140,121 @@ def fmt_amendment(n: int, style: str) -> str:
     # IRL: arabic (14), Court: roman (XIV)
     return f"Amendment {n if style == 'irl' else to_roman(n)}"
 
+def ensure_constitution_schema(reg: dict) -> None:
+    """
+    Backfill headings + sections containers without disturbing existing text.
+    Call once before any constitution commands run (e.g., Cog __init__).
+    """
+    const = reg.setdefault("constitution", {})
+    for bucket in ("articles", "amendments"):
+        b = const.setdefault(bucket, {})
+        for _, node in list(b.items()):
+            if not isinstance(node, dict):
+                continue
+            node.setdefault("heading", "")
+            secs = node.setdefault("sections", {})
+            # If single-body (no sections), 'sections' will be {"text": "..."}; leave as-is.
+            if isinstance(secs, dict) and "text" in secs and len(secs) == 1:
+                continue
+            for _, s in list(secs.items()):
+                if isinstance(s, dict):
+                    s.setdefault("heading", "")
+
 
 class ConstitutionUploadModal(discord.ui.Modal, title="Upload Constitution Text"):
-    def __init__(self, *, kind: str, number: int, target_node: dict):
+    def __init__(self, *, kind: str, number: int, target_node: dict, top_heading: str | None = None):
         """
-        kind: "article" | "amendment"
-        number: which article/amendment
-        target_node: the dict that has/should have {"sections": {...}}
+        kind: 'article' | 'amendment'
+        number: which Article/Amendment (Arabic)
+        target_node: dict to mutate (has/gets {'heading': str, 'sections': {...}})
+        top_heading: optional heading passed from the slash command
         """
         super().__init__()
         self.kind = kind
         self.number = number
         self.target = target_node
+        self.top_heading = (top_heading or "").strip()
 
+        # 3 inputs max in the modal
         self.section = discord.ui.TextInput(
-            label="Section number (optional)",
-            required=False,
-            placeholder="e.g., 1",
-            style=discord.TextStyle.short,
+            label="Section number (leave blank for whole Article/Amendment)",
+            required=False, style=discord.TextStyle.short, placeholder="e.g., 1"
+        )
+        self.section_heading = discord.ui.TextInput(
+            label="Section heading (optional)",
+            required=False, style=discord.TextStyle.short, placeholder="e.g., Vesting"
         )
         self.body = discord.ui.TextInput(
-            label="Text",
-            required=True,
-            placeholder="Paste the constitutional text here",
-            style=discord.TextStyle.paragraph,
+            label="Text", required=True, style=discord.TextStyle.paragraph,
+            placeholder="Paste the constitutional text here"
         )
+
         self.add_item(self.section)
+        self.add_item(self.section_heading)
         self.add_item(self.body)
 
     async def on_submit(self, interaction: discord.Interaction):
-        # Ensure 'sections' container exists
         node = self.target
+        node.setdefault("heading", "")
         sections = node.setdefault("sections", {})
 
-        sec_val = (self.section.value or "").strip()
-        if sec_val:
-            sec_key = str(int(sec_val)) if sec_val.isdigit() else sec_val
-            sec_node = sections.setdefault(sec_key, {"text": ""})
-            sec_node["text"] = str(self.body.value)
-            section_msg = f", Section {sec_key}"
-        else:
-            # Treat as a single-body article/amendment (no sections)
-            node["sections"] = {"text": str(self.body.value)}
-            section_msg = " (no sections)"
+        # Apply top-level heading if provided
+        if self.top_heading:
+            node["heading"] = self.top_heading
 
-        # Persist
-        # NOTE: uses your existing module-level function
+        sec_raw = (self.section.value or "").strip()
+        sec_key = str(int(sec_raw)) if sec_raw.isdigit() else sec_raw
+
+        if not sec_key:
+            # Single-body Article/Amendment (no per-section granularity)
+            sections.clear()
+            sections["text"] = str(self.body.value)
+            label = "Article" if self.kind == "article" else "Amendment"
+            await interaction.response.send_message(
+                f"✅ Uploaded {label} {self.number} (no sections).",
+                ephemeral=True
+            )
+        else:
+            # If previously single-body, convert to multi-section
+            if "text" in sections and len(sections) == 1:
+                body0 = sections["text"]
+                sections.clear()
+                sections["1"] = {"heading": "", "text": body0}
+            s = sections.setdefault(sec_key, {"heading": "", "text": ""})
+            if self.section_heading.value:
+                s["heading"] = self.section_heading.value.strip()
+            s["text"] = str(self.body.value)
+
+            label = "Article" if self.kind == "article" else "Amendment"
+            await interaction.response.send_message(
+                f"✅ Uploaded {label} {self.number}, Section {sec_key}.",
+                ephemeral=True
+            )
+
+        # Persist (uses your existing saver)
         save_federal_registry(interaction.client.get_cog("SpideyGov").federal_registry)
 
-        label = "Article" if self.kind == "article" else "Amendment"
-        await interaction.response.send_message(
-            f"✅ Uploaded {label} {self.number}{section_msg}.",
-            ephemeral=True
-        )
 
+class ConstitutionSetHeadingModal(discord.ui.Modal, title="Set Constitution Heading"):
+    def __init__(self, *, path_label: str, node: dict):
+        super().__init__()
+        self.node = node
+        self.heading = discord.ui.TextInput(
+            label=f"Heading for {path_label}",
+            required=True, style=discord.TextStyle.short, max_length=100
+        )
+        self.add_item(self.heading)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # Node may be article/amendment (has 'heading') OR a section node
+        if "text" in self.node and len(self.node) == 1:
+            # this would be a single-body container; not applicable here
+            pass
+        elif "heading" in self.node:
+            self.node["heading"] = self.heading.value.strip()
+
+        save_federal_registry(interaction.client.get_cog("SpideyGov").federal_registry)
+        await interaction.response.send_message("✅ Heading updated.", ephemeral=True)
 
 class LegislativeProposalModal(discord.ui.Modal, title="Legislative Proposal"):
     def __init__(self, title: str, type: str, sponsor: discord.Member,
@@ -388,10 +449,23 @@ class SpideyGov(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.federal_registry = load_federal_registry()
+        ensure_constitution_schema(self.federal_registry)
         self.registry_lock = asyncio.Lock()
 
     def cog_unload(self):
         save_federal_registry(self.federal_registry)
+    
+    def to_roman(self, n: int) -> str:
+        vals = [
+            (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+            (100, "C"),  (90, "XC"),  (50, "L"),  (40, "XL"),
+            (10, "X"),   (9, "IX"),   (5, "V"),   (4, "IV"), (1, "I"),
+        ]
+        out, x = [], n
+        for v, s in vals:
+            while x >= v:
+                out.append(s); x -= v
+        return "".join(out) if out else "I"
 
     government = app_commands.Group(name="government", description="Government related commands")
 
@@ -742,38 +816,110 @@ class SpideyGov(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=False)
     
+    async def constitution_article_autocomplete(self, interaction: discord.Interaction, current: str):
+        current = (current or "").lower()
+        const = self.federal_registry.get("constitution", {})
+        arts = const.get("articles", {})
+        out = []
+        for k, v in arts.items():
+            num = int(k) if k.isdigit() else k
+
+            label = f"Art. {self.to_roman(int(num))} — {v.get('heading','')}".strip(" —")
+            if current in label.lower():
+                out.append(app_commands.Choice(name=label, value=str(num)))
+        # Discord shows up to 25 choices
+        return out[:25]
+
+    async def constitution_amendment_autocomplete(self, interaction: discord.Interaction, current: str):
+        current = (current or "").lower()
+        const = self.federal_registry.get("constitution", {})
+        amds = const.get("amendments", {})
+        out = []
+        for k, v in amds.items():
+            num = int(k) if k.isdigit() else k
+            label = f"Amend. {num} — {v.get('heading','')}".strip(" —")
+            if current in label.lower():
+                out.append(app_commands.Choice(name=label, value=str(num)))
+        return out[:25]
+
+    async def constitution_section_autocomplete(self, interaction: discord.Interaction, current: str):
+        current = (current or "").lower()
+        const = self.federal_registry.get("constitution", {})
+        ns = interaction.namespace
+        is_article = getattr(ns, "article", None) is not None and getattr(ns, "amendment", None) is None
+        bucket = "articles" if is_article else "amendments" if getattr(ns, "amendment", None) is not None else None
+        number = str(getattr(ns, "article", None) or getattr(ns, "amendment", None) or "")
+
+        if not bucket or not number:
+            return []
+        node = const.get(bucket, {}).get(number)
+        if not node:
+            return []
+
+        secs = node.get("sections", {})
+        # if single-body, no sections to autocomplete
+        if "text" in secs and len(secs) == 1:
+            return []
+
+        out = []
+        for sk, sv in secs.items():
+            heading = sv.get("heading","")
+            label = f"Sec. {sk}" + (f" — {heading}" if heading else "")
+            if current in label.lower():
+                out.append(app_commands.Choice(name=label, value=str(sk)))
+        return out[:25]
+
+
     @government.command(name="constitution_upload_article", description="Upload an Article via modal")
     @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(number="Article number (Arabic input, e.g., 1 for Article I)")
-    async def constitution_upload_article(self, interaction: discord.Interaction, number: int):
+    @app_commands.describe(
+        number="Article number (Arabic input, e.g., 1 for Article I)",
+        heading="Top-level Article heading (e.g., Legislative Authority)"
+    )
+    async def constitution_upload_article(self, interaction: discord.Interaction, number: int, heading: str | None = None):
         const = self.federal_registry.setdefault("constitution", {})
-        articles = const.setdefault("articles", {})
-        art_node = articles.setdefault(str(number), {"sections": {}})
+        art = const.setdefault("articles", {}).setdefault(str(number), {"heading": "", "sections": {}})
+
+        # Optionally set heading immediately (so it shows up even if they cancel later)
+        if heading and heading.strip():
+            art["heading"] = heading.strip()
+            save_federal_registry(self.federal_registry)
+
         await interaction.response.send_modal(
-            ConstitutionUploadModal(kind="article", number=number, target_node=art_node)
+            ConstitutionUploadModal(kind="article", number=number, target_node=art, top_heading=heading)
         )
+
 
     @government.command(name="constitution_upload_amendment", description="Upload an Amendment via modal")
     @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(number="Amendment number (Arabic input, e.g., 14 for Amend. 14)")
-    async def constitution_upload_amendment(self, interaction: discord.Interaction, number: int):
+    @app_commands.describe(
+        number="Amendment number (Arabic input, e.g., 14)",
+        heading="Top-level Amendment heading (e.g., Due Process & Equal Protection)"
+    )
+    async def constitution_upload_amendment(self, interaction: discord.Interaction, number: int, heading: str | None = None):
         const = self.federal_registry.setdefault("constitution", {})
-        amends = const.setdefault("amendments", {})
-        amd_node = amends.setdefault(str(number), {"sections": {}})
+        amd = const.setdefault("amendments", {}).setdefault(str(number), {"heading": "", "sections": {}})
+
+        if heading and heading.strip():
+            amd["heading"] = heading.strip()
+            save_federal_registry(self.federal_registry)
+
         await interaction.response.send_modal(
-            ConstitutionUploadModal(kind="amendment", number=number, target_node=amd_node)
+            ConstitutionUploadModal(kind="amendment", number=number, target_node=amd, top_heading=heading)
         )
+
     
-    @government.command(name="view_constitution", description="View Articles/Amendments (IRL or Court style labels)")
+    @government.command(name="view_constitution", description="View Articles/Amendments (with headings; IRL or Court labels)")
+    @app_commands.autocomplete(article=constitution_article_autocomplete, amendment=constitution_amendment_autocomplete, section=constitution_section_autocomplete)
     @app_commands.choices(style=[
         app_commands.Choice(name="IRL (default)", value="irl"),
         app_commands.Choice(name="Court", value="court"),
     ])
     @app_commands.describe(
-        article="Article number (Arabic input, e.g., 1 for Article I)",
-        amendment="Amendment number (Arabic input, e.g., 14 for XIV in Court style)",
-        section="Section number (Arabic input, e.g., 8)",
-        style="Formatting style for labels"
+        article="Article (Arabic input; autocomplete supports headings)",
+        amendment="Amendment (Arabic input; autocomplete supports headings)",
+        section="Section number (Arabic; autocomplete supports headings)",
+        style="Label style for titles"
     )
     async def view_constitution(
         self,
@@ -785,73 +931,92 @@ class SpideyGov(commands.Cog):
     ):
         # XOR guard
         if (article is None and amendment is None) or (article is not None and amendment is not None):
-            return await interaction.response.send_message(
-                "Specify either an **article** or an **amendment**, but not both.",
-                ephemeral=True
-            )
-        style_val = style.value if style else "irl"
+            return await interaction.response.send_message("Specify either an article or an amendment, not both.", ephemeral=True)
 
+        style_val = (style.value if style else "irl")
         const = self.federal_registry.get("constitution", {})
         is_article = article is not None
         number = article if is_article else amendment
-        root_key = "articles" if is_article else "amendments"
-        node = const.get(root_key, {}).get(str(number))
+        bucket = "articles" if is_article else "amendments"
+        node = const.get(bucket, {}).get(str(number))
         if not node:
-            lbl = "Article" if is_article else "Amendment"
-            return await interaction.response.send_message(f"{lbl} {number} not found.", ephemeral=True)
+            return await interaction.response.send_message(f"{'Article' if is_article else 'Amendment'} {number} not found.", ephemeral=True)
 
-        sections = node.get("sections", {})
-        # Title label per style
-        title_head = fmt_article(number) if is_article else fmt_amendment(number, style_val)
+        top_heading = node.get("heading") or ""
+        title_head = fmt_article(number, style_val) if is_article else fmt_amendment(number, style_val)
+        title_line = f"{title_head}" + (f" — {top_heading}" if top_heading else "")
 
-        # Single-body (no sections container) case
-        if section is None and "text" in sections:
-            embed = discord.Embed(
-                title=f"Constitution — {title_head}",
-                description=sections["text"],
-                color=discord.Color.gold()
-            )
+        secs = node.get("sections", {})
+
+        # Single-body
+        if section is None and "text" in secs and len(secs) == 1:
+            embed = discord.Embed(title=f"Constitution — {title_line}", description=secs["text"], color=discord.Color.gold())
             return await interaction.response.send_message(embed=embed, ephemeral=False)
 
         # Specific section
         if section is not None:
-            sec = sections.get(str(section))
-            if not sec:
-                return await interaction.response.send_message(
-                    f"Section {section} of {title_head} not found.",
-                    ephemeral=True
-                )
-            embed = discord.Embed(
-                title=f"Constitution — {title_head}, Section {section}",
-                description=(sec.get("text") or ""),
-                color=discord.Color.gold()
-            )
+            sd = secs.get(str(section))
+            if not sd:
+                return await interaction.response.send_message(f"Section {section} not found in {title_head}.", ephemeral=True)
+            sec_head = sd.get("heading") or ""
+            sec_title = f"Section {section}" + (f" — {sec_head}" if sec_head else "")
+            embed = discord.Embed(title=f"Constitution — {title_line}", description=f"**{sec_title}**\n{sd.get('text','')}", color=discord.Color.gold())
             return await interaction.response.send_message(embed=embed, ephemeral=False)
 
-        # List all sections (pack within embed limits)
-        # keep ~3800 char budget for safety
+        # Pack multiple sections w/ headings
         BUDGET = 3800
-        parts, used, shown = [], 0, 0
-        for sec_num, sec in sorted(sections.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0):
-            body = (sec.get("text") or "").strip()
-            block = f"**Section {sec_num}**\n{body}\n\n"
+        parts, used = [], 0
+        # If it was previously single-body and then converted, you’ll have real sections now
+        items = sorted(((int(k), v) for k, v in secs.items() if k.isdigit()), key=lambda kv: kv[0])
+        for snum, sd in items:
+            sec_head = sd.get("heading") or ""
+            block = f"**Section {snum}" + (f" — {sec_head}" if sec_head else "") + f"**\n{(sd.get('text') or '').strip()}\n\n"
             if used + len(block) > BUDGET:
                 break
-            parts.append(block); used += len(block); shown += 1
-
-        if not parts:
-            # very long first section: hard-truncate
-            sec_num, sec = next(iter(sorted(sections.items(), key=lambda kv: int(kv[0]) if kv[0].isdigit() else 0)))
-            head = f"**Section {sec_num}**\n"
+            parts.append(block); used += len(block)
+        if not parts and items:
+            snum, sd = items[0]
+            head = f"**Section {snum}" + (f" — {sd.get('heading')}" if sd.get('heading') else "") + "**\n"
             room = max(0, BUDGET - len(head) - 3)
-            body = (sec.get("text") or "").strip()
-            parts = [head + body[:room] + "..."]
-            shown = 1
+            parts = [head + (sd.get('text') or "")[:room] + "..."]
 
-        embed = discord.Embed(
-            title=f"Constitution — {title_head}",
-            description="".join(parts),
-            color=discord.Color.gold()
-        ).set_footer(text=f"Showing {shown} section(s)" + (" …truncated" if shown < len(sections) else ""))
-
+        embed = discord.Embed(title=f"Constitution — {title_line}", description="".join(parts), color=discord.Color.gold())
         await interaction.response.send_message(embed=embed, ephemeral=False)
+
+    @government.command(name="constitution_set_heading", description="Set a heading (Article/Amendment or specific Section)")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        article="Article number (Arabic, e.g., 1)",
+        amendment="Amendment number (Arabic, e.g., 14)",
+        section="Section number (optional; leave empty to set the Article/Amendment heading)"
+    )
+    async def constitution_set_heading(
+        self,
+        interaction: discord.Interaction,
+        article: int | None = None,
+        amendment: int | None = None,
+        section: int | None = None
+    ):
+        # XOR on article/amendment
+        if (article is None and amendment is None) or (article is not None and amendment is not None):
+            return await interaction.response.send_message(
+                "Specify either an article or an amendment (not both).", ephemeral=True
+            )
+        const = self.federal_registry.setdefault("constitution", {})
+        bucket = "articles" if article is not None else "amendments"
+        number = article if article is not None else amendment
+        node = const.setdefault(bucket, {}).get(str(number))
+        if not node:
+            return await interaction.response.send_message(f"{bucket[:-1].capitalize()} {number} not found.", ephemeral=True)
+
+        path_label = f"{'Article' if bucket=='articles' else 'Amendment'} {number}"
+        target = node
+        if section is not None:
+            secs = node.get("sections", {})
+            s = secs.get(str(section))
+            if not s:
+                return await interaction.response.send_message(f"Section {section} not found in {path_label}.", ephemeral=True)
+            target = s
+            path_label = f"{path_label}, Section {section}"
+
+        await interaction.response.send_modal(ConstitutionSetHeadingModal(path_label=path_label, node=target))
