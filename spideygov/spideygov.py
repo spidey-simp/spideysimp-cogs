@@ -2151,8 +2151,10 @@ class SpideyGov(commands.Cog):
         title: str,
         date: str,
         time: str,
-        tz: str = _TZ_CHOICES[0],  # default PT
+        tz: str = None,  # default PT
     ):
+        if not tz:
+            tz = _TZ_CHOICES[0]
         reg = self.federal_registry
         parent, node = _resolve_committee_node(reg, chamber.value, name)
         if not node:
