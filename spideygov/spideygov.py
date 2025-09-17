@@ -1228,7 +1228,7 @@ class SpideyGov(commands.Cog):
         app_commands.Choice(name="Crazy Times", value="crazy_times"),
         app_commands.Choice(name="User Themed", value="user_themed"),
     ])
-    async def view_category_info(self, interaction: discord.Interaction, category: app_commands.Choice[str]):
+    async def view_category_info(self, interaction: discord.Interaction, category: str):
         cat_key = category.value
         cat_info = CATEGORIES.get(cat_key)
         if not cat_info:
@@ -1356,7 +1356,7 @@ class SpideyGov(commands.Cog):
         article: int | None = None,
         amendment: int | None = None,
         section: int | None = None,
-        style: app_commands.Choice[str] | None = None
+        style: str | None = None
     ):
         # XOR guard
         if (article is None and amendment is None) or (article is not None and amendment is not None):
@@ -1498,7 +1498,7 @@ class SpideyGov(commands.Cog):
         app_commands.Choice(name="Senate", value="Senate"),
         app_commands.Choice(name="House", value="House"),
     ])
-    async def docket(self, interaction: discord.Interaction, chamber: app_commands.Choice[str]):
+    async def docket(self, interaction: discord.Interaction, chamber: str):
         items = self.federal_registry.get("bills", {}).get("items", {})
         # show DRAFT/INTRODUCED/IN_COMMITTEE/FLOOR; hide PASSED/FAILED/ENACTED by default
         active = [b for b in items.values() if b.get("chamber")==chamber.value and b.get("status") in {"DRAFT","INTRODUCED","IN_COMMITTEE","FLOOR"}]
@@ -1666,7 +1666,7 @@ class SpideyGov(commands.Cog):
         interaction: discord.Interaction,
         bill_id: str,
         target_id: str,
-        op: app_commands.Choice[str],
+        op: str,
         section_heading: str | None = None,
         body: str | None = None,
         rationale: str | None = None,
@@ -1850,24 +1850,28 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_message(f"✅ Applied {amend_id} to {bill_id}.", ephemeral=True)
 
     async def parent_committee_autocomplete(self, interaction: discord.Interaction, current: str):
-        # which chamber is calling?
+        # Determine chamber from caller’s roles (leader → senate, else house)
         user_role_ids = {r.id for r in getattr(interaction.user, "roles", [])}
         chamber = "senate" if SENATE_MAJORITY_LEADER in user_role_ids else "house"
 
         committees = self.federal_registry.setdefault("committees", {
             "senate": {},
             "house": {},
-            "joint": {},           # optional bucket for joint committees
+            "joint": {},
         })
         chamber_committees = committees.get(chamber, {})
 
         cur = (current or "").lower()
         choices: list[app_commands.Choice[str]] = []
-        for key, data in sorted(chamber_committees.items(), key=lambda kv: kv[0]):  # sort by key
-            label = key.replace("_", " ").title()
+
+        # Only top-level committees
+        for key, data in sorted(chamber_committees.items(), key=lambda kv: kv[0]):
+            label = (data.get("name") or key.replace("_", " ").title()).strip()
             if not cur or cur in label.lower():
                 choices.append(app_commands.Choice(name=label, value=key))
+
         return choices[:25]
+
 
 
     @legislature.command(name="create_committee", description="Create a congressional committee or subcommittee")
@@ -1891,7 +1895,7 @@ class SpideyGov(commands.Cog):
         self,
         interaction: discord.Interaction,
         name: str,
-        committee_type: app_commands.Choice[str] | str = "standing",
+        committee_type: str | str = "standing",
         *,
         chair: discord.Member,
         sub_committee: bool = False,
@@ -1999,9 +2003,9 @@ class SpideyGov(commands.Cog):
     async def committee_name_autocomplete(self, interaction: discord.Interaction, current: str):
         """Return committees + subcommittees for the chosen chamber, sorted."""
         reg = self.federal_registry
-        committees = _get_committees_root(reg)
+        committees = _get_committees_root(reg)  # your existing helper
 
-        # Chamber comes from the other option on the same slash command
+        # Chamber comes from the sibling option on the same slash command
         ns = interaction.namespace
         chamber = getattr(ns, "chamber", None)
         if isinstance(chamber, app_commands.Choice):
@@ -2024,9 +2028,11 @@ class SpideyGov(commands.Cog):
                 slabel = (sv.get("name") or sk.replace("_", " ").title()).strip()
                 full = f"{label} → {slabel}"
                 if not cur or cur in full.lower():
-                    # encode as parent::child so we can resolve it later
+                    # encode parent::child so handlers can resolve it
                     out.append(app_commands.Choice(name=full, value=f"{key}::{sk}"))
+
         return out[:25]
+
 
     @legislature.command(name="committee_info", description="Details about a (sub)committee")
     @app_commands.choices(chamber=[
@@ -2039,7 +2045,7 @@ class SpideyGov(commands.Cog):
         chamber="Which body the committee belongs to",
         name="Committee or subcommittee (autocomplete)",
     )
-    async def committee_info(self, interaction: discord.Interaction, chamber: app_commands.Choice[str], name: str):
+    async def committee_info(self, interaction: discord.Interaction, chamber: str, name: str):
         reg = self.federal_registry
         committees = _get_committees_root(reg)
         bucket = committees.get(chamber.value, {})
@@ -2140,12 +2146,12 @@ class SpideyGov(commands.Cog):
     async def committee_hearing_schedule(
         self,
         interaction: discord.Interaction,
-        chamber: app_commands.Choice[str],
+        chamber: str,
         name: str,
         title: str,
         date: str,
         time: str,
-        tz: app_commands.Choice[str] = _TZ_CHOICES[0],  # default PT
+        tz: str = _TZ_CHOICES[0],  # default PT
     ):
         reg = self.federal_registry
         parent, node = _resolve_committee_node(reg, chamber.value, name)
@@ -2211,9 +2217,9 @@ class SpideyGov(commands.Cog):
     async def committee_manage(
         self,
         interaction: discord.Interaction,
-        chamber: app_commands.Choice[str],
+        chamber: str,
         name: str,
-        action: app_commands.Choice[str],
+        action: str,
         member: discord.Member | None = None,
         role: discord.Role | None = None,
         as_chair: bool = False,
@@ -2318,15 +2324,15 @@ class SpideyGov(commands.Cog):
     async def report_bill(
         self,
         interaction: discord.Interaction,
-        action: app_commands.Choice[str],
+        action: str,
         bill_id: str | None = None,
-        chamber: app_commands.Choice[str] | None = None,
+        chamber: str | None = None,
         title: str | None = None,
         summary: str | None = None,
         text: str | None = None,
         joint: bool = False,
         hours: int = 24,
-        threshold: app_commands.Choice[str] | None = None,
+        threshold: str | None = None,
         notify: bool = False,
     ):
         act = action.value
