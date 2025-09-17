@@ -1028,7 +1028,7 @@ class ExecutiveOrderModal(discord.ui.Modal, title="New Executive Order"):
         label="Sections (use 'Sec. 1 — ...' or '§ 1. ...')",
         style=discord.TextStyle.paragraph,
         placeholder="Sec. 1 — Policy\nBody...\n\nSec. 2 — Implementation\nBody...",
-        max_length=5000
+        max_length=4000
     )
 
     def __init__(self, parent):
