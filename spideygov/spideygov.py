@@ -80,6 +80,65 @@ SECTION_RE = re.compile(
     re.M
 )
 
+ROMANS = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"]
+
+def _format_bill_for_display(b: dict) -> list[str]:
+    """
+    Return a list of message-sized chunks with **bolded** Title/Section headings.
+    Uses bill["structure"] if present, else falls back to raw text with light heading detection.
+    """
+    chunks: list[str] = []
+    acc = ""
+
+    def flush():
+        nonlocal acc
+        if acc.strip():
+            chunks.append(acc)
+        acc = ""
+
+    struct = b.get("structure") or {}
+    titles = struct.get("titles") or []
+
+    if titles:
+        # Structure-aware pretty print
+        for t_idx, t in enumerate(titles, start=1):
+            t_label = t.get("name") or ""
+            t_hdr = f"**Title {ROMANS[t_idx-1] if t_idx-1 < len(ROMANS) else t_idx} — {t_label}**\n"
+            if len(acc) + len(t_hdr) > 1800: flush()
+            acc += t_hdr
+
+            sections = t.get("sections") or []
+            for s in sections:
+                sn = s.get("number") or ""
+                stitle = s.get("title") or ""
+                shdr = f"**Sec. {sn} — {stitle}**\n"
+                sbody = (s.get("text") or "").strip() + "\n\n"
+                if len(acc) + len(shdr) + len(sbody) > 1800:  # keep slack for embed limits
+                    flush()
+                acc += shdr + sbody
+        flush()
+        return chunks
+
+    # Fallback: bold typical heading patterns in raw text
+    import re
+    raw = (b.get("text") or "").splitlines()
+    for line in raw:
+        L = line.strip()
+        if not L:
+            acc += "\n"
+            continue
+        if re.match(r"^(Title\s+[IVXLC]+(?:\s*[-—]\s*.+)?)$", L, re.IGNORECASE):
+            L = f"**{L}**"
+        elif re.match(r"^(Sec(?:tion)?\.?\s*\d+[A-Za-z\-]*\s*(?:[-—]\s*.+)?)$", L, re.IGNORECASE):
+            L = f"**{L}**"
+        elif re.match(r"^(§+\s*\d+[A-Za-z\-]*\s*(?:[-—]\s*.+)?)$", L):
+            L = f"**{L}**"
+        if len(acc) + len(L) + 1 > 1800:
+            flush()
+        acc += L + "\n"
+    flush()
+    return chunks
+
 
 def parse_sections_from_text(text: str):
     """
@@ -888,6 +947,123 @@ class ChapterUploadConfirmView(discord.ui.View):
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(content="❌ Cancelled. No changes written.", embed=None, view=None)
 
+_SEC_PATTERNS = [
+    r"^\s*Sec(?:tion)?\.?\s*(?P<num>\d+[A-Za-z\-]*)\s*[—\-:\.]\s*(?P<title>.+)\s*$",
+    r"^\s*§+\s*(?P<num>\d+[A-Za-z\-]*)\.?\s*(?P<title>.+)\s*$",
+]
+
+def _parse_sections_from_text(body: str) -> list[dict]:
+    """
+    Split a multiline text into sections by heading lines.
+    Returns: [{"number": "...","title": "...","text": "..."}]
+    """
+    lines = (body or "").splitlines()
+    sections = []
+    cur = {"number": None, "title": None, "text": ""}
+
+    def start_new(num, title):
+        nonlocal cur
+        if cur["number"] or cur["text"].strip():
+            sections.append({**cur, "text": cur["text"].strip()})
+        cur = {"number": num.strip(), "title": (title or "").strip(), "text": ""}
+
+    for ln in lines:
+        m = None
+        for pat in _SEC_PATTERNS:
+            m = re.match(pat, ln.strip())
+            if m: break
+        if m:
+            start_new(m.group("num"), m.group("title"))
+        else:
+            cur["text"] += (ln + "\n")
+    if cur["number"] or cur["text"].strip():
+        sections.append({**cur, "text": cur["text"].strip()})
+    # default if user forgot a heading at start: make it Sec. 1 — General
+    if not sections:
+        sections = [{"number": "1", "title": "General", "text": body.strip()}]
+    return sections
+
+def _format_eo_for_display(order: dict) -> list[str]:
+    """Bold the Sec. headings for EO; chunk for safe embed sizes."""
+    chunks: list[str] = []
+    acc = ""
+    sections = ((order.get("structure") or {}).get("titles") or [{}])[0].get("sections") or []
+    for s in sections:
+        hdr = f"**Sec. {s.get('number','')} — {s.get('title','')}**\n"
+        body = (s.get("text") or "").strip() + "\n\n"
+        if len(acc) + len(hdr) + len(body) > 1800:
+            if acc.strip():
+                chunks.append(acc); acc = ""
+        acc += hdr + body
+    if acc.strip():
+        chunks.append(acc)
+    return chunks
+
+class ExecutiveOrderModal(discord.ui.Modal, title="New Executive Order"):
+    eo_title = discord.ui.TextInput(
+        label="Order Title",
+        placeholder="e.g., Executive Order on Channel Access Controls",
+        max_length=200
+    )
+    eo_summary = discord.ui.TextInput(
+        label="Short Summary (optional)",
+        style=discord.TextStyle.paragraph,
+        required=False,
+        max_length=300
+    )
+    eo_body = discord.ui.TextInput(
+        label="Sections (use 'Sec. 1 — ...' or '§ 1. ...')",
+        style=discord.TextStyle.paragraph,
+        placeholder="Sec. 1 — Policy\nBody...\n\nSec. 2 — Implementation\nBody...",
+        max_length=5000
+    )
+
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent  # the Cog
+
+    async def on_submit(self, interaction: discord.Interaction):
+        reg = self.parent.federal_registry
+        store = reg.setdefault("executive_orders", {}).setdefault("items", {})
+
+        # assign EO number (simple annual counter)
+        from datetime import datetime
+        yr = datetime.utcnow().year
+        seq = reg.setdefault("executive_orders", {}).setdefault("seq", {}).get(str(yr), 0) + 1
+        reg["executive_orders"]["seq"][str(yr)] = seq
+        eo_id = f"EO-{yr}-{seq:04d}"
+
+        # parse sections
+        sections = _parse_sections_from_text(str(self.eo_body))
+
+        order = {
+            "id": eo_id,
+            "title": str(self.eo_title).strip(),
+            "summary": str(self.eo_summary).strip(),
+            "text": str(self.eo_body),
+            "structure": {"titles": [{"name": "Executive Order", "sections": sections}]},
+            "issued_by": interaction.user.id,
+            "issued_at": discord.utils.utcnow().isoformat(),
+            "status": "ISSUED",
+        }
+        store[eo_id] = order
+        save_federal_registry(reg)
+
+        # post in White House channel, nicely formatted
+        wh = interaction.client.get_channel(SPIDEY_HOUSE)
+        pages = _format_eo_for_display(order)
+        if wh:
+            # header
+            head = discord.Embed(
+                title=f"{eo_id} — {order['title']}",
+                description=(order.get("summary") or ""),
+                color=discord.Color.dark_gold()
+            )
+            await wh.send(embed=head)
+            for p in pages:
+                await wh.send(embed=discord.Embed(description=p[:4000], color=discord.Color.dark_gold()))
+
+        await interaction.response.send_message(f"✅ Issued **{eo_id}** — {order['title']}", ephemeral=True)
 
 
 
@@ -1469,29 +1645,52 @@ class SpideyGov(commands.Cog):
         if not b:
             return await interaction.response.send_message("Bill not found.", ephemeral=True)
 
-        kind = "Bill" if b["type"] == "bill" else "Resolution"
+        kind = "Bill" if b.get("type") == "bill" else "Resolution"
         joint_prefix = "Joint " if b.get("joint") else ""
-        head = f"{b['chamber']} {joint_prefix}{kind} {bill_id}"
+        head = f"{b.get('chamber','?')} {joint_prefix}{kind} {bill_id}"
 
-        embed = discord.Embed(title=head, description=b.get("summary",""), color=discord.Color.blurple())
-        embed.add_field(name="Title", value=b.get("title",""), inline=False)
-        embed.add_field(name="Purpose", value=b.get("purpose","")[:1024] or "—", inline=False)
+        # Meta embed (short fields)
+        meta = discord.Embed(
+            title=head,
+            description=(b.get("summary") or ""),
+            color=discord.Color.blurple()
+        )
+        meta.add_field(name="Title", value=b.get("title","")[:1024] or "—", inline=False)
+        if b.get("purpose"):
+            meta.add_field(name="Purpose", value=b["purpose"][:1024], inline=False)
         if b.get("committee"):
-            embed.add_field(name="Committee", value=b["committee"], inline=True)
+            meta.add_field(name="Committee", value=b["committee"][:1024], inline=True)
         if b.get("co_sponsors"):
-            embed.add_field(name="Co-sponsors", value=", ".join(b["co_sponsors"])[:1024], inline=False)
-        embed.add_field(name="Status", value=b.get("status","DRAFT"), inline=True)
+            meta.add_field(name="Co-sponsors", value=", ".join(b["co_sponsors"])[:1024], inline=False)
+        meta.add_field(name="Status", value=b.get("status","DRAFT")[:1024], inline=True)
+        if b.get("authority"):
+            meta.add_field(name="Authority", value=b["authority"].get("primary_label","(unspecified)")[:1024], inline=False)
         if b.get("codification") or b.get("repealing"):
             cod = "Codification" if b.get("codification") else "Repeal"
-            embed.add_field(name="Code Impact", value=f"{cod}: Title {b.get('code_title','?')} §§ {b.get('sections','?')}", inline=False)
+            meta.add_field(
+                name="Code Impact",
+                value=f"{cod}: Title {b.get('code_title','?')} §§ {b.get('sections','?')}"[:1024],
+                inline=False
+            )
 
-        # show a trimmed body; it can be long
-        body = (b.get("text") or "").strip()
-        if body:
-            show = body if len(body) < 1000 else (body[:990] + " …")
-            embed.add_field(name="Text (trimmed)", value=show, inline=False)
+        # Structured text pages with bolded headings
+        pages = _format_bill_for_display(b)
+        if not pages:
+            return await interaction.response.send_message(embed=meta, ephemeral=False)
 
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        # Send meta first
+        await interaction.response.send_message(embed=meta, ephemeral=False)
+
+        # Then send bill text in 4k-chunked embeds
+        total = len(pages)
+        for i, txt in enumerate(pages, start=1):
+            e = discord.Embed(
+                title=f"{bill_id} — Text ({i}/{total})",
+                description=txt[:4000],
+                color=discord.Color.blurple()
+            )
+            await interaction.followup.send(embed=e)
+
 
     @legislature.command(name="docket", description="List active bills/resolutions by chamber")
     @app_commands.choices(chamber=[
@@ -1516,58 +1715,29 @@ class SpideyGov(commands.Cog):
 
 
 
-    @executive.command(name="eo_issue", description="Issue an Executive Order (logs it and posts an embed)")
+    @executive.command(name="eo_new", description="Draft and issue an Executive Order (modal)")
     @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(
-        title="Short title (e.g., Adjusting Channel Access During Security Events)",
-        body="Full text of the order",
-        revokes="Optional: comma-separated EO IDs this order revokes",
-        amends="Optional: EO ID this order amends"
-    )
-    async def eo_issue(self, interaction: discord.Interaction, title: str, body: str, revokes: str | None = None, amends: str | None = None):
-        reg = self.federal_registry
-        eo = ensure_eo_schema(reg)
-        eo_id = next_eo_id(reg)
-        order = {
-            "id": eo_id,
-            "title": title,
-            "text": body,
-            "issued_at": discord.utils.utcnow().isoformat(),
-            "issued_by": interaction.user.id,
-            "revokes": [s.strip() for s in (revokes or "").split(",") if s.strip()],
-            "amends": (amends or "").strip() or None,
-            "status": "ACTIVE",
-            "message_id": None,
-            "channel_id": None,
-        }
-        eo["items"][eo_id] = order
-        save_federal_registry(reg)
-
-        embed = discord.Embed(title=f"{eo_id} — {title}", description=body[:4000], color=discord.Color.dark_gold())
-        if order["amends"]: embed.add_field(name="Amends", value=order["amends"])
-        if order["revokes"]: embed.add_field(name="Revokes", value=", ".join(order["revokes"])[:1024], inline=False)
-
-        # Post to a log channel if you have one
-        log_ch = interaction.client.get_channel(SPIDEY_HOUSE) if "EXECUTIVE_ORDERS_LOG" in globals() else None
-        if log_ch:
-            msg = await log_ch.send(embed=embed)
-            order["message_id"] = msg.id
-            order["channel_id"] = log_ch.id
-            save_federal_registry(reg)
-
-        await interaction.response.send_message(f"✅ Issued {eo_id}.", ephemeral=True)
+    async def eo_new(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(ExecutiveOrderModal(self))
 
     @executive.command(name="eo_view", description="View an Executive Order")
-    @app_commands.describe(eo_id="EO ID (e.g., EO-2025-0003)")
+    @app_commands.describe(eo_id="e.g., EO-2025-0001")
     async def eo_view(self, interaction: discord.Interaction, eo_id: str):
-        order = self.federal_registry.get("executive_orders", {}).get("items", {}).get(eo_id)
-        if not order: return await interaction.response.send_message("EO not found.", ephemeral=True)
-        color = discord.Color.green() if order["status"] == "ACTIVE" else discord.Color.red()
-        embed = discord.Embed(title=f"{eo_id} — {order.get('title','')}", description=order.get("text","")[:4000], color=color)
-        if order.get("amends"): embed.add_field(name="Amends", value=order["amends"])
-        if order.get("revokes"): embed.add_field(name="Revokes", value=", ".join(order["revokes"])[:1024], inline=False)
-        embed.set_footer(text=f"Status: {order['status']}")
-        await interaction.response.send_message(embed=embed, ephemeral=False)
+        reg = self.federal_registry
+        order = reg.get("executive_orders", {}).get("items", {}).get(eo_id)
+        if not order:
+            return await interaction.response.send_message("Executive Order not found.", ephemeral=True)
+
+        pages = _format_eo_for_display(order)
+        head = discord.Embed(
+            title=f"{eo_id} — {order.get('title','')}",
+            description=(order.get("summary") or ""),
+            color=discord.Color.dark_gold()
+        )
+        await interaction.response.send_message(embed=head, ephemeral=False)
+        for p in pages:
+            await interaction.followup.send(embed=discord.Embed(description=p[:4000], color=discord.Color.dark_gold()))
+
 
     async def eo_id_autocomplete(self, interaction: discord.Interaction, current: str):
         current = (current or "").lower()
