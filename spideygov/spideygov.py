@@ -80,130 +80,47 @@ SECTION_RE = re.compile(
     re.M
 )
 
-TITLE_RE = re.compile(
-    r"""^\s*                # leading ws
-        (?:Title)\s+        # 'Title'
-        ([IVXLCDM]+|\d+)    # roman or digits
-        (?:\s*[-—:.]\s*.*)? # optional delimiter + trailing title
-        \s*$                # end
+_TITLE_LINE = re.compile(
+    r"""^\s*                    # leading ws
+        (?:Title)\s+            # Title
+        (?:[IVXLCDM]+|\d+)      # roman or digits
+        (?:\s*[-—:.]\s*.*)?     # optional delimiter + trailing words
+        \s*$                    # end
     """,
     re.IGNORECASE | re.VERBOSE,
 )
-SEC_RE = re.compile(
+_SECTION_LINE = re.compile(
     r"""^\s*
-        (?:Sec(?:tion)?\.?|\§+)\s*     # 'Sec', 'Section', '§' forms
-        (\d+[A-Za-z\-]*)               # number (allow 101, 105A)
-        (?:\s*[-—:.]\s*.*)?            # optional delimiter + trailing title
+        (?:Sec(?:tion)?\.?|§+)  # Section markers
+        \s*\d+[A-Za-z\-]*\.?    # number like 1, 101, 105A, §101.
+        (?:\s*[-—:.]\s*.*)?     # optional delimiter + trailing words
         \s*$
     """,
     re.IGNORECASE | re.VERBOSE,
 )
 
-ROMANS = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"]
-
-def _to_roman(n: int) -> str:
-    """Safe roman numeral, 1..3999 (falls back to digits if out of range)."""
-    if not isinstance(n, int) or n <= 0 or n >= 4000:
-        return str(n)
-    vals = [
-        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
-        (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
-        (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
-    ]
-    out = []
-    for v, sym in vals:
-        while n >= v:
-            out.append(sym); n -= v
-    return "".join(out)
-
-def _normalize_titles_struct(struct) -> list:
+def _bold_headings_preserve(raw_text: str, chunk_size: int = 3800) -> list[str]:
     """
-    Accepts bill['structure']['titles'] as:
-      - list[ {name, sections:[...]} ]  OR
-      - dict{ "1": {name, sections}, "2": {...} }
-    Returns a sorted list of the title objects.
-    """
-    if not struct:
-        return []
-    titles = struct.get("titles")
-    if not titles:
-        return []
-    if isinstance(titles, list):
-        return titles
-    if isinstance(titles, dict):
-        # Sort numeric keys if possible, else lexical
-        def _key(k):
-            try: return int(k)
-            except: return k
-        return [titles[k] for k in sorted(titles.keys(), key=_key)]
-    return []
-
-
-def _format_bill_for_display(b: dict) -> list[str]:
-    """
-    Return message-sized chunks with **bold** headings.
-    - If structure exists: render in dot style (Title I. … / Sec. 1. …)
-    - If only raw text: detect headings and bold the *entire original line* (no rewriting)
+    Bold only heading lines (Title/Section/§) while preserving the line EXACTLY.
+    Returns safe-sized chunks for embed descriptions.
     """
     chunks: list[str] = []
     acc = ""
 
     def flush():
         nonlocal acc
-        if acc.strip():
+        if acc:
             chunks.append(acc)
         acc = ""
 
-    struct = b.get("structure") or {}
-    titles = _normalize_titles_struct(struct)
-
-    if titles:
-        # Structure-aware, *dot style*, no em dashes
-        for t_idx, t in enumerate(titles, start=1):
-            t_label = (t.get("name") or "").strip()
-            roman = _to_roman(t_idx)
-            # Title line: Title I. General Principles
-            t_hdr = f"**Title {roman}" + (f". {t_label}**\n" if t_label else ".**\n")
-            if len(acc) + len(t_hdr) > 1800:
-                flush()
-            acc += t_hdr
-
-            sections = t.get("sections") or []
-            # Normalize sections dict→list if needed
-            if isinstance(sections, dict):
-                def _sec_key(k):
-                    try: return int(k)
-                    except: return k
-                sections = [sections[k] for k in sorted(sections.keys(), key=_sec_key)]
-            for s in sections:
-                sn = (s.get("number") or "").strip()
-                stitle = (s.get("title") or "").strip()
-                # Section line: Sec. 1. Authority
-                shdr = f"**Sec. {sn}" + (f". {stitle}**\n" if stitle else ".**\n")
-                sbody = ((s.get("text") or "").strip() + "\n\n")
-                if len(acc) + len(shdr) + len(sbody) > 1800:
-                    flush()
-                acc += shdr + sbody
-        flush()
-        return chunks
-
-    # Fallback: bold original heading lines without altering delimiters
-    raw = (b.get("text") or "").splitlines()
-    for line in raw:
-        L = line.rstrip("\n")
-        if not L.strip():
-            if len(acc) + 1 > 1800:
-                flush()
-            acc += "\n"
-            continue
-
-        if TITLE_RE.match(L) or SEC_RE.match(L):
-            L = f"**{L.strip()}**"
-
-        if len(acc) + len(L) + 1 > 1800:
+    for line in (raw_text or "").splitlines():
+        s = line.rstrip("\r\n")
+        if _TITLE_LINE.match(s) or _SECTION_LINE.match(s):
+            s = f"**{s.strip()}**"   # wrap whole line, don't alter punctuation or spacing
+        # keep blank lines and non-heading lines as-is
+        if len(acc) + len(s) + 1 > chunk_size:
             flush()
-        acc += L + "\n"
-
+        acc += s + "\n"
     flush()
     return chunks
 
@@ -1718,7 +1635,7 @@ class SpideyGov(commands.Cog):
         joint_prefix = "Joint " if b.get("joint") else ""
         head = f"{b.get('chamber','?')} {joint_prefix}{kind} {bill_id}"
 
-        # Meta embed (short fields)
+        # Meta embed (fields capped to 1024)
         meta = discord.Embed(
             title=head,
             description=(b.get("summary") or ""),
@@ -1742,15 +1659,14 @@ class SpideyGov(commands.Cog):
                 inline=False
             )
 
-        # Structured text pages with bolded headings
-        pages = _format_bill_for_display(b)
-        if not pages:
-            return await interaction.response.send_message(embed=meta, ephemeral=False)
-
-        # Send meta first
+        # Build pages by bolding only heading lines, preserving your exact text
+        pages = _bold_headings_preserve(b.get("text") or "")
         await interaction.response.send_message(embed=meta, ephemeral=False)
 
-        # Then send bill text in 4k-chunked embeds
+        if not pages:
+            return  # no body text to show
+
+        # Send the bill text as paginated description embeds (≤4096 each)
         total = len(pages)
         for i, txt in enumerate(pages, start=1):
             e = discord.Embed(
@@ -1759,6 +1675,7 @@ class SpideyGov(commands.Cog):
                 color=discord.Color.blurple()
             )
             await interaction.followup.send(embed=e)
+
 
 
     @legislature.command(name="docket", description="List active bills/resolutions by chamber")
