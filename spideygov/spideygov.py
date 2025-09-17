@@ -453,6 +453,33 @@ def normalize_registry_order(reg: dict) -> None:
             rebuilt_titles[t] = tnode
         reg["spidey_republic_code"] = rebuilt_titles
 
+def _bold_headings_single(raw_text: str, budget: int = 4000) -> str:
+    """
+    Bold only heading lines (Title/Section/§) while preserving the line EXACTLY.
+    Returns a single string trimmed to embed-safe size.
+    """
+    out = []
+    used = 0
+    for line in (raw_text or "").splitlines():
+        s = line.rstrip("\r\n")
+        if _TITLE_LINE.match(s) or _SECTION_LINE.match(s):
+            s = f"**{s.strip()}**"
+        # +1 for newline
+        need = len(s) + 1
+        if used + need > budget:
+            # graceful tail if first line is huge
+            room = max(0, budget - used - 3)
+            if room > 0:
+                if need > room:
+                    out.append(s[:room] + "...")
+                else:
+                    out.append(s)
+            break
+        out.append(s)
+        used += need
+    return "\n".join(out)
+
+
 def _get_committees_root(reg: dict) -> dict:
     # Default skeleton
     return reg.setdefault("committees", {"senate": {}, "house": {}, "joint": {}})
@@ -1635,7 +1662,7 @@ class SpideyGov(commands.Cog):
         joint_prefix = "Joint " if b.get("joint") else ""
         head = f"{b.get('chamber','?')} {joint_prefix}{kind} {bill_id}"
 
-        # Meta embed (fields capped to 1024)
+        # Meta
         meta = discord.Embed(
             title=head,
             description=(b.get("summary") or ""),
@@ -1659,22 +1686,18 @@ class SpideyGov(commands.Cog):
                 inline=False
             )
 
-        # Build pages by bolding only heading lines, preserving your exact text
-        pages = _bold_headings_preserve(b.get("text") or "")
         await interaction.response.send_message(embed=meta, ephemeral=False)
 
-        if not pages:
-            return  # no body text to show
-
-        # Send the bill text as paginated description embeds (≤4096 each)
-        total = len(pages)
-        for i, txt in enumerate(pages, start=1):
+        # Body (single embed, headings bolded)
+        body_txt = _bold_headings_single(b.get("text") or "")
+        if body_txt.strip():
             e = discord.Embed(
-                title=f"{bill_id} — Text ({i}/{total})",
-                description=txt[:4000],
+                title=f"{bill_id} — Text",
+                description=body_txt,
                 color=discord.Color.blurple()
             )
             await interaction.followup.send(embed=e)
+
 
 
 
