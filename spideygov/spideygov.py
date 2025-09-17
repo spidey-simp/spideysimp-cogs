@@ -80,12 +80,70 @@ SECTION_RE = re.compile(
     re.M
 )
 
+TITLE_RE = re.compile(
+    r"""^\s*                # leading ws
+        (?:Title)\s+        # 'Title'
+        ([IVXLCDM]+|\d+)    # roman or digits
+        (?:\s*[-—:.]\s*.*)? # optional delimiter + trailing title
+        \s*$                # end
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+SEC_RE = re.compile(
+    r"""^\s*
+        (?:Sec(?:tion)?\.?|\§+)\s*     # 'Sec', 'Section', '§' forms
+        (\d+[A-Za-z\-]*)               # number (allow 101, 105A)
+        (?:\s*[-—:.]\s*.*)?            # optional delimiter + trailing title
+        \s*$
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
 ROMANS = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"]
+
+def _to_roman(n: int) -> str:
+    """Safe roman numeral, 1..3999 (falls back to digits if out of range)."""
+    if not isinstance(n, int) or n <= 0 or n >= 4000:
+        return str(n)
+    vals = [
+        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
+        (100, "C"), (90, "XC"), (50, "L"), (40, "XL"),
+        (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+    ]
+    out = []
+    for v, sym in vals:
+        while n >= v:
+            out.append(sym); n -= v
+    return "".join(out)
+
+def _normalize_titles_struct(struct) -> list:
+    """
+    Accepts bill['structure']['titles'] as:
+      - list[ {name, sections:[...]} ]  OR
+      - dict{ "1": {name, sections}, "2": {...} }
+    Returns a sorted list of the title objects.
+    """
+    if not struct:
+        return []
+    titles = struct.get("titles")
+    if not titles:
+        return []
+    if isinstance(titles, list):
+        return titles
+    if isinstance(titles, dict):
+        # Sort numeric keys if possible, else lexical
+        def _key(k):
+            try: return int(k)
+            except: return k
+        return [titles[k] for k in sorted(titles.keys(), key=_key)]
+    return []
+
 
 def _format_bill_for_display(b: dict) -> list[str]:
     """
-    Return a list of message-sized chunks with **bolded** Title/Section headings.
-    Uses bill["structure"] if present, else falls back to raw text with light heading detection.
+    Return message-sized chunks with **bold** headings.
+    - If structure exists: render in dot style (Title I. … / Sec. 1. …)
+    - If only raw text: detect headings and bold the *entire original line* (no rewriting)
     """
     chunks: list[str] = []
     acc = ""
@@ -97,47 +155,58 @@ def _format_bill_for_display(b: dict) -> list[str]:
         acc = ""
 
     struct = b.get("structure") or {}
-    titles = struct.get("titles") or []
+    titles = _normalize_titles_struct(struct)
 
     if titles:
-        # Structure-aware pretty print
+        # Structure-aware, *dot style*, no em dashes
         for t_idx, t in enumerate(titles, start=1):
-            t_label = t.get("name") or ""
-            t_hdr = f"**Title {ROMANS[t_idx-1] if t_idx-1 < len(ROMANS) else t_idx} — {t_label}**\n"
-            if len(acc) + len(t_hdr) > 1800: flush()
+            t_label = (t.get("name") or "").strip()
+            roman = _to_roman(t_idx)
+            # Title line: Title I. General Principles
+            t_hdr = f"**Title {roman}" + (f". {t_label}**\n" if t_label else ".**\n")
+            if len(acc) + len(t_hdr) > 1800:
+                flush()
             acc += t_hdr
 
             sections = t.get("sections") or []
+            # Normalize sections dict→list if needed
+            if isinstance(sections, dict):
+                def _sec_key(k):
+                    try: return int(k)
+                    except: return k
+                sections = [sections[k] for k in sorted(sections.keys(), key=_sec_key)]
             for s in sections:
-                sn = s.get("number") or ""
-                stitle = s.get("title") or ""
-                shdr = f"**Sec. {sn} — {stitle}**\n"
-                sbody = (s.get("text") or "").strip() + "\n\n"
-                if len(acc) + len(shdr) + len(sbody) > 1800:  # keep slack for embed limits
+                sn = (s.get("number") or "").strip()
+                stitle = (s.get("title") or "").strip()
+                # Section line: Sec. 1. Authority
+                shdr = f"**Sec. {sn}" + (f". {stitle}**\n" if stitle else ".**\n")
+                sbody = ((s.get("text") or "").strip() + "\n\n")
+                if len(acc) + len(shdr) + len(sbody) > 1800:
                     flush()
                 acc += shdr + sbody
         flush()
         return chunks
 
-    # Fallback: bold typical heading patterns in raw text
-    import re
+    # Fallback: bold original heading lines without altering delimiters
     raw = (b.get("text") or "").splitlines()
     for line in raw:
-        L = line.strip()
-        if not L:
+        L = line.rstrip("\n")
+        if not L.strip():
+            if len(acc) + 1 > 1800:
+                flush()
             acc += "\n"
             continue
-        if re.match(r"^(Title\s+[IVXLC]+(?:\s*[-—]\s*.+)?)$", L, re.IGNORECASE):
-            L = f"**{L}**"
-        elif re.match(r"^(Sec(?:tion)?\.?\s*\d+[A-Za-z\-]*\s*(?:[-—]\s*.+)?)$", L, re.IGNORECASE):
-            L = f"**{L}**"
-        elif re.match(r"^(§+\s*\d+[A-Za-z\-]*\s*(?:[-—]\s*.+)?)$", L):
-            L = f"**{L}**"
+
+        if TITLE_RE.match(L) or SEC_RE.match(L):
+            L = f"**{L.strip()}**"
+
         if len(acc) + len(L) + 1 > 1800:
             flush()
         acc += L + "\n"
+
     flush()
     return chunks
+
 
 
 def parse_sections_from_text(text: str):
