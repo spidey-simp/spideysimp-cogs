@@ -796,7 +796,7 @@ class SpideyCourts(commands.Cog):
         thread_id = doc.get("thread_id")
         channel_id = thread_id or ch_id
         guild_id = getattr(self.bot.guilds[0], "id", 0) if self.bot.guilds else 0
-        return f"https://discord.com/channels/{guild_id}/{channel_id}/{msg_id}"
+        return f"https://discord.com/channels/{channel_id}/{msg_id}"
 
     def _format_docket_lines(self, case_number: str, case: dict, viewer: discord.Member) -> list[str]:
         """Build per-entry lines (newest first). Keeps exhibits under their parent."""
