@@ -1295,17 +1295,19 @@ class SpideyCourts(commands.Cog):
 
         # Header: caption, counsel, venue, judge (names)
         guild = interaction.guild
+        await self._normalize_case(guild, case)
         venue_name = VENUE_NAMES.get(case.get("venue"), case.get("venue"))
         judge = await self.try_get_display_name(guild, case.get("judge_id")) or case.get("judge") or "Unknown"
 
         counsel_pl = None
         counsel_df = None
         cor = case.get("counsel_of_record", {})
-        if cor:
-            pid = cor.get("plaintiff")
-            did = cor.get("defendant")
-            counsel_pl = await self.try_get_display_name(guild, int(pid)) if pid else None
-            counsel_df = await self.try_get_display_name(guild, int(did)) if did else None
+        pl_id = self._coerce_user_id(case.get("plaintiff"))
+        df_id = self._coerce_user_id(case.get("defendant"))
+        if pl_id and str(pl_id) in cor:
+            counsel_pl = await self.try_get_display_name(guild, int(cor[str(pl_id)]))
+        if df_id and str(df_id) in cor:
+            counsel_df = await self.try_get_display_name(guild, int(cor[str(df_id)]))
 
         caption = await self._caption_from_parties(guild, case)
 
