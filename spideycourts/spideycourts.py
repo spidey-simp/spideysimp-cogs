@@ -1246,6 +1246,7 @@ class SpideyCourts(commands.Cog):
             return None
 
 
+    @court.autocomplete("case_number")
     async def case_autocomplete(self, interaction: discord.Interaction, current: str):
         """
         Autocomplete case picker:
