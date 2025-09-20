@@ -1230,58 +1230,93 @@ class SpideyCourts(commands.Cog):
                 self.bot, venue, plaintiff, defendant, criminal=criminal, government=government
             )
         )
+    
+    def _coerce_user_id(self, value) -> int | None:
+        """Return an int user id if value looks like one (raw int/str/mention), else None."""
+        if value is None:
+            return None
+        try:
+            s = str(value).strip()
+            if s.startswith("<@") and s.endswith(">"):
+                # <@123> or <@!123>
+                digits = "".join(ch for ch in s if ch.isdigit())
+                return int(digits) if digits else None
+            return int(s)
+        except Exception:
+            return None
 
-    async def case_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        """Autocomplete for case numbers where the user is a party or counsel."""
-        matches = []
 
-        for case_number, case_data in self.court_data.items():
-            user_id = interaction.user.id
+    async def case_autocomplete(self, interaction: discord.Interaction, current: str):
+        """
+        Autocomplete case picker:
+        - normalizes case to ensure `parties` exists
+        - builds a caption via _caption_from_parties
+        - searches number, caption, party names, and counsel_of_record display names
+        """
+        current_l = (current or "").lower()
+        results = []
 
-            # Ensure ID lists for additional parties
-            additional_plaintiffs = case_data.get("additional_plaintiffs", [])
-            additional_defendants = case_data.get("additional_defendants", [])
+        # Safety: Discord requires you return <= 25 choices
+        MAX_CHOICES = 25
 
-            if isinstance(additional_plaintiffs, list) and isinstance(additional_defendants, list):
-                # Only include cases where user is relevant
-                is_relevant = (
-                    user_id == case_data.get("plaintiff") or
-                    user_id == case_data.get("defendant") or
-                    user_id == case_data.get("counsel_for_plaintiff") or
-                    user_id == case_data.get("counsel_for_defendant") or
-                    user_id == case_data.get("judge_id") or
-                    str(user_id) in additional_plaintiffs or
-                    str(user_id) in additional_defendants
+        for case_number, case in self.court_data.items():
+            if case_number.startswith("_") or not isinstance(case, dict):
+                continue
+
+            # Ensure we have parties for captioning/search
+            try:
+                await self._normalize_case(interaction.guild, case)
+            except Exception:
+                # Skip malformed records rather than breaking autocomplete
+                continue
+
+            # Caption (single source of truth)
+            try:
+                caption = await self._caption_from_parties(interaction.guild, case)
+            except Exception:
+                caption = "Unknown v. Unknown"
+
+            # Collect searchable text: case number + caption + party names + counsel names
+            haystack_parts = [case_number.lower(), caption.lower()]
+
+            # Parties
+            parties = case.get("parties", {})
+            for side in ("plaintiffs", "defendants"):
+                for p in parties.get(side, []) or []:
+                    name = p.get("name") or ""
+                    if name:
+                        haystack_parts.append(name.lower())
+
+            # Counsel of record (new model)
+            cor = case.get("counsel_of_record", {}) or {}
+            counsel_names = []
+            for party_id_str, lawyer_id in cor.items():
+                lid = self._coerce_user_id(lawyer_id)
+                if lid:
+                    disp = await self.try_get_display_name(interaction.guild, lid)
+                    if disp:
+                        counsel_names.append(disp.lower())
+            haystack_parts.extend(counsel_names)
+
+            # Legacy counsel fields (keep compatibility)
+            for legacy_key in ("counsel_for_plaintiff", "counsel_for_defendant"):
+                lid = self._coerce_user_id(case.get(legacy_key))
+                if lid:
+                    disp = await self.try_get_display_name(interaction.guild, lid)
+                    if disp:
+                        haystack_parts.append(disp.lower())
+
+            haystack = " | ".join(haystack_parts)
+
+            if not current_l or current_l in haystack:
+                # Label shows caption and number; value is the number
+                results.append(
+                    app_commands.Choice(name=f"{caption}, {case_number}", value=case_number)
                 )
+                if len(results) >= MAX_CHOICES:
+                    break
+        return results
 
-                if is_relevant and (current.lower() in case_number.lower() or current.lower() in f"{case_data.get('plaintiff', 'Unknown')} v. {case_data.get('defendant', 'Unknown')} {case_number.lower()}".lower()):
-                    # Try resolving names for nicer autocomplete display
-                    plaintiff_name = str(case_data.get("plaintiff", "Unknown"))
-                    defendant_name = str(case_data.get("defendant", "Unknown"))
-                    guild = interaction.guild
-                    try:
-                        plaintiff_member = guild.get_member(case_data["plaintiff"]) or await guild.fetch_member(case_data["plaintiff"])
-                        plaintiff_name = plaintiff_member.display_name
-                    except Exception:
-                        pass
-
-                    try:
-                        defendant_member = guild.get_member(case_data["defendant"]) or await guild.fetch_member(case_data["defendant"])
-                        defendant_name = defendant_member.display_name
-                    except Exception:
-                        pass
-
-                    matches.append(
-                        app_commands.Choice(
-                            name=f"{plaintiff_name} v. {defendant_name}, {case_number}",
-                            value=case_number
-                        )
-                    )
-
-            if len(matches) >= 25:
-                break
-
-        return matches
     
     @court.command(name="view_docket", description="View the docket for a case (paginated).")
     @app_commands.autocomplete(case_number=case_autocomplete)
