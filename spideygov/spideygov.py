@@ -20,8 +20,8 @@ SENATORS = 1327053499405701142
 REPRESENTATIVES = 1327053334036742215
 SENATE = 1302330234422562887
 HOUSE = 1302330037365772380
-SPEAKER_OF_THE_HOUSE = 1417354264795418664
-SENATE_MAJORITY_LEADER = 1417354436472344586
+SENATE_MAJORITY_LEADER = 1417354264795418664
+SPEAKER_OF_THE_HOUSE = 1417354436472344586
 SPIDEY_HOUSE = 1302330503399084144
 
 CITIZENSHIP = {
@@ -2053,79 +2053,7 @@ class SpideyGov(commands.Cog):
 
 
 
-    @legislature.command(name="create_committee", description="Create a congressional committee or subcommittee")
-    @app_commands.checks.has_any_role(SENATE_MAJORITY_LEADER, SPEAKER_OF_THE_HOUSE)
-    @app_commands.describe(
-        name="The name of the committee",
-        committee_type="Type (standing, select, joint, special, ad_hoc)",
-        chair="Chair of the Committee",
-        sub_committee="Is this a subcommittee?",
-        parent_committee="If a subcommittee, the parent committee (key from autocomplete)"
-    )
-    @app_commands.autocomplete(parent_committee=parent_committee_autocomplete)
-    @app_commands.choices(committee_type=[
-        app_commands.Choice(name="Standing", value="standing"),
-        app_commands.Choice(name="Select", value="select"),
-        app_commands.Choice(name="Joint", value="joint"),
-        app_commands.Choice(name="Special", value="special"),
-        app_commands.Choice(name="Ad hoc", value="ad_hoc"),
-    ])
-    async def create_committee(
-        self,
-        interaction: discord.Interaction,
-        name: str,
-        committee_type: str | str = "standing",
-        *,
-        chair: discord.Member,
-        sub_committee: bool = False,
-        parent_committee: str | None = None,
-    ):
-        # normalize choice -> str
-        ctype = committee_type.value if isinstance(committee_type, app_commands.Choice) else committee_type
-
-        # decide bucket (senate/house or joint)
-        user_role_ids = {r.id for r in getattr(interaction.user, "roles", [])}
-        chamber = "joint" if ctype == "joint" else ("senate" if SENATE_MAJORITY_LEADER in user_role_ids else "house")
-
-        reg = self.federal_registry
-        committees = reg.setdefault("committees", {"senate": {}, "house": {}, "joint": {}})
-        chamber_committees = committees.setdefault(chamber, {})
-
-        key = name.strip().lower().replace(" ", "_")
-        if key in chamber_committees:
-            return await interaction.response.send_message("A committee with that name already exists.", ephemeral=True)
-
-        # parent/child rules
-        if sub_committee and not parent_committee:
-            return await interaction.response.send_message("A parent committee must be specified for a subcommittee.", ephemeral=True)
-
-        if parent_committee:
-            parent_key = parent_committee.strip().lower()
-            parent = chamber_committees.get(parent_key)
-            if not parent:
-                return await interaction.response.send_message("The specified parent committee does not exist.", ephemeral=True)
-            if not sub_committee:
-                return await interaction.response.send_message("Only subcommittees can have a parent committee.", ephemeral=True)
-
-        # build record
-        record = {
-            "name": name,
-            "type": ctype,
-            "chair_id": chair.id,
-            "members": [chair.id],
-            "created_at": discord.utils.utcnow().isoformat(),
-            "created_by": interaction.user.id,
-        }
-
-        if sub_committee:
-            parent = chamber_committees[parent_key]  # from above
-            parent.setdefault("sub_committees", {})[key] = record
-        else:
-            chamber_committees[key] = {**record, "sub_committees": {}}
-
-        save_federal_registry(reg)
-        where = "Joint" if chamber == "joint" else chamber.title()
-        await interaction.response.send_message(f"✅ Created committee '{name}' in the {where}.", ephemeral=True)
+    
 
     @legislature.command(name="view_committees", description="View the Congressional Committees")
     @app_commands.describe(filter="Narrow to specific body")
@@ -2373,25 +2301,71 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-    @legislature.command(name="committee_manage", description="Add/remove members, set chair, or bulk-appoint by role")
+
+    # --- new helper: parent-committee autocomplete that respects the chosen chamber ---
+    async def parent_committee_by_chamber_autocomplete(self, interaction: discord.Interaction, current: str):
+        """Autocomplete ONLY top-level committees for the chamber option in the same command."""
+        reg = self.federal_registry
+        committees = _get_committees_root(reg)
+
+        ns = interaction.namespace
+        chamber = getattr(ns, "chamber", None)
+        if isinstance(chamber, app_commands.Choice):
+            chamber = chamber.value
+        if chamber not in {"senate", "house", "joint"}:
+            return []
+
+        cur = (current or "").lower()
+        out: list[app_commands.Choice[str]] = []
+        bucket = committees.get(chamber, {})
+        for key, data in sorted(bucket.items(), key=lambda kv: kv[0]):
+            label = (data.get("name") or key.replace("_", " ").title()).strip()
+            if not cur or cur in label.lower():
+                out.append(app_commands.Choice(name=label, value=key))
+        return out[:25]
+
+
+    @legislature.command(name="committee_manage", description="Create/delete committees; add/remove members; set chair; bulk-appoint")
     @app_commands.choices(chamber=[
         app_commands.Choice(name="Senate", value="senate"),
         app_commands.Choice(name="House", value="house"),
         app_commands.Choice(name="Joint", value="joint"),
     ])
     @app_commands.choices(action=[
+        app_commands.Choice(name="Create committee", value="create"),
+        app_commands.Choice(name="Delete committee", value="delete"),
         app_commands.Choice(name="Add member", value="add_member"),
         app_commands.Choice(name="Remove member", value="remove_member"),
         app_commands.Choice(name="Set chair", value="set_chair"),
         app_commands.Choice(name="Bulk add by role", value="bulk_add_role"),
     ])
-    @app_commands.autocomplete(name=committee_name_autocomplete)
+    @app_commands.choices(committee_type=[
+        app_commands.Choice(name="Standing", value="standing"),
+        app_commands.Choice(name="Select", value="select"),
+        app_commands.Choice(name="Joint", value="joint"),
+        app_commands.Choice(name="Special", value="special"),
+        app_commands.Choice(name="Ad hoc", value="ad_hoc"),
+    ])
+    @app_commands.autocomplete(
+        # For operations targeting an existing committee/subcommittee
+        name=committee_name_autocomplete,
+        # For CREATE subcommittee parent selection (top-level only)
+        parent_committee=parent_committee_by_chamber_autocomplete
+    )
     @app_commands.describe(
         chamber="Body",
-        name="Committee or subcommittee (autocomplete)",
         action="What to do",
-        member="Target user (required for add/remove/set chair)",
-        role="Role to bulk-appoint (required for bulk add)",
+        # For CREATE/DELETE and for member operations targeting a specific (sub)committee
+        name="Committee or subcommittee (autocomplete; for delete/member ops)",
+        # CREATE fields:
+        new_name="For CREATE: new committee name (ignored for other actions)",
+        committee_type="For CREATE: type of committee (default standing)",
+        chair="For CREATE/SET CHAIR: the chair",
+        sub_committee="For CREATE: mark as a subcommittee",
+        parent_committee="For CREATE(subcommittee): pick the parent (top-level only)",
+        # Membership management:
+        member="For add/remove/set chair: target user",
+        role="For bulk add by role",
         as_chair="When adding: also make this member the chair",
         force="When removing: allow removing the current chair"
     )
@@ -2399,8 +2373,16 @@ class SpideyGov(commands.Cog):
         self,
         interaction: discord.Interaction,
         chamber: str,
-        name: str,
         action: str,
+        name: str | None = None,
+        *,
+        # CREATE fields
+        new_name: str | None = None,
+        committee_type: str | None = None,
+        chair: discord.Member | None = None,
+        sub_committee: bool = False,
+        parent_committee: str | None = None,
+        # membership ops
         member: discord.Member | None = None,
         role: discord.Role | None = None,
         as_chair: bool = False,
@@ -2409,68 +2391,141 @@ class SpideyGov(commands.Cog):
         act = action.value
         ch = chamber.value
 
-        # perms
+        # perms: chamber leader or admin
         if not _is_chamber_leader(interaction.user, ch):
             return await interaction.response.send_message("Only the chamber leader may manage committees.", ephemeral=True)
 
-        # resolve node
         reg = self.federal_registry
-        parent, node = _resolve_committee_node(reg, ch, name)
-        if not node:
-            return await interaction.response.send_message("Committee not found.", ephemeral=True)
+        committees = _get_committees_root(reg)
+        bucket = committees.setdefault(ch, {})
 
-        # validate args per action
-        if act in {"add_member", "remove_member", "set_chair"} and member is None:
-            return await interaction.response.send_message("Please specify a member.", ephemeral=True)
-        if act == "bulk_add_role" and role is None:
-            return await interaction.response.send_message("Please specify a role.", ephemeral=True)
+        # ---------- CREATE ----------
+        if act == "create":
+            ctype = (committee_type.value if isinstance(committee_type, app_commands.Choice) else (committee_type or "standing")).strip().lower()
+            # If user selected 'Joint' type, normalize bucket to 'joint'
+            target_bucket_key = "joint" if ctype == "joint" else ch
+            bucket = committees.setdefault(target_bucket_key, {})
 
-        # perform
-        async with getattr(self, "registry_lock", asyncio.Lock()):
-            if act == "add_member":
-                _add_member(node, member.id)
-                if as_chair:
-                    node["chair_id"] = member.id
+            if not new_name:
+                return await interaction.response.send_message("Please provide `new_name` for the committee.", ephemeral=True)
+            if not chair:
+                return await interaction.response.send_message("Please specify a `chair` for the new committee.", ephemeral=True)
+
+            key = new_name.strip().lower().replace(" ", "_")
+            if sub_committee:
+                if not parent_committee:
+                    return await interaction.response.send_message("Select a `parent_committee` for a subcommittee.", ephemeral=True)
+                parent_key = parent_committee.strip().lower()
+                parent = bucket.get(parent_key)
+                if not parent:
+                    return await interaction.response.send_message("The specified parent committee does not exist in this chamber.", ephemeral=True)
+                parent.setdefault("sub_committees", {})
+                if key in parent["sub_committees"]:
+                    return await interaction.response.send_message("A subcommittee with that name already exists under the parent.", ephemeral=True)
+                parent["sub_committees"][key] = {
+                    "name": new_name,
+                    "type": ctype,
+                    "chair_id": chair.id,
+                    "members": [chair.id],
+                    "created_at": discord.utils.utcnow().isoformat(),
+                    "created_by": interaction.user.id,
+                }
                 save_federal_registry(reg)
-                role_note = " (Chair)" if as_chair else ""
-                msg = f"✅ Appointed {member.mention}{role_note} to **{node.get('name','(unnamed)')}**."
-
-            elif act == "remove_member":
-                chair_id = node.get("chair_id")
-                if chair_id == member.id and not force:
-                    return await interaction.response.send_message(
-                        "That member is the chair. Use `force=True` or set a new chair first.", ephemeral=True
-                    )
-                members = set(node.get("members") or [])
-                if member.id in members:
-                    members.remove(member.id)
-                    node["members"] = sorted(members)
-                if chair_id == member.id:
-                    node["chair_id"] = None
-                save_federal_registry(reg)
-                msg = f"✅ Removed {member.mention} from **{node.get('name','(unnamed)')}**."
-
-            elif act == "set_chair":
-                node["chair_id"] = member.id
-                _add_member(node, member.id)
-                save_federal_registry(reg)
-                msg = f"✅ {member.mention} set as Chair of **{node.get('name','(unnamed)')}**."
-
-            elif act == "bulk_add_role":
-                added = 0
-                for m in role.members:
-                    if m.bot:
-                        continue
-                    if _add_member(node, m.id):
-                        added += 1
-                save_federal_registry(reg)
-                msg = f"✅ Appointed **{added}** members from {role.mention} to **{node.get('name','(unnamed)')}**."
-
+                where = "Joint" if target_bucket_key == "joint" else target_bucket_key.title()
+                return await interaction.response.send_message(f"✅ Created subcommittee **{new_name}** under **{parent.get('name','(parent)')}** ({where}).", ephemeral=True)
             else:
-                return await interaction.response.send_message("Unknown action.", ephemeral=True)
+                if key in bucket:
+                    return await interaction.response.send_message("A committee with that name already exists.", ephemeral=True)
+                bucket[key] = {
+                    "name": new_name,
+                    "type": ctype,
+                    "chair_id": chair.id,
+                    "members": [chair.id],
+                    "sub_committees": {},
+                    "created_at": discord.utils.utcnow().isoformat(),
+                    "created_by": interaction.user.id,
+                }
+                save_federal_registry(reg)
+                where = "Joint" if target_bucket_key == "joint" else target_bucket_key.title()
+                return await interaction.response.send_message(f"✅ Created committee **{new_name}** ({where}).", ephemeral=True)
 
-        where = chamber.name.title()
-        await interaction.response.send_message(f"{msg} ({where})", ephemeral=True)
+        # For the rest, we need an existing target (except bulk_add_role which still needs name)
+        if not name and act != "bulk_add_role":
+            return await interaction.response.send_message("Please specify `name` (committee or subcommittee).", ephemeral=True)
+
+        # Resolve committee or subcommittee for actions that target an existing node
+        parent, node = _resolve_committee_node(reg, ch, name) if name else (None, None)
+
+        # ---------- DELETE ----------
+        if act == "delete":
+            if not node:
+                return await interaction.response.send_message("Committee not found.", ephemeral=True)
+            if parent:
+                # deleting a subcommittee
+                parent_key, sub_key = name.split("::", 1)
+                subs = parent.get("sub_committees") or {}
+                subs.pop(sub_key, None)
+                save_federal_registry(reg)
+                return await interaction.response.send_message(f"🗑️ Deleted subcommittee **{node.get('name','(unnamed)')}**.", ephemeral=True)
+            else:
+                # deleting a top-level committee
+                bucket.pop(name, None)
+                save_federal_registry(reg)
+                return await interaction.response.send_message(f"🗑️ Deleted committee **{(node or {}).get('name','(unnamed)')}**.", ephemeral=True)
+
+        # ---------- ADD MEMBER ----------
+        if act == "add_member":
+            if not node or not member:
+                return await interaction.response.send_message("Pick a committee and a member to add.", ephemeral=True)
+            _add_member(node, member.id)
+            if as_chair:
+                node["chair_id"] = member.id
+            save_federal_registry(reg)
+            role_note = " (Chair)" if as_chair else ""
+            return await interaction.response.send_message(f"✅ Appointed {member.mention}{role_note} to **{node.get('name','(unnamed)')}**.", ephemeral=True)
+
+        # ---------- REMOVE MEMBER ----------
+        if act == "remove_member":
+            if not node or not member:
+                return await interaction.response.send_message("Pick a committee and a member to remove.", ephemeral=True)
+            chair_id = node.get("chair_id")
+            if chair_id == member.id and not force:
+                return await interaction.response.send_message("That member is the chair. Use `force=True` or set a new chair first.", ephemeral=True)
+            members = set(node.get("members") or [])
+            if member.id in members:
+                members.remove(member.id)
+                node["members"] = sorted(members)
+            if chair_id == member.id:
+                node["chair_id"] = None
+            save_federal_registry(reg)
+            return await interaction.response.send_message(f"✅ Removed {member.mention} from **{node.get('name','(unnamed)')}**.", ephemeral=True)
+
+        # ---------- SET CHAIR ----------
+        if act == "set_chair":
+            if not node or not chair:
+                return await interaction.response.send_message("Pick a committee and specify a `chair`.", ephemeral=True)
+            node["chair_id"] = chair.id
+            _add_member(node, chair.id)
+            save_federal_registry(reg)
+            return await interaction.response.send_message(f"✅ {chair.mention} set as Chair of **{node.get('name','(unnamed)')}**.", ephemeral=True)
+
+        # ---------- BULK ADD BY ROLE ----------
+        if act == "bulk_add_role":
+            if not name or not role:
+                return await interaction.response.send_message("Specify `name` (committee) and a `role` to bulk add.", ephemeral=True)
+            if not node:
+                return await interaction.response.send_message("Committee not found.", ephemeral=True)
+            added = 0
+            for m in role.members:
+                if m.bot:
+                    continue
+                if _add_member(node, m.id):
+                    added += 1
+            save_federal_registry(reg)
+            return await interaction.response.send_message(f"✅ Appointed **{added}** members from {role.mention} to **{node.get('name','(unnamed)')}**.", ephemeral=True)
+
+        return await interaction.response.send_message("Unknown action.", ephemeral=True)
+
     
     @legislature.command(name="report_bill", description="Introduce, vote, transmit, enroll, or present a bill")
     @app_commands.autocomplete(bill_id=bill_id_autocomplete)
