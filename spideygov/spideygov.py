@@ -124,6 +124,12 @@ def _bold_headings_preserve(raw_text: str, chunk_size: int = 3800) -> list[str]:
     flush()
     return chunks
 
+def _choice_val(x):
+    """Return .value for app_commands.Choice, else the string as-is (or None)."""
+    try:
+        return x.value  # Choice
+    except AttributeError:
+        return x        # already a str or None
 
 
 def parse_sections_from_text(text: str):
@@ -2372,24 +2378,24 @@ class SpideyGov(commands.Cog):
     async def committee_manage(
         self,
         interaction: discord.Interaction,
-        chamber: str,
-        action: str,
+        chamber: str,                      # keep as str in signature
+        action: str,                       # keep as str in signature
         name: str | None = None,
         *,
-        # CREATE fields
         new_name: str | None = None,
-        committee_type: str | None = None,
+        committee_type: str | None = None, # keep as str in signature
         chair: discord.Member | None = None,
         sub_committee: bool = False,
         parent_committee: str | None = None,
-        # membership ops
         member: discord.Member | None = None,
         role: discord.Role | None = None,
         as_chair: bool = False,
         force: bool = False,
     ):
-        act = action.value
-        ch = chamber.value
+        act = (_choice_val(action) or "").lower()
+        ch  = (_choice_val(chamber) or "").lower()
+        ctype = (_choice_val(committee_type) or "standing").lower()
+
 
         # perms: chamber leader or admin
         if not _is_chamber_leader(interaction.user, ch):
