@@ -1248,61 +1248,70 @@ class SpideyCourts(commands.Cog):
 
     # put this near the top of class SpideyCourts
     async def case_autocomplete(self, interaction: discord.Interaction, current: str):
-        """Return up to 25 choices for case_number."""
-        try:
-            current_l = (current or "").lower()
-            choices = []
-            for case_number, case in self.court_data.items():
-                if not isinstance(case, dict) or case_number.startswith("_"):
-                    continue
+        """
+        Ultra-fast autocomplete:
+        - zero awaits in the loop (no guild fetches, no normalization)
+        - derives a caption from stored fields only
+        - searches case number, caption text, visible party names, and raw COR IDs
+        """
+        q = (current or "").lower()
+        out = []
+        MAX_CHOICES = 25
 
-                # Normalize to ensure 'parties' exists
-                try:
-                    await self._normalize_case(interaction.guild, case)
-                except Exception:
-                    continue
+        def name_from_value(v):
+            # Show something readable without network calls
+            if v is None:
+                return "Unknown"
+            s = str(v)
+            if s.isdigit():
+                return f"<@{s}>"
+            return s
 
-                # Build caption once
-                try:
-                    caption = await self._caption_from_parties(interaction.guild, case)
-                except Exception:
-                    caption = "Unknown v. Unknown"
+        def fast_caption(case: dict) -> str:
+            cap = (case.get("caption") or {}).copy()
+            style = (cap.get("style") or "v").lower()
 
-                hay = [case_number.lower(), caption.lower()]
+            # Prefer prebuilt party names if present (they're already strings)
+            parties = case.get("parties") or {}
+            pls = parties.get("plaintiffs") or []
+            dfs = parties.get("defendants") or []
 
-                # Parties
-                parties = case.get("parties", {})
-                for side in ("plaintiffs", "defendants"):
-                    for p in parties.get(side, []) or []:
-                        n = (p.get("name") or "").lower()
-                        if n:
-                            hay.append(n)
+            if style == "in_re":
+                left = cap.get("left") or (pls[0].get("name") if pls else None) or name_from_value(case.get("plaintiff"))
+                return f"In re {left or 'Matter'}"
 
-                # Counsel of record
-                for _, lawyer_id in (case.get("counsel_of_record") or {}).items():
-                    lid = self._coerce_user_id(lawyer_id)
-                    if lid:
-                        disp = await self.try_get_display_name(interaction.guild, lid)
-                        if disp:
-                            hay.append(disp.lower())
+            left = cap.get("left") or (pls[0].get("name") if pls else None) or name_from_value(case.get("plaintiff"))
+            right = cap.get("right") or (dfs[0].get("name") if dfs else None) or name_from_value(case.get("defendant"))
+            return f"{left or 'Unknown'} v. {right or 'Unknown'}"
 
-                # Legacy per-side counsel (fallback)
-                for leg in ("counsel_for_plaintiff", "counsel_for_defendant"):
-                    lid = self._coerce_user_id(case.get(leg))
-                    if lid:
-                        disp = await self.try_get_display_name(interaction.guild, lid)
-                        if disp:
-                            hay.append(disp.lower())
+        for case_number, case in self.court_data.items():
+            if not isinstance(case, dict) or case_number.startswith("_"):
+                continue
 
-                if (not current_l) or (current_l in " | ".join(hay)):
-                    choices.append(app_commands.Choice(name=f"{caption}, {case_number}", value=case_number))
-                    if len(choices) >= 25:
-                        break
+            cap = fast_caption(case)
 
-            return choices
-        except Exception:
-            # Never throw from autocomplete; just return nothing
-            return []
+            # Build a tiny haystack (all local strings; no awaits)
+            hay = [case_number.lower(), cap.lower()]
+
+            # Party names if already stored
+            parties = case.get("parties") or {}
+            for side in ("plaintiffs", "defendants"):
+                for p in parties.get(side, []) or []:
+                    n = (p.get("name") or "").lower()
+                    if n: hay.append(n)
+
+            # Raw counsel-of-record IDs (we skip display lookups to stay fast)
+            for _, lawyer_id in (case.get("counsel_of_record") or {}).items():
+                s = str(lawyer_id)
+                if s: hay.append(s.lower())
+
+            if not q or any(q in chunk for chunk in hay):
+                out.append(app_commands.Choice(name=f"{cap}, {case_number}", value=case_number))
+                if len(out) >= MAX_CHOICES:
+                    break
+
+        return out
+
 
 
     
