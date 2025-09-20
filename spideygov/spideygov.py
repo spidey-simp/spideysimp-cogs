@@ -2161,7 +2161,7 @@ class SpideyGov(commands.Cog):
     async def committee_info(self, interaction: discord.Interaction, chamber: str, name: str):
         reg = self.federal_registry
         committees = _get_committees_root(reg)
-        bucket = committees.get(chamber.value, {})
+        bucket = committees.get(chamber, {})
 
         # Resolve committee vs subcommittee from encoded value
         parent_key = None
