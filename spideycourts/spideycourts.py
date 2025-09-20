@@ -1259,13 +1259,19 @@ class SpideyCourts(commands.Cog):
         MAX_CHOICES = 25
 
         def name_from_value(v):
-            # Show something readable without network calls
+            """Fast, non-mention label for a party value."""
             if v is None:
                 return "Unknown"
-            s = str(v)
+            s = str(v).strip()
+            # If it's a user id, try guild cache for display_name; never return a mention
             if s.isdigit():
-                return f"<@{s}>"
+                mem = interaction.guild.get_member(int(s))
+                if mem:
+                    return mem.display_name  # cached, instant
+                return f"User {s}"  # fallback when not in cache / no intents
+            # If it's already a saved string (org/class/state), keep it
             return s
+
 
         def fast_caption(case: dict) -> str:
             cap = (case.get("caption") or {}).copy()
