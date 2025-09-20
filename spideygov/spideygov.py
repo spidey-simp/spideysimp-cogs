@@ -1045,21 +1045,24 @@ class ExecutiveOrderModal(discord.ui.Modal, title="New Executive Order"):
         reg = self.parent.federal_registry
         store = reg.setdefault("executive_orders", {}).setdefault("items", {})
 
-        # assign EO number (simple annual counter)
         from datetime import datetime
         yr = datetime.utcnow().year
         seq = reg.setdefault("executive_orders", {}).setdefault("seq", {}).get(str(yr), 0) + 1
         reg["executive_orders"]["seq"][str(yr)] = seq
         eo_id = f"EO-{yr}-{seq:04d}"
 
-        # parse sections
-        sections = _parse_sections_from_text(str(self.eo_body))
+        # FIX: pull .value for all inputs
+        title = (self.eo_title.value or "").strip()
+        summary = (self.eo_summary.value or "").strip()
+        body = (self.eo_body.value or "")
+
+        sections = _parse_sections_from_text(body)
 
         order = {
             "id": eo_id,
-            "title": str(self.eo_title).strip(),
-            "summary": str(self.eo_summary).strip(),
-            "text": str(self.eo_body),
+            "title": title,
+            "summary": summary,
+            "text": body,
             "structure": {"titles": [{"name": "Executive Order", "sections": sections}]},
             "issued_by": interaction.user.id,
             "issued_at": discord.utils.utcnow().isoformat(),
@@ -1068,16 +1071,10 @@ class ExecutiveOrderModal(discord.ui.Modal, title="New Executive Order"):
         store[eo_id] = order
         save_federal_registry(reg)
 
-        # post in White House channel, nicely formatted
         wh = interaction.client.get_channel(SPIDEY_HOUSE)
         pages = _format_eo_for_display(order)
         if wh:
-            # header
-            head = discord.Embed(
-                title=f"{eo_id} — {order['title']}",
-                description=(order.get("summary") or ""),
-                color=discord.Color.dark_gold()
-            )
+            head = discord.Embed(title=f"{eo_id} — {order['title']}", description=(order.get("summary") or ""), color=discord.Color.dark_gold())
             await wh.send(embed=head)
             for p in pages:
                 await wh.send(embed=discord.Embed(description=p[:4000], color=discord.Color.dark_gold()))
@@ -1424,7 +1421,7 @@ class SpideyGov(commands.Cog):
         app_commands.Choice(name="User Themed", value="user_themed"),
     ])
     async def view_category_info(self, interaction: discord.Interaction, category: str):
-        cat_key = category.value
+        cat_key = category
         cat_info = CATEGORIES.get(cat_key)
         if not cat_info:
             return await interaction.response.send_message("Category not found.", ephemeral=True)
@@ -1557,7 +1554,7 @@ class SpideyGov(commands.Cog):
         if (article is None and amendment is None) or (article is not None and amendment is not None):
             return await interaction.response.send_message("Specify either an article or an amendment, not both.", ephemeral=True)
 
-        style_val = (style.value if style else "irl")
+        style_val = (style if style else "irl")
         const = self.federal_registry.get("constitution", {})
         is_article = article is not None
         number = article if is_article else amendment
@@ -1715,9 +1712,9 @@ class SpideyGov(commands.Cog):
     async def docket(self, interaction: discord.Interaction, chamber: str):
         items = self.federal_registry.get("bills", {}).get("items", {})
         # show DRAFT/INTRODUCED/IN_COMMITTEE/FLOOR; hide PASSED/FAILED/ENACTED by default
-        active = [b for b in items.values() if b.get("chamber")==chamber.value and b.get("status") in {"DRAFT","INTRODUCED","IN_COMMITTEE","FLOOR"}]
+        active = [b for b in items.values() if b.get("chamber")==chamber and b.get("status") in {"DRAFT","INTRODUCED","IN_COMMITTEE","FLOOR"}]
         if not active:
-            return await interaction.response.send_message(f"No active items in the {chamber.value}.", ephemeral=True)
+            return await interaction.response.send_message(f"No active items in the {chamber}.", ephemeral=True)
 
         active.sort(key=lambda x: x["id"])
         desc = []
@@ -1725,7 +1722,7 @@ class SpideyGov(commands.Cog):
             kind = "Bill" if b["type"] == "bill" else "Resolution"
             joint = " (Joint)" if b.get("joint") else ""
             desc.append(f"**{b['id']}** — {kind}{joint}: {b.get('title','')}  ·  *{b.get('status')}*")
-        embed = discord.Embed(title=f"{chamber.value} Docket", description="\n".join(desc), color=discord.Color.purple())
+        embed = discord.Embed(title=f"{chamber} Docket", description="\n".join(desc), color=discord.Color.purple())
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
 
@@ -1902,11 +1899,11 @@ class SpideyGov(commands.Cog):
             return await interaction.response.send_message("This bill is not structured into titles/sections.", ephemeral=True)
 
         t_no, s_no = _parse_target_tid(target_id)
-        if op.value in {"replace", "delete", "insert_after"} and (not t_no or not s_no):
+        if op in {"replace", "delete", "insert_after"} and (not t_no or not s_no):
             return await interaction.response.send_message(
                 "Target must be a section like **T1.S2** for this operation.", ephemeral=True
             )
-        if op.value == "insert_end" and not t_no:
+        if op == "insert_end" and not t_no:
             return await interaction.response.send_message(
                 "For **insert_end**, target must be a title like **T1**.", ephemeral=True
             )
@@ -1915,11 +1912,11 @@ class SpideyGov(commands.Cog):
         tnode = snode = None
         if s_no is not None:
             tnode, snode = _find_section(struct, t_no, s_no)
-            if op.value != "insert_end" and not snode:
+            if op != "insert_end" and not snode:
                 return await interaction.response.send_message("Target section not found.", ephemeral=True)
 
         # validate new content where required
-        if op.value in {"replace", "insert_after", "insert_end"}:
+        if op in {"replace", "insert_after", "insert_end"}:
             if not body or not body.strip():
                 return await interaction.response.send_message("Body is required for this operation.", ephemeral=True)
 
@@ -1931,11 +1928,11 @@ class SpideyGov(commands.Cog):
         amend_id = _next_amend_id(bill)
         amend = {
             "id": amend_id,
-            "op": op.value,
+            "op": op,
             "target_id": f"T{t_no}" + (f".S{s_no}" if s_no is not None else ""),
-            "title_no": t_no if op.value == "insert_end" else None,
-            "new_heading": (section_heading or "").strip() if op.value in {"replace","insert_after","insert_end"} else "",
-            "new_body": (body or "").strip() if op.value in {"replace","insert_after","insert_end"} else "",
+            "title_no": t_no if op == "insert_end" else None,
+            "new_heading": (section_heading or "").strip() if op in {"replace","insert_after","insert_end"} else "",
+            "new_body": (body or "").strip() if op in {"replace","insert_after","insert_end"} else "",
             "old_heading": old_heading,
             "old_body": old_body,
             "rationale": (rationale or "").strip(),
@@ -1949,16 +1946,16 @@ class SpideyGov(commands.Cog):
         save_federal_registry(reg)
 
         # ---- build a preview embed (no side effects) ----
-        if op.value == "replace":
+        if op == "replace":
             ud = _mkdiff(old_body, amend["new_body"], ctx=3)
             preview = f"```diff\n{ud[:3500]}\n```" if ud else "(no textual changes)"
-        elif op.value == "insert_after":
+        elif op == "insert_after":
             preview = (
                 f"Insert **after** T{t_no}.S{s_no}\n"
                 + (f"**Heading:** {amend['new_heading']}\n\n" if amend['new_heading'] else "")
                 + amend["new_body"][:1800]
             )
-        elif op.value == "insert_end":
+        elif op == "insert_end":
             preview = (
                 f"Append as **new final section** of Title {t_no}\n"
                 + (f"**Heading:** {amend['new_heading']}\n\n" if amend['new_heading'] else "")
@@ -1973,10 +1970,10 @@ class SpideyGov(commands.Cog):
             embed.add_field(name="Rationale", value=amend["rationale"][:1024], inline=False)
 
         # Replace usually has a big diff; put it in description when small, else as a field
-        if op.value == "replace" and len(preview) < 3900:
+        if op == "replace" and len(preview) < 3900:
             embed.description += "\n\n" + preview
         else:
-            embed.add_field(name="Preview", value=preview[:1024] if op.value != "replace" else preview[:1024], inline=False)
+            embed.add_field(name="Preview", value=preview[:1024] if op != "replace" else preview[:1024], inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
@@ -2114,13 +2111,12 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     async def committee_name_autocomplete(self, interaction: discord.Interaction, current: str):
-        """Return committees + subcommittees for the chosen chamber, sorted."""
         reg = self.federal_registry
-        committees = _get_committees_root(reg)  # your existing helper
+        committees = _get_committees_root(reg)
 
-        # Chamber comes from the sibling option on the same slash command
         ns = interaction.namespace
         chamber = getattr(ns, "chamber", None)
+        # FIX: actually unwrap if it's a Choice
         if isinstance(chamber, app_commands.Choice):
             chamber = chamber.value
         if chamber not in {"senate", "house", "joint"}:
@@ -2130,21 +2126,18 @@ class SpideyGov(commands.Cog):
         out: list[app_commands.Choice[str]] = []
         bucket = committees.get(chamber, {})
 
-        # Top-level committees
         for key, data in sorted(bucket.items(), key=lambda kv: kv[0]):
             label = (data.get("name") or key.replace("_", " ").title()).strip()
             if not cur or cur in label.lower():
                 out.append(app_commands.Choice(name=label, value=key))
-            # Subcommittees
             subs = data.get("sub_committees") or {}
             for sk, sv in sorted(subs.items(), key=lambda kv: kv[0]):
                 slabel = (sv.get("name") or sk.replace("_", " ").title()).strip()
                 full = f"{label} → {slabel}"
                 if not cur or cur in full.lower():
-                    # encode parent::child so handlers can resolve it
                     out.append(app_commands.Choice(name=full, value=f"{key}::{sk}"))
-
         return out[:25]
+
 
 
     @legislature.command(name="committee_info", description="Details about a (sub)committee")
@@ -2267,21 +2260,20 @@ class SpideyGov(commands.Cog):
         tz: str = None,  # default PT
     ):
         if not tz:
-            tz = _TZ_CHOICES[0]
+            tz = "America/Los_Angeles"
+
         reg = self.federal_registry
-        parent, node = _resolve_committee_node(reg, chamber.value, name)
+        parent, node = _resolve_committee_node(reg, chamber, name)
         if not node:
             return await interaction.response.send_message("Committee not found.", ephemeral=True)
 
-        # Permission: chair or leadership override
         if not (_user_is_committee_chair(interaction.guild, interaction.user, node) or _user_has_leadership_override(interaction.user)):
             return await interaction.response.send_message("Only the committee chair (or leadership) may schedule hearings.", ephemeral=True)
 
-        dt_local = _build_aware_dt(date, time, tz.value)
+        dt_local = _build_aware_dt(date, time, tz)
         if not dt_local:
             return await interaction.response.send_message("Invalid date/time. Use date=YYYY-MM-DD and time like '6:00 pm' or '18:00'.", ephemeral=True)
 
-        # Store as UTC ISO for durability
         dt_utc = dt_local.astimezone(timezone.utc)
         node.setdefault("hearings", []).append({
             "title": title,
@@ -2291,7 +2283,6 @@ class SpideyGov(commands.Cog):
         })
         save_federal_registry(reg)
 
-        # Confirm with pretty Discord timestamps
         embed = discord.Embed(
             title="Hearing scheduled",
             description=(parent.get("name") + " → " + node.get("name")) if parent else node.get("name"),
@@ -2303,7 +2294,8 @@ class SpideyGov(commands.Cog):
             value=f"{discord.utils.format_dt(dt_local, style='F')} ({discord.utils.format_dt(dt_local, style='R')})",
             inline=False
         )
-        embed.set_footer(text=f"{chamber.name.title()} committee")
+        # FIX: chamber is a str here
+        embed.set_footer(text=f"{str(chamber).title()} committee")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -2577,7 +2569,7 @@ class SpideyGov(commands.Cog):
         threshold: str | None = None,
         notify: bool = False,
     ):
-        act = action.value
+        act = action
         reg = self.federal_registry
         items = ensure_bills_schema(reg)["items"]
 
@@ -2585,7 +2577,7 @@ class SpideyGov(commands.Cog):
         if act == "introduce":
             if not chamber or not title or not text:
                 return await interaction.response.send_message("Provide chamber, title, and text to introduce.", ephemeral=True)
-            ch = chamber.value
+            ch = chamber
             if not is_in_chamber(interaction.user, ch):
                 return await interaction.response.send_message(f"Only {ch} members may introduce in the {ch}.", ephemeral=True)
 
@@ -2668,7 +2660,7 @@ class SpideyGov(commands.Cog):
                 "channel_id": chan.id,
                 "opened_at": discord.utils.utcnow().isoformat(),
                 "opened_by": interaction.user.id,
-                "threshold": (threshold.value if threshold else "simple"),
+                "threshold": (threshold if threshold else "simple"),
                 "hours": hours,
                 "eligible_count": len(eligible),
                 "quorum_required": quorum,
