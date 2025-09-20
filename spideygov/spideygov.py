@@ -2545,12 +2545,7 @@ class SpideyGov(commands.Cog):
     ])
     @app_commands.describe(
         action="What do you want to do?",
-        bill_id="Existing bill ID (omit when introducing)",
-        chamber="For introduction only: Senate or House",
-        title="Short title (introduction)",
-        summary="1-2 sentence summary (introduction)",
-        text="Bill text (introduction)",
-        joint="Is this a joint resolution? (introduction)",
+        bill_id="Target bill ID (required for all actions except docket/status listings)",
         hours="Poll duration (open_vote)",
         threshold="Vote threshold (open_vote/close_vote)",
         notify="DM eligible members the poll link (open_vote)"
@@ -2560,11 +2555,6 @@ class SpideyGov(commands.Cog):
         interaction: discord.Interaction,
         action: str,
         bill_id: str | None = None,
-        chamber: str | None = None,
-        title: str | None = None,
-        summary: str | None = None,
-        text: str | None = None,
-        joint: bool = False,
         hours: int = 24,
         threshold: str | None = None,
         notify: bool = False,
@@ -2573,54 +2563,41 @@ class SpideyGov(commands.Cog):
         reg = self.federal_registry
         items = ensure_bills_schema(reg)["items"]
 
-        # ---------- INTRODUCE ----------
+        # ---------- INTRODUCE ---------- 
         if act == "introduce":
-            if not chamber or not title or not text:
-                return await interaction.response.send_message("Provide chamber, title, and text to introduce.", ephemeral=True)
-            ch = chamber
-            if not is_in_chamber(interaction.user, ch):
-                return await interaction.response.send_message(f"Only {ch} members may introduce in the {ch}.", ephemeral=True)
+            if not bill_id or bill_id not in items:
+                return await interaction.response.send_message("Provide a valid DRAFT bill_id to introduce.", ephemeral=True)
+            b = items[bill_id]
+            if b.get("status") != "DRAFT":
+                return await interaction.response.send_message("Only DRAFT bills can be introduced.", ephemeral=True)
+            if not is_in_chamber(interaction.user, b.get("chamber", "")):
+                return await interaction.response.send_message(f"Only {b.get('chamber','?')} members may introduce this bill.", ephemeral=True)
 
-            # number & create bill
-            bill_no = next_bill_id(reg, ch)  # uses your existing helper
-            struct = parse_bill_structure(text)
-            has_sections = any(t.get("sections") for t in struct.get("titles", []))
-
-            bill = {
-                "id": bill_no,
-                "chamber": ch,
-                "type": "bill",
-                "joint": joint,
-                "title": title,
-                "summary": summary or "",
-                "text": text,
-                "structure": struct if has_sections else None,
-                "amendments": {},
-                "status": "INTRODUCED",
-                "introduced_by": interaction.user.id,
-                "introduced_at": discord.utils.utcnow().isoformat(),
-            }
-            items[bill_no] = bill
-            mark_history(bill, f"Introduced in {ch}", interaction.user.id)
+            b["status"] = "INTRODUCED"
+            b["introduced_by"] = interaction.user.id
+            b["introduced_at"] = discord.utils.utcnow().isoformat()
+            mark_history(b, f"Introduced in {b['chamber']}", interaction.user.id)
             save_federal_registry(reg)
-            chan = interaction.client.get_channel(chamber_channel_id(ch))
+
+            chan = interaction.client.get_channel(chamber_channel_id(b["chamber"]))
             if chan:
                 intro_embed = discord.Embed(
                     title="Bill Introduced",
-                    description=f"**{bill_no}** — {title}",
+                    description=f"**{b['id']}** — {b.get('title','')}",
                     color=discord.Color.blurple()
                 )
-                intro_embed.add_field(name="Chamber", value=ch, inline=True)
-                intro_embed.add_field(name="Sponsor", value=f"<@{interaction.user.id}>", inline=True)
-                if summary:
-                    intro_embed.add_field(name="Summary", value=summary[:1024], inline=False)
+                intro_embed.add_field(name="Chamber", value=b["chamber"], inline=True)
+                intro_embed.add_field(name="Sponsor", value=f"<@{b.get('sponsor_id','')}>", inline=True)
+                if b.get("summary"):
+                    intro_embed.add_field(name="Summary", value=b["summary"][:1024], inline=False)
                 await chan.send(embed=intro_embed)
 
-            # Operator ack (public, not ephemeral)
-            await interaction.response.send_message(f"✅ Introduced **{bill_no}** — {title} in the **{ch}**.", ephemeral=False)
-            return
-        
-        # For all other actions we need an existing bill
+            return await interaction.response.send_message(
+                f"✅ Introduced **{b['id']}** — {b.get('title','')} in the **{b['chamber']}**.",
+                ephemeral=False
+            )
+
+        # (unchanged) everything below still requires bill_id:
         if not bill_id or bill_id not in items:
             return await interaction.response.send_message("Bill not found. (Provide bill_id.)", ephemeral=True)
         b = items[bill_id]
