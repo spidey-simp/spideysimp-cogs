@@ -23,6 +23,7 @@ HOUSE = 1302330037365772380
 SENATE_MAJORITY_LEADER = 1417354264795418664
 SPEAKER_OF_THE_HOUSE = 1417354436472344586
 SPIDEY_HOUSE = 1302330503399084144
+SENATE_VOTING_CHANNEL = 1334289687996796949
 
 CITIZENSHIP = {
     "commons": 1415927703340716102,
@@ -2610,7 +2611,10 @@ class SpideyGov(commands.Cog):
                 return await interaction.response.send_message("A vote is already open.", ephemeral=True)
 
             # where to post poll
-            chan = interaction.client.get_channel(chamber_channel_id(b["chamber"]))
+            if b["chamber"] == "house":
+                chan = interaction.client.get_channel(chamber_channel_id(b["chamber"]))
+            else:
+                chan = SENATE_VOTING_CHANNEL
             if not chan:
                 return await interaction.response.send_message("Chamber channel not found.", ephemeral=True)
 
