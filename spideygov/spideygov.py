@@ -2614,7 +2614,7 @@ class SpideyGov(commands.Cog):
             if b["chamber"] == "house":
                 chan = interaction.client.get_channel(chamber_channel_id(b["chamber"]))
             else:
-                chan = SENATE_VOTING_CHANNEL
+                chan = interaction.client.get_channel(SENATE_VOTING_CHANNEL)
             if not chan:
                 return await interaction.response.send_message("Chamber channel not found.", ephemeral=True)
 
@@ -2623,7 +2623,7 @@ class SpideyGov(commands.Cog):
             p = discord.Poll(
                 question=q,
                 duration=timedelta(hours=hours),
-                allow_multiselect=False
+                multiple=False
             )
             p.add_answer(text="Yea", emoji="✅")
             p.add_answer(text="Nay", emoji="❌")
