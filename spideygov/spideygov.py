@@ -8,7 +8,7 @@ import re
 import asyncio
 import random
 import datetime
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import math
 import difflib
 from zoneinfo import ZoneInfo
@@ -2622,7 +2622,7 @@ class SpideyGov(commands.Cog):
             q = _poll_question_for(b)
             p = discord.Poll(
                 question=q,
-                duration=datetime.timedelta(hours=hours),
+                duration=timedelta(hours=hours),
                 allow_multiselect=False
             )
             p.add_answer(text="Yea", emoji="✅")
