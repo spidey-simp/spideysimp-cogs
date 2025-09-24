@@ -2673,7 +2673,11 @@ class SpideyGov(commands.Cog):
             announce.add_field(name="Duration", value=f"{hours}h", inline=True)
             announce.add_field(name="Threshold", value=b['vote'].get('threshold','simple'), inline=True)
             announce.add_field(name="Poll Link", value=f"[Jump to poll]({msg.jump_url})", inline=False)
+            if b["chamber"] != "house":
+                chan = interaction.client.get_channel(SENATE)    
+            
             await chan.send(embed=announce)
+                
 
             # Operator ack (public)
             await interaction.response.send_message(
