@@ -2629,7 +2629,9 @@ class SpideyGov(commands.Cog):
             p.add_answer(text="Nay", emoji="❌")
             p.add_answer(text="Present", emoji="➖")
 
-            msg = await chan.send(content="Roll call is open:", poll=p)
+            role_id = REPRESENTATIVES if b["chamber"] == "house" else SENATORS
+            role_mention = f"<@&{role_id}>"
+            msg = await chan.send(f"{role_mention}, roll call is open:", poll=p, allowed_mentions=discord.AllowedMentions(roles=True, users=False, everyone=False))
 
             # quorum set-up (reuse your helper)
             eligible = await resolve_eligible_members(interaction.guild, chan, b["chamber"])
