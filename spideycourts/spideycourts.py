@@ -15,6 +15,9 @@ import re
 import random
 from dataclasses import dataclass, asdict
 import time, uuid
+import io, re, json
+from typing import Optional
+
 
 
 
@@ -133,6 +136,9 @@ CITE_MULTI_RX = re.compile(
     re.IGNORECASE | re.VERBOSE
 )
 
+TEXTY_EXTS = {".txt", ".md", ".markdown", ".yml", ".yaml", ".json", ".rtf", ".pdf", ".docx"}
+MAX_ATTACH_BYTES = 8 * 1024 * 1024
+
 def load_json(file_path):
     """Load JSON data from a file."""
     if not os.path.exists(file_path):
@@ -161,6 +167,86 @@ class Party:
 def _now() -> int: return int(time.time())
 
 def _uuid() -> str: return uuid.uuid4().hex
+
+def _ext_of(name: str) -> str:
+    n = (name or "").lower()
+    return "." + n.rsplit(".", 1)[-1] if "." in n else ""
+
+def _strip_rtf(x: str) -> str:
+    # minimal (good for simple RTF)
+    x = re.sub(r"\{\\\*[^{}]*\}", "", x)
+    x = re.sub(r"\\[a-zA-Z]+\d* ?", "", x)
+    x = x.replace("{", "").replace("}", "")
+    return x.strip()
+
+async def _read_attachment_text(att: discord.Attachment) -> str:
+    """
+    Extract text from a small-ish attachment.
+    Supports: .txt/.md/.yml/.yaml/.json/.rtf/.pdf/.docx
+    Scanned PDFs won't work (no OCR here).
+    """
+    ext = _ext_of(att.filename)
+    if ext not in TEXTY_EXTS:
+        raise ValueError("Unsupported file type. Use .txt, .md, .yml/.yaml, .json, .rtf, .pdf, or .docx.")
+    if att.size and att.size > MAX_ATTACH_BYTES:
+        raise ValueError(f"File too large ({att.size} bytes). Keep under {MAX_ATTACH_BYTES} bytes.")
+
+    raw = await att.read()  # bytes
+
+    # plain text-ish
+    if ext in {".txt", ".md", ".markdown", ".yml", ".yaml", ".json", ".rtf"}:
+        try:
+            txt = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            txt = raw.decode("cp1252", errors="replace")
+        if ext == ".json":
+            try:
+                obj = json.loads(txt)
+                txt = json.dumps(obj, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
+        if ext == ".rtf":
+            txt = _strip_rtf(txt)
+        return txt.strip()
+
+    # DOCX (optional)
+    if ext == ".docx":
+        try:
+            import docx  # python-docx
+        except Exception:
+            raise ValueError("DOCX support requires the 'python-docx' package. Install it, or upload a .txt.")
+        f = io.BytesIO(raw)
+        doc = docx.Document(f)
+        parts = [p.text for p in doc.paragraphs]
+        for t in getattr(doc, "tables", []):
+            for row in t.rows:
+                parts.append(" | ".join(cell.text for cell in row.cells))
+        return "\n".join(parts).strip()
+
+    # PDF (optional)
+    if ext == ".pdf":
+        try:
+            import PyPDF2
+        except Exception:
+            raise ValueError("PDF support requires 'PyPDF2'. Install it, or upload a .txt.")
+        f = io.BytesIO(raw)
+        try:
+            reader = PyPDF2.PdfReader(f)
+        except Exception as e:
+            raise ValueError(f"Could not read PDF: {e}")
+        parts = []
+        for page in reader.pages:
+            try:
+                parts.append(page.extract_text() or "")
+            except Exception:
+                parts.append("")
+        txt = "\n".join(parts).strip()
+        if not txt:
+            raise ValueError("This PDF appears scanned (no embedded text). Use OCR or upload a .txt.")
+        return txt
+
+    return ""
+
 
 class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
     def __init__(
@@ -760,6 +846,46 @@ class SpideyCourts(commands.Cog):
     async def _ready(self):
         await self.bot.wait_until_ready()
 
+    # ---------- Long text posting ----------
+    def _chunks(self, s: str, n: int):
+        for i in range(0, len(s), n):
+            yield s[i:i+n]
+
+    async def _post_long_text(self, 
+        channel: discord.abc.Messageable,
+        title: str,
+        body: str,
+        color: discord.Color = discord.Color.dark_teal(),
+        make_thread: bool = True,
+        delay: float = 0.4,  # rate-limit cushion
+    ):
+        """
+        Post an embed header + chunked text messages under it (optionally in a thread).
+        Returns dict with ids.
+        """
+        head = await channel.send(
+            embed=discord.Embed(title=title, color=color)
+        )
+        target = await head.create_thread(name=title) if make_thread else channel
+
+        # We prefer embeds for readability, but descriptions cap at 4096.
+        CHUNK = 3800  # leave headroom for formatting
+        for i, part in enumerate(_chunks(body, CHUNK), start=1):
+            e = discord.Embed(
+                title=None if not make_thread else f"Part {i}",
+                description=part,
+                color=color
+            )
+            await target.send(embed=e)
+            await asyncio.sleep(delay)
+
+        return {
+            "message_id": head.id,
+            "channel_id": getattr(channel, "id", None),
+            "thread_id": getattr(target, "id", None) if make_thread else None,
+        }
+
+
     def _eligible_juror_members(
         self,
         guild: discord.Guild,
@@ -779,6 +905,7 @@ class SpideyCourts(commands.Cog):
             out.append(m)
         return out
 
+    
 
     def _short_date(self, iso: str) -> str:
         try:
@@ -1755,7 +1882,10 @@ class SpideyCourts(commands.Cog):
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         case_number="Case number (e.g., 1:25-cv-000001-SS)",
+        title="Short title for the order",
         related_entry="Optional docket entry this resolves (e.g., a motion)",
+        file="Upload .pdf/.docx/.txt/etc. to bypass modal for long orders",
+        summary="(Optional) One-line docket summary"
     )
     @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.choices(order_type=[
@@ -1776,8 +1906,10 @@ class SpideyCourts(commands.Cog):
         order_type: app_commands.Choice[str],
         related_entry: int | None = None,
         outcome: app_commands.Choice[str] | None = None,
+        file: discord.Attachment | None = None,
+        summary: str | None = None,
     ):
-        # (Optional) Only the assigned judge may issue orders
+        # guard: case + assigned judge check (unchanged)
         case = self.court_data.get(case_number)
         if not case:
             await interaction.response.send_message("❌ Case not found.", ephemeral=True)
@@ -1787,15 +1919,88 @@ class SpideyCourts(commands.Cog):
             await interaction.response.send_message("❌ Only the assigned judge may issue orders in this case.", ephemeral=True)
             return
 
-        await interaction.response.send_modal(
-            OrderModal(
-                bot=self.bot,
-                case_number=case_number,
-                order_type=order_type.value,
-                related_entry=related_entry,
-                outcome=(outcome.value if outcome else None),
+        # If no file, keep your modal path EXACTLY
+        if file is None:
+            return await interaction.response.send_modal(
+                OrderModal(
+                    bot=self.bot,
+                    case_number=case_number,
+                    order_type=order_type.value,
+                    related_entry=related_entry,
+                    outcome=(outcome.value if outcome else None),
+                )
             )
-        )
+
+        # File path: extract text, then post using your existing long/short logic
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            content = await _read_attachment_text(file)
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Couldn’t read the file: {e}", ephemeral=True)
+
+        if not content:
+            return await interaction.followup.send("❌ The uploaded file contained no extractable text.", ephemeral=True)
+
+        # venue channel (same as modal)
+        venue_key = case.get("venue")
+        ch_id = VENUE_CHANNEL_MAP.get(venue_key)
+        venue_ch = self.bot.get_channel(ch_id) if ch_id else None
+        if not venue_ch:
+            return await interaction.followup.send("❌ Venue channel not found.", ephemeral=True)
+
+        title_head = f"{order_type.value} — {case_number}"
+
+        try:
+            if len(content) <= 1800:
+                msg = await venue_ch.send(
+                    f"**{title_head}**\n" + (f"*{summary}*\n\n" if summary else "\n") + content,
+                    allowed_mentions=discord.AllowedMentions.none()
+                )
+                thread_id = None
+            else:
+                # reuse your *_post_long_filing* helper (keeps behavior consistent with modal)
+                msg, thread = await self._post_long_filing(
+                    court_channel=venue_ch,
+                    title=title_head,
+                    case_number=case_number,
+                    author=interaction.user,
+                    content=(f"{summary}\n\n{content}" if summary else content),
+                )
+                thread_id = thread.id
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Failed to post the order: {e}", ephemeral=True)
+
+        # Docket entry — mirror your modal schema
+        filings = case.setdefault("filings", [])
+        entry_no = len(filings) + 1
+        doc = {
+            "entry": entry_no,
+            "document_type": order_type.value,
+            "author": interaction.user.name,
+            "author_id": interaction.user.id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "message_id": msg.id,
+            "channel_id": msg.channel.id,
+            "content": (f"Outcome: {outcome.value}" if outcome else None),
+        }
+        if thread_id:
+            doc["thread_id"] = thread_id
+        if related_entry:
+            doc["related_docs"] = [related_entry]
+
+        filings.append(doc)
+
+        # Resolve the related motion, if any (same behavior as modal)
+        if related_entry:
+            rel = next((d for d in filings if d.get("entry") == related_entry), None)
+            if rel:
+                rel["resolved"] = True
+                if outcome:
+                    rel["ruling_outcome"] = outcome.value
+
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(f"✅ {order_type.value} docketed as Entry {entry_no}.", ephemeral=True)
+
 
 
 

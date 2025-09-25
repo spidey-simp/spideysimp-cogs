@@ -13,6 +13,17 @@ import math
 import difflib
 from zoneinfo import ZoneInfo
 
+try:
+    import docx  # python-docx
+except Exception:
+    docx = None
+
+try:
+    from PyPDF2 import PdfReader
+except Exception:
+    PdfReader = None
+
+
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FED_REGISTRY_FILE = os.path.join(BASE_DIR, "federal_registry.json")
@@ -131,6 +142,54 @@ def _choice_val(x):
         return x.value  # Choice
     except AttributeError:
         return x        # already a str or None
+
+# --- helper: parse attachment text without saving a file ---
+async def extract_text_from_attachment(att: discord.Attachment) -> str:
+    """
+    Reads a Discord attachment and returns extracted text.
+    Supported:
+      - .txt / .md -> UTF-8 decode (with errors='replace')
+      - .docx      -> python-docx (if available)
+      - .pdf       -> PyPDF2 (if available)
+    Falls back to UTF-8 decode if unknown.
+    """
+    name = (att.filename or "").lower()
+    data = await att.read()
+
+    def _utf8(b: bytes) -> str:
+        return b.decode("utf-8", errors="replace")
+
+    if name.endswith((".txt", ".md")):
+        return _utf8(data)
+
+    if name.endswith(".docx"):
+        if not docx:
+            raise RuntimeError("`.docx` parsing requires the `python-docx` package.")
+        from io import BytesIO
+        try:
+            d = docx.Document(BytesIO(data))
+            return "\n".join(p.text for p in d.paragraphs)
+        except Exception as e:
+            raise RuntimeError(f"Failed to parse .docx: {e}")
+
+    if name.endswith(".pdf"):
+        if not PdfReader:
+            raise RuntimeError("`.pdf` parsing requires the `PyPDF2` package.")
+        from io import BytesIO
+        try:
+            reader = PdfReader(BytesIO(data))
+            parts = []
+            for page in reader.pages:
+                try:
+                    parts.append(page.extract_text() or "")
+                except Exception:
+                    parts.append("")
+            return "\n".join(parts)
+        except Exception as e:
+            raise RuntimeError(f"Failed to parse .pdf: {e}")
+
+    # Unknown type → try UTF-8 best-effort
+    return _utf8(data)
 
 
 def parse_sections_from_text(text: str):
@@ -1113,6 +1172,7 @@ class SpideyGov(commands.Cog):
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry")
 
 
+    # --- replace your propose_legislation command with this version ---
     @legislature.command(name="propose_legislation", description="Propose new legislation")
     @app_commands.checks.has_any_role(SENATORS, REPRESENTATIVES)
     @app_commands.describe(
@@ -1125,6 +1185,9 @@ class SpideyGov(commands.Cog):
         co_sponsors="Co-sponsors, comma-separated (optional)",
         code_title="Code title if codifying/repealing (optional)",
         sections="Hyphenated sections if codifying/repealing (optional)",
+        summary="(Only when using file) 1-2 sentence summary",
+        purpose="(Only when using file) brief purpose statement",
+        file="Upload .txt/.docx/.pdf to bypass the modal"
     )
     @app_commands.choices(type=[
         app_commands.Choice(name="Bill", value="bill"),
@@ -1142,32 +1205,89 @@ class SpideyGov(commands.Cog):
         co_sponsors: str | None = None,
         code_title: str | None = None,
         sections: str | None = None,
+        summary: str | None = None,
+        purpose: str | None = None,
+        file: discord.Attachment | None = None,
     ):
+        # chamber inference stays identical to your existing logic
         is_senator = any(r.id == SENATORS for r in interaction.user.roles)
         chamber = "Senate" if is_senator else "House"
 
-        # If codifying/repealing but missing details, bounce early
+        # guard for codification metadata like before
         if (codification or repealing) and (not code_title or not sections):
             return await interaction.response.send_message(
-                "Because this is a codification/repeal, `code_title` and `sections` are required. Re-run the command with those fields.",
+                "Because this is a codification/repeal, `code_title` and `sections` are required. Re-run with those fields.",
                 ephemeral=True
             )
 
-        modal = LegislativeProposalModal(
-            title=title,
-            type=type,
-            joint=joint,
-            chamber=chamber,
-            sponsor=interaction.user,
-            # stash the short metadata on the modal for on_submit
-            codification=codification,
-            repealing=repealing,
-            committee=committee,
-            co_sponsors=co_sponsors,
-            code_title=code_title,
-            sections=sections,
+        # If no file, run your existing modal path (unchanged)
+        if not file:
+            modal = LegislativeProposalModal(
+                title=title,
+                type=type,
+                joint=joint,
+                chamber=chamber,
+                sponsor=interaction.user,
+                codification=codification,
+                repealing=repealing,
+                committee=committee,
+                co_sponsors=co_sponsors,
+                code_title=code_title,
+                sections=sections,
+            )
+            return await interaction.response.send_modal(modal)
+
+        # Otherwise, parse the file, then store bill with the SAME schema as the modal path
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            body_text = await extract_text_from_attachment(file)
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Could not read the file: {e}", ephemeral=True)
+
+        reg = self.federal_registry
+        bills = ensure_bills_schema(reg)
+
+        bill_id = next_bill_id(reg, chamber)
+
+        co_list = []
+        if co_sponsors:
+            co_list = [p.strip() for p in str(co_sponsors).split(",") if p.strip()]
+
+        struct = parse_bill_structure(str(body_text))
+        has_sections = any(t.get("sections") for t in struct.get("titles", []))
+
+        bill = {
+            "id": bill_id,
+            "title": title,
+            "type": type,                         # "bill" | "resolution"
+            "joint": bool(joint),
+            "chamber": chamber,                   # "Senate" | "House"
+            "sponsor_id": interaction.user.id,
+            "co_sponsors": co_list,
+            "committee": committee or "",
+            "codification": bool(codification),
+            "repealing": bool(repealing),
+            "code_title": code_title or "",
+            "sections": sections or "",
+            "summary": (summary or "(summary omitted)"),
+            "purpose": (purpose or "(purpose omitted)"),
+            "text": str(body_text),
+            "structure": struct if has_sections else None,
+            "amendments": {},
+            "status": "DRAFT",
+            "created_at": discord.utils.utcnow().isoformat(),
+            "message_id": None,
+            "thread_id": None,
+        }
+        bills["items"][bill_id] = bill
+        save_federal_registry(reg)
+
+        kind = "Bill" if type == "bill" else "Resolution"
+        joint_prefix = "Joint " if joint else ""
+        await interaction.followup.send(
+            f"✅ Saved draft {joint_prefix}{kind} **{bill_id}** — “{title}”.",
+            ephemeral=True
         )
-        await interaction.response.send_modal(modal)
 
 
     @registry.command(name="title_editor", description="Name a title for federal regulations")
@@ -1693,15 +1813,47 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_message(embed=meta, ephemeral=False)
 
         # Body (single embed, headings bolded)
-        body_txt = _bold_headings_single(b.get("text") or "")
-        if body_txt.strip():
+        body_txt = _bold_headings_single(b.get("text") or "").strip()
+        if not body_txt:
+            return
+
+        # get the meta message we just sent, and create a thread off it
+        try:
+            meta_msg = await interaction.original_response()
+        except Exception:
+            meta_msg = None
+
+        if len(body_txt) <= 4000:
             e = discord.Embed(
                 title=f"{bill_id} — Text",
                 description=body_txt,
                 color=discord.Color.blurple()
             )
-            await interaction.followup.send(embed=e)
+            await interaction.followup.send(embed=e, allowed_mentions=discord.AllowedMentions.none())
+            return
 
+        # long: thread + chunked plain messages (cleaner than many embeds)
+        if not meta_msg:
+            # fallback: post a tiny anchor message to thread off
+            meta_msg = await interaction.followup.send(
+                content=f"**{bill_id} — Full Text** (thread)",
+                wait=True
+            )
+
+        thread = await meta_msg.create_thread(name=f"{bill_id} — Text")
+
+        # conservative chunk size to fit Discord 2000-char hard limit
+        CHUNK = 1900
+        parts = [body_txt[i:i+CHUNK] for i in range(0, len(body_txt), CHUNK)]
+
+        # first post: quick header
+        await thread.send(f"Posting full text in **{len(parts)}** parts…", allowed_mentions=discord.AllowedMentions.none())
+
+        for idx, part in enumerate(parts, start=1):
+            await thread.send(
+                content=f"*Part {idx}/{len(parts)}*\n{part}",
+                allowed_mentions=discord.AllowedMentions.none()
+            )
 
 
 
