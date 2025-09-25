@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 import math
 import difflib
 from zoneinfo import ZoneInfo
+from discord.ext import tasks
 
 try:
     import docx  # python-docx
@@ -23,7 +24,7 @@ try:
 except Exception:
     PdfReader = None
 
-
+UTC = timezone.utc
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FED_REGISTRY_FILE = os.path.join(BASE_DIR, "federal_registry.json")
@@ -110,6 +111,23 @@ _SECTION_LINE = re.compile(
     """,
     re.IGNORECASE | re.VERBOSE,
 )
+
+STATUS_CHANNEL_ID = 1420796334910210178  # “bill status” channel you created
+
+def _now_iso():
+    return datetime.now(UTC).isoformat()
+
+def _iso_to_dt(s: str) -> datetime:
+    try:
+        return datetime.fromisoformat(s.replace("Z","+00:00")).astimezone(UTC)
+    except Exception:
+        return datetime.now(UTC)
+
+def _vote_expired(vote: dict) -> bool:
+    if not vote: return False
+    opened_at = _iso_to_dt(vote.get("opened_at",""))
+    hours = int(vote.get("hours", 24))
+    return datetime.now(UTC) >= opened_at + timedelta(hours=hours)
 
 def _bold_headings_preserve(raw_text: str, chunk_size: int = 3800) -> list[str]:
     """
@@ -1150,9 +1168,15 @@ class SpideyGov(commands.Cog):
         ensure_constitution_schema(self.federal_registry)
         normalize_registry_order(self.federal_registry)
         self.registry_lock = asyncio.Lock()
+        self.bill_poll_sweeper.start()
+        self.bill_status_ticker.start()
 
     def cog_unload(self):
         save_federal_registry(self.federal_registry)
+        try: self.bill_poll_sweeper.cancel()
+        except Exception: pass
+        try: self.bill_status_ticker.cancel()
+        except Exception: pass
     
     def to_roman(self, n: int) -> str:
         vals = [
@@ -1165,6 +1189,161 @@ class SpideyGov(commands.Cog):
             while x >= v:
                 out.append(s); x -= v
         return "".join(out) if out else "I"
+    
+    async def _fetch_message(self, channel_id: int, message_id: int):
+        ch = self.bot.get_channel(int(channel_id))
+        if not ch: return None, None
+        try:
+            msg = await ch.fetch_message(int(message_id))
+            return ch, msg
+        except Exception:
+            return ch, None
+
+    async def _auto_close_vote_for_bill(self, bill: dict):
+        """Mirror your close_vote math, but without an interaction context."""
+        v = bill.get("vote") or {}
+        ch, msg = await _fetch_message(self, v.get("channel_id"), v.get("message_id"))
+        if not ch or not msg:
+            # mark failed if we can’t fetch the poll
+            bill["status"] = "FAILED"
+            v["closed_at"] = _now_iso()
+            return
+
+        # try to end poll
+        try:
+            await msg.end_poll()
+            msg = await ch.fetch_message(msg.id)  # re-fetch for final tallies
+        except Exception:
+            pass
+
+        yea, nay, present, total = _tally_from_message(msg)
+        quorum = v.get("quorum_required", 0)
+        eligible = v.get("eligible_count", 0)
+
+        if total < quorum:
+            outcome = "NO_QUORUM"
+            bill["status"] = "FAILED"
+        else:
+            th = v.get("threshold", "simple")
+            outcome = _decide(yea, nay, present, th)
+            bill["status"] = "PASSED" if outcome == "PASSED" else "FAILED"
+
+        v.update({
+            "closed_at": _now_iso(),
+            "yea": yea, "nay": nay, "present": present,
+            "total": total,
+            "outcome": outcome,
+        })
+
+        # public result embed in the chamber channel
+        color = discord.Color.green() if outcome == "PASSED" else discord.Color.red()
+        e = discord.Embed(
+            title=f"{bill['id']} — Vote {outcome}",
+            description=bill.get("title",""),
+            color=color
+        )
+        e.add_field(name="Yea", value=str(yea))
+        e.add_field(name="Nay", value=str(nay))
+        e.add_field(name="Present", value=str(present))
+        e.add_field(name="Ballots cast", value=str(total))
+        e.set_footer(text=f"Eligible: {eligible} · Quorum: {quorum} · Threshold: {v.get('threshold','simple')}")
+        await ch.send(embed=e)
+
+        # nice: flash in status channel
+        await self._status_flash(f"**{bill['id']}** vote closed → **{outcome}** ({yea}-{nay}-{present}).")
+
+    async def _get_status_channel(self):
+        return self.bot.get_channel(STATUS_CHANNEL_ID)
+
+    async def _status_flash(self, text: str, color: discord.Color = discord.Color.gold()):
+        ch = await self._get_status_channel()
+        if not ch: return
+        try:
+            await ch.send(embed=discord.Embed(description=text, color=color), delete_after=86400)
+        except Exception:
+            pass
+    
+    def _compose_bill_status_embed(self, reg: dict) -> discord.Embed:
+        items = (reg.get("bills") or {}).get("items") or {}
+        # group by status
+        buckets = {}
+        for b in items.values():
+            buckets.setdefault(b.get("status","DRAFT"), []).append(b)
+
+        # show a compact summary + top few IDs per bucket
+        e = discord.Embed(
+            title="Legislative Status — Live",
+            color=discord.Color.blurple(),
+            timestamp=datetime.now(UTC)
+        )
+        order = ["DRAFT","INTRODUCED","FLOOR VOTE OPEN","PASSED","FAILED","SENT_TO_OTHER","RECEIVED_OTHER","ENROLLED","PRESENTED","ENACTED","VETOED"]
+        for key in order:
+            arr = buckets.get(key, [])
+            if not arr: continue
+            # list first 8 bills in this status
+            ids = ", ".join(sorted((b["id"] for b in arr))[:8])
+            e.add_field(name=f"{key} ({len(arr)})", value=(ids or "—"), inline=False)
+        return e
+    
+    async def _upsert_status_message(self):
+        reg = self.federal_registry
+        # remember a single message id so we always edit in place
+        root = reg.setdefault("bills", {})
+        meta = root.setdefault("status_meta", {})
+        ch = await self._get_status_channel()
+        if not ch: return
+
+        embed = self._compose_bill_status_embed(reg)
+        msg_id = meta.get("message_id")
+        if msg_id:
+            try:
+                msg = await ch.fetch_message(int(msg_id))
+                await msg.edit(embed=embed)
+                return
+            except Exception:
+                pass
+        # create fresh if missing
+        m = await ch.send(embed=embed)
+        meta["message_id"] = m.id
+        save_federal_registry(reg)
+
+    @tasks.loop(hours=1.0)
+    async def bill_poll_sweeper(self):
+        """Hourly: auto-close any expired polls."""
+        reg = self.federal_registry
+        items = (reg.get("bills") or {}).get("items") or {}
+        dirty = False
+        for b in list(items.values()):
+            v = b.get("vote") or {}
+            if v.get("message_id") and b.get("status") == "FLOOR VOTE OPEN" and _vote_expired(v):
+                try:
+                    await self._auto_close_vote_for_bill(b)
+                    mark_history(b, "Vote auto-closed by sweeper", None)
+                    dirty = True
+                except Exception:
+                    # don’t crash the loop; try the next bill
+                    continue
+        if dirty:
+            save_federal_registry(reg)
+
+    @bill_poll_sweeper.before_loop
+    async def _wait_ready_sweeper(self):
+        await self.bot.wait_until_ready()
+
+    @tasks.loop(hours=1.0)
+    async def bill_status_ticker(self):
+        """Hourly: update the live status card."""
+        try:
+            await self._upsert_status_message()
+        except Exception:
+            pass
+
+    @bill_status_ticker.before_loop
+    async def _wait_ready_status(self):
+        await self.bot.wait_until_ready()
+
+    
+
 
     legislature = app_commands.Group(name="legislature", description="Legislative commands")
     executive = app_commands.Group(name="executive", description="Executive commands")
