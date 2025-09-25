@@ -1282,7 +1282,7 @@ class SpideyGov(commands.Cog):
             if not arr: continue
             # list first 8 bills in this status
             ids = ", ".join(sorted((b["id"] for b in arr))[:8])
-            e.add_field(name=f"{key} ({len(arr)})", value=(ids or "—"), inline=False)
+            e.add_field(name=f"{key.title()} ({len(arr)})", value=(ids or "—"), inline=False)
         return e
     
     async def _upsert_status_message(self):
