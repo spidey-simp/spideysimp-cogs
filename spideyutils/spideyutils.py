@@ -15,6 +15,11 @@ from discord.app_commands import Choice
 import copy
 import shutil
 import uuid
+from io import BytesIO
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -35,7 +40,14 @@ FACTORY_TYPES = [
     "nuclear_facility",
 ]
 
-
+IDEOLOGY_COLORS = {
+    "Democratic": "#4e79a7",
+    "Fascist": "#fb7100",
+    "Communist": "#e00000",
+    "Authoritarian": "#d79c05",
+    "Monarchic": "#b07aa1",
+    # Add more if you introduce new ideologies
+}
 
 BACKUP_CHANNEL_ID = 1357944150502412288
 
@@ -89,6 +101,36 @@ async def backup_dynamic_json(self):
     except Exception as e:
         print(f"Failed to backup dynamic JSON: {e}")
 
+def _normalize(values: list[float]) -> list[float]:
+    total = sum(values)
+    if total <= 0:
+        return values
+    # Normalize to sum=100 for stable % labels
+    return [v * 100.0 / total for v in values]
+
+
+def ideology_pie_image(country_name: str, ideology_map: dict[str, float]) -> BytesIO:
+    labels = [k for k in ["Democratic","Fascist","Communist","Authoritarian","Monarchic"] if k in ideology_map]
+    values = [max(0.0, float(ideology_map[k])) for k in labels]
+    total = sum(values)
+    if total <= 0:
+        labels, values = ["No Data"], [100.0]
+    else:
+        values = [v * 100.0 / total for v in values]
+
+    colors = [IDEOLOGY_COLORS.get(k) for k in labels]
+    fig = plt.figure(figsize=(6, 6))
+    wedges, texts, autotexts = plt.pie(
+        values, labels=labels, colors=colors, startangle=90,
+        autopct=lambda pct: f"{pct:.0f}%" if pct >= 4 else "",
+        pctdistance=0.72, labeldistance=1.05,
+    )
+    centre = plt.Circle((0,0), 0.60, fc="white"); fig.gca().add_artist(centre)
+    plt.title(f"{country_name} — Ideology Breakdown"); plt.axis("equal")
+    if any(t.get_text()=="" for t in autotexts):
+        plt.legend(wedges, labels, loc="lower center", bbox_to_anchor=(0.5,-0.02), ncol=3, frameon=False)
+    buf = BytesIO(); plt.savefig(buf, format="png", bbox_inches="tight", dpi=200)
+    plt.close(fig); buf.seek(0); return buf
 
 class AlliancePollButton(ui.Button):
     def __init__(self, cog, alliance: str, poll_id: str, option: str):
@@ -2425,6 +2467,7 @@ class SpideyUtils(commands.Cog):
     @diplomacy.command(name="country_info_detailed", description="View detailed info for a Cold War RP country.")
     @app_commands.autocomplete(country= autocomplete_country)
     async def view_country_info_detailed(self, interaction: discord.Interaction, country: str):
+        files = []
         await interaction.response.defer(thinking=True, ephemeral=True)
 
         cold_war_data = self.bot.get_cog("SpideyUtils").cold_war_data
@@ -2514,13 +2557,32 @@ class SpideyUtils(commands.Cog):
         p = target.get("POLITICAL", {})
         pol = discord.Embed(title="📊 Political/Demographic Overview", color=discord.Color.purple())
         for k, label in [("population", "Population"),
-                         ("recruitable_manpower", "Recruitable Manpower"),
-                         ("public_support_score", "Public Support"),
-                         ("civil_unrest_level", "Civil Unrest")]:
+                        ("recruitable_manpower", "Recruitable Manpower"),
+                        ("public_support_score", "Public Support"),
+                        ("civil_unrest_level", "Civil Unrest")]:
             pol.add_field(name=label, value=self.ranged_value(p.get(k, 0), knowledge, "population" if k == "population" else "generic"))
-        ideology_breakdown = target.get("IDEOLOGY", {})
+
+        ideology_breakdown = target.get("IDEOLOGY", {})  # <-- your existing source
         for ideol in ["democratic", "fascist", "communist", "authoritarian", "monarchic"]:
             pol.add_field(name=f"{ideol.title()} Support", value=self.ranged_value(ideology_breakdown.get(ideol, 0), knowledge), inline=True)
+
+        # === NEW: attach donut chart derived from your ideology_breakdown ===
+        # Gate the chart to avoid intel leaks at low knowledge. Adjust threshold if you want.
+        if knowledge >= 60:
+            ideo_raw = {
+                "Democratic": ideology_breakdown.get("democratic", 0) or 0,
+                "Fascist": ideology_breakdown.get("fascist", 0) or 0,
+                "Communist": ideology_breakdown.get("communist", 0) or 0,
+                "Authoritarian": ideology_breakdown.get("authoritarian", 0) or 0,
+                "Monarchic": ideology_breakdown.get("monarchic", 0) or 0,
+            }
+            if sum(ideo_raw.values()) > 0:
+                png = ideology_pie_image(country, ideo_raw)
+                chart_file = discord.File(png, filename="ideology.png")
+                pol.set_image(url="attachment://ideology.png")
+                files.append(chart_file)
+        # === END NEW ===
+
         embeds.append(pol)
 
         # INTEL
@@ -2568,7 +2630,7 @@ class SpideyUtils(commands.Cog):
 
         embeds.append(intel)
 
-        await interaction.followup.send(embeds=embeds, ephemeral=True)
+        await interaction.followup.send(embeds=embeds, files=files or None, ephemeral=True)
 
     async def autocomplete_espionage_actions(self, interaction: discord.Interaction, current:str):
         return [
