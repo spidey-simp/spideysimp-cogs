@@ -913,15 +913,14 @@ class SpideyUtils(commands.Cog):
             ][:25]
 
     @history.command(name="view", description="View historical events for a specific country or globally.")
-    @app_commands.describe(country="Optional country name to filter history.", global_view="Set to true to view global history.", year="Filter by a specific year")
-    @app_commands.autocomplete(year=autocomplete_year)
-    async def view_history(self, interaction: discord.Interaction, country: str = None, global_view: bool = False, year: str = None):
+    @app_commands.describe(country="Optional country name to filter history.", year="Filter by a specific year")
+    @app_commands.autocomplete(year=autocomplete_year, country=autocomplete_country)
+    async def view_history(self, interaction: discord.Interaction, country: str = None, year: str = None):
         await interaction.response.defer(thinking=True, ephemeral=False)
 
-        if not global_view and not country:
-            await interaction.followup.send("Please either select global or a country.", ephemeral=True)
-        
-        data = self.bot.get_cog("SpideyUtils").cold_war_data
+        global_view = True if not country else global_view = False
+
+        data = self.cold_war_data
 
         if global_view:
             global_events = data.get("GLOBAL_HISTORY", {})
@@ -945,7 +944,7 @@ class SpideyUtils(commands.Cog):
                 if isinstance(year_data, dict):
                     for title, ev in year_data.items():
                         desc = ev.get("description", "No information available.")
-                        img = ev.get("image")
+                        img = ev.get("IMAGE")
                         dateline = ev.get("dateline")
                         byline = ev.get("byline")
                         quote = ev.get("quote")
@@ -979,7 +978,7 @@ class SpideyUtils(commands.Cog):
         if country not in countries:
             return await interaction.response.send_message(f"❌ Country '{country}' not found.", ephemeral=True)
 
-        country_data = countries[country].get("country_history", {})
+        country_data = countries[country].get("COUNTRY_HISTORY", {})
         if not year:
             embed = discord.Embed(title=f"📜 Historical Timeline – {country}", color=discord.Color.gold())
             for y, ev in sorted(country_data.items()):
