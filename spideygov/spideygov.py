@@ -1991,46 +1991,46 @@ class SpideyGov(commands.Cog):
 
         await interaction.response.send_message(embed=meta, ephemeral=False)
 
-        # Body (single embed, headings bolded)
-        body_txt = _bold_headings_single(b.get("text") or "").strip()
-        if not body_txt:
+        raw_text = b.get("text") or ""
+        if not raw_text.strip():
             return
 
-        # get the meta message we just sent, and create a thread off it
+        if len(raw_text) <= 4000:
+            # single embed; bold headings with a 4000 budget
+            body_txt = _bold_headings_single(raw_text).strip()
+            if body_txt:
+                e = discord.Embed(
+                    title=f"{bill_id} — Text",
+                    description=body_txt,
+                    color=discord.Color.blurple()
+                )
+                await interaction.followup.send(embed=e, allowed_mentions=discord.AllowedMentions.none())
+            return
+
+        # long path: create a thread and post chunked messages
+        # first, get the meta message we just sent
         try:
             meta_msg = await interaction.original_response()
         except Exception:
             meta_msg = None
-
-        if len(body_txt) <= 4000:
-            e = discord.Embed(
-                title=f"{bill_id} — Text",
-                description=body_txt,
-                color=discord.Color.blurple()
-            )
-            await interaction.followup.send(embed=e, allowed_mentions=discord.AllowedMentions.none())
-            return
-
-        # long: thread + chunked plain messages (cleaner than many embeds)
         if not meta_msg:
-            # fallback: post a tiny anchor message to thread off
-            meta_msg = await interaction.followup.send(
-                content=f"**{bill_id} — Full Text** (thread)",
-                wait=True
-            )
+            meta_msg = await interaction.followup.send(content=f"**{bill_id} — Full Text** (thread)", wait=True)
 
         thread = await meta_msg.create_thread(name=f"{bill_id} — Text")
 
-        # conservative chunk size to fit Discord 2000-char hard limit
+        # bold headings across the **entire** body, then chunk to ≤2000 char messages
+        # use the heading-preserving chunker with a big chunk size to get one big string
+        full_bold = "".join(_bold_headings_preserve(raw_text, chunk_size=10**9))
         CHUNK = 1900
-        parts = [body_txt[i:i+CHUNK] for i in range(0, len(body_txt), CHUNK)]
+        parts = [full_bold[i:i+CHUNK] for i in range(0, len(full_bold), CHUNK)]
 
-        # first post: quick header
-        await thread.send(f"Posting full text in **{len(parts)}** parts…", allowed_mentions=discord.AllowedMentions.none())
-
-        for idx, part in enumerate(parts, start=1):
+        await thread.send(
+            f"Posting full text in **{len(parts)}** parts…",
+            allowed_mentions=discord.AllowedMentions.none()
+        )
+        for i, part in enumerate(parts, start=1):
             await thread.send(
-                content=f"*Part {idx}/{len(parts)}*\n{part}",
+                content=f"*Part {i}/{len(parts)}*\n{part}",
                 allowed_mentions=discord.AllowedMentions.none()
             )
 
