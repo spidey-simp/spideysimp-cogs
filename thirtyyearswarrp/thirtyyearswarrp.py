@@ -415,7 +415,7 @@ def bootstrap_from_seed(static: Dict[str, Any], dynamic: Dict[str, Any], seed: D
             continue
         base = deepcopy(modifier_key_defaults)
         seeded = deep_merge(base, overrides or {})
-        dynamic[ckey] = deep_merge(seeded, dyn or {})  # dynamic wins if present
+        dynamic[ckey] = deep_merge(dyn or {}, seeded)  # dynamic wins if present
         dynamic[ckey]["_bootstrap_done"] = True
         applied.append(ckey)
     return applied
@@ -493,7 +493,7 @@ class ThirtyYearsWarRP(commands.Cog):
 
     async def country_name_autocomplete(self, interaction:discord.Interaction, current:str) -> List[app_commands.Choice[str]]:
         choices = [
-            app_commands.Choice(name=country, value=country)
+            app_commands.Choice(name=country.replace("_", " ").title(), value=country)
             for country in self.static_data.get("countries", {}).keys()
             if current.lower() in country.lower()
         ]
@@ -687,3 +687,13 @@ class ThirtyYearsWarRP(commands.Cog):
         save_json(DATA_FILE, self.dynamic_data)
         await interaction.response.send_message(f"✅ Bootstrap complete for: {', '.join(applied) or 'no specific countries (defaults only)'}", ephemeral=True)
 
+    @gm.command(name="reseed_now", description="Force apply seed values (seed wins) and recompute.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def gm_reseed_now(self, interaction: discord.Interaction):
+        seed = load_json(SEED_FILE)
+        for ckey, overrides in (seed.get("countries") or {}).items():
+            ensure_country_defaults(self.static_data, self.dynamic_data, ckey)
+            self.dynamic_data[ckey] = deep_merge(self.dynamic_data[ckey], overrides)  # seed overlays
+        bootstrap_recompute_all(self)
+        save_json(DATA_FILE, self.dynamic_data)
+        await interaction.response.send_message("✅ Reseeded (seed wins) and recomputed.", ephemeral=True)
