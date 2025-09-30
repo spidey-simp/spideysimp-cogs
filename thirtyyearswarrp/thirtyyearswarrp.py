@@ -488,8 +488,8 @@ class ThirtyYearsWarRP(commands.Cog):
         save_json(DATA_FILE, self.dynamic_data)
     
     tyw = app_commands.Group(name="tyw", description="Commands related to the Thirty Years' War RP.")
-    gm = tyw.group(name="gm", description="Game Master commands.")
-    view = tyw.group(name="view", description="View game data.")
+    gm = app_commands.Group(name="gm", description="Game Master commands.", parent=tyw, default_permissions=discord.Permissions(administrator=True))
+    view = app_commands.Group(name="view", description="View game data.", parent=tyw)
 
     async def country_name_autocomplete(self, interaction:discord.Interaction, current:str) -> List[app_commands.Choice[str]]:
         choices = [
