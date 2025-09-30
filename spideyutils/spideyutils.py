@@ -960,6 +960,7 @@ class SpideyUtils(commands.Cog):
     async def view_history(self, interaction: discord.Interaction, country: str = None, year: str = None):
         await interaction.response.defer(thinking=True, ephemeral=False)
 
+        global_view = False
         if not country:
             global_view = True
 

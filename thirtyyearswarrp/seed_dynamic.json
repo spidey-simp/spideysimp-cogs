@@ -1,0 +1,774 @@
+{
+  "countries": {
+    "spanish_empire": {
+      "owner_id": null,
+
+      "treasury": 180,
+      "debt": 60,
+      "income_base": 30,
+      "upkeep_base": 15,
+      "net_revenue_last_turn": 0,
+      "harvest": 95,
+
+      "stability": 8,
+      "civil_unrest": 1,
+      "war_support": 20,
+      "war_exhaustion": 0,
+
+      "organization": 72,
+
+      "population": 12000000,
+      "manpower": 180000,
+      "manpower_recovery": 5,
+
+      "religion": { "Catholic": 96, "Protestant": 3, "Muslim": 1 },
+
+      "build_points": 4,
+      "build_focus": "economy",
+      "unit_pool": {
+        "infantry": 8,
+        "cavalry": 3,
+        "artillery": 4,
+        "warships": 12,
+        "galleys": 8,
+        "transports": 8
+      },
+      "merc_pool": { "infantry": 2, "cavalry": 0, "artillery": 0 },
+      "merc_unpaid_strikes": 0,
+      "queue": [],
+      "recruitment_cap_land": 4,
+      "recruitment_cap_naval": 3,
+      "general_average_skill": 6,
+      "admiral_average_skill": 6,
+
+      "military_posture": "strength",
+      "papal_charge_active": false,
+      "papal_charge_turns": 0,
+
+      "papal_favor": 70,
+      "hre_standing": 10,
+      "prestige": 20,
+
+      "non_core_regions": 34,
+      "core_regions": 51,
+
+      "council_competence": 45,
+      "sovereign_authority": 70,
+
+      "fort_network": 2,
+      "logistics": 0,
+
+      "force_cap": 18,
+
+      "excommunicated": false,
+
+      "blockade_pressure_last_turn": 0,
+
+      "event_flags": {},
+      "temporary_national_spirits": [],
+      "new_history": {},
+
+      "colonial_holdings": 22
+    },
+    "france":
+    {
+    "owner_id": null,
+
+    "treasury": 220,
+    "debt": 60,
+    "income_base": 38,
+    "upkeep_base": 18,
+    "net_revenue_last_turn": 0,
+    "harvest": 105,
+
+    "stability": 20,
+    "civil_unrest": 1,
+    "war_support": 0,
+    "war_exhaustion": 0,
+
+    "organization": 65,
+
+    "population": 17000000,
+    "manpower": 255000,
+    "manpower_recovery": 6,
+
+    "religion": { "Catholic": 80, "Protestant": 20, "Muslim": 0 },
+
+    "build_points": 3,
+    "build_focus": "balanced",
+    "unit_pool": {
+      "infantry": 12,
+      "cavalry": 4,
+      "artillery": 6,
+      "warships": 10,
+      "galleys": 0,
+      "transports": 10
+    },
+    "merc_pool": { "infantry": 0, "cavalry": 0, "artillery": 0 },
+    "merc_unpaid_strikes": 0,
+    "queue": [],
+    "recruitment_cap_land": 3,
+    "recruitment_cap_naval": 2,
+    "general_average_skill": 5,
+    "admiral_average_skill": 4,
+
+    "military_posture": "balanced",
+    "papal_charge_active": false,
+    "papal_charge_turns": 0,
+
+    "papal_favor": 20,
+    "hre_standing": -10,
+    "prestige": 15,
+
+    "non_core_regions": 0,
+    "core_regions": 80,
+    "colonial_holdings": 2,
+
+    "council_competence": 50,
+    "sovereign_authority": 70,
+
+    "fort_network": 2,
+    "logistics": 1,
+
+    "force_cap": 23,
+
+    "excommunicated": false,
+
+    "blockade_pressure_last_turn": 0,
+
+    "event_flags": {},
+    "temporary_national_spirits": [],
+    "new_history": {}
+  },
+  "austria": {
+  "owner_id": null,
+
+  "treasury": 180,
+  "debt": 40,
+  "income_base": 34,
+  "upkeep_base": 17,
+  "net_revenue_last_turn": 0,
+  "harvest": 100,
+
+  "stability": -10,
+  "civil_unrest": 5,
+  "war_support": 10,
+  "war_exhaustion": 0,
+
+  "organization": 60,
+
+  "population": 8000000,
+  "manpower": 130000,
+  "manpower_recovery": 6,
+
+  "religion": { "Catholic": 85, "Protestant": 15, "Muslim": 0 },
+
+  "build_points": 3,
+  "build_focus": "army",
+  "unit_pool": {
+    "infantry": 10,
+    "cavalry": 5,
+    "artillery": 5,
+    "warships": 2,
+    "galleys": 6,
+    "transports": 4
+  },
+  "merc_pool": { "infantry": 0, "cavalry": 0, "artillery": 0 },
+  "merc_unpaid_strikes": 0,
+  "queue": [],
+  "recruitment_cap_land": 3,
+  "recruitment_cap_naval": 1,
+  "general_average_skill": 5,
+  "admiral_average_skill": 2,
+
+  "military_posture": "balanced",
+  "papal_charge_active": false,
+  "papal_charge_turns": 0,
+
+  "papal_favor": 35,
+  "hre_standing": 40,
+  "prestige": 20,
+
+  "non_core_regions": 36,
+  "core_regions": 23,
+  "colonial_holdings": 0,
+
+  "council_competence": 45,
+  "sovereign_authority": 65,
+
+  "fort_network": 3,
+  "logistics": 1,
+
+  "force_cap": 21,
+
+  "excommunicated": false,
+
+  "blockade_pressure_last_turn": 0,
+
+  "event_flags": {},
+  "temporary_national_spirits": [],
+  "new_history": {}
+},
+"ottoman_empire": {
+  "owner_id": null,
+
+  "treasury": 220,
+  "debt": 20,
+  "income_base": 42,
+  "upkeep_base": 20,
+  "net_revenue_last_turn": 0,
+  "harvest": 100,
+
+  "stability": -15,
+  "civil_unrest": 8,
+  "war_support": 0,
+  "war_exhaustion": 12,
+
+  "organization": 65,
+
+  "population": 22000000,
+  "manpower": 330000,
+  "manpower_recovery": 7,
+
+  "religion": { "Catholic": 18, "Protestant": 2, "Muslim": 80 },
+
+  "build_points": 3,
+  "build_focus": "army",
+  "unit_pool": {
+    "infantry": 14,
+    "cavalry": 8,
+    "artillery": 6,
+    "warships": 10,
+    "galleys": 24,
+    "transports": 8
+  },
+  "merc_pool": { "infantry": 2, "cavalry": 1, "artillery": 0 },
+  "merc_unpaid_strikes": 0,
+  "queue": [],
+  "recruitment_cap_land": 4,
+  "recruitment_cap_naval": 3,
+  "general_average_skill": 6,
+  "admiral_average_skill": 5,
+
+  "military_posture": "balanced",
+  "papal_charge_active": false,
+  "papal_charge_turns": 0,
+
+  "papal_favor": 0,
+  "hre_standing": 0,
+  "prestige": 25,
+
+  "non_core_regions": 130,
+  "core_regions": 132,
+  "colonial_holdings": 0,
+
+  "council_competence": 55,
+  "sovereign_authority": 70,
+
+  "fort_network": 3,
+  "logistics": 2,
+
+  "force_cap": 29,
+
+  "excommunicated": false,
+
+  "blockade_pressure_last_turn": 0,
+
+  "event_flags": {},
+  "temporary_national_spirits": [],
+  "new_history": {}
+},
+"england": {
+  "owner_id": null,
+
+  "treasury": 180,
+  "debt": 10,
+  "income_base": 32,
+  "upkeep_base": 16,
+  "net_revenue_last_turn": 0,
+  "harvest": 100,
+
+  "stability": 10,
+  "civil_unrest": 0,
+  "war_support": -5,
+  "war_exhaustion": 0,
+
+  "organization": 68,
+
+  "population": 5500000,
+  "manpower": 82500,
+  "manpower_recovery": 6,
+
+  "religion": { "Catholic": 20, "Protestant": 80, "Muslim": 0 },
+
+  "build_points": 3,
+  "build_focus": "naval",
+  "unit_pool": {
+    "infantry": 10,
+    "cavalry": 4,
+    "artillery": 4,
+    "warships": 18,
+    "galleys": 0,
+    "transports": 10
+  },
+  "merc_pool": { "infantry": 1, "cavalry": 0, "artillery": 0 },
+  "merc_unpaid_strikes": 0,
+  "queue": [],
+  "recruitment_cap_land": 3,
+  "recruitment_cap_naval": 3,
+  "general_average_skill": 5,
+  "admiral_average_skill": 7,
+
+  "military_posture": "balanced",
+  "papal_charge_active": false,
+  "papal_charge_turns": 0,
+
+  "papal_favor": 0,
+  "hre_standing": 0,
+  "prestige": 15,
+
+  "core_regions": 25,
+  "non_core_regions": 23,
+  "colonial_holdings": 3,
+
+  "council_competence": 55,
+  "sovereign_authority": 55,
+
+  "fort_network": 2,
+  "logistics": 1,
+
+  "force_cap": 19,
+
+  "excommunicated": false,
+
+  "blockade_pressure_last_turn": 0,
+
+  "event_flags": {},
+  "temporary_national_spirits": [],
+  "new_history": {}
+},
+"dutch_republic": {
+  "owner_id": null,
+
+  "treasury": 200,
+  "debt": 15,
+  "income_base": 36,
+  "upkeep_base": 14,
+  "net_revenue_last_turn": 0,
+  "harvest": 100,
+
+  "stability": 8,
+  "civil_unrest": 0,
+  "war_support": 5,
+  "war_exhaustion": 0,
+
+  "organization": 66,
+
+  "population": 1600000,
+  "manpower": 24000,
+  "manpower_recovery": 6,
+
+  "religion": { "Catholic": 15, "Protestant": 85, "Muslim": 0 },
+
+  "build_points": 3,
+  "build_focus": "naval",
+  "unit_pool": {
+    "infantry": 8,
+    "cavalry": 2,
+    "artillery": 4,
+    "warships": 14,
+    "galleys": 0,
+    "transports": 10
+  },
+  "merc_pool": { "infantry": 1, "cavalry": 0, "artillery": 0 },
+  "merc_unpaid_strikes": 0,
+  "queue": [],
+  "recruitment_cap_land": 3,
+  "recruitment_cap_naval": 3,
+  "general_average_skill": 6,
+  "admiral_average_skill": 6,
+
+  "military_posture": "siege_warfare",
+  "papal_charge_active": false,
+  "papal_charge_turns": 0,
+
+  "papal_favor": 0,
+  "hre_standing": -20,
+  "prestige": 18,
+
+  "core_regions": 13,
+  "non_core_regions": 0,
+  "colonial_holdings": 3,
+
+  "council_competence": 55,
+  "sovereign_authority": 60,
+
+  "fort_network": 2,
+  "logistics": 1,
+
+  "force_cap": 15,
+
+  "excommunicated": false,
+
+  "blockade_pressure_last_turn": 0,
+
+  "event_flags": {},
+  "temporary_national_spirits": [],
+  "new_history": {}
+},
+"sweden": {
+  "owner_id": null,
+
+  "treasury": 160,
+  "debt": 10,
+  "income_base": 30,
+  "upkeep_base": 14,
+  "net_revenue_last_turn": 0,
+  "harvest": 100,
+
+  "stability": 6,
+  "civil_unrest": 0,
+  "war_support": 30,
+  "war_exhaustion": 0,
+
+  "organization": 74,
+
+  "population": 1500000,
+  "manpower": 28000,
+  "manpower_recovery": 6,
+
+  "religion": { "Catholic": 10, "Protestant": 90, "Muslim": 0 },
+
+  "build_points": 3,
+  "build_focus": "army",
+  "unit_pool": {
+    "infantry": 10,
+    "cavalry": 4,
+    "artillery": 5,
+    "warships": 10,
+    "galleys": 4,
+    "transports": 8
+  },
+  "merc_pool": { "infantry": 2, "cavalry": 1, "artillery": 0 },
+  "merc_unpaid_strikes": 0,
+  "queue": [],
+  "recruitment_cap_land": 3,
+  "recruitment_cap_naval": 2,
+  "general_average_skill": 7,
+  "admiral_average_skill": 5,
+
+  "military_posture": "efficiency",
+  "papal_charge_active": false,
+  "papal_charge_turns": 0,
+
+  "papal_favor": 0,
+  "hre_standing": -5,
+  "prestige": 13,
+
+  "core_regions": 38,
+  "non_core_regions": 10,
+  "colonial_holdings": 0,
+
+  "council_competence": 65,
+  "sovereign_authority": 65,
+
+  "fort_network": 2,
+  "logistics": 1,
+
+  "force_cap": 20,
+
+  "excommunicated": false,
+
+  "blockade_pressure_last_turn": 0,
+
+  "event_flags": {},
+  "temporary_national_spirits": [],
+  "new_history": {}
+},
+"prussia": {
+      "owner_id": null,
+
+      "treasury": 140,
+      "debt": 8,
+      "income_base": 24,
+      "upkeep_base": 12,
+      "net_revenue_last_turn": 0,
+      "harvest": 100,
+
+      "stability": 2,
+      "civil_unrest": 1,
+      "war_support": 0,
+      "war_exhaustion": 0,
+
+      "organization": 64,
+
+      "population": 1000000,
+      "manpower": 16000,
+      "manpower_recovery": 6,
+
+      "religion": { "Catholic": 15, "Protestant": 85, "Muslim": 0 },
+
+      "build_points": 3,
+      "build_focus": "army",
+      "unit_pool": {
+        "infantry": 6,
+        "cavalry": 2,
+        "artillery": 2,
+        "warships": 2,
+        "galleys": 0,
+        "transports": 2
+      },
+      "merc_pool": { "infantry": 1, "cavalry": 0, "artillery": 0 },
+      "merc_unpaid_strikes": 0,
+      "queue": [],
+      "recruitment_cap_land": 2,
+      "recruitment_cap_naval": 1,
+      "general_average_skill": 4,
+      "admiral_average_skill": 2,
+
+      "military_posture": "efficiency",
+      "papal_charge_active": false,
+      "papal_charge_turns": 0,
+
+      "papal_favor": 0,
+      "hre_standing": 10,
+      "prestige": 6,
+
+      "core_regions": 17,
+      "non_core_regions": 0,
+      "colonial_holdings": 0,
+
+      "council_competence": 45,
+      "sovereign_authority": 55,
+
+      "fort_network": 2,
+      "logistics": 0,
+
+      "force_cap": 12,
+
+      "excommunicated": false,
+
+      "blockade_pressure_last_turn": 0,
+
+      "event_flags": {},
+      "temporary_national_spirits": [],
+      "new_history": {}
+    },
+    "bavaria": {
+      "owner_id": null,
+
+      "treasury": 110,
+      "debt": 35,
+      "income_base": 22,
+      "upkeep_base": 12,
+      "net_revenue_last_turn": 0,
+      "harvest": 100,
+
+      "stability": 12,
+      "civil_unrest": 0,
+      "war_support": 8,
+      "war_exhaustion": 0,
+
+      "organization": 62,
+
+      "population": 1200000,
+      "manpower": 19000,
+      "manpower_recovery": 6,
+
+      "religion": { "Catholic": 95, "Protestant": 5, "Muslim": 0 },
+
+      "build_points": 3,
+      "build_focus": "army",
+      "unit_pool": {
+        "infantry": 6,
+        "cavalry": 2,
+        "artillery": 2,
+        "warships": 0,
+        "galleys": 0,
+        "transports": 0
+      },
+      "merc_pool": { "infantry": 1, "cavalry": 0, "artillery": 0 },
+      "merc_unpaid_strikes": 0,
+      "queue": [],
+      "recruitment_cap_land": 2,
+      "recruitment_cap_naval": 0,
+      "general_average_skill": 5,
+      "admiral_average_skill": 0,
+
+      "military_posture": "hunker_down",
+      "papal_charge_active": false,
+      "papal_charge_turns": 0,
+
+      "papal_favor": 75,
+      "hre_standing": 20,
+      "prestige": 18,
+
+      "core_regions": 5,
+      "non_core_regions": 0,
+      "colonial_holdings": 0,
+
+      "council_competence": 55,
+      "sovereign_authority": 65,
+
+      "fort_network": 2,
+      "logistics": 0,
+
+      "force_cap": 12,
+
+      "excommunicated": false,
+
+      "blockade_pressure_last_turn": 0,
+
+      "event_flags": {},
+      "temporary_national_spirits": [],
+      "new_history": {},
+
+      "landlocked": true
+    },
+    "saxony": {
+  "owner_id": null,
+
+  "treasury": 120,
+  "debt": 8,
+  "income_base": 18,
+  "upkeep_base": 10,
+  "net_revenue_last_turn": 0,
+  "harvest": 100,
+
+  "stability": 4,
+  "civil_unrest": 0,
+  "war_support": -5,
+  "war_exhaustion": 0,
+
+  "organization": 60,
+
+  "population": 1400000,
+  "manpower": 21000,
+  "manpower_recovery": 6,
+
+  "religion": { "Catholic": 15, "Protestant": 85, "Muslim": 0 },
+
+  "build_points": 2,
+  "build_focus": "army",
+  "unit_pool": {
+    "infantry": 6,
+    "cavalry": 2,
+    "artillery": 2,
+    "warships": 0,
+    "galleys": 0,
+    "transports": 0
+  },
+  "merc_pool": { "infantry": 1, "cavalry": 0, "artillery": 0 },
+  "merc_unpaid_strikes": 0,
+  "queue": [],
+  "recruitment_cap_land": 2,
+  "recruitment_cap_naval": 0,
+  "general_average_skill": 4,
+  "admiral_average_skill": 0,
+
+  "military_posture": "balanced",
+  "papal_charge_active": false,
+  "papal_charge_turns": 0,
+
+  "papal_favor": 0,
+  "hre_standing": 12,
+  "prestige": 8,
+
+  "core_regions": 7,
+  "non_core_regions": 0,
+  "colonial_holdings": 0,
+
+  "council_competence": 50,
+  "sovereign_authority": 60,
+
+  "fort_network": 2,
+  "logistics": 0,
+
+  "force_cap": 12,
+
+  "excommunicated": false,
+
+  "blockade_pressure_last_turn": 0,
+
+  "event_flags": {},
+  "temporary_national_spirits": [],
+  "new_history": {},
+
+  "landlocked": true
+},
+"denmark": {
+  "owner_id": null,
+
+  "treasury": 180,
+  "debt": 12,
+  "income_base": 32,
+  "upkeep_base": 16,
+  "net_revenue_last_turn": 0,
+  "harvest": 100,
+
+  "stability": 8,
+  "civil_unrest": 0,
+  "war_support": 5,
+  "war_exhaustion": 0,
+
+  "organization": 66,
+
+  "population": 2300000,
+  "manpower": 35000,
+  "manpower_recovery": 6,
+
+  "religion": { "Catholic": 5, "Protestant": 95, "Muslim": 0 },
+
+  "build_points": 3,
+  "build_focus": "naval",
+  "unit_pool": {
+    "infantry": 8,
+    "cavalry": 3,
+    "artillery": 3,
+    "warships": 14,
+    "galleys": 6,
+    "transports": 8
+  },
+  "merc_pool": { "infantry": 1, "cavalry": 0, "artillery": 0 },
+  "merc_unpaid_strikes": 0,
+  "queue": [],
+  "recruitment_cap_land": 3,
+  "recruitment_cap_naval": 3,
+  "general_average_skill": 5,
+  "admiral_average_skill": 6,
+
+  "military_posture": "balanced",
+  "papal_charge_active": false,
+  "papal_charge_turns": 0,
+
+  "papal_favor": 0,
+  "hre_standing": 0,
+  "prestige": 12,
+
+  "core_regions": 40,
+  "non_core_regions": 1,
+  "colonial_holdings": 0,
+
+  "council_competence": 55,
+  "sovereign_authority": 65,
+
+  "fort_network": 2,
+  "logistics": 1,
+
+  "force_cap": 16,
+
+  "excommunicated": false,
+
+  "blockade_pressure_last_turn": 0,
+
+  "event_flags": {},
+  "temporary_national_spirits": [],
+  "new_history": {}
+}
+
+
+
+
+
+  }
+}

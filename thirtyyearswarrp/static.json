@@ -1,0 +1,896 @@
+{
+    "meta": {
+  "schema_version": "0.3",
+  "campaign": "Thirty Years War AU",
+  "start_year": 1615
+},
+"canon": {
+  "religions": ["Catholic","Protestant","Muslim"],
+  "religion_colors": {
+    "Catholic": "#be9200",
+    "Protestant": "#1f77b4",
+    "Muslim": "#04811b"
+  },
+  "regions": {
+    "low_countries": ["brabant","flanders","hainaut","limburg","luxembourg","zeeland","holland","utrecht","gelderland","overijssel","groningen","friesland","drenthe"],
+    "baltic": ["skane","blekinge","halland","smaland","ostergotland","sodermanland","uppland","livonia","curonia","prussia","east_prussia","pomerania"],
+    "balkans": ["croatia","slavonia","bosnia","serbia","wallachia","transylvania","banat","hungary_south"],
+    "central_germany": ["saxony","thuringia","anhalt","hessen","franconia","bohemia","moravia","silesia"],
+    "oresund": ["helsingor","helsingborg","copenhagen","malmo"],
+    "siege": ["*"]
+  }
+},
+    "countries": {
+        "spanish_empire": {
+            "name": "Spanish Empire",
+            "playable_level": 1,
+            "government": "Monarchy",
+            "religion": "Catholic",
+            "habsburg": true,
+            "forced_religion": true,
+            "leader": {
+                "name": "Felipe III",
+                "description": "Felipe the Pious is the son of a legacy of inbreeding. He's primarily reliant on the Duke of Lerma for his policy.",
+                "title": "King",
+                "full_style": "King of Spain, Portugal, Sardinia, Naples, and Sicily; Duke of Milan",
+                "image": "https://vignette.wikia.nocookie.net/world-monarchs/images/e/ed/Philip_III_SP.jpg/revision/latest?cb=20150820062124"
+            },
+            "flag": "https://1.bp.blogspot.com/-efRnWNWvucg/WxL6vlRaj-I/AAAAAAAAOQM/IKeXksUNvVgXYyM1b1w5cNhuG8DIGHZnACLcBGAs/s400/Flag_of_the_Low_Countries_Habsburg_Spansih.png",
+            "description": "Ruled by the Spanish Habsburgs, the Spanish have a strong desire to preserve Catholic tradition. The Empire stretches across the seas thanks to the Treaty of Tordesillas. Additionally, the European expansion remains strong with control over the Western Mediterranean to as far East as Naples, while holding as far North as the Spanish Netherlands. But the Spanish Empire is on its downturn. The English defeating the Spanish Armada in 1588 and the Dutch gaining independence in 1609 have been insults to its progress. The treasury is depleting. The rise of Protestantism is an insult.",
+            "national_spirits": [
+                {
+                    "id": "galleons_of_the_indies",
+                    "name": "Galleons of the Indies",
+                    "description": "From Veracruz to Manila our treasure lanes glitter. Where the sun falls, Spanish silver rises—and Europe counts by our coin.",
+                    "tags": ["naval","economy","colonial"],
+                    "visible": true,
+                    "conditions": [
+                    "treasury_debt_ratio < 0.75"
+                    ],
+                    "effects": [
+                    { "phase":"turn_tick","scope":"country","key":"treasury","op":"add","value":100 },
+                    { "phase":"combat","scope":"naval","key":"combat_mod","op":"add","value":15 }
+                    ]
+                },
+                {
+                    "id": "sword_and_censer",
+                    "name": "Sword and Censer",
+                    "description": "We carry the Cross and the pike together. Let heresy whisper; our priests and captains answer as one.",
+                    "tags": ["religion","internal_security","combat"],
+                    "visible": true,
+                    "conditions": [
+                    "religion.majority == 'Catholic'",
+                    "leader.excommunicated == false"
+                    ],
+                    "effects": [
+                    { "phase":"turn_tick","scope":"religion:Catholic","key":"growth_rate","op":"add","value":0.6 },
+                    { "phase":"turn_tick","scope":"religion_non_catholic","key":"growth_rate","op":"mul","value":0.95 },
+                    { "phase":"combat","scope":"religion_non_catholic","key":"combat_mod","op":"add","value":20 }
+                    ]
+                },
+                {
+                    "id": "fires_of_granada",
+                    "name": "Fires of Granada",
+                    "description": "Since 1492 the hearth-fire of the Faith has burned in Iberia. Its warmth is zeal; its light does not fade.",
+                    "tags": ["religion","internal_security"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"turn_tick","scope":"religion_non_catholic","key":"growth_rate","op":"mul","value":0.75 }
+                    ]
+                },
+                {
+                    "id": "tercios_of_flanders",
+                    "name": "Tercios of Flanders",
+                    "description": "Squares of pike and shot that taught Europe to march. Our veterans carry campaigns and catechisms alike.",
+                    "tags": ["combat","army","morale"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                        { "phase":"combat", "scope":"land",  "key":"combat_mod", "op":"add", "value": 8 },
+                        { "phase":"combat", "scope":"siege", "key":"combat_mod", "op":"add", "value": 4 }
+                    ]
+                    }
+
+                ],
+
+            "history": {
+                "1580": "The Iberian Union has been formed on the peninsula absorbing Aragon, Castile, and Portugal under one crown.",
+                "1585": "The Anglo-Spanish War began.",
+                "1588": "The Spanish Armada was obliterated in the English Channel.",
+                "1604": "The Anglo-Spanish War ends with the Treaty of London.",
+                "1609": "A decree called the \"Expulsion of the Moriscos\" was made. The decree expelled Spain's Christians that were converts from Islam."
+            }
+        },
+        "france": {
+            "name": "France",
+            "playable_level": 1,
+            "government": "Monarchy",
+            "religion": "Catholic",
+            "forced_religion": false,
+            "leader": {
+                "name": "Louis XIII",
+                "description":"Louis the Just would come to rely on the famous Cardinal Richelieu (1624). Louis has focused a lot of his effort on centralizing French power under the monarchy.",
+                "title": "King",
+                "full_style": "Most high, most potent and most excellent Prince, {name}, by the Grace of God, King of France and of Navarre, Most Christian Majesty",
+                "image": "https://www.worldhistory.org/uploads/images/16139.jpg"
+            },
+            "flag": "https://i.pinimg.com/originals/0d/b0/6a/0db06a9ebc905b92fb5723534b4fbd90.png",
+            "description": "After the rise of Protestants in the French Wars of Religion in the late 1500s, Henry IV declared suum cuique meaning let each have their own faith. Now, although France is largely Catholic, the rise of the Huguenots has left the French more open to Protestantism. Will they side with the other Catholics if a war breaks out? Or perhaps would it be more prudent to side with the Protestants to put an end to the Habsburg disease?",
+            "national_spirits": [
+                {
+                    "id": "suum_cuique",
+                    "name": "Suum Cuique",
+                    "description": "“To each his own.” Let conscience rest and the realm stand; France is broad enough to shelter many prayers—until steel is required.",
+                    "tags": ["religion","stability"],
+                    "visible": true,
+                    "conditions": [
+                    "forced_religion == false"
+                    ],
+                    "effects": [
+                    { "phase":"permanent","scope":"country","key":"stability_mod","op":"add","value":15 }
+                    ]
+                },
+                {
+                    "id": "break_the_ring",
+                    "name": "Break the Ring",
+                    "description": "Habsburg claws encircle Europe. France will prise them back—hinge by hinge, border by border.",
+                    "tags": ["combat","morale"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"combat","scope":"habsburg_states","key":"combat_mod","op":"add","value":12 },
+                    { "phase":"turn_tick","scope":"country","key":"war_support","op":"add","value":2 }
+                    ]
+                },
+                {
+                "id": "intendants_of_the_crown",
+                "name": "Intendants of the Crown",
+                "description": "Royal commissioners bind province to throne—paper, seal, and sword in quiet alignment.",
+                "tags": ["stability","economy","administration"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                    { "phase":"turn_tick", "scope":"country", "key":"stability_mod", "op":"add", "value": 2 },
+                    { "phase":"turn_tick", "scope":"country", "key":"treasury",      "op":"add", "value": 15 }
+                ]
+                },
+                {
+                "id": "gunfoundries_of_the_seine",
+                "name": "Gunfoundries of the Seine",
+                "description": "Brass and iron cast for the king—parks of siege guns to answer any wall.",
+                "tags": ["combat","siege","artillery"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                    { "phase":"combat", "scope":"siege", "key":"combat_mod", "op":"add", "value": 8 },
+                    { "phase":"combat", "scope":"land",  "key":"combat_mod", "op":"add", "value": 2 }
+                ]
+                }
+
+                ],
+            "history":{
+                "1598": "Henry IV issues the Edict of Nantes which ends the French Wars of Religion.",
+                "1610": "Henry IV dies leaving a 9-year-old as the heir to the French throne. His mother holds regency."
+            }
+        },
+        "austria": {
+            "name": "Archduchy of Austria",
+            "playable_level":1,
+            "government": "Monarchy",
+            "religion":"Catholic",
+            "habsburg": true,
+            "forced_religion": true,
+            "leader": {
+                "name": "Matthias",
+                "description":"Matthias kept the motto *Concordia lumine maior* which ironically means \"United is stronger in the light\". Known for having little political initiative, can he ward off the oncoming war?",
+                "title": "Emperor",
+                "full_style": "Holy Roman Emperor, King of Bohemia, Hungary and Croatia, King in Germany, Archduke of Austria and Further Austria",
+                "image": "https://images.fineartamerica.com/images/artworkimages/mediumlarge/1/1-matthias-holy-roman-emperor-hans-von-aachen.jpg"
+            },
+            "flag": "https://i.pinimg.com/originals/22/72/81/2272811a3258a5d064dd37b7cb651f21.png",
+            "description": "The Austrian Empire has been ordained by the Pope as God's chosen place in the Germanic States. Now, with rising tensions in Bohemia (currently under Austria's control), will Austria be able to preserve the Catholic charge that the Pope has bestowed upon it? Or will the Protestants disrupt the Holy Roman Empire? None shall disrupt the Emperor's right to preserve order in Central Europe.",
+            "national_spirits": [
+                {
+                    "id": "guardian_of_the_altar",
+                    "name": "Guardian of the Altar",
+                    "description": "Spain keeps the sunset; we keep the dawn. From Vienna to Prague the bells are ours to defend.",
+                    "tags": ["religion","internal_security"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"turn_tick","scope":"religion:Catholic","key":"growth_rate","op":"add","value":0.3 },
+                    { "phase":"turn_tick","scope":"religion_non_catholic","key":"growth_rate","op":"mul","value":0.97 }
+                    ]
+                },
+                {
+                    "id": "bohemian_powder_keg",
+                    "name": "Bohemian Powder Keg",
+                    "description": "Prague murmurs, princes scheme. If we hold the city, we must master its soul—or be blown apart by it.",
+                    "tags": ["religion","stability"],
+                    "visible": true,
+                    "conditions": [ "holds('bohemia')" ],
+                    "effects": [
+                    { "phase":"turn_tick","scope":"country","key":"stability_mod","op":"add","value":-5 },
+                    { "phase":"turn_tick","scope":"religion:Protestant","key":"growth_rate","op":"add","value":0.8 }
+                    ]
+                },
+                {
+                    "id": "hofkriegsrat",
+                    "name": "Hofkriegsrat",
+                    "description": "The Aulic War Council drums order into the ranks—at the price of endless ledgers.",
+                    "tags": ["combat","army","administration"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                        { "phase":"combat",    "scope":"land",    "key":"combat_mod", "op":"add", "value": 6 },
+                        { "phase":"turn_tick", "scope":"country", "key":"treasury",   "op":"add", "value": -10 }
+                    ]
+                    },
+                {
+                    "id": "military_frontier",
+                    "name": "Military Frontier",
+                    "description": "Grenzers and palisades along the borderlands—hard men on harder ground.",
+                    "tags": ["combat","geography","frontier"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                        { "phase":"combat", "scope":"region:balkans", "key":"combat_mod", "op":"add", "value": 6 },
+                        { "phase":"combat", "scope":"terrain:hills",  "key":"combat_mod", "op":"add", "value": 4 }
+                    ]
+                }
+                ],
+            "history":{
+                "1593": "13 years' war begins between the Holy Roman Empire and the Ottomans.",
+                "1604": "Stephen Bocskai, a Hungarian noble, revolts against the Habsburg dominion of Hungary.",
+                "1608": "Matthias secures Austria, Hungary, and Moravia.",
+                "1612": "Matthias is elected Holy Roman Emperor."
+            }
+        },
+        "ottoman_empire": {
+        "name": "Ottoman Empire",
+        "playable_level": 1,
+        "government": "Monarchy",
+        "religion": "Muslim",
+        "forced_religion": false,
+        "leader": {
+            "name": "Ahmed I",
+            "description":"Prior to Ahmed's reign, the Sultans consistently committed fratricide (the killing of brothers) to protect their claim. Ahmed ended that practice.",
+            "title": "Sultan",
+            "full_style": "Sultan of the Ottoman Empire, Padishah of the Three Continents, Protector of the Holy Cities, Caliph of Islam",
+            "image": "https://alchetron.com/cdn/ahmed-i-e676f99b-e837-4802-a017-e92c24090a8-resize-750.jpg"
+        },
+        "flag": "https://www.reddit.com/media?url=https%3A%2F%2Fi.redd.it%2F4uke9wztydm21.png",
+        "description": "While the Christians squabble over altars and princes, the Sublime State endures. Our janissaries drill on the Bosporus, our timariots ride the Balkan roads, and the gates of the Danube answer to Istanbul. Let Rome and Vienna chatter—when the crescent moves, borders move with it.",
+        "national_spirits": [
+            {
+                "id": "keeper_of_the_millets",
+                "name": "Keeper of the Millets",
+                "description": "Under the Sultan’s justice, nations pray in peace—and pay in full. Order makes revenue; revenue makes empire.",
+                "tags": ["religion","internal_security","economy"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"turn_tick","scope":"country","key":"civil_unrest","op":"add","value":-2 },
+                { "phase":"turn_tick","scope":"religion_non_muslim","key":"growth_rate","op":"mul","value":1.02 },
+                { "phase":"turn_tick","scope":"religion:Muslim","key":"growth_rate","op":"add","value":0.2 }
+                ]
+            },
+            {
+                "id": "sons_of_the_padishah",
+                "name": "Sons of the Padishah",
+                "description": "Steel in rank and step in time. The household troops redraw maps—at a cost counted in gold.",
+                "tags": ["combat","army","economy"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat","scope":"land","key":"combat_mod","op":"add","value":12 },
+                { "phase":"turn_tick","scope":"country","key":"treasury","op":"add","value":-50 }
+                ]
+            },
+            {
+                "id": "keys_of_the_bosporus",
+                "name": "Keys of the Bosporus",
+                "description": "Where two seas meet, the Sultan sets the lock. Tribute flows with the current.",
+                "tags": ["naval","economy","geography"],
+                "visible": true,
+                "conditions": [ "holds('constantinople')" ],
+                "effects": [
+                { "phase":"turn_tick","scope":"country","key":"treasury","op":"add","value":60 },
+                { "phase":"combat","scope":"naval","key":"combat_mod","op":"add","value":5 }
+                ]
+            },
+            {
+                "id": "timariot_sipahis",
+                "name": "Timariot Sipahis",
+                "description": "Horse and bow turned cuirass and lance—land-for-service riders who break lines at the gallop.",
+                "tags": ["combat","army","cavalry"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                    { "phase":"combat", "scope":"terrain:plains", "key":"combat_mod", "op":"add", "value": 8 },
+                    { "phase":"combat", "scope":"land",          "key":"combat_mod", "op":"add", "value": 2 }
+                ]
+                }
+
+            ],
+        "history":{
+            "1593":"13 years' war begins between the Holy Roman Empire and the Ottomans.",
+            "1603": "Ottoman-Safavid War begins between the Ottomans and the Safavid Empire.",
+            "1612": "The Treaty of Nasuh Pasha ends the conflict with Safavid Persia."
+        }
+        },
+        "england": {
+            "name": "England",
+            "playable_level":2,
+            "government":"Monarchy",
+            "religion":"Protestant",
+            "forced_religion":false,
+            "leader":{
+                "name": "James VI and I",
+                "description": "James has already long served as the King of Scotland and more recently became King of England and Ireland hence the dual numerology. James was baptized Catholic but was raised Protestant. He remains obsessed with unifying the parliaments of England and Scotland.",
+                "title": "King",
+                "full_style": "King of Great Britain, France and Ireland, Defender of the Faith, etc.",
+                "image":"https://images.squarespace-cdn.com/content/v1/50adfa2ae4b0cc1d786569eb/1615744720925-8VWU8P1WC0FQSYLNWV6W/20210317+1024px-Portrait_of_James_I_of_England_wearing_the_jewel_called_the_Three_Brothers_in_his_hat.jpg"
+            },
+            "flag": "https://cdn.shopify.com/s/files/1/2494/7352/products/73fb4a5f8967812ef24e0b95a6a3a1b0_1200x1200.jpg?v=1522240301",
+            "description": "The Crown has long held a backseat especially after our pushback from the French in the 100 years' war. However, it is time for England to have its time in the sun. Under Elizabeth I, we demolished the Spanish Armada in 1588. Now, my lord, we should set up a permanent colony in the New World. But in the interest of ruling the waves, is it worth it for the crown to drift into the rising tensions of Continental Europe? Can we sit on the backburners again? Or should we claim our place in history?",
+            "national_spirits":[
+                {
+                    "id": "mistress_of_the_seas",
+                    "name": "Mistress of the Seas",
+                    "description": "Our timbers are oak and our gunners steady; the Narrow Seas are England’s moat. Let any foe test it—our broadsides will do the arguing.",
+                    "tags": ["naval","economy"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"combat",    "scope":"naval",   "key":"combat_mod", "op":"add", "value": 20 },
+                    { "phase":"turn_tick", "scope":"country", "key":"treasury",   "op":"add", "value": 20 }
+                    ]
+                },
+                {
+                    "id": "protestant_bulwark",
+                    "name": "Protestant Bulwark",
+                    "description": "Papist powder may smoulder, yet England stands unshaken. We keep our Bibles close and our matchlocks closer.",
+                    "tags": ["religion","stability"],
+                    "visible": true,
+                    "conditions": [
+                    "religion.majority == 'Protestant'",
+                    "forced_religion == false"
+                    ],
+                    "effects": [
+                    { "phase":"turn_tick", "scope":"religion:Protestant",      "key":"growth_rate", "op":"add", "value": 0.4 },
+                    { "phase":"turn_tick", "scope":"religion_non_protestant",  "key":"growth_rate", "op":"mul", "value": 0.98 }
+                    ]
+                },
+                {
+                    "id": "gunpowder_vigilance",
+                    "name": "Gunpowder Vigilance",
+                    "description": "After Fawkes, every cellar is searched and every whisper weighed. Treason fears the lantern.",
+                    "tags": ["internal_security"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"turn_tick", "scope":"country", "key":"civil_unrest", "op":"add", "value": -2 }
+                    ]
+                },
+                {
+                    "id": "new_world_ventures",
+                    "name": "New World Ventures",
+                    "description": "Chartered companies stake our claim across the western ocean—timber, tobacco, and hope returning in every hold.",
+                    "tags": ["economy","colonial"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"turn_tick", "scope":"country", "key":"treasury", "op":"add", "value": 40 }
+                    ]
+                }
+            ],
+            "history":{
+                "1588":"The Spanish Armada was obliterated in the English Channel.",
+                "1589":"The English Counter Armada to Spain is destroyed by the Spanish.",
+                "1605":"Guy Fawkes and other Catholics attempt to blow up the Parliament of England but failed.",
+                "1607":"Jamestown is officially founded as the first English colony in the Americas."
+            }
+        },
+        "dutch_republic": {
+            "name":"The Dutch Republic",
+            "playable_level":2,
+            "government":"Republic",
+            "religion":"Protestant",
+            "forced_religion":false,
+            "leader":{
+                "name":"Maurice",
+                "title":"Stadtholder",
+                "description": "Maurice of Orange was not an excellent politician, but he did pioneer tons of new techniques in siege warfare, which is what helped repel the Spanish. Because of repelling them, Maurice is still very popular.",
+                "image":"https://uploads4.wikiart.org/images/john-riley/prince-maurice-of-nassau-prince-of-orange.jpg"
+            },
+            "flag":"https://cdn10.bigcommerce.com/s-hhbbk/products/1946/images/42919/HIST0370__09999.1580522711.1280.1280.png?c=2",
+            "description":"Our recent independence might suggest a weakness to an ignorant sort. But our treasury overfloweth. We recently established a colony in the East Indies, and the spices alone have made our land rich. Yet, Spain in all her might knocks on our door with threats of reclamation. Surely, with our riches, we can push back the power of the Habsburgs. Soon, the Dutch shall be a center for all trade. ",
+            "national_spirits": [
+            {
+                "id": "voc_charters",
+                "name": "VOC Charters",
+                "description": "Spices, pepper, porcelain—Amsterdam’s ledgers run like rivers of gold. The Company sails where profit points, and the Republic prospers.",
+                "tags": ["economy","naval","colonial"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"turn_tick", "scope":"country", "key":"treasury",  "op":"add", "value": 70 },
+                { "phase":"combat",    "scope":"naval",   "key":"combat_mod","op":"add", "value": 5 }
+                ]
+            },
+            {
+                "id": "siege_successors",
+                "name": "Siege Successors",
+                "description": "Maurice drills by measure, fires by volley, and takes walls by wit. Our engineers write the new book of war.",
+                "tags": ["combat","army"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat", "scope":"siege",                 "key":"combat_mod", "op":"add", "value": 12 }
+                ]
+            },
+            {
+                "id": "polder_tactics",
+                "name": "Polder Tactics",
+                "description": "Dikes, ditches, and flooded fields turn invaders to mire. We fight on ground we make ourselves.",
+                "tags": ["combat","geography"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat", "scope":"region:low_countries",  "key":"combat_mod", "op":"add", "value": 8 },
+                { "phase":"combat", "scope":"flooded_terrain",       "key":"combat_mod", "op":"add", "value": 6 }
+                ]
+            },
+            {
+                "id": "victor_over_the_hegemon",
+                "name": "Victor over the Hegemon",
+                "description": "We cast off Madrid’s yoke. We will not bend again. Against Habsburg steel our resolve hardens.",
+                "tags": ["combat","morale"],
+                "visible": true,
+                "conditions": [ "independent == true" ],
+                "effects": [
+                { "phase":"combat",    "scope":"habsburg_states", "key":"combat_mod", "op":"add", "value": 8 },
+                { "phase":"combat",    "scope":"region:low_countries","key":"combat_mod", "op":"add", "value": 3 },
+                { "phase":"turn_tick", "scope":"country",          "key":"war_support","op":"add","value": 2 }
+                ]
+            }
+            ],
+
+            "history":{
+                "1581": "The Dutch declared independence from the Spanish.",
+                "1588":"The beginning of the Dutch Golden Age of trade, science, art, etc. begins.\nThe provinces decide on the formation of a republic after losing British and French support.",
+                "1609": "The Twelve Years' Truce is signed between the Dutch and Spanish temporarily ending the conflict."
+            }
+        },
+        "sweden": {
+            "name": "Swedish Empire",
+            "playable_level":2,
+            "government":"Monarchy",
+            "religion":"Protestant",
+            "forced_religion":false,
+            "leader":{
+                "name":"Gustavus Adolphus",
+                "description":"Considered one of the best military minds of the era, Gustavus Adolphus brought Sweden to the multinational stage. He's sometimes called the \"Father of Modern Warfare.\"",
+                "title": "King",
+                "image": "https://upload.wikimedia.org/wikipedia/commons/2/22/Attributed_to_Jacob_Hoefnagel_-_Gustavus_Adolphus%2C_King_of_Sweden_1611-1632_-_Google_Art_Project.jpg"
+            },
+            "flag": "https://upload.wikimedia.org/wikipedia/commons/3/33/Flag_of_Sweden_%281562%E2%80%931650%29.svg",
+            "description":" Hej! Vill du help Sweden to grow as the empire of the North? While the impending tensions of the South likely won't mean anything for us, surely we shan't stand idly by if our trading routes through the Danish isles are interrupted? Our Gustavus-Adolphus has disciplined an unmatchable military just in case! Tak!",
+            "national_spirits": [
+            {
+                "id": "swedish_drill",
+                "name": "Swedish Drill",
+                "description": "Step, volley, advance—again. Our files move like clockwork and break like thunder.",
+                "tags": ["combat","army"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat", "scope":"land", "key":"combat_mod", "op":"add", "value": 12 }
+                ]
+            },
+            {
+                "id": "leather_guns",
+                "name": "Leather Guns",
+                "description": "Light pieces roll with the line and speak before the pikes arrive. Walls and ranks both feel the bite.",
+                "tags": ["combat","siege","artillery"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat", "scope":"siege", "key":"combat_mod", "op":"add", "value": 12 },
+                { "phase":"combat", "scope":"land",  "key":"combat_mod", "op":"add", "value": 4 }
+                ]
+            },
+            {
+                "id": "masters_of_winter",
+                "name": "Masters of Winter",
+                "description": "Snow blinds the untrained; for us it is a cloak. We march where others freeze.",
+                "tags": ["combat","geography"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat", "scope":"terrain:snow",   "key":"combat_mod", "op":"add", "value": 8 },
+                { "phase":"combat", "scope":"terrain:forest", "key":"combat_mod", "op":"add", "value": 6 }
+                ]
+            },
+            {
+                "id": "baltic_sea_lines",
+                "name": "Baltic Sea Lines",
+                "description": "The routes from Stockholm to Livonia and Prussia are our lifeline. Our prows know every wind of the Baltic.",
+                "tags": ["naval","economy","geography"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat",    "scope":"region:baltic", "key":"combat_mod", "op":"add", "value": 6 },
+                { "phase":"turn_tick", "scope":"country",       "key":"treasury",   "op":"add", "value": 25 }
+                ]
+            },
+            {
+                "id": "lion_of_the_north",
+                "name": "Lion of the North",
+                "description": "For the Protestant cause we draw the sword and do not sheathe it lightly.",
+                "tags": ["combat","religion","morale"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat", "scope":"religion_non_protestant", "key":"combat_mod", "op":"add", "value": 6 }
+                ]
+            }
+            ],
+            "history":{
+                "1610":"Ingrian War between Russia and Sweden begins.",
+                "1611":"Denmark goes to war with Sweden, which begins the Kalmar War.",
+                "1613":"The Kalmar War ends with the Treaty of Knäred."
+            }
+        },
+        "prussia": {
+            "name":"Duchy of Prussia",
+            "playable_level":2,
+            "government":"Duchy",
+            "religion":"Protestant",
+            "forced_religion":false,
+            "leader":{
+                "name":"Albert Frederick",
+                "description":"Afflicted by recurring mental illness, Albert Frederick leaves much governance to regents. His sympathies toward Poland shape court politics.",
+                "regent_gov":true,
+                "title":"Duke",
+                "image":"https://upload.wikimedia.org/wikipedia/commons/3/3e/Portrait_of_Albert_Frederick%2C_Duke_of_Prussia.jpg"
+            },
+            "flag":"https://upload.wikimedia.org/wikipedia/commons/e/ef/Flag_of_Ducal_Prussia.svg",
+            "description":"A lean border duchy with Teutonic habits and sharp drill. Though not an imperial elector, our officers prize discipline over grandeur. Others forge cathedrals; we forge rifles.",            
+            "national_spirits": [
+                {
+                    "id": "teutonic_remnant",
+                    "name": "Teutonic Remnant",
+                    "description": "Mail gave way to musket, but the rule of drill remains. The old Order’s habit of discipline clings to our ranks.",
+                    "tags": ["combat","army","discipline"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase": "combat", "scope": "land",  "key": "combat_mod", "op": "add", "value": 8 },
+                    { "phase": "combat", "scope": "siege", "key": "combat_mod", "op": "add", "value": 6 }
+                    ]
+                },
+                {
+                    "id": "marcher_tactics",
+                    "name": "Marcher Tactics",
+                    "description": "Marsh, forest, and frost—our captains fight on hard ground with harder men.",
+                    "tags": ["combat","geography"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase": "combat", "scope": "terrain:forest", "key": "combat_mod", "op": "add", "value": 6 },
+                    { "phase": "combat", "scope": "terrain:marsh",  "key": "combat_mod", "op": "add", "value": 6 }
+                    ]
+                },
+                {
+                    "id": "baltic_marches",
+                    "name": "Baltic Marches",
+                    "description": "From Königsberg to the Niemen the wind smells of pine and powder; our banners know those roads by heart.",
+                    "tags": ["combat","geography","economy"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase": "combat",    "scope": "region:baltic", "key": "combat_mod", "op": "add", "value": 5 },
+                    { "phase": "turn_tick", "scope": "country",       "key": "treasury",   "op": "add", "value": 10 }
+                    ]
+                },
+                {
+                    "id": "ducal_estates",
+                    "name": "Ducal Estates",
+                    "description": "Frugal coffers and obedient estates: not rich, but ready.",
+                    "tags": ["economy","stability"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase": "turn_tick", "scope": "country", "key": "treasury",      "op": "add", "value": 15 },
+                    { "phase": "turn_tick", "scope": "country", "key": "stability_mod", "op": "add", "value": 2 }
+                    ]
+                }
+                ],
+            "history":{
+                "1594": "A union of Prussia and Brandenburg is formed after Albert Frederick marries his daughter to John Sigismund of Brandenburg."
+            }
+        },
+        "bavaria": {
+            "name":"Duchy of Bavaria",
+            "playable_level":3,
+            "government":"Duchy",
+            "religion":"Catholic",
+            "forced_religion":true,
+            "leader":{
+                "name":"Maximilian I",
+                "description":"Maximilian the Great is well-known for being a hugely devout Catholic. He was a huge proponent of the Counter-Reformation and created the Catholic League of Imperial Princes.",
+                "title":"Duke",
+                "image":"https://upload.wikimedia.org/wikipedia/commons/6/69/Joachim_von_Sandrart_-_Maximilian_I%2C_Elector_of_Bavaria.jpg"
+            },
+            "flag": "https://upload.wikimedia.org/wikipedia/commons/e/e0/Rautenflagge_%2824_Rauten%29.svg",
+            "description":" Often touted as the strongest Catholic elector of the Holy Roman Empire. Her influence is not going to be matched by the disgusting Protestants of Prussia. While they gain influence from their troops, we build towering cathedrals and receive favors from the Pope. Good luck to those Prussians as they burn in inferno!",
+            "national_spirits": [
+                {
+                    "id": "catholic_league_standard",
+                    "name": "Standard of the Catholic League",
+                    "description": "Maximilian’s banner gathers the faithful—pikes shoulder to shoulder, chaplains at their heels. Against heresy we close ranks.",
+                    "tags": ["combat","religion","morale"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"combat", "scope":"religion_non_catholic", "key":"combat_mod", "op":"add", "value": 8 },
+                    { "phase":"turn_tick", "scope":"country",                  "key":"war_support","op":"add", "value": 1 }
+                    ]
+                },
+                {
+                    "id": "jesuit_colleges",
+                    "name": "Jesuit Colleges",
+                    "description": "Pulpit and classroom march together. Confessors tend the soul; tutors tend the state.",
+                    "tags": ["religion","stability"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"turn_tick", "scope":"religion:Catholic",     "key":"growth_rate",  "op":"add", "value": 0.4 },
+                    { "phase":"turn_tick", "scope":"country",               "key":"stability_mod","op":"add", "value": 2 }
+                    ]
+                },
+                {
+                    "id": "fortresses_of_the_isar",
+                    "name": "Fortresses of the Isar",
+                    "description": "Bavarian stone buys Bavarian time. Our guns sit high; our enemies climb hard.",
+                    "tags": ["combat","geography","siege"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"combat", "scope":"siege",          "key":"combat_mod", "op":"add", "value": 8 },
+                    { "phase":"combat", "scope":"terrain:hills",  "key":"combat_mod", "op":"add", "value": 4 }
+                    ]
+                },
+                {
+                    "id": "bavarian_court_finances",
+                    "name": "Bavarian Court Finances",
+                    "description": "Debts from splendor linger, yet the ducal ledgers are kept with a careful hand.",
+                    "tags": ["economy"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"turn_tick", "scope":"country", "key":"treasury", "op":"add", "value": 15 }
+                    ]
+                }
+                ],
+            "history":{
+                "1597": "Albert V died leaving Bavaria in severe debt from his heavy patronage of the arts.",
+                "1609": "Maximilian founds the Catholic League of Imperial Princes."
+            }
+        },
+        "saxony": {
+            "name":"Electorate of Saxony",
+            "playable_level":3,
+            "government":"Electorate",
+            "religion":"Protestant",
+            "forced_religion":false,
+            "leader":{
+                "name":"John George I",
+                "description":"Though John George is a well-known protestant, the rise of Prussia-Brandenburg on his doorstep has caused him to fear Calvinist encroachment and Habsburg pressure.",
+                "title":"Elector",
+                "image":"https://upload.wikimedia.org/wikipedia/commons/6/68/Johann_Georg_I_Saxony.jpg"
+            },
+            "flag":"https://upload.wikimedia.org/wikipedia/commons/4/44/Flag_of_Electoral_Saxony.svg",
+            "description":"We have cast off the chains of Rome and embraced the true faith of Luther, born upon our very soil. Saxony does not tremble before Austrian decrees or Bavarian boasts. We lead the Protestant cause from the heart of the Empire. The Emperor may sit in Vienna, but the people’s souls are ours.",
+            "national_spirits": [
+            {
+                "id": "luthers_hearth",
+                "name": "Luther’s Hearth",
+                "description": "Wittenberg’s fire still warms our towns. Hymn and hammer both keep the faith.",
+                "tags": ["religion","stability"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"turn_tick", "scope":"religion:Protestant",         "key":"growth_rate",  "op":"add", "value": 0.4 },
+                { "phase":"turn_tick", "scope":"country",                      "key":"stability_mod","op":"add","value": 2 }
+                ]
+            },
+            {
+                "id": "workshop_militias",
+                "name": "Workshop Militias",
+                "description": "Guild pikes and parish muskets—no parade ground finery, just men who know their streets and fields.",
+                "tags": ["combat","geography"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat", "scope":"terrain:forest", "key":"combat_mod", "op":"add", "value": 6 },
+                { "phase":"combat", "scope":"terrain:hills",  "key":"combat_mod", "op":"add", "value": 4 }
+                ]
+            },
+            {
+                "id": "broker_of_the_elbe",
+                "name": "Broker of the Elbe",
+                "description": "Vienna talks of crowns and Prague of creeds; Saxony minds the road between. We hold what’s ours by choosing our ground.",
+                "tags": ["combat","hre","geography"],
+                "visible": true,
+                "conditions": [],
+                "effects": [
+                { "phase":"combat", "scope":"region:central_germany", "key":"combat_mod", "op":"add", "value": 6 }
+                ]
+            }
+            ]
+        },
+        "denmark": {
+            "name":"Kingdom of Denmark and Norway",
+            "playable_level":3,
+            "government":"Monarchy",
+            "religion":"Protestant",
+            "forced_religion":false,
+            "leader":{
+                "name":"Christian IV",
+                "description":"Considered by many to be an incredibly popular and stable ruler.",
+                "title":"King",
+                "full_style":"By the Grace of God, King of Denmark and Norway, the Wends and the Goths, Duke of Schleswig, Holstein, Stormarn and Dithmarschen, Count of Oldenburg and Delmenhorst.",
+                "image":"https://upload.wikimedia.org/wikipedia/commons/b/b6/Christian_IV_Pieter_Isaacsz_1612.jpg"
+            },
+            "flag":"https://upload.wikimedia.org/wikipedia/commons/9/9c/Flag_of_Denmark.svg",
+            "description":" We guard the straits, the key to all northern trade. Let the Swedes grumble and the Habsburgs preach. Nothing moves between the Baltic and the world without our consent. With fleets to rival any in Europe and a crown blessed by Protestant resolve, Denmark will not be ignored.",
+            "national_spirits": [
+                {
+                    "id": "sound_dues",
+                    "name": "Sound Dues",
+                    "description": "Pay the toll or tack back. The King’s coffers rise and fall with the Øresund—and ships learn to lower their flags.",
+                    "tags": ["economy","naval","geography"],
+                    "visible": true,
+                    "conditions": [ "holds('oresund')" ],
+                    "effects": [
+                    { "phase":"turn_tick", "scope":"country",        "key":"treasury",   "op":"add", "value": 70 },
+                    { "phase":"combat",    "scope":"strait_battle",  "key":"combat_mod", "op":"add", "value": 6 },
+                    { "phase":"combat",    "scope":"region:baltic",  "key":"combat_mod", "op":"add", "value": 3 }
+                    ]
+                },
+                {
+                    "id": "shipyards_of_copenhagen",
+                    "name": "Shipyards of Copenhagen",
+                    "description": "Oak and iron by royal command: hulls tight, guns true, crews drilled. The King’s fleet answers with thunder.",
+                    "tags": ["naval","combat"],
+                    "visible": true,
+                    "conditions": [],
+                    "effects": [
+                    { "phase":"combat", "scope":"naval", "key":"combat_mod", "op":"add", "value": 12 }
+                    ]
+                },
+                {
+                    "id": "lutheran_steadfastness",
+                    "name": "Lutheran Steadfastness",
+                    "description": "Psalms on the quarterdeck and sermons at the harvest—Denmark’s conscience is firm, and so is her hand.",
+                    "tags": ["religion","stability"],
+                    "visible": true,
+                    "conditions": [
+                    "religion.majority == 'Protestant'",
+                    "forced_religion == false"
+                    ],
+                    "effects": [
+                    { "phase":"turn_tick", "scope":"religion:Protestant",        "key":"growth_rate",  "op":"add", "value": 0.3 },
+                    { "phase":"turn_tick", "scope":"country",                    "key":"stability_mod","op":"add", "value": 2 }
+                    ]
+                },
+                {
+                    "id": "forts_of_the_sound",
+                    "name": "Forts of the Sound",
+                    "description": "Kronborg’s guns watch the narrows; stone and shot buy time while the beacons burn.",
+                    "tags": ["combat","siege","geography"],
+                    "visible": true,
+                    "conditions": [ "holds('helsingor')" ],
+                    "effects": [
+                    { "phase":"combat", "scope":"siege",          "key":"combat_mod", "op":"add", "value": 8 },
+                    { "phase":"combat", "scope":"region:oresund", "key":"combat_mod", "op":"add", "value": 4 }
+                    ]
+                }
+                ],
+            "history":{
+                "1605":"Christian IV begins a series of expeditions to Greenland.",
+                "1611":"Denmark goes to war with Sweden, which begins the Kalmar War.",
+                "1613":"The Kalmar War ends with the Treaty of Knäred"
+            }
+        }
+    },
+    "hre_election": {
+        "electors": [
+            {"id":"bohemia",     "holder":"austria", "type":"secular"},
+            {"id":"bavaria",     "holder":"bavaria",         "type":"secular"},
+            {"id":"saxony",      "holder":"saxony",          "type":"secular"},
+            {"id":"brandenburg", "holder":"prussia",         "type":"secular"},
+            {"id":"mainz",       "holder":"GM",              "type":"ecclesiastical"},
+            {"id":"trier",       "holder":"GM",              "type":"ecclesiastical"},
+            {"id":"cologne",     "holder":"GM",              "type":"ecclesiastical"}
+        ],
+        "rules": {
+            "majority_required": 4,
+            "tie_break": "incumbent"
+        }
+    },
+    "map_index": {
+    "capitals": {
+        "spanish_empire": "madrid",
+        "france": "paris",
+        "austria": "vienna",
+        "ottoman_empire": "constantinople",
+        "england": "london",
+        "dutch_republic": "amsterdam",
+        "sweden": "stockholm",
+        "prussia": "konigsberg",
+        "bavaria": "munich",
+        "saxony": "dresden",
+        "denmark": "copenhagen"
+    },
+    "key_provinces": {
+        "spanish_netherlands": ["brabant","flanders","hainaut","luxembourg"],
+        "constantinople": ["constantinople"],
+        "helsingor": ["helsingor"],
+        "oresund": ["helsingor","helsingborg","copenhagen","malmo"]
+    },
+    "terrain": {
+        "hills": ["tyrol","styria","franconian_jura","erzgebirge"],
+        "forest": ["saxony","bohemia","smaland","uppland","prussia","east_prussia"],
+        "snow":   ["lapland","norrland","finland","karelia","ingria"]
+    },
+    "straits": ["oresund","bosporus","dardanelles"]
+    },
+    "aliases": {
+    "spanish_empire": ["spain","habsburg spain","castile","iberia"],
+    "austria": ["austria","habsburgs","archduchy of austria"],
+    "ottoman_empire": ["ottomans","sublime porte","turkey"],
+    "england": ["england","english crown","gb"],
+    "dutch_republic": ["netherlands","holland","united provinces"],
+    "sweden": ["swedish empire","sweden"],
+    "prussia": ["ducal prussia","east prussia"],
+    "bavaria": ["duchy of bavaria"],
+    "saxony": ["electorate of saxony","saxony-electorate"],
+    "denmark": ["denmark-norway","denmark & norway","dk"]
+    },
+   "defaults": {
+    "stability_base": 0,
+    "war_support_base": 0,
+    "growth_rates": {
+        "religion_base": 0.0,
+        "religion_cap_per_turn": 2.0
+    },
+    "rolls": {
+        "success_threshold": 50,
+        "extreme_margin": 25
+    },
+    "caps": {
+        "stability_min": -50,
+        "stability_max": 50,
+        "war_support_min": -20,
+        "war_support_max": 100
+    }
+    },
+    "hre_ui": {
+        "tie_break_rule": "incumbent",
+        "show_gm_votes": true,
+        "elector_labels": {
+            "bohemia": "Crown of Bohemia (Austrian-held)",
+            "bavaria": "Bavaria (AU Elector)",
+            "brandenburg": "Brandenburg (proxied by Prussia)",
+            "saxony": "Electorate of Saxony",
+            "mainz": "Archbishopric of Mainz",
+            "trier": "Archbishopric of Trier",
+            "cologne": "Archbishopric of Cologne"
+        }
+        }
+}
