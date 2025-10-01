@@ -1882,7 +1882,6 @@ class SpideyCourts(commands.Cog):
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         case_number="Case number (e.g., 1:25-cv-000001-SS)",
-        title="Short title for the order",
         related_entry="Optional docket entry this resolves (e.g., a motion)",
         file="Upload .pdf/.docx/.txt/etc. to bypass modal for long orders",
         summary="(Optional) One-line docket summary"

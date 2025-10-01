@@ -697,3 +697,51 @@ class ThirtyYearsWarRP(commands.Cog):
         bootstrap_recompute_all(self)
         save_json(DATA_FILE, self.dynamic_data)
         await interaction.response.send_message("✅ Reseeded (seed wins) and recomputed.", ephemeral=True)
+
+    @gm.command(name="create_test_country", description="Create a test country for debugging.")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(name="Defaults to test_country")
+    async def gm_create_test_country(self, interaction: discord.Interaction, name: str = "test_country"):
+        if name in self.static_data.get("countries", {}):
+            return await interaction.response.send_message(f"❌ Country `{name}` already exists in static data.", ephemeral=True)
+        if name in self.dynamic_data:
+            return await interaction.response.send_message(f"❌ Country `{name}` already exists in dynamic data.", ephemeral=True)
+
+        # Add minimal static shell
+        self.static_data.setdefault("countries", {})[name] = {
+            "name": "Test Country",
+            "description": "A country created for testing/debugging.",
+            "government": "Monarchy",
+            "religion": "Catholic",
+            "leader": {"name": "Test Leader", "title": "Duke"},
+            "flag": None,
+            "national_spirits": [
+                {
+                    "id": "test_spirit",
+                    "name": "Test Spirit",
+                    "description": "A test national spirit.",
+                    "tags": ["test","stability"],
+                    "visible": True,
+                    "conditions": [],
+                    "effects": [
+                        { "phase":"permanent", "scope":"country", "key":"stability_mod", "op":"add", "value": 5 }
+                    ]
+                }
+            ]
+        }
+
+        # Ensure dynamic block exists with sane defaults
+        ensure_country_defaults(self.static_data, self.dynamic_data, name)
+
+        # Compute admin_cap/overextension immediately so UI shows them
+        try:
+            recompute_capacity_block(self, name)
+        except Exception:
+            # safe-guard if function name/scope differs in your file
+            pass
+
+        # Persist
+        save_json(STATIC_FILE, self.static_data)
+        save_json(DATA_FILE, self.dynamic_data)
+
+        await interaction.response.send_message(f"✅ Created test country `{name}` in static and dynamic data.", ephemeral=True)
