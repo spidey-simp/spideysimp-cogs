@@ -1,0 +1,520 @@
+{
+  "policies": {
+    "build_focus": {
+        "image": "https://i.pinimg.com/736x/43/b2/86/43b286910b58ca887fe4dae74e46319b.jpg",
+      "description": "Adjust national build priority.",
+      "cooldown_turns": 2,
+      "options": {
+        "balanced": {
+          "description": "No particular bias.",
+          "effects_active": []
+        },
+        "naval": {
+          "description": "Favor ship construction and naval upkeep efficiency.",
+          "effects_active": [
+            { "phase":"permanent","scope":"country","key":"rule:build_bias_naval","op":"set","value":0.20 },
+            { "phase":"permanent","scope":"country","key":"recruitment_cap_naval","op":"add","value":1 }
+          ]
+        },
+        "siege": {
+          "description": "Favor siege equipment and sappers.",
+          "effects_active": [
+            { "phase":"permanent","scope":"country","key":"rule:build_bias_siege","op":"set","value":0.20 },
+            { "phase":"permanent","scope":"country","key":"rule:siege_train_capacity","op":"add","value":1 }
+          ]
+        },
+        "army": {
+          "description": "Favor land units and army upkeep efficiency.",
+          "effects_active": [
+            { "phase":"permanent","scope":"country","key":"rule:build_bias_army","op":"set","value":0.20 },
+            { "phase":"permanent","scope":"country","key":"recruitment_cap_land","op":"add","value":1 }
+          ]
+        },
+        "economy": {
+          "description": "Favor economic projects and revenues.",
+          "effects_active": [
+            { "phase":"permanent","scope":"country","key":"income_base","op":"add","value":2 },
+            { "phase":"permanent","scope":"country","key":"rule:build_bias_economy","op":"set","value":0.20 }
+          ]
+        },
+        "religion": {
+          "description": "Favor religious construction and conversion.",
+          "effects_active": [
+            { "phase":"permanent","scope":"religion:state","key":"growth_rate","op":"add","value":0.2 },
+            { "phase":"permanent","scope":"country","key":"rule:build_bias_religion","op":"set","value":0.20 }
+          ]
+        }
+      }
+    },
+
+    "military_posture": {
+        "image":"https://crossfireamersfoort.wordpress.com/wp-content/uploads/2012/07/nrdlingenterciotorralto.jpg",
+      "description": "Set the standing doctrine of your forces.",
+      "cooldown_turns": 2,
+      "options": {
+        "balanced": {
+          "description": "No special doctrine.",
+          "effects_active": []
+        },
+        "strength": {
+          "description": "Heavier formations, decisive shock.",
+          "effects_active": [
+            { "phase":"permanent","scope":"land","key":"combat_mod","op":"add","value":10 },
+            { "phase":"permanent","scope":"naval","key":"combat_mod","op":"add","value":10 },
+            { "phase":"permanent","scope":"country","key":"rule:post_attack_org_penalty","op":"set","value":3 }
+          ]
+        },
+        "efficiency": {
+          "description": "Maneuver, drill, and economy of force.",
+          "on_enact": [
+            { "phase":"instant","scope":"country","key":"organization","op":"add","value":10 }
+          ],
+          "effects_active": [
+            { "phase":"permanent","scope":"country","key":"rule:org_loss_mult_attack","op":"set","value":0.5 },
+            { "phase":"permanent","scope":"country","key":"rule:org_loss_mult_move","op":"set","value":0.75 }
+          ]
+        },
+        "hunker_down": {
+          "description": "Hold ground at all costs.",
+          "effects_active": [
+            { "phase":"permanent","scope":"defense","key":"combat_mod","op":"add","value":20 },
+            { "phase":"permanent","scope":"country","key":"rule:org_loss_mult_defense","op":"set","value":0.25 },
+            { "phase":"permanent","scope":"country","key":"rule:org_loss_mult_attack","op":"set","value":1.5 }
+          ]
+        },
+        "siege_warfare": {
+          "description": "Guns, trenches, and methodical reduction.",
+          "effects_active": [
+            { "phase":"permanent","scope":"siege","key":"combat_mod","op":"add","value":15 }
+          ]
+        }
+      }
+    },
+
+    "forced_religion": {
+        "image":"https://i.pinimg.com/originals/5f/e0/8d/5fe08d156949426f5f1090b5a0cc296d.jpg",
+      "description": "Toggle whether the realm enforces the state religion.",
+      "cooldown_turns": 6,
+      "options": {
+        "true": {
+          "notes": "Compute minority_pct = 100 - religion[state_religion]. Apply first matching tier.",
+          "tier_key": "minority_pct",
+          "tiers": [
+            {
+              "threshold_pct_lt": 10,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-8 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":3 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 25,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-18 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":6 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 40,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-28 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":9 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 60,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-38 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":12 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-5 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 80,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-48 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":16 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-10 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 101,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-60 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":20 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-20 },
+                { "phase":"instant","scope":"country","key":"event_flags.religion_crisis","op":"set","value":"heretic_majority" }
+              ]
+            }
+          ],
+          "conditional": [
+            {
+              "when": "state_religion == 'Catholic'",
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"papal_favor","op":"add","value":20 }
+              ]
+            }
+          ]
+        },
+      "false": {
+          "on_enact": [
+            { "phase":"instant","scope":"country","key":"stability","op":"add","value":15 },
+            { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":-5 }
+          ],
+          "conditional": [
+            {
+              "when": "state_religion == 'Catholic'",
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"papal_favor","op":"add","value":-50 }
+              ]
+            }
+          ]
+        }
+      }
+    },
+
+    "state_religion": {
+        "image":"https://miro.medium.com/v2/resize:fit:1200/1*ToDrQVkMj5vl1nZ_RIaAPg.jpeg",
+      "description": "Adopt a different state confession.",
+      "cooldown_turns": 8,
+      "options": {
+        "Catholic": {
+          "description": "Crown by altar and Rome.",
+          "notes": "Compute new_share = religion['Catholic']; shock_pct = 100 - new_share.",
+          "tier_key": "shock_pct",
+          "tiers": [
+            {
+              "threshold_pct_lt": 25,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-15 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":6 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-6 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 50,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-30 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":10 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-10 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-10 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 75,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-45 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":15 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-15 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-15 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 101,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-60 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":20 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-25 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-25 },
+                { "phase":"instant","scope":"country","key":"event_flags.religion_crisis","op":"set","value":"confessional_flip" }
+              ]
+            }
+          ],
+          "conditional": [
+            { "when": "forced_religion == true",
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-10 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":4 }
+              ]
+            },
+            { "when": "prev_state_religion != 'Catholic'",
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"papal_favor","op":"add","value":20 }
+              ]
+            }
+          ]
+        },
+
+        "Protestant": {
+          "description": "Scripture and estates gain primacy.",
+          "notes": "Compute new_share = religion['Protestant']; shock_pct = 100 - new_share.",
+          "tier_key": "shock_pct",
+          "tiers": [
+            {
+              "threshold_pct_lt": 25,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-15 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":6 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-6 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 50,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-30 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":10 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-10 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-10 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 75,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-45 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":15 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-15 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-15 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 101,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-60 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":20 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-25 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-25 },
+                { "phase":"instant","scope":"country","key":"event_flags.religion_crisis","op":"set","value":"confessional_flip" }
+              ]
+            }
+          ],
+          "conditional": [
+            { "when": "forced_religion == true",
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-10 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":4 }
+              ]
+            },
+            { "when": "prev_state_religion == 'Catholic'",
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"papal_favor","op":"add","value":-40 }
+              ]
+            }
+          ]
+        },
+
+        "Muslim": {
+          "description": "The Law and the Caliphate’s mantle.",
+          "notes": "Compute new_share = religion['Muslim']; shock_pct = 100 - new_share.",
+          "tier_key": "shock_pct",
+          "tiers": [
+            {
+              "threshold_pct_lt": 25,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-15 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":6 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-6 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 50,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-30 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":10 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-10 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-10 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 75,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-45 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":15 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-15 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-15 }
+              ]
+            },
+            {
+              "threshold_pct_lt": 101,
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-60 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":20 },
+                { "phase":"instant","scope":"country","key":"war_support","op":"add","value":-25 },
+                { "phase":"instant","scope":"country","key":"prestige","op":"add","value":-25 },
+                { "phase":"instant","scope":"country","key":"event_flags.religion_crisis","op":"set","value":"confessional_flip" }
+              ]
+            }
+          ],
+          "conditional": [
+            { "when": "forced_religion == true",
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"stability","op":"add","value":-10 },
+                { "phase":"instant","scope":"country","key":"civil_unrest","op":"add","value":4 }
+              ]
+            },
+            { "when": "prev_state_religion == 'Catholic'",
+              "on_enact": [
+                { "phase":"instant","scope":"country","key":"papal_favor","op":"add","value":-50 }
+              ]
+            }
+          ]
+        }
+      }
+    },
+
+    "taxation_level": {
+        "image":"https://images.fineartamerica.com/images/artworkimages/mediumlarge/2/the-tax-collector-marinus-van-reymerswaele.jpg",
+      "description": "Set realm-wide tax intensity.",
+      "cooldown_turns": 2,
+      "options": {
+        "very_low": {
+          "description": "Lenient imposts.",
+          "effects_active": [
+            { "phase":"permanent","scope":"country","key":"income_base","op":"add","value":-2 },
+            { "phase":"permanent","scope":"country","key":"stability","op":"add","value":3 },
+            { "phase":"permanent","scope":"country","key":"civil_unrest","op":"add","value":-2 }
+          ]
+        },
+        "low": {
+          "description": "Mild taxation.",
+          "effects_active": [
+            { "phase":"permanent","scope":"country","key":"income_base","op":"add","value":-1 },
+            { "phase":"permanent","scope":"country","key":"stability","op":"add","value":1 },
+            { "phase":"permanent","scope":"country","key":"civil_unrest","op":"add","value":-1 }
+          ]
+        },
+        "medium": {
+          "description": "Customary dues.",
+          "effects_active": []
+        },
+        "high": {
+          "description": "Assertive levies.",
+          "effects_active": [
+            { "phase":"permanent","scope":"country","key":"income_base","op":"add","value":2 },
+            { "phase":"permanent","scope":"country","key":"stability","op":"add","value":-2 },
+            { "phase":"permanent","scope":"country","key":"civil_unrest","op":"add","value":2 }
+          ]
+        },
+        "very_high": {
+          "description": "Extraction at the limit.",
+          "effects_active": [
+            { "phase":"permanent","scope":"country","key":"income_base","op":"add","value":4 },
+            { "phase":"permanent","scope":"country","key":"stability","op":"add","value":-5 },
+            { "phase":"permanent","scope":"country","key":"civil_unrest","op":"add","value":4 }
+          ],
+          "conditional": [
+            { "when": "debt > treasury",
+              "effects_active": [
+                { "phase":"permanent","scope":"country","key":"prestige","op":"add","value":-3 }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+    "edicts": {
+        "persecute_heretics": {
+
+        },
+        "jesuit_educations":{
+
+        },
+        "suggest_canonization": {
+            "name": "Suggest Canonization",
+            "description": "Propose a candidate for sainthood to Rome.",
+            "requires": ["state_religion == 'Catholic'"],
+            "cost_treasury": 10,
+            "cooldown_turns": 4,
+            "per_turn_limit": 1,
+            "visibility": "public",
+            "tiering": {
+                "key": "matrix",
+                "rows": [
+                { "cond": "religion['Catholic'] < 25 || council_competence < 25", "tier": "fail_outright" },
+                { "cond": "(religion['Catholic'] < 50) || (council_competence < 50)", "tier": "weak" },
+                { "cond": "(religion['Catholic'] < 70) || (council_competence < 70)", "tier": "guess" },
+                { "cond": "else", "tier": "strong" }
+                ]
+            },
+            "pools": {
+                "names": [
+                "Fr. Matteo Rinaldi","Sr. Isabella de la Cruz","Br. Tomás de Ávila",
+                "Fr. Jean-Baptiste Aumont","Sr. Caterina dell’Arno","Fr. Miguel de Segura",
+                "Hermit of Morvan","Sr. Beatriz de Alcántara"
+                ],
+                "good_effects": [
+                { "label": "Pilgrimage surge", "effects": [
+                    {"phase":"instant","scope":"country","key":"prestige","op":"add","value":5},
+                    {"phase":"instant","scope":"country","key":"papal_favor","op":"add","value":10},
+                    {"phase":"turn_tick","scope":"country","key":"stability","op":"add","value":4,"duration_turns":1},
+                    {"phase":"turn_tick","scope":"country","key":"treasury","op":"add","value":60,"duration_turns":1}
+                ]},
+                { "label": "Jesuit glow", "effects": [
+                    {"phase":"instant","scope":"country","key":"papal_favor","op":"add","value":12},
+                    {"phase":"turn_tick","scope":"religion:Catholic","key":"growth_rate","op":"add","value":0.4,"duration_turns":2}
+                ]},
+                { "label": "Miracle tales", "effects": [
+                    {"phase":"instant","scope":"country","key":"prestige","op":"add","value":8},
+                    {"phase":"turn_tick","scope":"country","key":"civil_unrest","op":"add","value":-2,"duration_turns":2}
+                ]}
+                ],
+                "bad_effects": [
+                { "label": "Hagiography debunked", "effects": [
+                    {"phase":"instant","scope":"country","key":"papal_favor","op":"add","value":-8},
+                    {"phase":"turn_tick","scope":"country","key":"stability","op":"add","value":-5,"duration_turns":2}
+                ]},
+                { "label": "Local scandal", "effects": [
+                    {"phase":"instant","scope":"country","key":"prestige","op":"add","value":-6},
+                    {"phase":"turn_tick","scope":"country","key":"civil_unrest","op":"add","value":3,"duration_turns":1}
+                ]}
+                ]
+            },
+            "tiers": {
+                "fail_outright": {
+                "ui": { "mode": "notify_only" },
+                "outcome": {
+                    "text": "We were unable to find anyone recently worthy of canonization.",
+                    "effects": []
+                }
+                },
+                "weak": {
+                "ui": { "mode": "confirm_only", "show_effects": false },
+                "rolls": {
+                    "papal_accept_chance": "0.50" 
+                },
+                "on_accept": {
+                    "pick": { "from": "bad_effects", "weights": [1,1] }
+                },
+                "on_reject": {
+                    "text": "The Vatican refused the petition.",
+                    "effects": [
+                    {"phase":"instant","scope":"country","key":"papal_favor","op":"add","value":-5}
+                    ]
+                }
+                },
+                "guess": {
+                "ui": { "mode": "choose_between_two_hidden", "show_effects": false },
+                "supply": {
+                    "A": { "pick": {"from":"good_effects", "weights":[1,1,1]} },
+                    "B": { "pick": {"from":"bad_effects",  "weights":[1,1]} }
+                }
+                },
+                "strong": {
+                "ui": { "mode": "choose_between_two", "show_effects": true },
+                "supply": {
+                    "A": { "pick": {"from":"good_effects", "weights":[1,1,1]} },
+                    "B": { "pick": {"from":"good_effects", "weights":[1,1,1]} }
+                },
+                "bonus_effects": [
+                    {"phase":"instant","scope":"country","key":"papal_favor","op":"add","value":5}
+                ]
+                }
+            }
+        },
+            "elevate_to_nobility":{
+
+            },
+            "print_bibles":{
+
+            },
+            "grain_subsidies":{
+
+            },
+            "war_games":{
+
+            },
+            "festival":{
+
+            }
+    }
+}

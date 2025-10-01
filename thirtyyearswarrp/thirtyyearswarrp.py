@@ -31,6 +31,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_FILE = os.path.join(BASE_DIR, "static.json")
 DATA_FILE = os.path.join(BASE_DIR, "data.json")
 SEED_FILE = os.path.join(BASE_DIR, "seed_dynamic.json")
+ACTIONS_FILE = os.path.join(BASE_DIR, "actions.json")
 
 
 RELIGION_COLORS = {
@@ -472,7 +473,26 @@ def bootstrap_recompute_all(self) -> None:
         if c in self.dynamic_data:
             recompute_capacity_block(self, c)
 
+def catholic_share(dyn): return float(dyn.get("religion",{}).get("Catholic",0))
+def can_afford(dyn, cost): return dyn.get("treasury",0) >= cost
 
+def apply_effects(dyn, effects, now_turn, duration_default=1):
+    # effects with 'instant' change dyn immediately (clamped by MODIFIER_CAPS)
+    # effects with 'turn_tick' are pushed into dyn['temporary_national_spirits'] with expiry
+    for eff in effects:
+        phase = eff["phase"]
+        if phase == "instant":
+            # mutate dyn in-place, clamp to caps where relevant
+            pass
+        elif phase == "turn_tick":
+            spirit = {
+                "id": f"edict_{now_turn}_{random.randint(1000,9999)}",
+                "name": "Edict Effect",
+                "visible": False,
+                "expires_on_turn": now_turn + eff.get("duration_turns", duration_default),
+                "effects": [eff]  # you can store many
+            }
+            dyn.setdefault("temporary_national_spirits", []).append(spirit)
 
 
 
@@ -483,6 +503,7 @@ class ThirtyYearsWarRP(commands.Cog):
 
         self.dynamic_data = load_json(DATA_FILE)
         bootstrap_recompute_all(self)
+        self.actions_data = load_json(ACTIONS_FILE)
 
     async def cog_unload(self):
         save_json(DATA_FILE, self.dynamic_data)
@@ -490,6 +511,7 @@ class ThirtyYearsWarRP(commands.Cog):
     tyw = app_commands.Group(name="tyw", description="Commands related to the Thirty Years' War RP.")
     gm = app_commands.Group(name="gm", description="Game Master commands.", parent=tyw, default_permissions=discord.Permissions(administrator=True))
     view = app_commands.Group(name="view", description="View game data.", parent=tyw)
+    actions = app_commands.Group(name="actions", description="Perform game actions.", parent=tyw)
 
     async def country_name_autocomplete(self, interaction:discord.Interaction, current:str) -> List[app_commands.Choice[str]]:
         choices = [
@@ -505,6 +527,26 @@ class ThirtyYearsWarRP(commands.Cog):
             for key in modifier_key_defaults.keys()
             if current.lower() in key.lower()
         ][:25]
+    
+    async def run_suggest_canonization(self, country, edict_cfg, turn):
+        dyn = self.dynamic_data[country]
+        if "Catholic" != self.static_data["countries"][country]["religion"]:
+            return await self.reply("❌ State religion must be Catholic.")
+        if not can_afford(dyn, edict_cfg["cost_treasury"]):
+            return await self.reply("❌ Insufficient treasury.")
+
+        # choose tier
+        cath = catholic_share(dyn)
+        cc   = dyn.get("council_competence", 50)
+        if cath < 25 or cc < 25:
+            tier = "fail_outright"
+        elif cath < 50 or cc < 50:
+            tier = "weak"
+        elif cath < 70 or cc < 70:
+            tier = "guess"
+        else:
+            tier = "strong"
+
 
 
     # --- GM: initialize dynamic data from static -------------------------------
@@ -745,3 +787,145 @@ class ThirtyYearsWarRP(commands.Cog):
         save_json(DATA_FILE, self.dynamic_data)
 
         await interaction.response.send_message(f"✅ Created test country `{name}` in static and dynamic data.", ephemeral=True)
+
+    async def policy_key_autocomplete(self, interaction: discord.Interaction, current: str):
+        policy_dict = self.actions_data.get("policies", {}) or {}
+        keys = list(policy_dict.keys())
+        return [
+            app_commands.Choice(
+                name=key.replace("_", " ").title(),
+                value=key
+            )
+            for key in keys
+            if current.lower() in key.lower()
+        ][:25]
+
+
+    async def policy_option_autocomplete(self, interaction: discord.Interaction, current: str):
+        policy_dict = self.actions_data.get("policies", {}) or {}
+        # which policy did the user pick in the same slash command?
+        policy_choice = getattr(interaction.namespace, "policy", None)
+
+        if not policy_choice or policy_choice not in policy_dict:
+            return []  # no policy chosen yet or invalid
+
+        options = policy_dict[policy_choice].get("options", {}) or {}
+        out = []
+
+        for opt_key, opt_val in options.items():
+            # visible label (keep short-ish)
+            label = opt_key.replace("_", " ").title()
+            desc = (opt_val.get("description") or "")
+            # let users match by key or description text
+            if current.lower() in opt_key.lower() or (desc and current.lower() in desc.lower()):
+                # Choice.name has a length cap; keep it tidy
+                shown = f"{label} — {desc}"[:100] if desc else label
+                out.append(app_commands.Choice(name=shown, value=opt_key))
+
+        return out[:25]
+    
+    async def my_country_autocomplete(self, interaction: discord.Interaction, current: str):
+        user_id = interaction.user.id
+        choices = []
+        for country, dyn in self.dynamic_data.items():
+            if dyn.get("owner_id") == user_id or user_id == GM_ID:
+                name = self.static_data.get("countries", {}).get(country, {}).get("name", country)
+                if current.lower() in country.lower() or current.lower() in name.lower():
+                    choices.append(app_commands.Choice(name=f"{name} ({country})", value=country))
+        return choices[:25]
+    
+    @actions.command(name="list_policies", description="List available policies and options.")
+    @app_commands.describe(key="Filter by a specific policy key")
+    @app_commands.autocomplete(key=policy_key_autocomplete)
+    async def actions_list_policies(self, interaction: discord.Interaction, key: str):
+        policy_dict = self.actions_data.get("policies", {}) or {}
+        if key not in policy_dict:
+            valid = ", ".join(policy_dict.keys()) or "none"
+            return await interaction.response.send_message(
+                f"❌ Unknown policy key `{key}`. Valid: {valid}", ephemeral=True
+            )
+
+        policy = policy_dict[key]
+        e = discord.Embed(
+            title=f"Policies · {key.replace('_',' ').title()}",
+            description=policy.get("description", "No description."),
+            color=discord.Color.orange()
+        )
+
+        img = policy.get("image")
+        if img:  # avoid broken image box
+            e.set_image(url=img)
+
+        # Optional: surface policy-level metadata
+        cd = policy.get("cooldown_turns")
+        notes = policy.get("notes")
+        meta_lines = []
+        if cd is not None:
+            meta_lines.append(f"**Cooldown:** {cd} turns")
+        if notes:
+            meta_lines.append(f"**Notes:** {notes}")
+        if meta_lines:
+            e.add_field(name="Info", value="\n".join(meta_lines), inline=False)
+
+        # Helpers
+        def _op_symbol(op: str) -> str:
+            return { "add": "+", "mul": "×", "set": "=", "+": "+", "x": "×", "=": "=" }.get(op, op)
+
+        def _fmt_eff(eff: dict) -> str:
+            phase = eff.get("phase", "?")
+            scope = eff.get("scope", "country")
+            k     = eff.get("key", "?")
+            op    = _op_symbol(eff.get("op", "?"))
+            v     = eff.get("value", "?")
+            return f"`{phase}` · `{scope}` · **{k} {op} {v}**"
+
+        def _trim(s: str, limit: int = 1024) -> str:
+            return s if len(s) <= limit else (s[:limit-1] + "…")
+
+        # Render options
+        options = (policy.get("options") or {})
+        for opt_key in sorted(options.keys()):
+            opt = options[opt_key] or {}
+            label = opt_key.replace("_", " ").title()
+            desc  = opt.get("description", "—")
+
+            # Collect any effect buckets this policy may use
+            effects_active = opt.get("effects_active", []) or []
+            on_enact       = opt.get("on_enact", []) or []
+            # "conditional" may be a list of {when, on_enact:[...]} objects
+            conditional    = opt.get("conditional", []) or []
+
+            lines = []
+            if effects_active:
+                lines.append("**While Active**")
+                lines += [ _fmt_eff(eff) for eff in effects_active ]
+            if on_enact:
+                lines.append("**On Enact**")
+                lines += [ _fmt_eff(eff) for eff in on_enact ]
+            if conditional:
+                for c in conditional:
+                    when = c.get("when", "condition")
+                    lines.append(f"**If {when}**")
+                    for eff in c.get("on_enact", []) or []:
+                        lines.append(_fmt_eff(eff))
+
+            value = f"{desc}\n" + ("\n".join(lines) if lines else "*No explicit effects listed.*")
+            e.add_field(name=f"**{label}**", value=_trim(value), inline=False)
+
+        e.set_footer(text="Tip: /tyw actions policy_set to change a policy.")
+        await interaction.response.send_message(embed=e)
+
+
+    @actions.command(name="policy_set", description="Set a policy/stance for your country.")
+    @app_commands.describe(
+        country="Your country (must be your own)",
+        policy="Which policy to change (e.g., build_focus, military_posture, ...)",
+        option="Option within that policy (e.g., naval, army, true/false, ...)"
+    )
+    @app_commands.autocomplete(
+        country=my_country_autocomplete,
+        policy=policy_key_autocomplete,
+        option=policy_option_autocomplete
+    )
+    async def actions_policy_set(self, interaction: discord.Interaction, policy: str, option: str):
+        await interaction.response.send_message("⚠️ This command is not yet implemented.", ephemeral=True)
