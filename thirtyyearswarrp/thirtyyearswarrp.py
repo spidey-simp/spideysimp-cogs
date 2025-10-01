@@ -927,5 +927,5 @@ class ThirtyYearsWarRP(commands.Cog):
         policy=policy_key_autocomplete,
         option=policy_option_autocomplete
     )
-    async def actions_policy_set(self, interaction: discord.Interaction, policy: str, option: str):
+    async def actions_policy_set(self, interaction: discord.Interaction, country:str, policy: str, option: str):
         await interaction.response.send_message("⚠️ This command is not yet implemented.", ephemeral=True)
