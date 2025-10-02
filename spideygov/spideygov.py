@@ -1569,12 +1569,37 @@ class SpideyGov(commands.Cog):
             chapter_dict=chapter_dict
         )
         await interaction.response.send_modal(modal)
+    
+    async def code_section_autocomplete(self, interaction: discord.Interaction, current: str):
+        ns = interaction.namespace
+        title = getattr(ns, "title", None)
+        chap = getattr(ns, "chap", None)
+        if title is None or chap is None:
+            return []
+        sections = self.federal_registry.get("spidey_republic_code", {}).get(str(title), {}).get("chapters", {}).get(str(chap), {}).get("sections", {})
+        def _numkey(k: str) -> int:
+            digits = "".join(ch for ch in k if ch.isdigit())
+            return int(digits) if digits else 10**9
+
+        keys = sorted(sections.keys(), key=_numkey)
+
+        cur = (current or "").lower()
+        out = []
+        for s in keys:
+            short = (sections[s].get("short") or "").strip()
+            label = f"{s} — {short}" if short else s
+            if not cur or cur in label.lower():
+                out.append(app_commands.Choice(name=label[:100], value=s))
+            if len(out) >= 25:
+                break
+        return out
 
     @registry.command(name="view_code", description="View code sections from a chapter")
-    @app_commands.autocomplete(title=code_title_autocomplete, chap=chapter_autocomplete)
+    @app_commands.autocomplete(title=code_title_autocomplete, chap=chapter_autocomplete, single_section=code_section_autocomplete, sec_start=code_section_autocomplete, sec_end=code_section_autocomplete)
     @app_commands.describe(
         title="Title key/number (e.g., 28)",
         chap="Chapter number (e.g., 13)",
+        single_section="View a single section (e.g., 1291 or § 1291)",
         sec_start="Start at this section (e.g., 1291 or § 1291)",
         sec_end="End at this section (optional)"
     )
@@ -1583,6 +1608,7 @@ class SpideyGov(commands.Cog):
         interaction: discord.Interaction,
         title: str,
         chap: str,
+        single_section: str | None = None,
         sec_start: str | None = None,
         sec_end: str | None = None,
     ):
@@ -1612,6 +1638,12 @@ class SpideyGov(commands.Cog):
         # figure out start index (>= sec_start), and optional end cap (<= sec_end)
         start_num = sec_digits(sec_start) if sec_start else None
         end_num = sec_digits(sec_end) if sec_end else None
+
+        if single_section:
+            single_num = sec_digits(single_section)
+            if single_num == 0:
+                return await interaction.response.send_message(f"Couldn’t parse section number from '{single_section}'.", ephemeral=True)
+            start_num = end_num = single_num
 
         start_idx = 0
         if start_num is not None:
