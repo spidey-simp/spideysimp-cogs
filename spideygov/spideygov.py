@@ -829,8 +829,8 @@ class LegislativeProposalModal(discord.ui.Modal, title="Legislative Proposal"):
         self.co_sponsors_val = co_sponsors
         self.code_title_val = code_title
         self.sections_val = sections
-        self.summary = discord.ui.TextInput(label="Summary", style=discord.TextStyle.paragraph, required=True)
-        self.purpose = discord.ui.TextInput(label="Purpose Statement", style=discord.TextStyle.paragraph, required=True)
+        self.summary = discord.ui.TextInput(label="Summary", style=discord.TextStyle.paragraph, required=False)
+        self.purpose = discord.ui.TextInput(label="Purpose Statement", style=discord.TextStyle.paragraph, required=False)
         self.text    = discord.ui.TextInput(label="Full Text", style=discord.TextStyle.paragraph, required=True)
         self.add_item(self.summary)
         self.add_item(self.purpose)
