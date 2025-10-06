@@ -1869,9 +1869,9 @@ class SpideyGov(commands.Cog):
         app_commands.Choice(name="Court", value="court"),
     ])
     @app_commands.describe(
-        article="Article (Arabic input; autocomplete supports headings)",
-        amendment="Amendment (Arabic input; autocomplete supports headings)",
-        section="Section number (Arabic; autocomplete supports headings)",
+        article="Article (Arabic input)",
+        amendment="Amendment (Arabic input)",
+        section="Section number (Arabic)",
         style="Label style for titles"
     )
     async def view_constitution(
@@ -1982,7 +1982,8 @@ class SpideyGov(commands.Cog):
             label = f"{bid} — {b.get('title','')}"
             if current in label.lower():
                 out.append(app_commands.Choice(name=label[:100], value=bid))
-        return out[:25]
+        out.reverse() # shows most recent first
+        return (out[:25])
 
     @legislature.command(name="bill_view", description="View a bill/resolution draft")
     @app_commands.autocomplete(bill_id=bill_id_autocomplete)
