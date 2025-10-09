@@ -46,6 +46,9 @@ CITIZENSHIP = {
 }
 CITIZENSHIP_IDS = set(CITIZENSHIP.values())
 
+CITIZENSHIP_ROLE = 1302324304712695909
+RESIDENTS = 1287978893755547769
+
 CATEGORIES = {
     "commons": {
         "name": "Commons",
@@ -1740,6 +1743,41 @@ class SpideyGov(commands.Cog):
                 await ctx.send(f"Failed to assign {role.name} to {member.mention}: {e}")
 
         await ctx.send(f"Done. Assigned: {assigned}. Already had one: {skipped}.")
+
+    @commands.command(name="citizenship_for_citizens_only", aliases=["cfco"])
+    @commands.is_owner()
+    async def citizenship_for_citizens_only(self, ctx: commands.Context):
+        """Remove citizenship roles from non-citizens."""
+        guild = ctx.guild
+        if not guild:
+            return await ctx.send("This command can only be used in a server.")
+
+        removed = 0
+        await ctx.send("Starting citizenship cleanup…")
+
+        for member in guild.members:
+            if member.bot:
+                continue
+            # check if they have any citizenship role
+            has_citizenship = any(r.id in CITIZENSHIP_IDS for r in member.roles)
+            if not has_citizenship:
+                continue
+
+            # check if they have the Citizen role
+            is_citizen = any(r.id == CITIZENSHIP_ROLE for r in member.roles)
+            if is_citizen:
+                continue
+
+            # remove all citizenship roles
+            roles_to_remove = [r for r in member.roles if r.id in CITIZENSHIP_IDS]
+            try:
+                await member.remove_roles(*roles_to_remove, reason="Citizenship for citizens only enforcement")
+                removed += 1
+                await asyncio.sleep(0.5)  # gentle rate-limit buffer; tune as needed
+            except (discord.Forbidden, discord.HTTPException) as e:
+                await ctx.send(f"Failed to remove citizenship roles from {member.mention}: {e}")
+
+        await ctx.send(f"Done. Removed citizenship roles from {removed} members.")
     
     @category.command(name="view_category_info", description="View info about a category")
     @app_commands.describe(
