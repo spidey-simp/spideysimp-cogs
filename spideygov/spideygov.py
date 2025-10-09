@@ -1205,7 +1205,7 @@ class SpideyGov(commands.Cog):
     async def _auto_close_vote_for_bill(self, bill: dict):
         """Mirror your close_vote math, but without an interaction context."""
         v = bill.get("vote") or {}
-        ch, msg = await _fetch_message(self, v.get("channel_id"), v.get("message_id"))
+        ch, msg = await self._fetch_message(v.get("channel_id"), v.get("message_id"))
         if not ch or not msg:
             # mark failed if we can’t fetch the poll
             bill["status"] = "FAILED"
@@ -1329,6 +1329,7 @@ class SpideyGov(commands.Cog):
         if dirty:
             save_federal_registry(reg)
 
+
     @bill_poll_sweeper.before_loop
     async def _wait_ready_sweeper(self):
         await self.bot.wait_until_ready()
@@ -1347,11 +1348,12 @@ class SpideyGov(commands.Cog):
 
     
 
-
-    legislature = app_commands.Group(name="legislature", description="Legislative commands")
-    executive = app_commands.Group(name="executive", description="Executive commands")
-    category = app_commands.Group(name="category", description="Category management commands")
-    registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry")
+    government = app_commands.Group(name="government", description="Government-related commands")
+    legislature = app_commands.Group(name="legislature", description="Legislative commands", parent=government)
+    executive = app_commands.Group(name="executive", description="Executive commands", parent=government)
+    category = app_commands.Group(name="category", description="Category management commands", parent=government)
+    registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
+    citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
 
 
     # --- replace your propose_legislation command with this version ---
@@ -1779,6 +1781,84 @@ class SpideyGov(commands.Cog):
 
         await ctx.send(f"Done. Removed citizenship roles from {removed} members.")
     
+    @commands.command(name="no_dual_citizenship", aliases=["ndc"])
+    @commands.is_owner()
+    async def no_dual_citizenship(self, ctx: commands.Context):
+        """Ensure no member has more than one citizenship role."""
+        guild = ctx.guild
+        if not guild:
+            return await ctx.send("This command can only be used in a server.")
+
+        fixed = 0
+        await ctx.send("Starting dual citizenship cleanup…")
+
+        for member in guild.members:
+            if member.bot:
+                continue
+            # find all citizenship roles they have
+            roles = [r for r in member.roles if r.id in CITIZENSHIP_IDS]
+            role_len = len(roles)
+            if role_len <= 1:
+                continue  # no dual citizenship
+
+            role_keep = random.randint(0, role_len - 1)
+            # keep one, remove the rest
+            roles_to_remove = roles[:role_keep] + roles[role_keep+1:]  # keep the one at role_keep index
+            try:
+                await member.remove_roles(*roles_to_remove, reason="No dual citizenship enforcement")
+                await member.send("You held more than one citizenship role, so we have removed the extras. You may reapply for a different citizenship if you wish.\n\n")
+                fixed += 1
+                await asyncio.sleep(0.5)  # gentle rate-limit buffer; tune as needed
+            except (discord.Forbidden, discord.HTTPException) as e:
+                await ctx.send(f"Failed to remove citizenship roles from {member.mention}: {e}")
+
+        await ctx.send(f"Done. Fixed dual citizenship for {fixed} members.")
+    
+    @citizenship.command(name="change_citizenship", description="Move to a different category")
+    @app_commands.describe(
+        new_citizenship="The citizenship role to move to"
+    )
+    @app_commands.checks.has_role(CITIZENSHIP_ROLE)
+    @app_commands.choices(new_citizenship=[
+        app_commands.Choice(name="Commons", value="commons"),
+        app_commands.Choice(name="Gaming", value="gaming"),
+        app_commands.Choice(name="Spideyton, District of Parker", value="dp"),
+        app_commands.Choice(name="Crazy Times", value="crazy_times"),
+        app_commands.Choice(name="User Themed", value="user_themed"),
+    ])
+    async def change_citizenship(self, interaction: discord.Interaction, new_citizenship: str):
+        citizenship_changes = self.federal_registry.setdefault("recent_citizenship_changes", {})
+        if interaction.user.id in citizenship_changes:
+            if citizenship_changes[interaction.user.id] + timedelta(days=30) > datetime.now(UTC):
+                return await interaction.response.send_message(
+                    "You can only change your citizenship once every 30 days. Please try again later.",
+                    ephemeral=True
+                )
+        
+        current_citizenship = [r for r in interaction.user.roles if r.id in CITIZENSHIP_IDS]
+        new_role_id = CITIZENSHIP.get(new_citizenship)
+        if new_role_id in current_citizenship:
+            return await interaction.response.send_message(
+                f"You already have the {new_citizenship} citizenship role.",
+                ephemeral=True
+            )
+        
+        try:
+            await interaction.user.add_roles(interaction.guild.get_role(new_role_id), reason="Citizenship change")
+            for r in current_citizenship:
+                await interaction.user.remove_roles(r, reason="Citizenship change")
+            citizenship_changes[interaction.user.id] = datetime.now(UTC)
+            return await interaction.response.send_message(
+                f"Your citizenship has been changed to {new_citizenship}.",
+                ephemeral=True
+            )
+        except (discord.Forbidden, discord.HTTPException) as e:
+            return await interaction.response.send_message(
+                f"Failed to change citizenship: {e}",
+                ephemeral=True
+            )
+
+
     @category.command(name="view_category_info", description="View info about a category")
     @app_commands.describe(
         category="The category to view info about"
