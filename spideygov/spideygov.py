@@ -36,6 +36,7 @@ SENATE_MAJORITY_LEADER = 1417354264795418664
 SPEAKER_OF_THE_HOUSE = 1417354436472344586
 SPIDEY_HOUSE = 1302330503399084144
 SENATE_VOTING_CHANNEL = 1334289687996796949
+STATE_DEPARTMENT_CHANNEL = 1424208056459198495
 
 CITIZENSHIP = {
     "commons": 1415927703340716102,
@@ -1858,6 +1859,110 @@ class SpideyGov(commands.Cog):
                 ephemeral=True
             )
 
+    @citizenship.command(name="residency_question_add", description="Add a residency question")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        question="The residency question to add"
+    )
+    async def residency_question_add(self, interaction: discord.Interaction, question: str):
+        if interaction.channel.id != STATE_DEPARTMENT_CHANNEL:
+            return await interaction.response.send_message("This command can only be used in the State Department channel. This is for FOIA purposes.", ephemeral=True)
+        question_bank = self.federal_registry.setdefault("residency_questions", [])
+        question_bank.append({
+            "question": question,
+            "added_by": interaction.user.id,
+            "added_at": discord.utils.utcnow().isoformat()
+        })
+        self.federal_registry["residency_questions"] = question_bank
+        save_federal_registry(self.federal_registry)
+        await interaction.response.send_message(f"Residency question added: {question}", ephemeral=False)
+    
+    @citizenship.command(name="residency_question_list", description="List residency questions")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def residency_question_list(self, interaction: discord.Interaction):
+        question_bank = self.federal_registry.get("residency_questions", [])
+        if not question_bank:
+            return await interaction.response.send_message("No residency questions found.", ephemeral=True)
+        
+        embed = discord.Embed(
+            title="Residency Questions",
+            description="\n".join(f"{i+1}. {q['question']}" for i, q in enumerate(question_bank)),
+            color=discord.Color.blue()
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @citizenship.command(name="residency_question_remove", description="Remove a residency question by its number")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        question_number="The number of the residency question to remove (see list)",
+        reason="Reason for removal (for audit log)"
+    )
+    async def residency_question_remove(self, interaction: discord.Interaction, question_number: int, reason:str):
+        if interaction.channel.id != STATE_DEPARTMENT_CHANNEL:
+            return await interaction.response.send_message("This command can only be used in the State Department channel. This is for FOIA purposes.", ephemeral=True)
+        question_bank = self.federal_registry.get("residency_questions", [])
+        if not question_bank or question_number < 1 or question_number > len(question_bank):
+            return await interaction.response.send_message("Invalid question number.", ephemeral=True)
+        
+        removed_question = question_bank.pop(question_number - 1)
+        self.federal_registry["residency_questions"] = question_bank
+        save_federal_registry(self.federal_registry)
+        await interaction.response.send_message(f"{interaction.user.display_name} removed residency question: {removed_question['question']}\n\nReason: {reason}", ephemeral=False)
+    
+    async def is_citizen(self, member: discord.Member) -> bool:
+        return any(r.id == CITIZENSHIP_ROLE for r in member.roles)
+
+    async def is_resident(self, member: discord.Member) -> bool:
+        return any(r.id in RESIDENTS for r in member.roles)
+    
+    async def category_citizenship(self, member: discord.Member) -> str | None:
+        for key, role_id in CITIZENSHIP.items():
+            if any(r.id == role_id for r in member.roles):
+                return key
+        return None
+    
+    async def visa_status(self, member:discord.Member) -> str:
+        self.federal_registry.setdefault("visas", {})
+        visa_info = self.federal_registry["visas"].get(str(member.id))
+        if not visa_info:
+            return "No visa record found."
+        else:
+            type = visa_info.get("type", "Unknown")
+            issued = visa_info.get("issued", "Unknown")
+            expiry_date = visa_info.get("expiry_date", "Unknown")
+            return f"Visa Type: {type}\nIssued On: {issued}\nExpiry Date: {expiry_date}"
+
+    @citizenship.command(name="my_status", description="View your citizenship status and history")
+    async def my_status(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="Your Citizenship Status",
+            color=discord.Color.blue()
+        )
+        is_citizen = await self.is_citizen(interaction.user)
+        is_resident = await self.is_resident(interaction.user)
+        category_citizenship = await self.category_citizenship(interaction.user)
+        if not is_citizen and not is_resident:
+            visa_info = self.visa_status(interaction.user)
+            embed.add_field(name="Status", value="You are currently a non-citizen resident or visitor.", inline=False)
+            embed.add_field(name="Visa Information", value=visa_info, inline=False)
+        else:
+            status_parts = []
+            if is_citizen:
+                status_parts.append("Citizen")
+            if is_resident:
+                status_parts.append("Resident")
+            embed.add_field(name="Status", value=", ".join(status_parts), inline=False)
+            if category_citizenship:
+                cat_info = CATEGORIES.get(category_citizenship)
+                if cat_info:
+                    embed.add_field(name="Citizenship Category", value=cat_info["name"], inline=False)
+            # Recent citizenship changes
+            changes = self.federal_registry.get("recent_citizenship_changes", {})
+            change_time = changes.get(interaction.user.id)
+            if change_time:
+                embed.add_field(name="Last Citizenship Change", value=change_time.strftime("%Y-%m-%d"), inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=False)
 
     @category.command(name="view_category_info", description="View info about a category")
     @app_commands.describe(
