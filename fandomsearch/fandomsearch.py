@@ -36,10 +36,14 @@ def _build_exact_url(base: str, style: str, title: str, section: str | None = No
     return url
 
 def _build_go_search_url(base: str, style: str, query: str) -> str:
-    if style == STYLE_FANDOM:
+    from urllib.parse import quote
+    if style == "fandom":
+        # Fandom-style works fine with Special:Search + go=Go
         return f"{base}/Special:Search?query={quote(query)}&go=Go"
-    # ROOT style (e.g., Paradox wikis) – Special:Search via index.php is safest
-    return f"{base}/index.php?title=Special%3ASearch&search={quote(query)}&go=Go"
+    # ROOT/Paradox-style: use index.php?search=... (most compatible)
+    # Optional: add &title=Special:Search to force the special page context.
+    return f"{base}/index.php?search={quote(query)}&title=Special%3ASearch"
+ 
 
 def _normalize_base_link(url: str) -> str:
     url = url.strip()
