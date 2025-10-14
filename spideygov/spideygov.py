@@ -13,6 +13,9 @@ import math
 import difflib
 from zoneinfo import ZoneInfo
 from discord.ext import tasks
+import shutil
+import time
+from pathlib import Path
 
 try:
     import docx  # python-docx
@@ -80,17 +83,103 @@ CATEGORIES = {
 
 VOTE_OPTIONS = ("Yea", "Nay", "Present")
 
+def _try_json_load(txt: str):
+    try:
+        return json.loads(txt)
+    except Exception:
+        return None
+
+def _salvage_by_trim(raw: str, step: int = 256, max_cut: int | None = 100_000):
+    L = len(raw)
+    limit = min(max_cut or L, L)
+    for cut in range(0, limit + 1, step):
+        ok = _try_json_load(raw[: L - cut])
+        if ok is not None:
+            return ok, cut
+    return None, None
+
+def _salvage_by_balance(raw: str):
+    out = []
+    stack = []
+    in_str = False
+    esc = False
+    for ch in raw:
+        out.append(ch)
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch in "{[":
+                stack.append(ch)
+            elif ch == "}" and stack and stack[-1] == "{":
+                stack.pop()
+            elif ch == "]" and stack and stack[-1] == "[":
+                stack.pop()
+    while stack:
+        out.append("}" if stack.pop() == "{" else "]")
+    fixed = "".join(out)
+    ok = _try_json_load(fixed)
+    return (ok, True) if ok is not None else (None, False)
+
+
 def load_federal_registry():
-    """Load the federal registry from a JSON file."""
-    if not os.path.exists(FED_REGISTRY_FILE):
+    """
+    Load registry with auto-recovery:
+      1) try main file
+      2) fall back to .bak
+      3) if corrupt, quarantine bad file and return {}
+    """
+    path = FED_REGISTRY_FILE
+    bak  = path + ".bak"
+
+    if not os.path.exists(path):
         return {}
-    with open(FED_REGISTRY_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+
+    # First, try the main file
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        # Try backup
+        try:
+            if os.path.exists(bak):
+                with open(bak, "r", encoding="utf-8") as bf:
+                    return json.load(bf)
+        except Exception:
+            pass
+        # Quarantine the bad file so we can boot
+        try:
+            bad = f"{path}.corrupt-{int(time.time())}.json"
+            os.replace(path, bad)  # keeps the evidence for manual salvage if you want
+        finally:
+            return {}
+    except Exception:
+        # any other unexpected I/O error
+        return {}
 
 def save_federal_registry(data):
-    """Save the federal registry to a JSON file."""
-    with open(FED_REGISTRY_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
+    path = FED_REGISTRY_FILE
+    tmp  = path + ".tmp"
+    bak  = path + ".bak"
+
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+        f.flush(); os.fsync(f.fileno())
+
+    try:
+        if os.path.exists(path):
+            shutil.copy2(path, bak)
+    except Exception:
+        pass
+
+    os.replace(tmp, path)
+
 
 SECTION_RE = re.compile(
     r'^[\*\s_]*[§&]\s*([0-9A-Za-z\-\.]+)\s*\.?\s*(.*?)\s*[\*\s_]*$',
@@ -1355,6 +1444,81 @@ class SpideyGov(commands.Cog):
     category = app_commands.Group(name="category", description="Category management commands", parent=government)
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
+
+    @registry.command(name="repair", description="Attempt to repair a corrupted federal registry file")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        commit="If true, replace the main file with the salvaged JSON and reload"
+    )
+    async def registry_repair(self, interaction: discord.Interaction, commit: bool = False):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        path = Path(FED_REGISTRY_FILE)
+        if not path.exists():
+            return await interaction.followup.send("❌ Registry file not found.", ephemeral=True)
+
+        raw = path.read_text(encoding="utf-8", errors="ignore")
+
+        # Already valid?
+        ok = _try_json_load(raw)
+        if ok is not None:
+            if commit:
+                # Nothing to do but rehydrate memory from disk to be sure
+                self.federal_registry = ok
+            return await interaction.followup.send("✅ Registry JSON is valid. No repair needed.", ephemeral=True)
+
+        # Try salvage A: trim tail
+        data, cut = _salvage_by_trim(raw)
+        method = None
+        if data is not None:
+            method = f"trim ({cut} bytes)"
+        else:
+            # Try salvage B: balance braces/brackets
+            data, balanced = _salvage_by_balance(raw)
+            if data is not None:
+                method = "balanced braces"
+            else:
+                return await interaction.followup.send(
+                    "❌ Could not auto-salvage the file. You may need a manual fix near the end of the file.",
+                    ephemeral=True
+                )
+
+        # Write salvaged copy
+        salv = path.with_suffix(".salvaged.json")
+        salv.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        if not commit:
+            return await interaction.followup.send(
+                f"✅ Salvaged via **{method}** → `{salv.name}`.\n"
+                f"Re-run with `commit=True` to replace the live file.",
+                ephemeral=True
+            )
+
+        # Commit: backup corrupt, swap in salvaged, reload memory
+        ts = int(time.time())
+        corrupt = path.with_suffix(f".corrupt-{ts}.json")
+        try:
+            os.replace(path, corrupt)
+            os.replace(salv, path)
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Failed to commit salvage: {e}", ephemeral=True)
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                self.federal_registry = json.load(f)
+        except Exception as e:
+            return await interaction.followup.send(
+                f"⚠️ Committed, but reload failed: {e}\n"
+                f"The previous corrupt file was saved as `{corrupt.name}`.",
+                ephemeral=True
+            )
+
+        await interaction.followup.send(
+            f"✅ Repaired via **{method}** and committed.\n"
+            f"Backed up corrupt file as `{corrupt.name}` and reloaded into memory.",
+            ephemeral=True
+        )
+
 
 
     # --- replace your propose_legislation command with this version ---

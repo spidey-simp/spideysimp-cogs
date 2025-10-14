@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Optional, Dict, List
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import discord
 from discord import app_commands
@@ -12,6 +12,8 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FANDOMS_FILE = os.path.join(BASE_DIR, "fandoms.json")
 
+STYLE_FANDOM = "fandom"
+STYLE_ROOT = "root"
 
 def load_file() -> dict:
     if not os.path.exists(FANDOMS_FILE):
@@ -25,25 +27,30 @@ def save_file(data):
     with open(FANDOMS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
+def _build_exact_url(base: str, style: str, title: str, section: str | None = None) -> str:
+    slug = _slugify(title)
+    # Both styles append /Title; fandom bases typically end with /wiki
+    url = f"{base}/{slug}"
+    if section:
+        url += f"#{_slugify(section.replace(' ', '_'))}"
+    return url
+
+def _build_go_search_url(base: str, style: str, query: str) -> str:
+    if style == STYLE_FANDOM:
+        return f"{base}/Special:Search?query={quote(query)}&go=Go"
+    # ROOT style (e.g., Paradox wikis) – Special:Search via index.php is safest
+    return f"{base}/index.php?title=Special%3ASearch&search={quote(query)}&go=Go"
+
 def _normalize_base_link(url: str) -> str:
-    """
-    Expect something like:
-      https://starwars.fandom.com/wiki
-    We'll:
-      - enforce https://
-      - strip trailing slashes
-      - ensure it ends with /wiki
-    """
     url = url.strip()
     if url.startswith("http://"):
         url = "https://" + url[len("http://"):]
     if not url.startswith("https://"):
         raise ValueError("Base link must start with https://")
-
-    url = url.rstrip("/")
-    if not url.lower().endswith("/wiki"):
-        url += "/wiki"
-    return url
+    parts = urlparse(url)
+    if not parts.netloc:
+        raise ValueError("Base link must include a valid host (e.g., https://starwars.fandom.com/wiki)")
+    return url.rstrip("/")
 
 def _slugify(title: str) -> str:
     # MediaWiki uses underscores; keep (), _, :, /, - unescaped for readability.
@@ -57,6 +64,20 @@ class FandomSearch(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.fandoms = load_file()
+
+    def _get_entry(self, key: str) -> dict | None:
+        """Return a normalized entry dict {'base': str, 'style': 'fandom'|'root'} or None."""
+        raw = self.fandoms.get(key)
+        if raw is None:
+            return None
+        if isinstance(raw, str):
+            # backward-compat: old entries are assumed fandom-style
+            return {"base": raw.rstrip("/"), "style": STYLE_FANDOM}
+        base = _normalize_base_link(raw.get("base", ""))
+        style = raw.get("style", STYLE_FANDOM)
+        if style not in (STYLE_FANDOM, STYLE_ROOT):
+            style = STYLE_FANDOM
+        return {"base": base, "style": style}
 
     fandom = app_commands.Group(name="fandom", description="fandom link searches")
 
@@ -72,10 +93,11 @@ class FandomSearch(commands.Cog):
     @fandom.command(name="upload_link", description="Upload the base link for a new fandom search.")
     @app_commands.describe(
         fandom="The fandom key (e.g., 'starwars', 'lotr', 'fallout')",
-        base_link="The fandom link with https:// and pointing to /wiki",
+        base_link="The base link (https://...), e.g., https://starwars.fandom.com/wiki or https://hoi4.paradoxwikis.com",
+        not_fandom="Toggle ON for non-Fandom/MediaWiki roots (e.g., Paradox wikis with no /wiki)",
     )
     @app_commands.checks.has_permissions(manage_guild=True)
-    async def upload_link(self, interaction: discord.Interaction, fandom: str, base_link: str):
+    async def upload_link(self, interaction: discord.Interaction, fandom: str, base_link: str, not_fandom: bool = False):
         try:
             key = fandom.strip().lower().replace(" ", "")
             if not key:
@@ -84,11 +106,11 @@ class FandomSearch(commands.Cog):
         except ValueError as e:
             return await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-        # Overwrite or create
-        self.fandoms[key] = base
+        style = STYLE_ROOT if not_fandom else STYLE_FANDOM
+        self.fandoms[key] = {"base": base, "style": style}
         save_file(self.fandoms)
         await interaction.response.send_message(
-            f"✅ Saved **{key}** → {base}", ephemeral=True
+            f"✅ Saved **{key}** → {base}  *(style: {style})*", ephemeral=True
         )
 
     @fandom.command(name="remove", description="Remove a fandom mapping.")
@@ -104,19 +126,30 @@ class FandomSearch(commands.Cog):
         else:
             await interaction.response.send_message(f"⚠️ No mapping for **{key}**.", ephemeral=True)
 
+    # --- list command: show style cleanly ---
     @fandom.command(name="list", description="List configured fandom base links.")
     async def list_links(self, interaction: discord.Interaction):
         if not self.fandoms:
             return await interaction.response.send_message("No fandoms configured yet.", ephemeral=True)
-        lines = [f"- **{k}** → {self.fandoms.get(k)}" for k in sorted(self.fandoms.keys())]
+
+        lines = []
+        for k in sorted(self.fandoms.keys()):
+            entry = self._get_entry(k)
+            if not entry:
+                continue
+            style = entry["style"]
+            emoji = "🌌" if style == STYLE_FANDOM else "📚"
+            lines.append(f"- **{k}** {emoji} *(style: {style})* → {entry['base']}")
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
+
+    # --- search command: branch on style, single response ---
     @fandom.command(name="search", description="Link a page from a configured fandom wiki.")
     @app_commands.describe(
         fandom="Which fandom wiki to use (autocomplete)",
         query="Page title or search terms",
-        exact="If true, link the exact title",
-        section="Optional section anchor for exact links",
+        exact="If true, link the exact title; otherwise use best-match redirect",
+        section="Optional section anchor for exact links (e.g., 'Biography')",
     )
     @app_commands.autocomplete(fandom=_fandom_autocomplete)
     async def search(
@@ -128,23 +161,20 @@ class FandomSearch(commands.Cog):
         section: Optional[str] = None,
     ):
         key = fandom.strip().lower().replace(" ", "")
-        base = self.fandoms.get(key)
-        if not base:
+        entry = self._get_entry(key)
+        if not entry:
             return await interaction.response.send_message(
                 f"⚠️ Fandom **{key}** is not configured. Use `/fandom upload_link` first.",
                 ephemeral=True,
             )
 
+        base, style = entry["base"], entry["style"]
         if exact:
-            url = f"{base}/{_slugify(query)}"
-            if section:
-                url += f"#{_slugify(section.replace(' ', '_'))}"
-            await interaction.response.send_message(url)
-            return
+            url = _build_exact_url(base, style, query, section)
+            return await interaction.response.send_message(url)
 
-        # Fuzzy search: one combined response to avoid double-responding
         preface = ""
         if section:
             preface = "ℹ️ Sections only apply to exact links. Using fuzzy search without #section.\n"
-        url = f"{base}/Special:Search?query={quote(query)}&go=Go"
+        url = _build_go_search_url(base, style, query)
         await interaction.response.send_message(f"{preface}{url}")
