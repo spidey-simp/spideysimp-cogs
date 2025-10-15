@@ -57,7 +57,7 @@ CITIZENSHIP_ROLE = 1302324304712695909
 RESIDENTS = 1287978893755547769
 WAVING = 1287676691552145529
 PENDING_RESIDENT = 1428131256327078009
-ADMINS = 1295895729948196874
+SEC_OF_STATE = 650814947437182977
 RULES = 1287700985275355147
 INTAKE_CHANNEL = 1428131798684274800
 CITIZENSHIP_APPLICANT = 1428142777308549263
@@ -1414,8 +1414,8 @@ class SpideyGov(commands.Cog):
             return
 
         q = _pick_residency_question(self.federal_registry)
-        admin_role = guild.get_role(ADMINS)
-        admin_ping = admin_role.mention if admin_role else "@admins"
+        admin_role = guild.get_member(SEC_OF_STATE)
+        admin_ping = admin_role.mention
 
         # forum parent: create a forum thread; else: create private thread under text channel
         try:
@@ -1450,6 +1450,9 @@ class SpideyGov(commands.Cog):
         except Exception:
             # swallow — onboarding should not crash join
             pass
+
+        state_dep = guild.get_channel(STATE_DEPARTMENT_CHANNEL)
+        await state_dep.send(f"New member {member.mention} joined. Residency intake thread opened: {thread.mention}")
 
     
     def to_roman(self, n: int) -> str:
