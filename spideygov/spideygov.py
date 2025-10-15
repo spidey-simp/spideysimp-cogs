@@ -16,6 +16,7 @@ from discord.ext import tasks
 import shutil
 import time
 from pathlib import Path
+import io
 
 try:
     import docx  # python-docx
@@ -1489,7 +1490,7 @@ class SpideyGov(commands.Cog):
     @app_commands.describe(commit="If true, replace the live file with the salvaged JSON and reload")
     async def registry_repair(self, interaction: discord.Interaction, commit: bool = False):
         global REGISTRY_SUSPENDED
-        
+
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         path = Path(FED_REGISTRY_FILE)
@@ -1585,6 +1586,58 @@ class SpideyGov(commands.Cog):
         )
 
 
+    @registry.command(
+        name="dump",
+        description="Send the raw federal registry JSON file(s) as attachments (read-only)."
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        which="Which file to dump: live / bak / salvaged / all"
+    )
+    @app_commands.choices(which=[
+        app_commands.Choice(name="Live (federal_registry.json)", value="live"),
+        app_commands.Choice(name="Backup (.bak)", value="bak"),
+        app_commands.Choice(name="Salvaged (.salvaged.json)", value="salvaged"),
+        app_commands.Choice(name="All", value="all"),
+    ])
+    async def registry_dump(self, interaction: discord.Interaction, which: str = "live"):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        base = Path(FED_REGISTRY_FILE)
+        paths: list[tuple[str, Path]] = []
+
+        if which in ("live", "all"):
+            paths.append((base.name, base))
+        if which in ("bak", "all"):
+            bak = Path(str(base) + ".bak")
+            if bak.exists():
+                paths.append((bak.name, bak))
+        if which in ("salvaged", "all"):
+            salv = base.with_suffix(".salvaged.json")
+            if salv.exists():
+                paths.append((salv.name, salv))
+
+        if not paths:
+            return await interaction.followup.send("❌ No matching files found to dump.", ephemeral=True)
+
+        files: list[discord.File] = []
+        errors: list[str] = []
+
+        for name, p in paths:
+            try:
+                data = p.read_bytes()
+                files.append(discord.File(io.BytesIO(data), filename=name))
+            except Exception as e:
+                errors.append(f"{name}: {e}")
+
+        if not files and errors:
+            return await interaction.followup.send("❌ " + " | ".join(errors), ephemeral=True)
+
+        msg = "Here you go—download, fix locally, then run `/government registry repair commit:true` to apply."
+        if errors:
+            msg += "\n\n⚠️ Some files couldn’t be read: " + " | ".join(errors)
+
+        await interaction.followup.send(content=msg, files=files, ephemeral=True)
 
 
     # --- replace your propose_legislation command with this version ---
