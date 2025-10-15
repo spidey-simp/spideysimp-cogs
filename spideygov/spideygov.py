@@ -17,6 +17,7 @@ import shutil
 import time
 from pathlib import Path
 import io
+import tempfile
 
 try:
     import docx  # python-docx
@@ -121,6 +122,16 @@ def _salvage_by_balance(raw: str):
     return (ok, True) if ok is not None else (None, False)
 
 
+def _ensure_registry_schema(reg: dict) -> dict:
+    # tolerate either key name; normalize
+    if "recent_citizenship_changes" in reg and "recent_citizenship_change" not in reg:
+        reg["recent_citizenship_change"] = reg.get("recent_citizenship_changes") or []
+    reg.setdefault("recent_citizenship_change", [])
+    # keep it always a list
+    if not isinstance(reg["recent_citizenship_change"], list):
+        reg["recent_citizenship_change"] = []
+    return reg
+
 def load_federal_registry():
     """
     Load registry with auto-recovery:
@@ -137,7 +148,10 @@ def load_federal_registry():
     # First, try the main file
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            reg = json.load(f)
+            reg = _ensure_registry_schema(reg)
+            return reg
+
     except json.JSONDecodeError:
         # Try backup
         try:
@@ -156,28 +170,55 @@ def load_federal_registry():
         # any other unexpected I/O error
         return {}
 
-def save_federal_registry(data: dict):
-    """
-    Atomic write with backup; NO-OP if REGISTRY_SUSPENDED is True.
-    """
-    if REGISTRY_SUSPENDED:
-        return
-    path = FED_REGISTRY_FILE
-    tmp  = path + ".tmp"
-    bak  = path + ".bak"
+def save_federal_registry(data: dict) -> None:
+    # never write half a file again
+    os.makedirs(os.path.dirname(FED_REGISTRY_FILE), exist_ok=True)
+    # pre-save backup
+    if os.path.exists(FED_REGISTRY_FILE):
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        bak = f"{FED_REGISTRY_FILE}.{ts}.bak"
+        try:
+            os.replace(FED_REGISTRY_FILE, bak)
+        except Exception:
+            pass  # best effort
 
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-        f.flush()
-        os.fsync(f.fileno())
-
+    # write atomically
+    fd, tmp = tempfile.mkstemp(prefix="freg_", suffix=".json", dir=os.path.dirname(FED_REGISTRY_FILE))
     try:
-        if os.path.exists(path):
-            shutil.copy2(path, bak)
-    except Exception:
-        pass
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, FED_REGISTRY_FILE)
+    finally:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except Exception:
+            pass
 
-    os.replace(tmp, path)
+def _salvage_recent_key(raw: str) -> str | None:
+    """
+    If we find `"recent_citizenship_change":` with no valid JSON value,
+    patch it to an empty list []. Also trims a trailing comma before a final '}'.
+    Returns fixed text or None if no obvious fix applies.
+    """
+    fixed = raw
+
+    # 1) handle either singular/plural key, missing value or truncated
+    pat = r'("recent_citizenship_change[s]?"\s*:\s*)(?=[}\n\r,])'
+    if re.search(pat, fixed):
+        fixed = re.sub(pat, r'\1[]', fixed)
+
+    # 2) if file ends with ",\n}" (trailing comma), drop it
+    fixed = re.sub(r',\s*([}\]])', r'\1', fixed)
+
+    # 3) try a load to see if it’s actually fixed
+    try:
+        json.loads(fixed)
+    except Exception:
+        return None
+    return fixed
 
 
 SECTION_RE = re.compile(
@@ -1639,7 +1680,51 @@ class SpideyGov(commands.Cog):
 
         await interaction.followup.send(content=msg, files=files, ephemeral=True)
 
+    @registry.command(name="quickfix_recent", description="Patch a broken recent_citizenship_change in the registry file (writes .recovered.json).")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def quickfix_recent(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            with open(FED_REGISTRY_FILE, "r", encoding="utf-8") as f:
+                raw = f.read()
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Couldn’t read registry: {e}", ephemeral=True)
 
+        fixed = _salvage_recent_key(raw)
+        if not fixed:
+            return await interaction.followup.send("❌ No obvious recent_citizenship_change corruption found (or still invalid after patch).", ephemeral=True)
+
+        recov = FED_REGISTRY_FILE + ".recovered.json"
+        try:
+            with open(recov, "w", encoding="utf-8") as f:
+                f.write(fixed)
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Couldn’t write recovered file: {e}", ephemeral=True)
+
+        await interaction.followup.send(f"✅ Wrote **{os.path.basename(recov)}**. Use `/registry replace_with_recovered` to swap it in after you glance at it.", ephemeral=True)
+
+    @registry.command(name="replace_with_recovered", description="Swap in the last .recovered.json if it parses.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def replace_with_recovered(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        recov = FED_REGISTRY_FILE + ".recovered.json"
+        if not os.path.exists(recov):
+            return await interaction.followup.send("❌ No recovered file found.", ephemeral=True)
+        try:
+            with open(recov, "r", encoding="utf-8") as f:
+                data = json.load(f)  # validate
+            data = _ensure_registry_schema(data)
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Recovered file still invalid: {e}", ephemeral=True)
+
+        # commit atomically & keep a backup of the corrupted original
+        try:
+            save_federal_registry(data)
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
+
+        await interaction.followup.send("✅ Swapped in recovered registry. You’re good.", ephemeral=True)
+    
     # --- replace your propose_legislation command with this version ---
     @legislature.command(name="propose_legislation", description="Propose new legislation")
     @app_commands.checks.has_any_role(SENATORS, REPRESENTATIVES)
