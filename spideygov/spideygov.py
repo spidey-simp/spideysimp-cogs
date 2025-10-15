@@ -249,6 +249,41 @@ STATUS_CHANNEL_ID = 1420796334910210178  # “bill status” channel you created
 def _now_iso():
     return datetime.now(UTC).isoformat()
 
+def _parse_iso(ts: str) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        # allow both ISO and ISO with 'Z'
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+def _ensure_citizenship_bucket(reg: dict) -> dict:
+    # normalize plural vs singular
+    if "recent_citizenship_changes" not in reg and "recent_citizenship_change" in reg:
+        reg["recent_citizenship_changes"] = reg.get("recent_citizenship_change") or {}
+    bucket = reg.setdefault("recent_citizenship_changes", {})
+    # coerce keys to str and values to ISO strings
+    fixed, changed = {}, False
+    for k, v in list(bucket.items()):
+        sk = str(k)
+        if isinstance(v, datetime):
+            iso = v.astimezone(UTC).isoformat()
+        elif isinstance(v, (int, float)):
+            iso = datetime.fromtimestamp(v, UTC).isoformat()
+        elif isinstance(v, str):
+            iso = v if _parse_iso(v) else _now_iso()
+        else:
+            iso = _now_iso()
+        if sk != k or iso != v:
+            changed = True
+        fixed[sk] = iso
+    if changed:
+        reg["recent_citizenship_changes"] = fixed
+    # future-proof switch you mentioned
+    reg.setdefault("election_active", False)
+    return reg
+
 def _iso_to_dt(s: str) -> datetime:
     try:
         return datetime.fromisoformat(s.replace("Z","+00:00")).astimezone(UTC)
@@ -1635,106 +1670,6 @@ class SpideyGov(commands.Cog):
             ephemeral=True
         )
 
-    @registry.command(name="repair", description="Attempt to repair a corrupted federal registry file")
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(commit="If true, replace the live file with the salvaged JSON and reload")
-    async def registry_repair(self, interaction: discord.Interaction, commit: bool = False):
-        global REGISTRY_SUSPENDED
-
-        await interaction.response.defer(ephemeral=True, thinking=True)
-
-        path = Path(FED_REGISTRY_FILE)
-        if not path.exists():
-            return await interaction.followup.send("❌ Registry file not found.", ephemeral=True)
-
-        raw = path.read_text(encoding="utf-8", errors="ignore")
-
-        # Already valid?
-        ok = _try_json_load(raw)
-        if ok is not None:
-            if commit:
-                # ensure we're in normal mode and persist
-                self.federal_registry = ok
-                self.registry_readonly = False
-                REGISTRY_SUSPENDED = False
-                save_federal_registry(self.federal_registry)
-                # (re)start tasks if they weren't running
-                try:
-                    if not self.bill_poll_sweeper.is_running():
-                        self.bill_poll_sweeper.start()
-                    if not self.bill_status_ticker.is_running():
-                        self.bill_status_ticker.start()
-                except Exception:
-                    pass
-            return await interaction.followup.send("✅ Registry JSON is valid. No repair needed.", ephemeral=True)
-
-        # Try salvage A: trim tail
-        data, cut = _salvage_by_trim(raw)
-        method = None
-        if data is not None:
-            method = f"trim ({cut} bytes)"
-        else:
-            # Try salvage B: balance braces/brackets
-            data, balanced = _salvage_by_balance(raw)
-            if data is not None:
-                method = "balanced braces"
-            else:
-                return await interaction.followup.send(
-                    "❌ Could not auto-salvage. Manual fix near the end of file may be required.",
-                    ephemeral=True
-                )
-
-        # Write salvaged copy next to the live file
-        salv = path.with_suffix(".salvaged.json")
-        salv.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        if not commit:
-            return await interaction.followup.send(
-                f"✅ Salvaged via **{method}** → `{salv.name}`.\n"
-                f"Re-run with `commit: True` to replace the live file and exit panic mode.",
-                ephemeral=True
-            )
-
-        # Commit safely: backup corrupt → replace → reload → exit panic → start tasks
-        ts = int(time.time())
-        corrupt = path.with_suffix(f".corrupt-{ts}.json")
-        try:
-            os.replace(path, corrupt)  # keep the original intact as backup
-            os.replace(salv, path)     # move salvaged into place
-        except Exception as e:
-            return await interaction.followup.send(f"❌ Failed to commit salvage: {e}", ephemeral=True)
-
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                self.federal_registry = json.load(f)
-        except Exception as e:
-            return await interaction.followup.send(
-                f"⚠️ Committed, but reload failed: {e}\n"
-                f"The previous corrupt file was saved as `{corrupt.name}`.",
-                ephemeral=True
-            )
-
-        # Exit panic mode
-        self.registry_readonly = False
-        REGISTRY_SUSPENDED = False
-
-        # Persist once (creates a fresh .bak atomically), then restart tasks
-        save_federal_registry(self.federal_registry)
-        try:
-            if not self.bill_poll_sweeper.is_running():
-                self.bill_poll_sweeper.start()
-            if not self.bill_status_ticker.is_running():
-                self.bill_status_ticker.start()
-        except Exception:
-            pass
-
-        await interaction.followup.send(
-            f"✅ Repaired via **{method}** and committed.\n"
-            f"Backed up corrupt file as `{corrupt.name}` and reloaded into memory.\n"
-            f"Exited panic mode; autosaves and tasks re-enabled.",
-            ephemeral=True
-        )
-
 
     @registry.command(
         name="dump",
@@ -1789,50 +1724,7 @@ class SpideyGov(commands.Cog):
 
         await interaction.followup.send(content=msg, files=files, ephemeral=True)
 
-    @registry.command(name="quickfix_recent", description="Patch a broken recent_citizenship_change in the registry file (writes .recovered.json).")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def quickfix_recent(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        try:
-            with open(FED_REGISTRY_FILE, "r", encoding="utf-8") as f:
-                raw = f.read()
-        except Exception as e:
-            return await interaction.followup.send(f"❌ Couldn’t read registry: {e}", ephemeral=True)
 
-        fixed = _salvage_recent_key(raw)
-        if not fixed:
-            return await interaction.followup.send("❌ No obvious recent_citizenship_change corruption found (or still invalid after patch).", ephemeral=True)
-
-        recov = FED_REGISTRY_FILE + ".recovered.json"
-        try:
-            with open(recov, "w", encoding="utf-8") as f:
-                f.write(fixed)
-        except Exception as e:
-            return await interaction.followup.send(f"❌ Couldn’t write recovered file: {e}", ephemeral=True)
-
-        await interaction.followup.send(f"✅ Wrote **{os.path.basename(recov)}**. Use `/registry replace_with_recovered` to swap it in after you glance at it.", ephemeral=True)
-
-    @registry.command(name="replace_with_recovered", description="Swap in the last .recovered.json if it parses.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def replace_with_recovered(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        recov = FED_REGISTRY_FILE + ".recovered.json"
-        if not os.path.exists(recov):
-            return await interaction.followup.send("❌ No recovered file found.", ephemeral=True)
-        try:
-            with open(recov, "r", encoding="utf-8") as f:
-                data = json.load(f)  # validate
-            data = _ensure_registry_schema(data)
-        except Exception as e:
-            return await interaction.followup.send(f"❌ Recovered file still invalid: {e}", ephemeral=True)
-
-        # commit atomically & keep a backup of the corrupted original
-        try:
-            save_federal_registry(data)
-        except Exception as e:
-            return await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
-
-        await interaction.followup.send("✅ Swapped in recovered registry. You’re good.", ephemeral=True)
     
     # --- replace your propose_legislation command with this version ---
     @legislature.command(name="propose_legislation", description="Propose new legislation")
@@ -2292,10 +2184,9 @@ class SpideyGov(commands.Cog):
 
         await ctx.send(f"Done. Fixed dual citizenship for {fixed} members.")
     
+
     @citizenship.command(name="change_citizenship", description="Move to a different category")
-    @app_commands.describe(
-        new_citizenship="The citizenship role to move to"
-    )
+    @app_commands.describe(new_citizenship="The citizenship role to move to")
     @app_commands.checks.has_role(CITIZENSHIP_ROLE)
     @app_commands.choices(new_citizenship=[
         app_commands.Choice(name="Commons", value="commons"),
@@ -2305,141 +2196,168 @@ class SpideyGov(commands.Cog):
         app_commands.Choice(name="User Themed", value="user_themed"),
     ])
     async def change_citizenship(self, interaction: discord.Interaction, new_citizenship: str):
-        citizenship_changes = self.federal_registry.setdefault("recent_citizenship_changes", {})
-        if interaction.user.id in citizenship_changes:
-            if citizenship_changes[interaction.user.id] + timedelta(days=30) > datetime.now(UTC):
-                return await interaction.response.send_message(
-                    "You can only change your citizenship once every 30 days. Please try again later.",
-                    ephemeral=True
-                )
-        
-        current_citizenship = [r for r in interaction.user.roles if r.id in CITIZENSHIP_IDS]
-        new_role_id = CITIZENSHIP.get(new_citizenship)
-        if new_role_id in current_citizenship:
+        # Optional global freeze (future election lockout)
+        _ensure_citizenship_bucket(self.federal_registry)
+        if self.federal_registry.get("election_active"):
             return await interaction.response.send_message(
-                f"You already have the {new_citizenship} citizenship role.",
-                ephemeral=True
-            )
-        
-        try:
-            await interaction.user.add_roles(interaction.guild.get_role(new_role_id), reason="Citizenship change")
-            for r in current_citizenship:
-                await interaction.user.remove_roles(r, reason="Citizenship change")
-            citizenship_changes[interaction.user.id] = datetime.now(UTC)
-            return await interaction.response.send_message(
-                f"Your citizenship has been changed to {new_citizenship}.",
-                ephemeral=True
-            )
-        except (discord.Forbidden, discord.HTTPException) as e:
-            return await interaction.response.send_message(
-                f"Failed to change citizenship: {e}",
+                "Citizenship changes are temporarily disabled during the election period.",
                 ephemeral=True
             )
 
+        user = interaction.user
+        # current citizenship roles the member holds (by id)
+        current_roles = [r for r in user.roles if r.id in CITIZENSHIP_IDS]
+        current_ids  = {r.id for r in current_roles}
+
+        new_role_id = CITIZENSHIP.get(new_citizenship)
+        if not new_role_id:
+            return await interaction.response.send_message("Unknown citizenship.", ephemeral=True)
+
+        if new_role_id in current_ids:
+            return await interaction.response.send_message(
+                f"You already have the **{new_citizenship.replace('_',' ').title()}** citizenship.",
+                ephemeral=True
+            )
+
+        # Cooldown: once every 30 days
+        bucket = self.federal_registry.setdefault("recent_citizenship_changes", {})
+        last_ts = bucket.get(str(user.id)) or bucket.get(user.id)  # tolerate old key type
+        last_dt = _parse_iso(last_ts) if isinstance(last_ts, str) else (last_ts if isinstance(last_ts, datetime) else None)
+        if last_dt and (last_dt + timedelta(days=30) > datetime.now(UTC)):
+            remaining = (last_dt + timedelta(days=30)) - datetime.now(UTC)
+            days = remaining.days
+            hours = remaining.seconds // 3600
+            return await interaction.response.send_message(
+                f"You can change citizenship again in **{days}d {hours}h**.",
+                ephemeral=True
+            )
+
+        # Apply: remove old citizenship roles first, then add new one
+        try:
+            # remove any existing citizenship roles
+            if current_roles:
+                await user.remove_roles(*current_roles, reason="Citizenship change")
+            # add the new one
+            role = interaction.guild.get_role(new_role_id)
+            if not role:
+                return await interaction.response.send_message("Target role not found.", ephemeral=True)
+            await user.add_roles(role, reason="Citizenship change")
+        except (discord.Forbidden, discord.HTTPException) as e:
+            return await interaction.response.send_message(f"Failed to change citizenship: {e}", ephemeral=True)
+
+        # Persist cooldown as ISO string with string user-id key
+        bucket[str(user.id)] = _now_iso()
+        self.federal_registry["recent_citizenship_changes"] = bucket
+        save_federal_registry(self.federal_registry)
+
+        await interaction.response.send_message(
+            f"✅ Your citizenship is now **{new_citizenship.replace('_',' ').title()}**.",
+            ephemeral=True
+        )
+
     @citizenship.command(name="residency_question_add", description="Add a residency question")
     @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(
-        question="The residency question to add"
-    )
+    @app_commands.describe(question="The residency question to add")
     async def residency_question_add(self, interaction: discord.Interaction, question: str):
         if interaction.channel.id != STATE_DEPARTMENT_CHANNEL:
-            return await interaction.response.send_message("This command can only be used in the State Department channel. This is for FOIA purposes.", ephemeral=True)
-        question_bank = self.federal_registry.setdefault("residency_questions", [])
-        question_bank.append({
+            return await interaction.response.send_message(
+                "This command can only be used in the State Department channel (FOIA).",
+                ephemeral=True
+            )
+        bank = self.federal_registry.setdefault("residency_questions", [])
+        bank.append({
             "question": question,
             "added_by": interaction.user.id,
             "added_at": discord.utils.utcnow().isoformat()
         })
-        self.federal_registry["residency_questions"] = question_bank
         save_federal_registry(self.federal_registry)
-        await interaction.response.send_message(f"Residency question added: {question}", ephemeral=False)
-    
+        await interaction.response.send_message(f"Added: {question}", ephemeral=False)
+
     @citizenship.command(name="residency_question_list", description="List residency questions")
     @app_commands.checks.has_permissions(administrator=True)
     async def residency_question_list(self, interaction: discord.Interaction):
-        question_bank = self.federal_registry.get("residency_questions", [])
-        if not question_bank:
+        bank = self.federal_registry.get("residency_questions", [])
+        if not bank:
             return await interaction.response.send_message("No residency questions found.", ephemeral=True)
-        
-        embed = discord.Embed(
-            title="Residency Questions",
-            description="\n".join(f"{i+1}. {q['question']}" for i, q in enumerate(question_bank)),
-            color=discord.Color.blue()
-        )
+        desc = "\n".join(f"{i+1}. {q['question']}" for i, q in enumerate(bank))
+        embed = discord.Embed(title="Residency Questions", description=desc[:4000], color=discord.Color.blue())
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @citizenship.command(name="residency_question_remove", description="Remove a residency question by its number")
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(
-        question_number="The number of the residency question to remove (see list)",
-        reason="Reason for removal (for audit log)"
+        question_number="The number from the list",
+        reason="Reason for removal (audit log)"
     )
-    async def residency_question_remove(self, interaction: discord.Interaction, question_number: int, reason:str):
+    async def residency_question_remove(self, interaction: discord.Interaction, question_number: int, reason: str):
         if interaction.channel.id != STATE_DEPARTMENT_CHANNEL:
-            return await interaction.response.send_message("This command can only be used in the State Department channel. This is for FOIA purposes.", ephemeral=True)
-        question_bank = self.federal_registry.get("residency_questions", [])
-        if not question_bank or question_number < 1 or question_number > len(question_bank):
+            return await interaction.response.send_message(
+                "This command can only be used in the State Department channel (FOIA).",
+                ephemeral=True
+            )
+        bank = self.federal_registry.get("residency_questions", [])
+        if not bank or not (1 <= question_number <= len(bank)):
             return await interaction.response.send_message("Invalid question number.", ephemeral=True)
-        
-        removed_question = question_bank.pop(question_number - 1)
-        self.federal_registry["residency_questions"] = question_bank
+        removed = bank.pop(question_number - 1)
         save_federal_registry(self.federal_registry)
-        await interaction.response.send_message(f"{interaction.user.display_name} removed residency question: {removed_question['question']}\n\nReason: {reason}", ephemeral=False)
-    
+        await interaction.response.send_message(
+            f"{interaction.user.display_name} removed: {removed['question']}\n\nReason: {reason}",
+            ephemeral=False
+        )
+
     async def is_citizen(self, member: discord.Member) -> bool:
         return any(r.id == CITIZENSHIP_ROLE for r in member.roles)
 
     async def is_resident(self, member: discord.Member) -> bool:
         return any(r.id in RESIDENTS for r in member.roles)
-    
+
     async def category_citizenship(self, member: discord.Member) -> str | None:
         for key, role_id in CITIZENSHIP.items():
             if any(r.id == role_id for r in member.roles):
                 return key
         return None
-    
-    async def visa_status(self, member:discord.Member) -> str:
-        self.federal_registry.setdefault("visas", {})
-        visa_info = self.federal_registry["visas"].get(str(member.id))
-        if not visa_info:
+
+    async def visa_status(self, member: discord.Member) -> str:
+        visas = self.federal_registry.setdefault("visas", {})
+        info = visas.get(str(member.id))
+        if not info:
             return "No visa record found."
-        else:
-            type = visa_info.get("type", "Unknown")
-            issued = visa_info.get("issued", "Unknown")
-            expiry_date = visa_info.get("expiry_date", "Unknown")
-            return f"Visa Type: {type}\nIssued On: {issued}\nExpiry Date: {expiry_date}"
+        t = info.get("type", "Unknown")
+        issued = info.get("issued", "Unknown")
+        expiry = info.get("expiry_date", "Unknown")
+        return f"Visa Type: {t}\nIssued On: {issued}\nExpiry Date: {expiry}"
 
     @citizenship.command(name="my_status", description="View your citizenship status and history")
     async def my_status(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="Your Citizenship Status",
-            color=discord.Color.blue()
-        )
-        is_citizen = await self.is_citizen(interaction.user)
-        is_resident = await self.is_resident(interaction.user)
-        category_citizenship = await self.category_citizenship(interaction.user)
-        if not is_citizen and not is_resident:
-            visa_info = self.visa_status(interaction.user)
-            embed.add_field(name="Status", value="You are currently a non-citizen resident or visitor.", inline=False)
-            embed.add_field(name="Visa Information", value=visa_info, inline=False)
+        embed = discord.Embed(title="Your Citizenship Status", color=discord.Color.blue())
+
+        citizen = await self.is_citizen(interaction.user)
+        resident = await self.is_resident(interaction.user)
+        cat = await self.category_citizenship(interaction.user)
+
+        if not citizen and not resident:
+            visa_info = await self.visa_status(interaction.user)  # ← await!
+            embed.add_field(name="Status", value="Non-citizen resident or visitor.", inline=False)
+            embed.add_field(name="Visa Information", value=visa_info[:1024], inline=False)
         else:
-            status_parts = []
-            if is_citizen:
-                status_parts.append("Citizen")
-            if is_resident:
-                status_parts.append("Resident")
-            embed.add_field(name="Status", value=", ".join(status_parts), inline=False)
-            if category_citizenship:
-                cat_info = CATEGORIES.get(category_citizenship)
-                if cat_info:
-                    embed.add_field(name="Citizenship Category", value=cat_info["name"], inline=False)
-            # Recent citizenship changes
-            changes = self.federal_registry.get("recent_citizenship_changes", {})
-            change_time = changes.get(interaction.user.id)
-            if change_time:
-                embed.add_field(name="Last Citizenship Change", value=change_time.strftime("%Y-%m-%d"), inline=False)
+            bits = []
+            if citizen: bits.append("Citizen")
+            if resident: bits.append("Resident")
+            embed.add_field(name="Status", value=", ".join(bits), inline=False)
+            if cat:
+                info = CATEGORIES.get(cat)
+                if info:
+                    embed.add_field(name="Citizenship Category", value=info["name"], inline=False)
+
+            # Last change (formatted)
+            bucket = self.federal_registry.get("recent_citizenship_changes", {})
+            last = bucket.get(str(interaction.user.id)) or bucket.get(interaction.user.id)
+            dt = _parse_iso(last) if isinstance(last, str) else (last if isinstance(last, datetime) else None)
+            if dt:
+                embed.add_field(name="Last Citizenship Change", value=dt.strftime("%Y-%m-%d"), inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=False)
+
 
     @category.command(name="view_category_info", description="View info about a category")
     @app_commands.describe(
