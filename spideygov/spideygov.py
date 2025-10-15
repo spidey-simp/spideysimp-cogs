@@ -55,6 +55,13 @@ CITIZENSHIP_IDS = set(CITIZENSHIP.values())
 
 CITIZENSHIP_ROLE = 1302324304712695909
 RESIDENTS = 1287978893755547769
+WAVING = 1287676691552145529
+PENDING_RESIDENT = 1428131256327078009
+ADMINS = 1295895729948196874
+RULES = 1287700985275355147
+INTAKE_CHANNEL = 1428131798684274800
+CITIZENSHIP_APPLICANT = 1428142777308549263
+PENDING_ALLOWED_CHANNELS = {RULES, WAVING, INTAKE_CHANNEL}
 
 CATEGORIES = {
     "commons": {
@@ -121,6 +128,12 @@ def _salvage_by_balance(raw: str):
     ok = _try_json_load(fixed)
     return (ok, True) if ok is not None else (None, False)
 
+
+def _pick_residency_question(reg: dict) -> str:
+    bank = reg.get("residency_questions") or []
+    if bank:
+        return random.choice(bank)["question"]
+    return "What's your favorite flavor of ice cream?"
 
 def _ensure_registry_schema(reg: dict) -> dict:
     # keep this minimal; add/normalize anything you rely on
@@ -1384,6 +1397,59 @@ class SpideyGov(commands.Cog):
             save_federal_registry(self.federal_registry)
         except Exception:
             pass
+    
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        """Give PENDING role and open an intake thread with a residency question."""
+        guild = member.guild
+        try:
+            pend = guild.get_role(PENDING_RESIDENT)
+            if pend and pend not in member.roles:
+                await member.add_roles(pend, reason="New arrival — residency intake")
+        except Exception:
+            pass
+
+        parent = self.bot.get_channel(INTAKE_CHANNEL)
+        if not parent:
+            return
+
+        q = _pick_residency_question(self.federal_registry)
+        admin_role = guild.get_role(ADMINS)
+        admin_ping = admin_role.mention if admin_role else "@admins"
+
+        # forum parent: create a forum thread; else: create private thread under text channel
+        try:
+            if getattr(parent, "type", None).name == "forum":
+                created = await parent.create_thread(
+                    name=f"Residency — {member.display_name}",
+                    content=f"{admin_ping}\nWelcome {member.mention}! Please answer:\n\n> {q}",
+                    allowed_mentions=discord.AllowedMentions(roles=True, users=True, everyone=False)
+                )
+                thread = created.thread or created
+            else:
+                # text channel: create private thread and add the user explicitly
+                thread = await parent.create_thread(
+                    name=f"Residency — {member.display_name}",
+                    type=discord.ChannelType.private_thread,
+                    invitable=False,
+                    auto_archive_duration=1440
+                )
+                await thread.send(
+                    f"{admin_ping}\nWelcome {member.mention}! Please answer:\n\n> {q}",
+                    allowed_mentions=discord.AllowedMentions(roles=True, users=True, everyone=False)
+                )
+                try:
+                    await thread.add_user(member)
+                except Exception:
+                    pass
+
+            # persist thread pointer
+            bucket = self.federal_registry.setdefault("residency_threads", {})
+            bucket[str(member.id)] = {"thread_id": thread.id, "opened_at": discord.utils.utcnow().isoformat()}
+            save_federal_registry(self.federal_registry)
+        except Exception:
+            # swallow — onboarding should not crash join
+            pass
 
     
     def to_roman(self, n: int) -> str:
@@ -1559,6 +1625,45 @@ class SpideyGov(commands.Cog):
     category = app_commands.Group(name="category", description="Category management commands", parent=government)
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
+
+
+    @commands.command(name="residency_gate_apply", aliases=["arg"])
+    @commands.is_owner()
+    async def residency_gate_apply(self, ctx: commands.Context):
+        guild = ctx.guild
+        pend = guild.get_role(PENDING_RESIDENT)
+        if not pend:
+            return await ctx.reply("Pending Resident role not found.")
+
+        touched = 0
+        for cat in guild.categories:
+            # apply at category level if possible (propagates to synced channels)
+            try:
+                allow = any(ch.id in PENDING_ALLOWED_CHANNELS for ch in cat.channels) and cat.id in PENDING_ALLOWED_CHANNELS
+            except Exception:
+                allow = False
+
+            # If category is one of the allowed containers, allow view; else deny
+            # Simpler rule: deny by default; we’ll explicitly allow on specific channels below.
+            try:
+                await cat.set_permissions(pend, view_channel=False, send_messages=False)
+                touched += 1
+            except Exception:
+                pass
+
+        # Per-channel exceptions (rules/wave/intake parent)
+        for ch_id in PENDING_ALLOWED_CHANNELS:
+            ch = guild.get_channel(ch_id)
+            if not ch:
+                continue
+            try:
+                await ch.set_permissions(pend, view_channel=True, send_messages=True, read_message_history=True)
+                touched += 1
+            except Exception:
+                pass
+
+        await ctx.reply(f"✅ Applied residency gate to {touched} places. Review anything custom and you’re done.")
+
 
     @registry.command(
         name="upload_fixed",
@@ -2357,6 +2462,184 @@ class SpideyGov(commands.Cog):
                 embed.add_field(name="Last Citizenship Change", value=dt.strftime("%Y-%m-%d"), inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=False)
+
+    async def applicant_autocomplete(self, interaction: discord.Interaction, current: str):
+        guild = interaction.guild
+        if not guild:
+            return []
+        
+        cur = (current or "").lower()
+        choices = []
+        for member in guild.members:
+            if member.bot:
+                continue
+            if any(r.id in [PENDING_RESIDENT, CITIZENSHIP_APPLICANT] for r in member.roles):
+                if any(r.id == PENDING_RESIDENT for r in member.roles):
+                    formatted_name = f"{member.display_name} (Pending Resident)"
+                else:
+                    formatted_name = f"{member.display_name} (Citizenship Applicant)"
+                if cur in member.display_name.lower() or cur in member.name.lower():
+                    choices.append(app_commands.Choice(name=formatted_name, value=str(member.id)))
+        return choices[:25]
+
+
+
+    @citizenship.command(
+        name="immigration_decision",
+        description="Approve or deny immigration (resident/citizen) and close the intake thread."
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        stage="Which application you’re deciding",
+        action="Decision",
+        applicant="The applicant",
+        category="If approving citizenship, optionally pick a category",
+        reason="Optional reason (required for deny/conditional)"
+    )
+    @app_commands.choices(
+        stage=[
+            app_commands.Choice(name="Resident", value="resident"),
+            app_commands.Choice(name="Citizen", value="citizen"),
+        ],
+        action=[
+            app_commands.Choice(name="Approve", value="approve"),
+            app_commands.Choice(name="Deny", value="deny"),
+            app_commands.Choice(name="Conditional", value="conditional"),
+        ],
+        # optional category for citizenship approval
+        category=[
+            app_commands.Choice(name="Commons", value="commons"),
+            app_commands.Choice(name="Gaming", value="gaming"),
+            app_commands.Choice(name="Spideyton, District of Parker", value="dp"),
+            app_commands.Choice(name="Crazy Times", value="crazy_times"),
+            app_commands.Choice(name="User Themed", value="user_themed"),
+        ]
+    )
+    @app_commands.autocomplete(applicant=applicant_autocomplete)
+    async def immigration_decision(
+        self,
+        interaction: discord.Interaction,
+        stage: str,
+        action: str,
+        applicant: discord.Member,
+        category: str = None,
+        reason: str = None,
+    ):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        # require a reason for non-approvals
+        if action in {"deny", "conditional"} and not (reason and reason.strip()):
+            return await interaction.followup.send("Please provide a reason for deny/conditional.", ephemeral=True)
+
+        guild = interaction.guild
+        pend = guild.get_role(PENDING_RESIDENT)
+        res  = guild.get_role(RESIDENTS)
+        cit  = guild.get_role(CITIZENSHIP_ROLE)
+        cit_app = guild.get_role(CITIZENSHIP_APPLICANT)
+
+        # Try to find intake thread for the applicant (created on join)
+        intake_map = self.federal_registry.setdefault("residency_threads", {})
+        info = (intake_map.get(str(applicant.id)) or {})
+        thread_id = info.get("thread_id")
+        thread = self.bot.get_channel(int(thread_id)) if thread_id else None
+
+        # Build a note we’ll post to the thread if we can
+        decision_line = f"**Decision:** {stage.title()} — {action.title()}"
+        if reason:
+            decision_line += f"\n**Note:** {reason.strip()}"
+
+        # Perform role changes
+        try:
+            if stage == "resident":
+                if action == "approve":
+                    # remove Pending, add Resident
+                    to_remove = [pend] if pend and pend in applicant.roles else []
+                    to_add = [res] if res and (res not in applicant.roles) else []
+                    if to_remove:
+                        await applicant.remove_roles(*to_remove, reason="Residency approved")
+                    if to_add:
+                        await applicant.add_roles(*to_add, reason="Residency approved")
+
+                elif action == "deny":
+                    # keep Pending, no additions
+                    pass
+
+                elif action == "conditional":
+                    # no role swap by default; you can tailor this to add a “Probationary” role if you create one
+                    pass
+
+            elif stage == "citizen":
+                if action == "approve":
+                    # Add Citizen, optionally category; remove Pending if present
+                    to_remove = [cit_app] if cit_app and cit_app in applicant.roles else []
+                    if to_remove:
+                        await applicant.remove_roles(*to_remove, reason="Citizenship approved")
+                    changes = []
+                    if cit and cit not in applicant.roles:
+                        changes.append(cit)
+                    if category:
+                        role_id = CITIZENSHIP.get(category)
+                        r = guild.get_role(role_id) if role_id else None
+                        if r and r not in applicant.roles:
+                            changes.append(r)
+                    if changes:
+                        await applicant.add_roles(*changes, reason="Citizenship approved")
+                    if pend and pend in applicant.roles:
+                        await applicant.remove_roles(pend, reason="Citizenship approved")
+                    # (Optionally) ensure Resident too — comment out if you want them mutually exclusive
+                    if res and res not in applicant.roles:
+                        try:
+                            await applicant.add_roles(res, reason="Citizenship approved (base resident)")
+                        except Exception:
+                            pass
+
+                elif stage == "citizen" and action == "deny":
+                    if cit_app and cit_app in applicant.roles:
+                        await applicant.remove_roles(cit_app, reason="Citizenship denied")
+
+                    pass
+
+                elif action == "conditional":
+                    # no default role change
+                    pass
+
+        except (discord.Forbidden, discord.HTTPException) as e:
+            return await interaction.followup.send(f"Role update failed: {e}", ephemeral=True)
+
+        # Post & archive intake thread if present (always post the outcome)
+        if thread:
+            try:
+                await thread.send(
+                    f"{decision_line}\n\n— decided by {interaction.user.mention}",
+                    allowed_mentions=discord.AllowedMentions(roles=False, users=True, everyone=False),
+                )
+                # Archive/lock on approve/deny; keep open on conditional
+                if action in {"approve", "deny"}:
+                    await thread.edit(archived=True, locked=True)
+            except Exception:
+                pass
+
+        # Log to registry for audit
+        logs = self.federal_registry.setdefault("immigration_actions", [])
+        logs.append({
+            "ts": _now_iso(),
+            "moderator_id": interaction.user.id,
+            "applicant_id": applicant.id,
+            "stage": stage,
+            "action": action,
+            "category": (category or None),
+            "reason": (reason.strip() if reason else None),
+            "thread_id": (int(thread.id) if thread else None),
+        })
+        save_federal_registry(self.federal_registry)
+
+        # Ack
+        human = f"{stage.title()} {action.title()}"
+        extra = f" (category: {category})" if (stage == "citizen" and action == "approve" and category) else ""
+        state_channel = await interaction.guild.fetch_channel(STATE_DEPARTMENT_CHANNEL)
+        if state_channel:
+            await state_channel.send(f"{applicant.mention} has been processed: {human}{extra}.\n\n— decided by {interaction.user.mention}{' with reason: ' + reason if reason else ''}")
+        await interaction.followup.send(f"✅ {applicant.mention}: {human}{extra}.", ephemeral=True)
 
 
     @category.command(name="view_category_info", description="View info about a category")
