@@ -123,11 +123,10 @@ def _salvage_by_balance(raw: str):
 
 
 def _ensure_registry_schema(reg: dict) -> dict:
-    # tolerate either key name; normalize
+    # keep this minimal; add/normalize anything you rely on
     if "recent_citizenship_changes" in reg and "recent_citizenship_change" not in reg:
         reg["recent_citizenship_change"] = reg.get("recent_citizenship_changes") or []
     reg.setdefault("recent_citizenship_change", [])
-    # keep it always a list
     if not isinstance(reg["recent_citizenship_change"], list):
         reg["recent_citizenship_change"] = []
     return reg
@@ -1525,6 +1524,116 @@ class SpideyGov(commands.Cog):
     category = app_commands.Group(name="category", description="Category management commands", parent=government)
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
+
+    @registry.command(
+        name="upload_fixed",
+        description="Upload a corrected registry JSON and swap it in (validates + backs up current)."
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        file="Attach a UTF-8 .json of the FULL registry",
+        commit="If false, only validate and report without replacing"
+    )
+    async def registry_upload_fixed(
+        self,
+        interaction: discord.Interaction,
+        file: discord.Attachment,
+        commit: bool = True,
+    ):
+        global REGISTRY_SUSPENDED
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        # Basic sanity
+        if not file:
+            return await interaction.followup.send("❌ No file attached.", ephemeral=True)
+        if file.size and file.size > 10_000_000:
+            return await interaction.followup.send("❌ File too large (>10MB).", ephemeral=True)
+
+        # Read & decode
+        try:
+            raw = await file.read()
+        except Exception as e:
+            return await interaction.followup.send(f"❌ Couldn’t read attachment: {e}", ephemeral=True)
+        try:
+            text = raw.decode("utf-8-sig")
+        except Exception:
+            return await interaction.followup.send("❌ File is not valid UTF-8.", ephemeral=True)
+
+        # Parse JSON
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            return await interaction.followup.send(
+                f"❌ JSON parse error at line {e.lineno}, col {e.colno}: {e.msg}",
+                ephemeral=True
+            )
+
+        # Normalize schema (keeps bad keys from bricking later)
+        data = _ensure_registry_schema(data)
+
+        # Dry-run?
+        if not commit:
+            keys = ", ".join(sorted(data.keys())[:12])
+            more = "…" if len(data.keys()) > 12 else ""
+            return await interaction.followup.send(
+                f"✅ JSON is valid. Top-level keys: {keys}{more}\n"
+                "Re-run with `commit: true` to replace the live registry.",
+                ephemeral=True
+            )
+
+        # Commit safely
+        path = FED_REGISTRY_FILE
+        base = Path(path)
+        ts = int(time.time())
+
+        # Enter suspend so nothing else writes mid-swap
+        REGISTRY_SUSPENDED = True
+
+        # Backup current file (even if corrupt)
+        try:
+            if base.exists():
+                shutil.copy2(base, base.with_suffix(f".preupload-{ts}.json"))
+        except Exception:
+            pass  # best effort
+
+        # Atomic write of the new data
+        try:
+            # if you already have save_federal_registry() with atomic replace, use it:
+            save_federal_registry(data)
+        except Exception as e:
+            REGISTRY_SUSPENDED = getattr(self, "registry_readonly", False)
+            return await interaction.followup.send(f"❌ Failed to write new registry: {e}", ephemeral=True)
+
+        # Reload into memory & exit panic
+        try:
+            with open(base, "r", encoding="utf-8") as f:
+                self.federal_registry = json.load(f)
+        except Exception as e:
+            return await interaction.followup.send(
+                f"⚠️ Wrote file, but reload failed: {e}\n"
+                f"Registry on disk should be OK; consider `/government reload`.",
+                ephemeral=True
+            )
+
+        self.registry_readonly = False
+        REGISTRY_SUSPENDED = False
+
+        # (Re)start tasks if you paused them in panic mode
+        try:
+            if hasattr(self, "bill_poll_sweeper") and not self.bill_poll_sweeper.is_running():
+                self.bill_poll_sweeper.start()
+            if hasattr(self, "bill_status_ticker") and not self.bill_status_ticker.is_running():
+                self.bill_status_ticker.start()
+        except Exception:
+            pass
+
+        await interaction.followup.send(
+            "✅ Uploaded and swapped in the fixed registry.\n"
+            "A backup of the previous file was saved alongside as `.preupload-<timestamp>.json`.\n"
+            "Autosaves & tasks are enabled again.",
+            ephemeral=True
+        )
 
     @registry.command(name="repair", description="Attempt to repair a corrupted federal registry file")
     @app_commands.checks.has_permissions(administrator=True)
