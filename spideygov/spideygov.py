@@ -2458,20 +2458,47 @@ class SpideyGov(commands.Cog):
         guild = interaction.guild
         if not guild:
             return []
-        
+
         cur = (current or "").lower()
-        choices = []
-        for member in guild.members:
-            if member.bot:
-                continue
-            if any(r.id in [PENDING_RESIDENT, CITIZENSHIP_APPLICANT] for r in member.roles):
-                if any(r.id == PENDING_RESIDENT for r in member.roles):
-                    formatted_name = f"{member.display_name} (Pending Resident)"
-                else:
-                    formatted_name = f"{member.display_name} (Citizenship Applicant)"
-                if cur in member.display_name.lower() or cur in member.name.lower():
-                    choices.append(app_commands.Choice(name=formatted_name, value=str(member.id)))
-        return choices[:25]
+
+        # Prefer role.members over guild.members (lighter & more reliable in autocomplete)
+        pending_role   = guild.get_role(PENDING_RESIDENT)
+        applicant_role = guild.get_role(CITIZENSHIP_APPLICANT)
+
+        candidates = set()
+        if pending_role:
+            candidates.update(pending_role.members)
+        if applicant_role:
+            candidates.update(applicant_role.members)
+
+        # If empty, try to populate cache once
+        if not candidates and not guild.chunked:
+            try:
+                await guild.chunk()  # hydrate member cache
+                if pending_role:
+                    candidates.update(pending_role.members)
+                if applicant_role:
+                    candidates.update(applicant_role.members)
+            except Exception:
+                pass
+
+        out = []
+        for m in sorted(candidates, key=lambda x: (x.display_name or x.name).lower()):
+            tag = "Pending Resident" if (pending_role and pending_role in m.roles) else "Citizenship Applicant"
+            label = f"{m.display_name} ({tag})"
+            # match display, username, or global name
+            names = [
+                (m.display_name or "").lower(),
+                (m.name or "").lower(),
+                (getattr(m, "global_name", "") or "").lower(),
+            ]
+            if not cur or any(cur in n for n in names):
+                out.append(app_commands.Choice(name=label[:100], value=str(m.id)))
+            if len(out) >= 25:
+                break
+
+        return out
+
 
 
 
