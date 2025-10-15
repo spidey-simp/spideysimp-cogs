@@ -59,9 +59,8 @@ WAVING = 1287676691552145529
 PENDING_RESIDENT = 1428131256327078009
 SEC_OF_STATE = 650814947437182977
 RULES = 1287700985275355147
-INTAKE_CHANNEL = 1428131798684274800
 CITIZENSHIP_APPLICANT = 1428142777308549263
-PENDING_ALLOWED_CHANNELS = {RULES, WAVING, INTAKE_CHANNEL}
+PENDING_ALLOWED_CHANNELS = {RULES, WAVING}
 
 CATEGORIES = {
     "commons": {
@@ -1409,7 +1408,7 @@ class SpideyGov(commands.Cog):
         except Exception:
             pass
 
-        parent = self.bot.get_channel(INTAKE_CHANNEL)
+        parent = self.bot.get_channel(WAVING)
         if not parent:
             return
 
@@ -1417,33 +1416,22 @@ class SpideyGov(commands.Cog):
         admin_role = guild.get_member(SEC_OF_STATE)
         admin_ping = admin_role.mention
 
-        # forum parent: create a forum thread; else: create private thread under text channel
         try:
-            if getattr(parent, "type", None).name == "forum":
-                created = await parent.create_thread(
-                    name=f"Residency — {member.display_name}",
-                    content=f"{admin_ping}\nWelcome {member.mention}! Please answer:\n\n> {q}",
-                    allowed_mentions=discord.AllowedMentions(roles=True, users=True, everyone=False)
-                )
-                thread = created.thread or created
-            else:
-                # text channel: create private thread and add the user explicitly
-                thread = await parent.create_thread(
-                    name=f"Residency — {member.display_name}",
-                    type=discord.ChannelType.private_thread,
-                    invitable=False,
-                    auto_archive_duration=1440
-                )
-                await thread.send(
-                    f"{admin_ping}\nWelcome {member.mention}! Please answer:\n\n> {q}",
-                    allowed_mentions=discord.AllowedMentions(roles=True, users=True, everyone=False)
-                )
-                try:
-                    await thread.add_user(member)
-                except Exception:
-                    pass
+            thread = await parent.create_thread(
+                name=f"Residency — {member.display_name}",
+                type=discord.ChannelType.private_thread,
+                invitable=False,
+                auto_archive_duration=1440
+            )
+            try:
+                await thread.add_user(member)  # ensure they can see it first
+            except Exception:
+                pass
 
-            # persist thread pointer
+            await thread.send(
+                f"{admin_ping}\nWelcome {member.mention}! Please answer:\n\n> {q}",
+                allowed_mentions=discord.AllowedMentions(roles=True, users=True, everyone=False)
+            )
             bucket = self.federal_registry.setdefault("residency_threads", {})
             bucket[str(member.id)] = {"thread_id": thread.id, "opened_at": discord.utils.utcnow().isoformat()}
             save_federal_registry(self.federal_registry)
@@ -1639,33 +1627,33 @@ class SpideyGov(commands.Cog):
             return await ctx.reply("Pending Resident role not found.")
 
         touched = 0
-        for cat in guild.categories:
-            # apply at category level if possible (propagates to synced channels)
-            try:
-                allow = any(ch.id in PENDING_ALLOWED_CHANNELS for ch in cat.channels) and cat.id in PENDING_ALLOWED_CHANNELS
-            except Exception:
-                allow = False
 
-            # If category is one of the allowed containers, allow view; else deny
-            # Simpler rule: deny by default; we’ll explicitly allow on specific channels below.
+        # 1) Deny everywhere (per-channel), we’ll whitelist specific IDs next.
+        for ch in guild.channels:
             try:
-                await cat.set_permissions(pend, view_channel=False, send_messages=False)
+                await ch.set_permissions(pend, view_channel=False, send_messages=False)
                 touched += 1
             except Exception:
                 pass
 
-        # Per-channel exceptions (rules/wave/intake parent)
+        # 2) Whitelist must-see channels (rules / waving / intake parent, etc.)
         for ch_id in PENDING_ALLOWED_CHANNELS:
             ch = guild.get_channel(ch_id)
             if not ch:
                 continue
             try:
-                await ch.set_permissions(pend, view_channel=True, send_messages=True, read_message_history=True)
+                await ch.set_permissions(
+                    pend,
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True
+                )
                 touched += 1
             except Exception:
                 pass
 
         await ctx.reply(f"✅ Applied residency gate to {touched} places. Review anything custom and you’re done.")
+
 
 
     @registry.command(
