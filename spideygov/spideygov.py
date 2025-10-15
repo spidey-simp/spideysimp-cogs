@@ -28,6 +28,7 @@ except Exception:
     PdfReader = None
 
 UTC = timezone.utc
+REGISTRY_SUSPENDED = True
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FED_REGISTRY_FILE = os.path.join(BASE_DIR, "federal_registry.json")
@@ -99,28 +100,19 @@ def _salvage_by_trim(raw: str, step: int = 256, max_cut: int | None = 100_000):
     return None, None
 
 def _salvage_by_balance(raw: str):
-    out = []
-    stack = []
-    in_str = False
-    esc = False
+    out, stack = [], []
+    in_str, esc = False, False
     for ch in raw:
         out.append(ch)
         if in_str:
-            if esc:
-                esc = False
-            elif ch == "\\":
-                esc = True
-            elif ch == '"':
-                in_str = False
+            if esc: esc = False
+            elif ch == "\\": esc = True
+            elif ch == '"': in_str = False
         else:
-            if ch == '"':
-                in_str = True
-            elif ch in "{[":
-                stack.append(ch)
-            elif ch == "}" and stack and stack[-1] == "{":
-                stack.pop()
-            elif ch == "]" and stack and stack[-1] == "[":
-                stack.pop()
+            if ch == '"': in_str = True
+            elif ch in "{[": stack.append(ch)
+            elif ch == "}" and stack and stack[-1] == "{": stack.pop()
+            elif ch == "]" and stack and stack[-1] == "[": stack.pop()
     while stack:
         out.append("}" if stack.pop() == "{" else "]")
     fixed = "".join(out)
@@ -163,14 +155,20 @@ def load_federal_registry():
         # any other unexpected I/O error
         return {}
 
-def save_federal_registry(data):
+def save_federal_registry(data: dict):
+    """
+    Atomic write with backup; NO-OP if REGISTRY_SUSPENDED is True.
+    """
+    if REGISTRY_SUSPENDED:
+        return
     path = FED_REGISTRY_FILE
     tmp  = path + ".tmp"
     bak  = path + ".bak"
 
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
-        f.flush(); os.fsync(f.fileno())
+        f.flush()
+        os.fsync(f.fileno())
 
     try:
         if os.path.exists(path):
@@ -809,6 +807,21 @@ async def _fetch_vote_counts(interaction: discord.Interaction, b: dict) -> tuple
     msg = await chan.fetch_message(b["vote"]["message_id"])
     return _tally_from_message(msg)
     
+def probe_federal_registry():
+    """
+    Return (data, None) if OK, (None, exc) if JSON is corrupt.
+    Does NOT rename or modify files. Pure read.
+    """
+    path = FED_REGISTRY_FILE
+    p = Path(path)
+    if not p.exists():
+        return {}, None
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            return json.load(f), None
+    except Exception as e:
+        return None, e
+    
 class ConstitutionUploadModal(discord.ui.Modal, title="Upload Constitution Text"):
     def __init__(self, *, kind: str, number: int, target_node: dict, top_heading: str | None = None):
         """
@@ -1257,19 +1270,44 @@ class ExecutiveOrderModal(discord.ui.Modal, title="New Executive Order"):
 class SpideyGov(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.federal_registry = load_federal_registry()
+        self.registry_readonly = REGISTRY_SUSPENDED
+        data, err = probe_federal_registry()
+        if err is None:
+            self.federal_registry = data or {}
+            self.registry_readonly = False
+            global REGISTRY_SUSPENDED
+            REGISTRY_SUSPENDED = False
+            try:
+                self.bill_poll_sweeper.start()
+                self.bill_status_ticker.start()
+            except Exception:
+                pass
+        else:
+            self.federal_registry = {}
+            self.registry_readonly = True
+            REGISTRY_SUSPENDED = True
+            print(f"ERROR: Could not load federal registry JSON: {err}")
+
         ensure_constitution_schema(self.federal_registry)
         normalize_registry_order(self.federal_registry)
         self.registry_lock = asyncio.Lock()
-        self.bill_poll_sweeper.start()
-        self.bill_status_ticker.start()
+        
 
     def cog_unload(self):
-        save_federal_registry(self.federal_registry)
+        # Always stop tasks
         try: self.bill_poll_sweeper.cancel()
         except Exception: pass
         try: self.bill_status_ticker.cancel()
         except Exception: pass
+
+        # Skip saving if we were in read-only
+        if getattr(self, "registry_readonly", False):
+            return
+        try:
+            save_federal_registry(self.federal_registry)
+        except Exception:
+            pass
+
     
     def to_roman(self, n: int) -> str:
         vals = [
@@ -1447,9 +1485,7 @@ class SpideyGov(commands.Cog):
 
     @registry.command(name="repair", description="Attempt to repair a corrupted federal registry file")
     @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(
-        commit="If true, replace the main file with the salvaged JSON and reload"
-    )
+    @app_commands.describe(commit="If true, replace the live file with the salvaged JSON and reload")
     async def registry_repair(self, interaction: discord.Interaction, commit: bool = False):
         await interaction.response.defer(ephemeral=True, thinking=True)
 
@@ -1463,8 +1499,20 @@ class SpideyGov(commands.Cog):
         ok = _try_json_load(raw)
         if ok is not None:
             if commit:
-                # Nothing to do but rehydrate memory from disk to be sure
+                # ensure we're in normal mode and persist
                 self.federal_registry = ok
+                self.registry_readonly = False
+                global REGISTRY_SUSPENDED
+                REGISTRY_SUSPENDED = False
+                save_federal_registry(self.federal_registry)
+                # (re)start tasks if they weren't running
+                try:
+                    if not self.bill_poll_sweeper.is_running():
+                        self.bill_poll_sweeper.start()
+                    if not self.bill_status_ticker.is_running():
+                        self.bill_status_ticker.start()
+                except Exception:
+                    pass
             return await interaction.followup.send("✅ Registry JSON is valid. No repair needed.", ephemeral=True)
 
         # Try salvage A: trim tail
@@ -1479,27 +1527,27 @@ class SpideyGov(commands.Cog):
                 method = "balanced braces"
             else:
                 return await interaction.followup.send(
-                    "❌ Could not auto-salvage the file. You may need a manual fix near the end of the file.",
+                    "❌ Could not auto-salvage. Manual fix near the end of file may be required.",
                     ephemeral=True
                 )
 
-        # Write salvaged copy
+        # Write salvaged copy next to the live file
         salv = path.with_suffix(".salvaged.json")
         salv.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
         if not commit:
             return await interaction.followup.send(
                 f"✅ Salvaged via **{method}** → `{salv.name}`.\n"
-                f"Re-run with `commit=True` to replace the live file.",
+                f"Re-run with `commit: True` to replace the live file and exit panic mode.",
                 ephemeral=True
             )
 
-        # Commit: backup corrupt, swap in salvaged, reload memory
+        # Commit safely: backup corrupt → replace → reload → exit panic → start tasks
         ts = int(time.time())
         corrupt = path.with_suffix(f".corrupt-{ts}.json")
         try:
-            os.replace(path, corrupt)
-            os.replace(salv, path)
+            os.replace(path, corrupt)  # keep the original intact as backup
+            os.replace(salv, path)     # move salvaged into place
         except Exception as e:
             return await interaction.followup.send(f"❌ Failed to commit salvage: {e}", ephemeral=True)
 
@@ -1513,11 +1561,27 @@ class SpideyGov(commands.Cog):
                 ephemeral=True
             )
 
+        # Exit panic mode
+        self.registry_readonly = False
+        REGISTRY_SUSPENDED = False
+
+        # Persist once (creates a fresh .bak atomically), then restart tasks
+        save_federal_registry(self.federal_registry)
+        try:
+            if not self.bill_poll_sweeper.is_running():
+                self.bill_poll_sweeper.start()
+            if not self.bill_status_ticker.is_running():
+                self.bill_status_ticker.start()
+        except Exception:
+            pass
+
         await interaction.followup.send(
             f"✅ Repaired via **{method}** and committed.\n"
-            f"Backed up corrupt file as `{corrupt.name}` and reloaded into memory.",
+            f"Backed up corrupt file as `{corrupt.name}` and reloaded into memory.\n"
+            f"Exited panic mode; autosaves and tasks re-enabled.",
             ephemeral=True
         )
+
 
 
 
