@@ -2309,7 +2309,7 @@ class SpideyGov(commands.Cog):
         return any(r.id == CITIZENSHIP_ROLE for r in member.roles)
 
     async def is_resident(self, member: discord.Member) -> bool:
-        return any(r.id in RESIDENTS for r in member.roles)
+        return any(r.id == RESIDENTS for r in member.roles)
 
     async def category_citizenship(self, member: discord.Member) -> str | None:
         for key, role_id in CITIZENSHIP.items():
