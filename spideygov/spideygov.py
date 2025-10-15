@@ -1269,13 +1269,14 @@ class ExecutiveOrderModal(discord.ui.Modal, title="New Executive Order"):
 
 class SpideyGov(commands.Cog):
     def __init__(self, bot):
+        global REGISTRY_SUSPENDED
+
         self.bot = bot
         self.registry_readonly = REGISTRY_SUSPENDED
         data, err = probe_federal_registry()
         if err is None:
             self.federal_registry = data or {}
             self.registry_readonly = False
-            global REGISTRY_SUSPENDED
             REGISTRY_SUSPENDED = False
             try:
                 self.bill_poll_sweeper.start()
@@ -1487,6 +1488,8 @@ class SpideyGov(commands.Cog):
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(commit="If true, replace the live file with the salvaged JSON and reload")
     async def registry_repair(self, interaction: discord.Interaction, commit: bool = False):
+        global REGISTRY_SUSPENDED
+        
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         path = Path(FED_REGISTRY_FILE)
@@ -1502,7 +1505,6 @@ class SpideyGov(commands.Cog):
                 # ensure we're in normal mode and persist
                 self.federal_registry = ok
                 self.registry_readonly = False
-                global REGISTRY_SUSPENDED
                 REGISTRY_SUSPENDED = False
                 save_federal_registry(self.federal_registry)
                 # (re)start tasks if they weren't running
