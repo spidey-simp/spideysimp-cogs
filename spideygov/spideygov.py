@@ -2512,7 +2512,7 @@ class SpideyGov(commands.Cog):
         interaction: discord.Interaction,
         stage: str,
         action: str,
-        applicant: int,
+        applicant: str,
         category: str = None,
         reason: str = None,
     ):
@@ -2522,7 +2522,7 @@ class SpideyGov(commands.Cog):
         if action in ["deny", "conditional"] and not (reason and reason.strip()):
             return await interaction.followup.send("Please provide a reason for deny/conditional.", ephemeral=True)
 
-        member = interaction.guild.get_member(applicant)
+        member = interaction.guild.get_member(int(applicant))
         if not member:
             return await interaction.followup.send("Applicant not found in the server.", ephemeral=True)
         applicant = member
