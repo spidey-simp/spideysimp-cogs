@@ -2528,7 +2528,7 @@ class SpideyGov(commands.Cog):
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         # require a reason for non-approvals
-        if action in {"deny", "conditional"} and not (reason and reason.strip()):
+        if action in ["deny", "conditional"] and not (reason and reason.strip()):
             return await interaction.followup.send("Please provide a reason for deny/conditional.", ephemeral=True)
 
         member = interaction.guild.get_member(applicant)
