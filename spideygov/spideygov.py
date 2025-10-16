@@ -62,6 +62,10 @@ RULES = 1287700985275355147
 CITIZENSHIP_APPLICANT = 1428142777308549263
 PENDING_ALLOWED_CHANNELS = {RULES, WAVING}
 
+CITIZENSHIP_EXAM_LEN = 8           # number of questions per exam
+CITIZENSHIP_PASSING  = 80          # percent
+CITIZENSHIP_EXAM_COOLDOWN_DAYS = 14
+
 CATEGORIES = {
     "commons": {
         "name": "Commons",
@@ -98,35 +102,11 @@ def _try_json_load(txt: str):
     except Exception:
         return None
 
-def _salvage_by_trim(raw: str, step: int = 256, max_cut: int | None = 100_000):
-    L = len(raw)
-    limit = min(max_cut or L, L)
-    for cut in range(0, limit + 1, step):
-        ok = _try_json_load(raw[: L - cut])
-        if ok is not None:
-            return ok, cut
-    return None, None
-
-def _salvage_by_balance(raw: str):
-    out, stack = [], []
-    in_str, esc = False, False
-    for ch in raw:
-        out.append(ch)
-        if in_str:
-            if esc: esc = False
-            elif ch == "\\": esc = True
-            elif ch == '"': in_str = False
-        else:
-            if ch == '"': in_str = True
-            elif ch in "{[": stack.append(ch)
-            elif ch == "}" and stack and stack[-1] == "{": stack.pop()
-            elif ch == "]" and stack and stack[-1] == "[": stack.pop()
-    while stack:
-        out.append("}" if stack.pop() == "{" else "]")
-    fixed = "".join(out)
-    ok = _try_json_load(fixed)
-    return (ok, True) if ok is not None else (None, False)
-
+def _get_state_channel(bot, guild):
+    try:
+        return guild.get_channel(STATE_DEPARTMENT_CHANNEL) or bot.get_channel(STATE_DEPARTMENT_CHANNEL)
+    except Exception:
+        return None
 
 def _pick_residency_question(reg: dict) -> str:
     bank = reg.get("residency_questions") or []
@@ -208,28 +188,7 @@ def save_federal_registry(data: dict) -> None:
         except Exception:
             pass
 
-def _salvage_recent_key(raw: str) -> str | None:
-    """
-    If we find `"recent_citizenship_change":` with no valid JSON value,
-    patch it to an empty list []. Also trims a trailing comma before a final '}'.
-    Returns fixed text or None if no obvious fix applies.
-    """
-    fixed = raw
 
-    # 1) handle either singular/plural key, missing value or truncated
-    pat = r'("recent_citizenship_change[s]?"\s*:\s*)(?=[}\n\r,])'
-    if re.search(pat, fixed):
-        fixed = re.sub(pat, r'\1[]', fixed)
-
-    # 2) if file ends with ",\n}" (trailing comma), drop it
-    fixed = re.sub(r',\s*([}\]])', r'\1', fixed)
-
-    # 3) try a load to see if it’s actually fixed
-    try:
-        json.loads(fixed)
-    except Exception:
-        return None
-    return fixed
 
 
 SECTION_RE = re.compile(
@@ -909,6 +868,166 @@ def probe_federal_registry():
             return json.load(f), None
     except Exception as e:
         return None, e
+
+def _validate_exam_bank(bank: list[dict]) -> None:
+    # Optional: sanity checks; raises if something is off.
+    for i, q in enumerate(bank, start=1):
+        if not isinstance(q.get("q"), str) or not q["q"].strip():
+            raise ValueError(f"Exam q#{i}: missing text")
+        choices = q.get("choices") or []
+        if not isinstance(choices, list) or len(choices) < 2:
+            raise ValueError(f"Exam q#{i}: need ≥2 choices")
+        ans = q.get("answer")
+        if not isinstance(ans, int) or not (0 <= ans < len(choices)):
+            raise ValueError(f"Exam q#{i}: bad answer index {ans}")
+
+def _build_exam_paper(reg: dict, n: int) -> list[dict]:
+    bank = _ensure_exam_bank(reg)
+    _validate_exam_bank(bank)  # safe to remove if you don’t want the guard
+    n = max(1, min(n, len(bank)))
+    selected = random.sample(bank, n)
+    paper = []
+    for item in selected:
+        # shuffle choices and remap correct index
+        order = list(range(len(item["choices"])))
+        random.shuffle(order)
+        shuffled = [item["choices"][i] for i in order]
+        correct_idx = order.index(item["answer"])
+        paper.append({
+            "id": item["id"],
+            "text": item["q"],
+            "choices": shuffled,
+            "correct_idx": correct_idx,
+        })
+    return paper
+
+class CitizenshipApplicationModal(discord.ui.Modal, title="Citizenship Application"):
+    def __init__(self, cog: commands.Cog, applicant: discord.Member):
+        super().__init__()
+        self.cog = cog
+        self.applicant = applicant
+
+        self.q1 = discord.ui.TextInput(
+            label="Why do you want citizenship?",
+            style=discord.TextStyle.paragraph, max_length=500, required=True
+        )
+        self.q2 = discord.ui.TextInput(
+            label="Have you read the Rules & Constitution?",
+            placeholder="Yes / No (and any comments)",
+            style=discord.TextStyle.short, max_length=100, required=True
+        )
+        self.q3 = discord.ui.TextInput(
+            label="Category preference (optional)",
+            placeholder="The Category you most identify with, if any",
+            style=discord.TextStyle.short, max_length=50, required=False
+        )
+        self.q4 = discord.ui.TextInput(
+            label="Anything else we should know? (optional)",
+            style=discord.TextStyle.paragraph, max_length=500, required=False
+        )
+
+        for inp in (self.q1, self.q2, self.q3, self.q4):
+            self.add_item(inp)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        cog = self.cog
+        guild = interaction.guild
+
+        # mark applicant role
+        role = guild.get_role(CITIZENSHIP_APPLICANT)
+        try:
+            if role and role not in self.applicant.roles:
+                await self.applicant.add_roles(role, reason="Filed citizenship application")
+        except Exception:
+            pass
+
+        # find/create intake thread (reuse your residency thread bucket)
+        intake_map = cog.federal_registry.setdefault("residency_threads", {})
+        info = (intake_map.get(str(self.applicant.id)) or {})
+        thread = cog.bot.get_channel(int(info.get("thread_id"))) if info.get("thread_id") else None
+        if not thread:
+            # fallback: private thread under WAVING (you allow PENDING to see WAVING)
+            parent = cog.bot.get_channel(WAVING)
+            if parent and str(getattr(parent, "type", "")) == "text":
+                thread = await parent.create_thread(
+                    name=f"Citizenship — {self.applicant.display_name}",
+                    type=discord.ChannelType.private_thread,
+                    invitable=False,
+                    auto_archive_duration=1440
+                )
+                try:
+                    await thread.add_user(self.applicant)
+                except Exception:
+                    pass
+                intake_map[str(self.applicant.id)] = {"thread_id": thread.id, "opened_at": _now_iso()}
+                save_federal_registry(cog.federal_registry)
+
+        # persist application
+        apps = cog.federal_registry.setdefault("citizenship_applications", {})
+        apps[str(self.applicant.id)] = {
+            "filed_at": _now_iso(),
+            "answers": {
+                "why": str(self.q1.value).strip(),
+                "read_const": str(self.q2.value).strip(),
+                "pref": (str(self.q3.value).strip() or None),
+                "extra": (str(self.q4.value).strip() or None),
+            },
+            "status": "filed"
+        }
+        save_federal_registry(cog.federal_registry)
+
+        # post to thread & state channel
+        body = (
+            f"**Citizenship Application — {self.applicant.mention}**\n"
+            f"**Q1:** {self.q1.value}\n"
+            f"**Q2:** {self.q2.value}\n"
+            f"**Q3:** {self.q3.value or '—'}\n"
+            f"**Q4:** {self.q4.value or '—'}\n"
+        )
+        if thread:
+            try: await thread.send(body, allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False))
+            except Exception: pass
+        st = _get_state_channel(cog.bot, guild)
+        if st:
+            try: await st.send(body)
+            except Exception: pass
+
+        await interaction.followup.send("✅ Application submitted!", ephemeral=True)
+
+class OathView(discord.ui.View):
+    def __init__(self, cog: commands.Cog, user_id: int, timeout: float = 600):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.user_id = user_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.user_id
+
+    @discord.ui.button(label="I swear", style=discord.ButtonStyle.success)
+    async def swear(self, interaction: discord.Interaction, button: discord.ui.Button):
+        reg = self.cog.federal_registry
+        rec = reg.setdefault("citizenship_records", {}).setdefault(str(self.user_id), {})
+        rec["oath_taken_at"] = _now_iso()
+        save_federal_registry(reg)
+
+        # Optional: auto-assign Citizenship role here (commented to keep your approval flow)
+        # role = interaction.guild.get_role(CITIZENSHIP_ROLE)
+        # if role and role not in interaction.user.roles:
+        #     try: await interaction.user.add_roles(role, reason="Oath taken")
+        #     except Exception: pass
+
+        st = _get_state_channel(self.cog.bot, interaction.guild)
+        if st:
+            try: await st.send(f"🤝 Oath taken by {interaction.user.mention}.")
+            except Exception: pass
+        await interaction.response.send_message("✅ Oath recorded.", ephemeral=True)
+        self.stop()
+
+    @discord.ui.button(label="Decline", style=discord.ButtonStyle.danger)
+    async def decline(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("You declined the oath. You can run the command again later.", ephemeral=True)
+        self.stop()
     
 class ConstitutionUploadModal(discord.ui.Modal, title="Upload Constitution Text"):
     def __init__(self, *, kind: str, number: int, target_node: dict, top_heading: str | None = None):
@@ -1353,7 +1472,59 @@ class ExecutiveOrderModal(discord.ui.Modal, title="New Executive Order"):
 
         await interaction.response.send_message(f"✅ Issued **{eo_id}** — {order['title']}", ephemeral=True)
 
+def _ensure_exam_bank(reg: dict):
+    bank = reg.setdefault("citizenship_exam_bank", [])
+    if bank:
+        return bank
+    # seed a few example questions (edit/expand later via admin cmds)
+    bank.extend([
+        {"id": "c1", "q": "What does Art. I primarily cover?", "choices": ["Judiciary", "Executive", "Legislature", "Elections"], "answer": 2},
+        {"id": "c2", "q": "How many chambers in Congress here?", "choices": ["1", "2", "3", "It depends"], "answer": 1},
+        {"id": "c3", "q": "Who can open a floor vote?", "choices": ["Any user", "Only chamber members", "Only President", "Only admins"], "answer": 1},
+        {"id": "c4", "q": "Bills exceeding 4000 chars should be…", "choices": ["Rejected", "Split across embeds", "Threaded/paginated", "DM’d to mods"], "answer": 2},
+        {"id": "c5", "q": "Where are enacted laws recorded?", "choices": ["Random channel", "Federal Registry", "Direct Messages", "Welcome"], "answer": 1},
+        {"id": "c6", "q": "Quorum is computed using…", "choices": ["All online users", "Eligible chamber members", "Admins only", "Citizens only"], "answer": 1},
+        {"id": "c7", "q": "Executive Orders are…", "choices": ["Legislation", "Court opinions", "Executive directives", "None"], "answer": 2},
+        {"id": "c8", "q": "Amendments to a bill can target…", "choices": ["Whole bill only", "Specific Title/Section", "Only Title level", "Only Section level"], "answer": 1},
+        {"id": "c9", "q": "Reporter publishes…", "choices": ["Bills", "Opinions/Orders", "Polls", "Rules"], "answer": 1},
+        {"id": "c10","q": "Intake threads live under…", "choices": ["Rules", "Waving", "DMs", "Forum"], "answer": 1},
+    ])
+    return bank
 
+def _exam_bucket(reg: dict):
+    return reg.setdefault("citizenship_exams", {})  # user_id -> record
+
+def _pick_exam(reg: dict, n: int):
+    import random
+    bank = _ensure_exam_bank(reg)
+    n = max(1, min(n, len(bank)))
+    return random.sample(bank, n)
+
+class ExamQuestionView(discord.ui.View):
+    def __init__(self, cog: commands.Cog, user_id: int, exam_id: str, q_idx: int, total: int, choices: list[str], timeout: float = 600):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.user_id = user_id
+        self.exam_id = exam_id
+        self.q_idx = q_idx
+        self.total = total
+        labels = ["A", "B", "C", "D"][:len(choices)]
+        for i, label in enumerate(labels):
+            self.add_item(ExamChoiceButton(label=label, idx=i))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id == self.user_id
+
+class ExamChoiceButton(discord.ui.Button):
+    def __init__(self, label: str, idx: int):
+        super().__init__(style=discord.ButtonStyle.primary, label=label)
+        self.choice_idx = idx
+
+    async def callback(self, interaction: discord.Interaction):
+        cog: "SpideyGov" = interaction.client.get_cog("SpideyGov")
+        if not cog:
+            return await interaction.response.send_message("Cog missing.", ephemeral=True)
+        await cog._exam_record_and_advance(interaction, self.choice_idx)
 
 class SpideyGov(commands.Cog):
     def __init__(self, bot):
@@ -1654,6 +1825,127 @@ class SpideyGov(commands.Cog):
 
         await ctx.reply(f"✅ Applied residency gate to {touched} places. Review anything custom and you’re done.")
 
+    @citizenship.command(name="exam_begin", description="Start the citizenship exam in a private thread")
+    async def exam_begin(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        reg = self.federal_registry
+        exams = _exam_bucket(reg)
+        uid = str(interaction.user.id)
+
+        # Cooldown
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        rec = exams.get(uid)
+        if rec and rec.get("last_attempt_at"):
+            try:
+                last = datetime.fromisoformat(rec["last_attempt_at"])
+                if now < last + timedelta(days=CITIZENSHIP_EXAM_COOLDOWN_DAYS):
+                    rem = (last + timedelta(days=CITIZENSHIP_EXAM_COOLDOWN_DAYS) - now).days + 1
+                    return await interaction.followup.send(f"⏳ You can retake the exam in ~{rem} day(s).", ephemeral=True)
+            except Exception:
+                pass
+
+        # Find/create the exam thread under WAVING and add the user
+        parent = self.bot.get_channel(WAVING)
+        if not parent:
+            return await interaction.followup.send("Waving channel not found.", ephemeral=True)
+        if str(getattr(parent, "type", "")) != "text":
+            return await interaction.followup.send("Waving must be a text channel.", ephemeral=True)
+
+        thread = None
+        try:
+            thread = await parent.create_thread(
+                name=f"Citizenship Exam — {interaction.user.display_name}",
+                type=discord.ChannelType.private_thread,
+                invitable=False,
+                auto_archive_duration=1440
+            )
+            await thread.add_user(interaction.user)
+        except Exception as e:
+            return await interaction.followup.send(f"Could not open exam thread: {e}", ephemeral=True)
+
+        # Build exam
+        paper = _build_exam_paper(reg, CITIZENSHIP_EXAM_LEN)
+        exams[uid] = {
+            "exam_id": f"x-{interaction.user.id}-{int(now.timestamp())}",
+            "started_at": _now_iso(),
+            "last_attempt_at": _now_iso(),
+            "paper": paper,        # store the shuffled paper
+            "answers": [],         # user selections (0..3)
+            "score": None,
+            "passed": None,
+            "thread_id": thread.id,
+        }
+        save_federal_registry(reg)
+
+
+        await thread.send(
+            f"{interaction.user.mention} **Citizenship Exam** begins now. "
+            f"Answer by clicking A/B/C/D on each question. Passing: **{CITIZENSHIP_PASSING}%**.",
+            allowed_mentions=discord.AllowedMentions(users=True)
+        )
+        # Post first question
+        await self._exam_post_question(thread, interaction.user, exams[uid], 0)
+        await interaction.followup.send(f"📘 Exam thread created: {thread.mention}", ephemeral=True)
+
+    async def _exam_post_question(self, thread: discord.Thread, user: discord.Member, rec: dict, idx: int):
+        q = rec["paper"][idx]
+        choices = q["choices"]
+        view = ExamQuestionView(self, user.id, rec["exam_id"], idx, len(rec["paper"]), choices)
+        letters = ["A", "B", "C", "D"][:len(choices)]
+        text = f"**Q{idx+1}/{len(rec['paper'])}.** {q['text']}\n" + "\n".join(f"{letters[i]}. {c}" for i, c in enumerate(choices))
+        await thread.send(text, view=view)
+
+    async def _exam_record_and_advance(self, interaction: discord.Interaction, choice_idx: int):
+        reg = self.federal_registry
+        exams = _exam_bucket(reg)
+        uid = str(interaction.user.id)
+        rec = exams.get(uid)
+        if not rec or rec.get("passed") is not None:
+            return await interaction.response.send_message("No active exam.", ephemeral=True)
+
+        answers = rec.setdefault("answers", [])
+        current_idx = len(answers)
+        answers.append(choice_idx)
+        save_federal_registry(reg)
+
+        thread = interaction.channel if isinstance(interaction.channel, discord.Thread) else None
+        if current_idx + 1 < len(rec["paper"]):
+            await interaction.response.defer(ephemeral=True)
+            await self._exam_post_question(thread, interaction.user, rec, current_idx + 1)
+        else:
+            # grade using the per-question correct_idx
+            paper = rec["paper"]
+            correct = sum(1 for i, ans in enumerate(answers) if i < len(paper) and ans == paper[i]["correct_idx"])
+            total = len(paper)
+            pct = int(round((correct / total) * 100))
+            passed = pct >= CITIZENSHIP_PASSING
+            rec["score"] = pct
+            rec["passed"] = passed
+            rec["completed_at"] = _now_iso()
+            save_federal_registry(reg)
+
+            await interaction.response.defer(ephemeral=True)
+            color = "🟩" if passed else "🟥"
+            msg = f"{color} **Exam complete:** {correct}/{total} — **{pct}%**. " + ("✅ You passed!" if passed else f"❌ You did not pass. Retry in {CITIZENSHIP_EXAM_COOLDOWN_DAYS} days.")
+            try:
+                await thread.send(f"{interaction.user.mention} {msg}", allowed_mentions=discord.AllowedMentions(users=True))
+            except Exception:
+                pass
+            st = _get_state_channel(self.bot, interaction.guild)
+            if st:
+                try: await st.send(f"🧪 Exam result — {interaction.user.mention}: {pct}% ({'pass' if passed else 'fail'})")
+                except Exception: pass
+
+
+    @citizenship.command(name="exam_status", description="See your citizenship exam status/cooldown")
+    async def exam_status(self, interaction: discord.Interaction):
+        reg = self.federal_registry
+        rec = _exam_bucket(reg).get(str(interaction.user.id))
+        if not rec:
+            return await interaction.response.send_message("No exam on record.", ephemeral=True)
+        lines = [f"Started: {rec.get('started_at','—')}", f"Completed: {rec.get('completed_at','—')}", f"Score: {rec.get('score','—')}", f"Passed: {rec.get('passed','—')}"]
+        await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
 
     @registry.command(
@@ -1939,6 +2231,25 @@ class SpideyGov(commands.Cog):
             ephemeral=True
         )
 
+    @citizenship.command(name="apply", description="Open the citizenship application form")
+    async def citizenship_apply(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(CitizenshipApplicationModal(self, interaction.user))
+    
+    @citizenship.command(name="oath", description="Take the citizenship oath (after passing exam)")
+    async def citizenship_oath(self, interaction: discord.Interaction):
+        # optional guard: exam must be passed
+        rec = _exam_bucket(self.federal_registry).get(str(interaction.user.id))
+        if not rec or rec.get("passed") is not True:
+            return await interaction.response.send_message("You must pass the exam before taking the oath.", ephemeral=True)
+
+        view = OathView(self, interaction.user.id)
+        text = (
+            "**Oath of Citizenship**\n"
+            "Do you solemnly swear to support the Constitution of the Spidey Republic, "
+            "to obey its laws and the lawful orders of its courts, and to faithfully "
+            "discharge the duties of citizenship?"
+        )
+        await interaction.response.send_message(text, view=view, ephemeral=True)
 
     @registry.command(name="title_editor", description="Name a title for federal regulations")
     @app_commands.checks.has_any_role(SENATORS, REPRESENTATIVES)
