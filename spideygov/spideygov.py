@@ -8,7 +8,7 @@ import re
 import asyncio
 import random
 import datetime
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import math
 import difflib
 from zoneinfo import ZoneInfo
@@ -65,6 +65,13 @@ PENDING_ALLOWED_CHANNELS = {RULES, WAVING}
 CITIZENSHIP_EXAM_LEN = 8           # number of questions per exam
 CITIZENSHIP_PASSING  = 80          # percent
 CITIZENSHIP_EXAM_COOLDOWN_DAYS = 14
+
+# --- Elections constants (put with your other channel/role IDs) ---
+FEC_ROLE_ID = 0                 # (optional) role that can manage recounts; else admins
+CLERK_ROLE_ID = 0               # Clerk of the House (for certifications) or leave 0 to allow admins
+DEFAULT_ELECTION_HOURS = 24
+ELECTIONS_ANNOUNCE_CHANNEL = 1334216429884407808
+
 
 CATEGORIES = {
     "commons": {
@@ -189,7 +196,154 @@ def save_federal_registry(data: dict) -> None:
             pass
 
 
+def _elections_root(reg: dict) -> dict:
+    return reg.setdefault("elections", {"contests": {}, "voters": {}})
 
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+def _next_general_election(today: date | None = None) -> date:
+    # Tuesday after the first Monday in November
+    d = today or datetime.now(UTC).date()
+    year = d.year if (d.month, d.day) <= (11, 30) else d.year + 1
+    nov1 = date(year, 11, 1)
+    # weekday(): Mon=0..Sun=6 ; we want first Monday then add a day to get Tuesday
+    first_monday = nov1 + timedelta(days=(0 - nov1.weekday()) % 7)
+    election_day = first_monday + timedelta(days=1)  # Tuesday after first Monday
+    return election_day
+
+def _compute_deadlines(elec_day: date) -> tuple[date, date]:
+    filing = elec_day - timedelta(days=21)
+    certify = elec_day - timedelta(days=14)
+    return filing, certify
+
+def _contest_id(office: str, category: str, election_day: date, district: str | None, seats: int) -> str:
+    base = f"{election_day.isoformat()}_{office.lower()}_{category.lower()}"
+    if district:
+        base += f"_{district.lower()}"
+    if seats and seats > 1:
+        base += f"_x{seats}"
+    return base
+
+def _contest_bucket(reg: dict, cid: str) -> dict:
+    return _elections_root(reg)["contests"].setdefault(cid, {})
+
+def _has_role_or_admin(member: discord.Member, role_id: int) -> bool:
+    return (role_id and any(r.id == role_id for r in member.roles)) or member.guild_permissions.administrator
+
+def _poll_tally_from_message(msg: discord.Message) -> list[tuple[str, int]]:
+    """
+    Returns list of (answer_text, votes) in the order shown on the poll.
+    """
+    poll = getattr(msg, "poll", None)
+    if not poll:
+        return []
+    out = []
+    for a in poll.answers:
+        # answer: .text, .emoji, .vote_count
+        out.append((a.text, int(getattr(a, "vote_count", 0))))
+    return out
+
+def _percent(n: int, d: int) -> float:
+    return (100.0 * n / d) if d else 0.0
+
+def _top_two_margin_one_percent(tally: list[tuple[str,int]]) -> tuple[bool, float]:
+    if not tally or len(tally) < 2:
+        return (False, 0.0)
+    sorted_by_votes = sorted(tally, key=lambda kv: kv[1], reverse=True)
+    top, second = sorted_by_votes[0][1], sorted_by_votes[1][1]
+    total = sum(v for _, v in tally)
+    # margin as percentage points of total ballots
+    margin_pct = abs(_percent(top - second, total))
+    return (margin_pct <= 1.0, margin_pct)
+
+def _grace_bucket(reg: dict) -> dict:
+    # Global one-time grace holder
+    return _elections_root(reg).setdefault("grace_once", {
+        "enabled": False,
+        "through": None,               # "YYYY-MM-DD"
+        "allow_registration": False,
+        "allow_filing": False,
+        "note": None,                  # optional audit note
+    })
+
+def _grace_ok(reg: dict, contest: dict | None, key: str) -> bool:
+    """
+    key in {"registration","filing"}.
+    Checks contest.grace first, then global grace_once.
+    Only true if enabled AND today <= through.
+    """
+    def _check(g: dict | None) -> bool:
+        if not g or not g.get("enabled"):
+            return False
+        if not g.get(f"allow_{key}", False):
+            return False
+        thru = g.get("through")
+        try:
+            if thru and datetime.now(UTC).date() <= date.fromisoformat(thru):
+                return True
+        except Exception:
+            return False
+        return False
+
+    if contest and _check(contest.get("grace")):
+        return True
+    return _check(_grace_bucket(reg))
+
+def _next_federal_election_day(start: date | None = None) -> date:
+    """Tuesday after the first Monday in November of this year (or next)."""
+    today = start or datetime.now(UTC).date()
+    # First Monday in November
+    first_nov = date(today.year, 11, 1)
+    first_mon = first_nov + timedelta(days=(0 - first_nov.weekday()) % 7)  # Monday=0
+    if first_mon.month != 11:  # if wrapped back into Oct, push a week
+        first_mon = first_mon + timedelta(days=7)
+    election = first_mon + timedelta(days=1)  # Tuesday
+    if today > election:
+        # use next year
+        first_nov = date(today.year + 1, 11, 1)
+        first_mon = first_nov + timedelta(days=(0 - first_nov.weekday()) % 7)
+        if first_mon.month != 11:
+            first_mon = first_mon + timedelta(days=7)
+        election = first_mon + timedelta(days=1)
+    return election
+
+def _equal_proportions_apportion(pop_map: dict[str,int], house_size: int) -> dict[str,int]:
+    """
+    Huntington–Hill with min 1 seat per category.
+    Deterministic tie-break: higher pop, then name (A→Z).
+    """
+    # start with 1 each
+    seats = {k: 1 for k in pop_map}
+    assigned = len(seats)
+    # priority function p/sqrt(n(n+1))
+    def priority(p, n): return p / math.sqrt(n * (n + 1))
+    # keep handing out seats until house_size
+    while assigned < house_size:
+        # choose the category with the max next priority
+        best_key = max(
+            pop_map.keys(),
+            key=lambda k: (priority(pop_map[k], seats[k]), pop_map[k], -ord(k[0]) if k else 0)
+        )
+        seats[best_key] += 1
+        assigned += 1
+    return seats
+
+def _count_category_citizens(guild, CITIZENSHIP: dict[str,int]) -> dict[str,int]:
+    """
+    Counts members that hold exactly one of the category roles in CITIZENSHIP (bots excluded).
+    If you want to restrict to Citizens only, add an extra filter for CITIZENSHIP_ROLE.
+    """
+    counts = {k: 0 for k in CITIZENSHIP}
+    cid_to_key = {rid: k for k, rid in CITIZENSHIP.items()}
+    for m in guild.members:
+        if m.bot: 
+            continue
+        cat_keys = [cid_to_key[r.id] for r in m.roles if r.id in cid_to_key]
+        # treat the first category role as their residence if they somehow have several
+        if cat_keys:
+            counts[cat_keys[0]] += 1
+    return counts
 
 SECTION_RE = re.compile(
     r'^[\*\s_]*[§&]\s*([0-9A-Za-z\-\.]+)\s*\.?\s*(.*?)\s*[\*\s_]*$',
@@ -674,6 +828,52 @@ def normalize_registry_order(reg: dict) -> None:
             tnode["chapters"] = rebuilt_chaps
             rebuilt_titles[t] = tnode
         reg["spidey_republic_code"] = rebuilt_titles
+
+def _seat_key(self, c: dict) -> str:
+    """Stable key for a single-seat contest. House uses seat_index if present."""
+    kind = c.get("kind")
+    cat  = c.get("category")
+    if kind == "senate":
+        return f"senate:{cat}"
+    # one-seat-per-contest model
+    return f"house:{cat}:{c.get('seat_index') or 1}"
+
+async def _grant_office(self, interaction: discord.Interaction, contest_id: str, winner_id: int):
+    """Certify & seat the winner. Allows the same user to occupy multiple offices."""
+    reg    = self.federal_registry
+    eroot  = _elections_root(reg)
+    c      = (eroot.get("contests") or {}).get(contest_id)
+    if not c:
+        return
+
+    seats  = eroot.setdefault("seats", {})
+    seats[self._seat_key(c)] = {
+        "member_id": int(winner_id),
+        "contest_id": contest_id,
+        "sworn_at": _now_iso(),
+    }
+
+    # Grant the chamber role (they can end up with both roles if they won both)
+    guild  = interaction.guild
+    member = guild.get_member(int(winner_id))
+    if member:
+        role_id = SENATORS if c.get("kind") == "senate" else REPRESENTATIVES
+        role = guild.get_role(role_id)
+        if role and role not in member.roles:
+            try:
+                await member.add_roles(role, reason=f"Elected via {contest_id}")
+            except Exception:
+                pass
+
+    # Update registry and lightly announce
+    save_federal_registry(reg)
+    try:
+        ch = interaction.client.get_channel(ELECTIONS_ANNOUNCE_CHANNEL)
+        if ch:
+            await ch.send(f"✅ Certified **{contest_id}** — seated <@{winner_id}>.")
+    except Exception:
+        pass
+
 
 def _bold_headings_single(raw_text: str, budget: int = 4000) -> str:
     """
@@ -1613,7 +1813,26 @@ class SpideyGov(commands.Cog):
         state_dep = guild.get_channel(STATE_DEPARTMENT_CHANNEL)
         await state_dep.send(f"New member {member.mention} joined. Residency intake thread opened: {thread.mention}")
 
-    
+    async def elections_contest_autocomplete(self, interaction: discord.Interaction, current: str):
+        reg = self.federal_registry
+        contests = _elections_root(reg)["contests"]
+        cur = (current or "").lower()
+        out = []
+        for cid, c in contests.items():
+            label = f"{cid} — {(c.get('office') or c.get('kind') or '?').title()} ({c.get('category','?')})"
+            if not cur or cur in label.lower():
+                out.append(app_commands.Choice(name=label[:100], value=cid))
+        return out[:25]
+
+    async def category_autocomplete(self, interaction: discord.Interaction, current: str):
+        cur = (current or "").lower()
+        out = []
+        for key, role_id in CITIZENSHIP.items():
+            label = key.replace("_", " ").title()
+            if not cur or cur in label.lower():
+                out.append(app_commands.Choice(name=label, value=key))
+        return out[:25]
+
     def to_roman(self, n: int) -> str:
         vals = [
             (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"),
@@ -1787,9 +2006,762 @@ class SpideyGov(commands.Cog):
     category = app_commands.Group(name="category", description="Category management commands", parent=government)
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
+    elections = app_commands.Group(name="elections", description="Elections & registration", parent=government)
+
+    @elections.command(name="party_create", description="Create a new political party")
+    @app_commands.describe(name="Full name of the party", abbreviation="Short abbreviation (3-6 chars)", color="Color for the party (hex code, e.g. #ff0000)", desc="Short description (optional)")
+    async def party_create(self, interaction: discord.Interaction, name: str, abbreviation: str, color: str, desc: str = None):
+        await interaction.response.defer(ephemeral=True)
+        reg = self.federal_registry
+        parties = _elections_root(reg).setdefault("parties", {})
+
+        name = (name or "").strip()
+        abbreviation = (abbreviation or "").strip().upper()
+        color = (color or "").strip()
+        desc = (desc or "").strip()
+
+        if not name:
+            return await interaction.followup.send("Party name is required.", ephemeral=True)
+        if not abbreviation or not re.match(r"^[A-Z]{3,6}$", abbreviation):
+            return await interaction.followup.send("Abbreviation must be 3-6 letters (A-Z).", ephemeral=True)
+        if abbreviation in parties:
+            return await interaction.followup.send("Abbreviation already in use.", ephemeral=True)
+        try:
+            if color.startswith("#"):
+                color = color[1:]
+            int(color, 16)
+            if len(color) not in (3, 6):
+                raise ValueError()
+            color = "#" + color.upper()
+        except Exception:
+            return await interaction.followup.send("Color must be a valid hex code, e.g. #ff0000.", ephemeral=True)
+
+        party_id = abbreviation
+        parties[party_id] = {
+            "id": party_id,
+            "name": name,
+            "abbreviation": abbreviation,
+            "color": color,
+            "description": desc,
+            "created_at": discord.utils.utcnow().isoformat(),
+            "members": [],
+        }
+        save_federal_registry(reg)
+
+        await interaction.followup.send(f"✅ Created party **{name}** ({abbreviation})", ephemeral=True)
+    
+    @elections.command(name="party_list", description="List all political parties")
+    async def party_list(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        reg = self.federal_registry
+        parties = _elections_root(reg).get("parties", {})
+
+        if not parties:
+            return await interaction.followup.send("No parties found.", ephemeral=True)
+
+        embed = discord.Embed(title="Political Parties", color=discord.Color.blue())
+        for p in sorted(parties.values(), key=lambda x: x.get("name","")):
+            name = f"{p.get('name','')} ({p.get('abbreviation','')})"
+            desc = p.get("description") or "No description."
+            members = len(p.get("members", []))
+            embed.add_field(name=name, value=f"{desc}\nMembers: {members}", inline=False)
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    
+    async def party_autocomplete(self, interaction: discord.Interaction, current: str):
+        reg = self.federal_registry
+        parties = _elections_root(reg).get("parties", {})
+        cur = (current or "").lower()
+        out = []
+        for pid, p in parties.items():
+            label = f"{p.get('name','')} ({p.get('abbreviation','')})"
+            if not cur or cur in label.lower():
+                out.append(app_commands.Choice(name=label[:100], value=pid))
+        out.append(app_commands.Choice(name="None / Independent", value="independent"))
+        return out[:25]
+    
+    @app_commands.command(name="register_to_vote", description="Register to vote for Federal elections")
+    @app_commands.describe(category="Your Category (for House/Senate voting)", party="Your party label or 'independent'")
+    @app_commands.autocomplete(category=category_autocomplete, party=party_autocomplete)
+    async def register_to_vote(self, interaction: discord.Interaction, category: str, party: str = "independent"):
+        reg = self.federal_registry
+        eroot = _elections_root(reg)
+        voters = eroot["voters"]
+
+        # gate: must be Citizen in that Category
+        if not any(r.id == CITIZENSHIP_ROLE for r in interaction.user.roles):
+            return await interaction.response.send_message("You must be a Citizen to register.", ephemeral=True)
+        cat_role_id = CITIZENSHIP.get(category)
+        if not cat_role_id or not any(r.id == cat_role_id for r in interaction.user.roles):
+            return await interaction.response.send_message("Your roles do not reflect that Category.", ephemeral=True)
+
+        # freeze check (optional) with grace override
+        freeze = eroot.get("registration_freeze")
+        if freeze:
+            if datetime.now(UTC).date() > date.fromisoformat(freeze) and not _grace_ok(reg, None, "registration"):
+                return await interaction.response.send_message("Registration deadline has passed.", ephemeral=True)
+
+        voters[str(interaction.user.id)] = {
+            "category": category,
+            "party": (party or "independent"),
+            "registered_at": _now_iso(),
+            "active": True,
+            "late_grace": bool(freeze and _grace_ok(reg, None, "registration")),
+        }
+        save_federal_registry(reg)
+        return await interaction.response.send_message(
+            f"✅ Registered to vote in **{category.replace('_',' ').title()}**"
+            + (" (accepted under one-time grace)" if voters[str(interaction.user.id)]["late_grace"] else ""),
+            ephemeral=True
+        )
 
 
-    @commands.command(name="residency_gate_apply", aliases=["arg"])
+    @elections.command(name="voter_status", description="See your voter registration")
+    async def voter_status(self, interaction: discord.Interaction):
+        rec = _elections_root(self.federal_registry)["voters"].get(str(interaction.user.id))
+        if not rec:
+            return await interaction.response.send_message("You are not registered.", ephemeral=True)
+        e = discord.Embed(title="Voter Registration",
+                        description=f"**Category:** {rec.get('category','?').replace('_',' ').title()}\n**Party:** {rec.get('party','independent')}\n**Active:** {rec.get('active',True)}\n**Since:** {rec.get('registered_at','?')}",
+                        color=discord.Color.green())
+        await interaction.response.send_message(embed=e, ephemeral=True)
+    
+    @elections.command(name="open_contest", description="Create an election contest (general or special)")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        office="house or senate",
+        category="Category key (autocomplete)",
+        seats="Number of seats (≥1). >1 will open a multi-select poll.",
+        district="Optional district label (e.g., D1)",
+        election_date="YYYY-MM-DD (omit = next general)",
+        post_channel="Channel where the poll & notices will be posted",
+    )
+    @app_commands.autocomplete(category=category_autocomplete)
+    async def open_contest(self,
+        interaction: discord.Interaction,
+        office: str,
+        category: str,
+        seats: app_commands.Range[int, 1, 25] = 1,
+        district: str | None = None,
+        election_date: str | None = None,
+        post_channel: discord.TextChannel | None = None,
+    ):
+        if office.lower() not in {"house","senate"}:
+            return await interaction.response.send_message("office must be 'house' or 'senate'.", ephemeral=True)
+
+        try:
+            eday = (datetime.strptime(election_date, "%Y-%m-%d").date() if election_date
+                    else _next_general_election())
+        except Exception:
+            return await interaction.response.send_message("Bad date format. Use YYYY-MM-DD.", ephemeral=True)
+
+        filing_deadline, cert_deadline = _compute_deadlines(eday)
+        cid = _contest_id(office, category, eday, district, seats)
+        bucket = _contest_bucket(self.federal_registry, cid)
+        if bucket.get("status"):
+            return await interaction.response.send_message("Contest already exists.", ephemeral=True)
+
+        bucket.update({
+            "id": cid,
+            "office": office.lower(),
+            "category": category,
+            "district": (district or None),
+            "seats": int(seats),
+            "election_day": eday.isoformat(),
+            "filing_deadline": filing_deadline.isoformat(),
+            "cert_deadline": cert_deadline.isoformat(),
+            "candidates": [],           # [{user_id, display, party, filed_at}]
+            "certified": [],            # list of user_ids
+            "status": "OPEN",           # OPEN -> FILED -> CERTIFIED -> VOTING -> TALLIED -> CERTIFIED_WINNER
+            "post_channel_id": (post_channel.id if post_channel else interaction.channel.id),
+            "poll_message_id": None,
+            "poll_thread_id": None,
+            "results": None,            # {"tally":[(name,votes)...], "total":N, "winners":[...], "closed_at":iso}
+        })
+        save_federal_registry(self.federal_registry)
+
+        e = discord.Embed(
+            title=f"Contest opened — {office.title()} ({category.replace('_',' ').title()})",
+            description=f"**Election Day:** {eday.isoformat()}\n**Filing deadline:** {filing_deadline.isoformat()}\n**Ballot cert:** {cert_deadline.isoformat()}\n**Seats:** {seats}" + (f"\n**District:** {district}" if district else ""),
+            color=discord.Color.blurple()
+        )
+        await interaction.response.send_message(embed=e, ephemeral=False)
+
+    # ---------------- CANDIDATE FILING ----------------
+
+    @elections.command(name="file_candidate", description="File as a candidate in a scheduled contest (House/Senate).")
+    @app_commands.describe(
+        contest_id="The contest id (from /elections list or auto_general output)",
+        statement="Optional short statement (appears on the ballot, trimmed)",
+        party="Political party affiliation (optional)"
+    )
+    @app_commands.autocomplete(contest_id=elections_contest_autocomplete, party=party_autocomplete)
+    async def file_candidate(self, interaction: discord.Interaction, contest_id: str, statement: str | None = None, party: str | None = None):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        reg = self.federal_registry
+        eroot = _elections_root(reg)
+        contests = eroot.get("contests", {})
+        c = contests.get(contest_id)
+        if not c:
+            return await interaction.followup.send("❌ Contest not found.", ephemeral=True)
+
+        # sanity: contest must be scheduled and filing open (or grace)
+        filing_deadline = date.fromisoformat(c["filing_deadline"])
+        today = datetime.now(UTC).date()
+        late = False
+        if today > filing_deadline and not _grace_ok(reg, c, "filing"):
+            return await interaction.followup.send("❌ Filing deadline has passed.", ephemeral=True)
+        if today > filing_deadline:
+            late = True  # grace window
+
+        # Category residency check (lightweight)
+        cat_key = c.get("category")
+        role_id = CITIZENSHIP.get(cat_key)
+        if role_id:
+            if not any(r.id == role_id for r in interaction.user.roles):
+                return await interaction.followup.send(f"❌ You must be a resident of **{cat_key.replace('_',' ').title()}** to file for this contest.", ephemeral=True)
+
+        # Ensure not already in THIS contest (but DO allow filing in other contests)
+        cands = c.setdefault("candidates", [])
+        if any(str(x.get("user_id")) == str(interaction.user.id) for x in cands):
+            return await interaction.followup.send("You’re already filed in this contest.", ephemeral=True)
+
+        # Add candidate
+        cands.append({
+            "user_id": interaction.user.id,
+            "display": interaction.user.display_name,
+            "party": (party or "independent"),
+            "filed_at": _now_iso(),
+            "late": late,
+            "statement": (statement or "").strip()[:200],
+        })
+        save_federal_registry(reg)
+
+        # Public ack in an elections channel if you have one
+        try:
+            if ELECTIONS_ANNOUNCE_CHANNEL:
+                ch = interaction.client.get_channel(ELECTIONS_ANNOUNCE_CHANNEL)
+                if ch:
+                    await ch.send(f"🗳️ **Candidate filed**: {interaction.user.mention} → `{contest_id}`")
+        except Exception:
+            pass
+
+        await interaction.followup.send(f"✅ Filed for `{contest_id}`. (Late: {late})", ephemeral=True)
+
+    @elections.command(name="withdraw_candidate", description="Withdraw from a contest before certification.")
+    @app_commands.describe(contest_id="Contest to withdraw from")
+    async def withdraw_candidate(self, interaction: discord.Interaction, contest_id: str):
+        await interaction.response.defer(ephemeral=True)
+
+        reg = self.federal_registry
+        contests = _elections_root(reg).get("contests", {})
+        c = contests.get(contest_id)
+        if not c:
+            return await interaction.followup.send("❌ Contest not found.", ephemeral=True)
+
+        # Block withdrawals on/after certification deadline
+        cert_deadline = date.fromisoformat(c["cert_deadline"])
+        if datetime.now(UTC).date() >= cert_deadline:
+            return await interaction.followup.send("❌ Certification is underway/complete; withdrawals are closed.", ephemeral=True)
+
+        orig = len(c.get("candidates", []))
+        c["candidates"] = [x for x in c.get("candidates", []) if str(x.get("user_id")) != str(interaction.user.id)]
+        if len(c["candidates"]) == orig:
+            return await interaction.followup.send("You are not filed in that contest.", ephemeral=True)
+
+        save_federal_registry(reg)
+        await interaction.followup.send(f"✅ Withdrawn from `{contest_id}`.", ephemeral=True)
+
+
+    # ---------------- BALLOT CERTIFICATION ----------------
+
+    @elections.command(name="certify_ballot", description="Publish the certified candidate list")
+    @app_commands.autocomplete(contest=elections_contest_autocomplete)
+    async def certify_ballot(self, interaction: discord.Interaction, contest: str):
+        reg = self.federal_registry
+        c = _elections_root(reg)["contests"].get(contest)
+        if not c:
+            return await interaction.response.send_message("Contest not found.", ephemeral=True)
+        # gate: Clerk or admin
+        if not _has_role_or_admin(interaction.user, CLERK_ROLE_ID):
+            return await interaction.response.send_message("Only the Clerk (or admin) may certify.", ephemeral=True)
+
+        today = datetime.now(UTC).date()
+        certline = date.fromisoformat(c["cert_deadline"])
+        if today > certline and not _grace_ok(self.federal_registry, c, "filing"):
+            return await interaction.response.send_message("Certification deadline has passed.", ephemeral=True)
+
+
+        cands = c.get("candidates", [])
+        if not cands:
+            return await interaction.response.send_message("No candidates filed.", ephemeral=True)
+
+        c["certified"] = [str(x["user_id"]) for x in cands]
+        c["status"] = "CERTIFIED"
+        save_federal_registry(reg)
+
+        # publish
+        chan = self.bot.get_channel(int(c["post_channel_id"]))
+        names = "\n".join(f"• {x['display']} ({x.get('party','independent')})" for x in cands)
+        e = discord.Embed(
+            title=f"Ballot certified — {contest}",
+            description=f"**Candidates:**\n{names}",
+            color=discord.Color.gold()
+        )
+        if chan:
+            await chan.send(embed=e)
+        await interaction.response.send_message("✅ Ballot certified.", ephemeral=True)
+
+    # ---------------- OPEN POLL ----------------
+
+    @elections.command(name="open_poll", description="Open the election poll")
+    @app_commands.describe(contest="Contest", hours="Poll duration hours (default 24)")
+    @app_commands.autocomplete(contest=elections_contest_autocomplete)
+    async def open_poll(self, interaction: discord.Interaction, contest: str, hours: int = DEFAULT_ELECTION_HOURS):
+        reg = self.federal_registry
+        c = _elections_root(reg)["contests"].get(contest)
+        if not c:
+            return await interaction.response.send_message("Contest not found.", ephemeral=True)
+        if c.get("status") != "CERTIFIED":
+            return await interaction.response.send_message("Contest must be CERTIFIED.", ephemeral=True)
+
+        chan = self.bot.get_channel(int(c["post_channel_id"]))
+        if not chan:
+            return await interaction.response.send_message("Post channel not found.", ephemeral=True)
+
+        # Build answers from certified candidates
+        cert_ids = set(c.get("certified") or [])
+        roster = [x for x in c.get("candidates", []) if str(x["user_id"]) in cert_ids]
+        if not roster:
+            return await interaction.response.send_message("No certified candidates to place on ballot.", ephemeral=True)
+
+        q = f"{c['office'].title()} — {c['category'].replace('_',' ').title()}" + (f" ({c['district']})" if c.get("district") else "")
+        p = discord.Poll(
+            question=q,
+            duration=timedelta(hours=hours),
+            multiple=(int(c.get("seats",1)) > 1)
+        )
+        for cand in roster:
+            p.add_answer(text=f"{cand['display']} ({cand.get('party','independent')})")
+
+        msg = await chan.send(content="🗳️ **Election Poll Open**", poll=p)
+
+        c["poll_message_id"] = msg.id
+        c["status"] = "VOTING"
+        ballot_map = {}
+        for cand in certd:
+            label = f"{cand['display']} ({cand.get('party','independent')})"
+            p.add_answer(text=label)
+            ballot_map[label] = cand['user_id']
+
+        c.setdefault('results', {})['ballot_map'] = ballot_map
+        save_federal_registry(reg)
+
+        await interaction.response.send_message(f"✅ Poll opened: {msg.jump_url}", ephemeral=True)
+
+    # ---------------- CLOSE & TALLY ----------------
+
+    @elections.command(name="close_poll", description="Close an election poll and tally")
+    @app_commands.autocomplete(contest=elections_contest_autocomplete)
+    async def close_poll(self, interaction: discord.Interaction, contest: str):
+        reg = self.federal_registry
+        c = _elections_root(reg)["contests"].get(contest)
+        if not c:
+            return await interaction.response.send_message("Contest not found.", ephemeral=True)
+        if c.get("status") != "VOTING":
+            return await interaction.response.send_message("Contest is not in VOTING.", ephemeral=True)
+
+        chan = self.bot.get_channel(int(c["post_channel_id"]))
+        msg = await chan.fetch_message(int(c["poll_message_id"]))
+        try:
+            await msg.end_poll()
+        except Exception:
+            pass
+        try:
+            msg = await chan.fetch_message(int(c["poll_message_id"]))
+        except Exception:
+            pass
+
+        tally = _poll_tally_from_message(msg)
+        total = sum(v for _, v in tally)
+        # winners = top N by votes (N = seats)
+        seats = int(c.get("seats",1))
+        winners = [name for name, _ in sorted(tally, key=lambda kv: kv[1], reverse=True)[:seats]]
+
+        c["results"] = {
+            "tally": tally,
+            "total": total,
+            "winners": winners,
+            "closed_at": _now_iso()
+        }
+        c["status"] = "TALLIED"
+        ballot_map = (c.get('results') or {}).get('ballot_map', {})
+        winner_ids = [ballot_map.get(name) for name in winners if ballot_map.get(name)]
+        c['results']['winners_user_ids'] = winner_ids
+        save_federal_registry(reg)
+
+
+        # Publish an audit embed
+        lines = []
+        for name, votes in tally:
+            pct = _percent(votes, total)
+            lines.append(f"{name} — **{votes}** ({pct:.1f}%)")
+        e = discord.Embed(
+            title=f"Unofficial Results — {contest}",
+            description="\n".join(lines) or "No ballots cast.",
+            color=discord.Color.green()
+        )
+        e.set_footer(text=f"Ballots: {total} • Seats: {seats}")
+        await chan.send(embed=e)
+        await interaction.response.send_message("✅ Tallied.", ephemeral=True)
+
+    # ---------------- RECOUNT ----------------
+
+    @elections.command(name="finalize", description="Certify winners and (optionally) assign roles")
+    @app_commands.autocomplete(contest_id=elections_contest_autocomplete)
+    async def elections_finalize(self, interaction: discord.Interaction, contest_id: str):
+        reg = self.federal_registry
+        c = _elections_root(reg)["contests"].get(contest_id)
+        if not c:
+            return await interaction.response.send_message("Contest not found.", ephemeral=True)
+        if c.get("status") not in {"TALLIED"}:
+            return await interaction.response.send_message("Contest isn’t ready to finalize.", ephemeral=True)
+
+        winner_ids = (c.get("results") or {}).get("winners_user_ids") or []
+        if not winner_ids:
+            return await interaction.response.send_message("No winners recorded yet.", ephemeral=True)
+
+        # (Optional) assign chamber roles here if you keep SENATOR_ROLE_ID / REPRESENTATIVE_ROLE_ID constants
+        # for uid in winner_ids: ... add roles safely
+
+        c["status"] = "CERTIFIED_WINNER"
+        save_federal_registry(reg)
+        await interaction.response.send_message(f"✅ Finalized `{contest_id}` with {len(winner_ids)} winner(s).", ephemeral=False)
+
+    @elections.command(name="recount_request", description="Request a recount (≤1.0% and within 48h)")
+    @app_commands.autocomplete(contest=elections_contest_autocomplete)
+    async def recount_request(self, interaction: discord.Interaction, contest: str):
+        reg = self.federal_registry
+        c = _elections_root(reg)["contests"].get(contest)
+        if not c or c.get("status") != "TALLIED":
+            return await interaction.response.send_message("Contest not found or not tallied.", ephemeral=True)
+
+        # must be a candidate in the contest
+        cand_names = [x["display"] for x in c.get("candidates", [])]
+        if interaction.user.display_name not in cand_names:
+            return await interaction.response.send_message("Only candidates may request a recount.", ephemeral=True)
+
+        # time window 48h from close
+        closed_at = datetime.fromisoformat(c["results"]["closed_at"])
+        if datetime.now(UTC) > (closed_at + timedelta(hours=48)):
+            return await interaction.response.send_message("Recount request window (48h) has expired.", ephemeral=True)
+
+        # ≤1.0% margin check
+        tally = c["results"]["tally"]
+        ok, margin = _top_two_margin_one_percent(tally)
+        if not ok:
+            return await interaction.response.send_message(f"Margin is {margin:.2f}%, which exceeds 1.0%.", ephemeral=True)
+
+        c["recount_requested_by"] = interaction.user.id
+        c["recount_requested_at"] = _now_iso()
+        c["status"] = "RECOUNT_REQUESTED"
+        save_federal_registry(reg)
+
+        chan = self.bot.get_channel(int(c["post_channel_id"]))
+        await chan.send(f"🔁 Recount requested for **{contest}** (margin {margin:.2f}%).")
+        await interaction.response.send_message("✅ Recount requested. FEC will respond.", ephemeral=True)
+
+    @elections.command(name="recount_set", description="FEC/Administrator sets the recount outcome")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.autocomplete(contest=elections_contest_autocomplete)
+    @app_commands.choices(outcome=[
+        app_commands.Choice(name="Uphold tally", value="uphold"),
+        app_commands.Choice(name="Reverse order", value="reverse"),
+    ])
+    async def recount_set(self, interaction: discord.Interaction, contest: str, outcome: str):
+        if not (_has_role_or_admin(interaction.user, FEC_ROLE_ID)):
+            return await interaction.response.send_message("Only FEC or admins may set recount outcome.", ephemeral=True)
+        reg = self.federal_registry
+        c = _elections_root(reg)["contests"].get(contest)
+        if not c or c.get("status") != "RECOUNT_REQUESTED":
+            return await interaction.response.send_message("No recount pending for that contest.", ephemeral=True)
+
+        # simple model: uphold keeps winners; reverse flips top two
+        winners = list(c["results"]["winners"])
+        if outcome == "reverse" and len(winners) >= 2:
+            winners[0], winners[1] = winners[1], winners[0]
+        c["results"]["recount_outcome"] = outcome
+        c["results"]["final_winners"] = winners
+        c["status"] = "CERTIFIED_WINNER"
+        save_federal_registry(reg)
+
+        chan = self.bot.get_channel(int(c["post_channel_id"]))
+        await chan.send(f"📜 **Recount {outcome}** — Final winners: " + ", ".join(winners))
+        await interaction.response.send_message("✅ Recount outcome recorded.", ephemeral=True)
+
+    # ---------------- (Stub) REAPPORTIONMENT ----------------
+
+    @elections.command(name="apportion_preview", description="(Stub) Preview a House apportionment from Category counts")
+    @app_commands.describe(house_size="Total House seats", counts_json="JSON: {category: population, ...}")
+    async def apportion_preview(self, interaction: discord.Interaction, house_size: int, counts_json: str):
+        """
+        Minimal preview (no stateful changes). We can wire equal-proportions fully later.
+        """
+        import json
+        try:
+            counts = json.loads(counts_json)
+            if not isinstance(counts, dict) or not counts:
+                raise ValueError
+        except Exception:
+            return await interaction.response.send_message("Bad JSON. Expect: {\"commons\": 5, \"gaming\": 3, ...}", ephemeral=True)
+
+        # equal proportions divisor method (quick and dirty)
+        seats = {k: 1 for k in counts}  # min 1
+        # generate priority numbers
+        priorities = []
+        for cat, pop in counts.items():
+            for n in range(2, house_size * 3):  # generous upper bound
+                priorities.append((cat, pop / math.sqrt(n*(n-1))))
+        priorities.sort(key=lambda x: x[1], reverse=True)
+
+        total = len(seats)
+        i = 0
+        while total < house_size and i < len(priorities):
+            cat, _ = priorities[i]
+            seats[cat] = seats.get(cat, 1) + 1
+            total += 1
+            i += 1
+
+        # reply
+        lines = [f"{k.replace('_',' ').title()}: {v}" for k, v in sorted(seats.items())]
+        await interaction.response.send_message(
+            embed=discord.Embed(title=f"Apportionment preview (House={house_size})",
+                                description="\n".join(lines),
+                                color=discord.Color.teal()),
+            ephemeral=True
+        )
+    
+
+
+    @elections.command(name="registration_freeze", description="Set/clear the global registration freeze date (YYYY-MM-DD).")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(when="Date like 2025-10-28. Omit to clear.")
+    async def registration_freeze(self, interaction: discord.Interaction, when: str | None = None):
+        reg = self.federal_registry
+        eroot = _elections_root(reg)
+        if when:
+            # validate
+            try:
+                date.fromisoformat(when)
+            except Exception:
+                return await interaction.response.send_message("Bad date. Use YYYY-MM-DD.", ephemeral=True)
+            eroot["registration_freeze"] = when
+            note = f"Freeze set to {when}."
+        else:
+            eroot.pop("registration_freeze", None)
+            note = "Registration freeze cleared."
+        save_federal_registry(reg)
+        await interaction.response.send_message(f"✅ {note}", ephemeral=True)
+
+
+    @elections.command(name="grace_once", description="Set a one-time late window (global or per contest).")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        through="Last day grace applies (YYYY-MM-DD)",
+        allow_registration="Allow late voter registration?",
+        allow_filing="Allow late candidate filing?",
+        note="Optional public note",
+        contest="(Optional) limit to one contest ID; omit for global"
+    )
+    @app_commands.autocomplete(contest=elections_contest_autocomplete)
+    async def grace_once(self,
+        interaction: discord.Interaction,
+        through: str,
+        allow_registration: bool = True,
+        allow_filing: bool = True,
+        note: str | None = None,
+        contest: str | None = None,
+    ):
+        try:
+            date.fromisoformat(through)
+        except Exception:
+            return await interaction.response.send_message("Bad date. Use YYYY-MM-DD.", ephemeral=True)
+
+        reg = self.federal_registry
+        if contest:
+            contests = _elections_root(reg)["contests"]
+            c = contests.get(contest)
+            if not c:
+                return await interaction.response.send_message("Contest not found.", ephemeral=True)
+            c["grace"] = {
+                "enabled": True,
+                "through": through,
+                "allow_registration": allow_registration,
+                "allow_filing": allow_filing,
+                "note": (note or None),
+            }
+            who = f"contest **{contest}**"
+        else:
+            gb = _grace_bucket(reg)
+            gb.update({
+                "enabled": True,
+                "through": through,
+                "allow_registration": allow_registration,
+                "allow_filing": allow_filing,
+                "note": (note or None),
+            })
+            who = "GLOBAL"
+
+        save_federal_registry(reg)
+        await interaction.response.send_message(
+            f"✅ Grace enabled ({who}) through {through} • "
+            f"registration={allow_registration} filing={allow_filing}.", ephemeral=True
+        )
+
+    @elections.command(name="grace_clear", description="Disable the one-time late window.")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(contest="(Optional) contest to clear; omit for global")
+    @app_commands.autocomplete(contest=elections_contest_autocomplete)
+    async def grace_clear(self, interaction: discord.Interaction, contest: str | None = None):
+        reg = self.federal_registry
+        if contest:
+            contests = _elections_root(reg)["contests"]
+            c = contests.get(contest)
+            if not c:
+                return await interaction.response.send_message("Contest not found.", ephemeral=True)
+            c.pop("grace", None)
+            who = f"contest **{contest}**"
+        else:
+            _grace_bucket(reg).update({"enabled": False})
+            who = "GLOBAL"
+        save_federal_registry(reg)
+        await interaction.response.send_message(f"✅ Grace cleared for {who}.", ephemeral=True)
+
+
+    @elections.command(name="auto_general", description="Auto-create the November general election contests from current citizenship rolls.")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        house_size="Total House seats (default 7)",
+        exclude_senate="Comma-separated category keys to exclude from Senate (e.g., 'dp')",
+        grace_through="YYYY-MM-DD to allow late filing/registration (default: day after Election Day)"
+    )
+    async def auto_general(
+        self,
+        interaction: discord.Interaction,
+        house_size: int = 7,
+        exclude_senate: str | None = "dp",
+        grace_through: str | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        guild = interaction.guild
+        if not guild:
+            return await interaction.followup.send("Must be used in a server.", ephemeral=True)
+
+        # 1) Determine Election Day & related dates
+        e_day = _next_federal_election_day()
+        filing_deadline = e_day - timedelta(days=21)
+        cert_deadline   = e_day - timedelta(days=14)
+        grace_default   = (e_day + timedelta(days=1)).isoformat()
+        grace_until     = grace_through or grace_default
+
+        # 2) Count current citizenship by Category
+        pops = _count_category_citizens(guild, CITIZENSHIP)
+
+        # 3) Apportion House seats (min 1 each, total house_size)
+        seats = _equal_proportions_apportion(pops, house_size)
+
+        # 4) Build/merge contests
+        reg = self.federal_registry
+        eroot = _elections_root(reg)
+        contests = eroot.setdefault("contests", {})
+
+        # ID prefix, e.g., "2025-11-general"
+        key_prefix = f"{e_day.year}-11-general"
+
+        # House contests (at-large until districts exist, per §2(e),(h))
+        for cat_key, seat_count in seats.items():
+            for idx in range(1, seat_count + 1):
+                cid = f"{key_prefix}-house-{cat_key}-seat-{idx}"
+                contests[cid] = {
+                    "kind": "house",
+                    "category": cat_key,
+                    "district": None,              # at-large
+                    "seat_index": idx,
+                    "election_day": e_day.isoformat(),
+                    "filing_deadline": filing_deadline.isoformat(),
+                    "cert_deadline": cert_deadline.isoformat(),
+                    "candidates": [],
+                    "status": "SCHEDULED",
+                }
+
+        # Senate contests (one per Category, but exclude e.g. dp)
+        excluded = set((exclude_senate or "").replace(" ", "").split(",")) if exclude_senate else set()
+        for cat_key in CITIZENSHIP.keys():
+            if cat_key in excluded:
+                continue
+            cid = f"{key_prefix}-senate-{cat_key}"
+            contests[cid] = {
+                "kind": "senate",
+                "category": cat_key,
+                "election_day": e_day.isoformat(),
+                "filing_deadline": filing_deadline.isoformat(),
+                "cert_deadline": cert_deadline.isoformat(),
+                "candidates": [],
+                "status": "SCHEDULED",
+                "term_begins": date(e_day.year+1, 1, 3).isoformat(),  # Jan 3 per your §1
+            }
+
+        # 5) One-time global grace for this cycle (late filings + registrations)
+        gb = _grace_bucket(reg)
+        gb.update({
+            "enabled": True,
+            "through": grace_until,            # e.g., 2025-11-05
+            "allow_registration": True,
+            "allow_filing": True,
+            "note": f"One-time 2025 general election grace (set {datetime.now(UTC).date().isoformat()})",
+        })
+
+        # 6) Persist
+        eroot["contests"] = contests
+        # (Optional) publish the President’s apportionment “statement” per §2(a),(g)
+        eroot["apportionment"] = {
+            "election_year": e_day.year,
+            "house_size": house_size,
+            "population": pops,
+            "seats": seats,
+            "published_by": interaction.user.id,
+            "published_at": _now_iso(),
+        }
+
+        save_federal_registry(reg)
+
+        # 7) Announce
+        # Summary text: who got how many House seats + which Categories have Senate races
+        house_lines = []
+        for k in sorted(seats.keys()):
+            house_lines.append(f"• {k.replace('_',' ').title()}: {seats[k]} seat(s) — pop {pops.get(k,0)}")
+        senate_lines = [k for k in CITIZENSHIP.keys() if k not in excluded]
+        emb = discord.Embed(
+            title=f"General Election Setup — {e_day.isoformat()}",
+            description="Contests created and deadlines set.",
+            color=discord.Color.blurple()
+        )
+        emb.add_field(name="House apportionment (equal proportions, min 1)", value="\n".join(house_lines), inline=False)
+        emb.add_field(name="Senate contests", value=", ".join(x.replace('_',' ').title() for x in senate_lines) or "—", inline=False)
+        emb.add_field(name="Deadlines", value=f"Filing: **{filing_deadline.isoformat()}**\nCertification: **{cert_deadline.isoformat()}**", inline=True)
+        emb.add_field(name="Grace window", value=f"Through **{grace_until}** (registration & filing)", inline=True)
+
+        if ELECTIONS_ANNOUNCE_CHANNEL:
+            ch = interaction.client.get_channel(ELECTIONS_ANNOUNCE_CHANNEL)
+            if ch:
+                try: await ch.send(embed=emb)
+                except Exception: pass
+
+        await interaction.followup.send(embed=emb, ephemeral=True)
+
+    @commands.command(name="residency_gate_apply", aliases=["rga"])
     @commands.is_owner()
     async def residency_gate_apply(self, ctx: commands.Context):
         guild = ctx.guild
