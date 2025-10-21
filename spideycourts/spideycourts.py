@@ -1446,8 +1446,10 @@ class SpideyCourts(commands.Cog):
 
             if not q or any(q in chunk for chunk in hay):
                 out.append(app_commands.Choice(name=f"{cap}, {case_number}", value=case_number))
-                if len(out) >= MAX_CHOICES:
-                    break
+
+    
+        out.reverse()  # prefer newer cases if over limit
+        out = out[:MAX_CHOICES] # cut to max after reversing
 
         return out
 
