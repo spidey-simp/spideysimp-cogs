@@ -2080,7 +2080,7 @@ class SpideyGov(commands.Cog):
         out.append(app_commands.Choice(name="None / Independent", value="independent"))
         return out[:25]
     
-    @app_commands.command(name="register_to_vote", description="Register to vote for Federal elections")
+    @elections.command(name="register_to_vote", description="Register to vote for Federal elections")
     @app_commands.describe(category="Your Category (for House/Senate voting)", party="Your party label or 'independent'")
     @app_commands.autocomplete(category=category_autocomplete, party=party_autocomplete)
     async def register_to_vote(self, interaction: discord.Interaction, category: str, party: str = "independent"):
