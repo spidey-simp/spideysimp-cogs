@@ -2006,7 +2006,7 @@ class SpideyGov(commands.Cog):
     category = app_commands.Group(name="category", description="Category management commands", parent=government)
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
-    elections = app_commands.Group(name="elections", description="Elections & registration", parent=government)
+    elections = app_commands.Group(name="elections", description="Elections & registration")
 
     @elections.command(name="party_create", description="Create a new political party")
     @app_commands.describe(name="Full name of the party", abbreviation="Short abbreviation (3-6 chars)", color="Color for the party (hex code, e.g. #ff0000)", desc="Short description (optional)")
