@@ -136,6 +136,11 @@ CITE_MULTI_RX = re.compile(
     re.IGNORECASE | re.VERBOSE
 )
 
+def _start_page_from_cite(cite: str) -> int | None:
+    # e.g., "1 SPIDEYLAW 4 (D. Commons 2025)" → 4
+    m = re.search(r"\b\d+\s+[A-Z][A-Z0-9.]+\s+(\d+)\b", cite)
+    return int(m.group(1)) if m else None
+
 TEXTY_EXTS = {".txt", ".md", ".markdown", ".yml", ".yaml", ".json", ".rtf", ".pdf", ".docx"}
 MAX_ATTACH_BYTES = 8 * 1024 * 1024
 
@@ -662,7 +667,7 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
 
         starter += "*Opinion follows in paginated messages below.*"
 
-        pages = cog._paginate_for_reporter(opinion, TARGET_CHARS_PER_PAGE)
+        pages = cog._paginate_for_reporter(opinion, TARGET_CHARS_PER_PAGE, start_page=first_page)
         num_pages = len(pages)
         if num_pages == 0:
             return await interaction.followup.send("❌ Opinion text is empty.", ephemeral=True)
@@ -1007,9 +1012,9 @@ class SpideyCourts(commands.Cog):
     def _get_reporter_for_case(self, case: dict) -> str:
         return VENUE_TO_REPORTER.get(case.get("venue"), "district")
 
-    def _paginate_for_reporter(self, text: str, max_chars: int = TARGET_CHARS_PER_PAGE):
+    def _paginate_for_reporter(self, text: str, max_chars: int = TARGET_CHARS_PER_PAGE, start_page: int = 1):
         """Split opinion text into fake 'pages' and prefix each with [*n]."""
-        chunks, page, buf = [], 1, ""
+        chunks, page, buf = [], start_page, ""
         paras = [p.strip() for p in (text or "").split("\n\n")]
         for para in paras:
             if not para:
@@ -1025,6 +1030,7 @@ class SpideyCourts(commands.Cog):
         if buf.strip():
             chunks.append(f"`[*{page}]`\n{buf.strip()}")
         return chunks
+
 
     async def _gather_opinion_text_from_docket(self, case: dict, entry_num: int) -> str | None:
         """
