@@ -323,6 +323,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         if not venue_channel_id:
             return await interaction.response.send_message("❌ Invalid venue selected.", ephemeral=True)
 
+
         # 1) Resolve parties FIRST
         pl_val = None
         if not self.criminal:
@@ -333,6 +334,20 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         extras = [d.strip() for d in extras_raw.split(";") if d.strip()]
         extra_vals = [await self.resolve_party_entry(interaction.guild, d) for d in extras]
 
+        # ... earlier in on_submit ...
+        if self.criminal:
+            gov_name = (self.government and GOV_DEFAULTS.get(self.government.lower(), self.government)) or GOV_DEFAULTS["country"]
+            plaintiff_stored = gov_name
+            counsel_pl = interaction.user.id  # auto-assume filer = prosecutor
+            case_type = "criminal"
+            is_criminal = True
+        else:
+            plaintiff_stored = pl_val
+            counsel_pl = interaction.user.id  # filer = plaintiff’s counsel
+            case_type = "civil"
+            is_criminal = False
+
+
         # 2) Case number with proper type
         typ = "cr" if self.criminal else "cv"
         court_data = self.bot.get_cog("SpideyCourts").court_data
@@ -342,17 +357,6 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         judge_name = JUDGE_VENUES.get(self.venue, {}).get("name", "SS")
         judge_id   = JUDGE_VENUES.get(self.venue, {}).get("id", 684457913250480143)
 
-        if self.criminal:
-            gov_name = (self.government and GOV_DEFAULTS.get(self.government.lower(), self.government)) or GOV_DEFAULTS["country"]
-            plaintiff_stored = gov_name
-            counsel_pl = None  # prosecutor optional to store separately later
-            case_type = "criminal"
-            is_criminal = True
-        else:
-            plaintiff_stored = pl_val
-            counsel_pl = interaction.user.id
-            case_type = "civil"
-            is_criminal = False
 
         court_data[case_number] = {
             "plaintiff": plaintiff_stored,
@@ -374,6 +378,14 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
                 "timestamp": interaction.created_at.isoformat(),
             }],
         }
+
+        # Auto-seed counsel-of-record for the plaintiff/prosecution on filing
+        cofr = court_data[case_number].setdefault("counsel_of_record", {})
+        pid = court_data[case_number].get("plaintiff")
+        if isinstance(pid, int):  # civil plaintiff is a user
+            cofr[str(pid)] = interaction.user.id
+        # (If criminal, plaintiff is a string like "The Spidey Republic", so we can’t key by user id.)
+
 
         # 4) Compose summary ONCE using formatted parties
         venue_channel = self.bot.get_channel(venue_channel_id)
@@ -1482,11 +1494,25 @@ class SpideyCourts(commands.Cog):
         if df_id and str(df_id) in cor:
             counsel_df = await self.try_get_display_name(guild, int(cor[str(df_id)]))
 
+        # Fallbacks to legacy fields so new filings show counsel immediately
+        if not counsel_pl:
+            legacy_pl = self._coerce_user_id(case.get("counsel_for_plaintiff"))
+            if legacy_pl:
+                counsel_pl = await self.try_get_display_name(guild, legacy_pl)
+
+        if not counsel_df:
+            legacy_df = self._coerce_user_id(case.get("counsel_for_defendant"))
+            if legacy_df:
+                counsel_df = await self.try_get_display_name(guild, legacy_df)
+
+        is_criminal = case.get("is_criminal", False)
+
+
         caption = await self._caption_from_parties(guild, case)
 
         header = (
             f"**Docket for Case {caption}, {case_number}**\n\n"
-            f"Counsel for Plaintiff: {counsel_pl or '<@Unknown>'}\n"
+            f"Counsel for {'Plaintiff' if not is_criminal else 'Prosecution'}: {counsel_pl or '<@Unknown>'}\n"
             f"Counsel for Defendant: {counsel_df or '<@Unknown>'}\n"
             f"Venue: {venue_name}\n"
             f"Judge: {judge}\n"
