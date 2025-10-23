@@ -2262,7 +2262,7 @@ class SpideyGov(commands.Cog):
 
         # Block withdrawals on/after certification deadline
         cert_deadline = date.fromisoformat(c["cert_deadline"])
-        if datetime.now(UTC).date() >= cert_deadline:
+        if datetime.now(UTC).date() >= cert_deadline and not _grace_ok(reg, c, "certification"):
             return await interaction.followup.send("❌ Certification is underway/complete; withdrawals are closed.", ephemeral=True)
 
         orig = len(c.get("candidates", []))
