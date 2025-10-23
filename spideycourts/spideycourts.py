@@ -1791,7 +1791,17 @@ class SpideyCourts(commands.Cog):
         gid = "@me" if guild_id in (None, 0) else str(guild_id)
         return f"https://discord.com/channels/{gid}/{channel_id}/{message_id}"
 
-    def _build_service_packet_text(self, guild: discord.Guild, case: dict, case_number: str, target_name: str, doc_entries: list[int]) -> str:
+    def _build_service_packet_text(
+        self,
+        guild: discord.Guild,
+        case: dict,
+        case_number: str,
+        party_name: str,
+        doc_entries: list[int],
+        *,
+        via_relation: str | None = None,   # "agent" | "representative" | None
+        agent_name: str | None = None
+    ) -> str:
         # Best-effort caption (no awaits)
         cap = case.get("_cached_caption")
         if not cap:
@@ -1807,43 +1817,55 @@ class SpideyCourts(commands.Cog):
                 cap = "Unknown v. Unknown"
             case["_cached_caption"] = cap
 
-        bullets = []
-        filings = case.get("filings") or []
+        bullets, filings = [], (case.get("filings") or [])
         for n in doc_entries:
-            try:
-                f = next(f for f in filings if f.get("entry") == n)
-            except StopIteration:
+            f = next((f for f in filings if f.get("entry") == n), None)
+            if not f:
                 continue
             title = f.get("document_type", "Document")
-            ch = f.get("channel_id")
-            mid = f.get("message_id")
+            ch, mid = f.get("channel_id"), f.get("message_id")
             if ch and mid:
                 bullets.append(f"- Entry {n}: **{title}** — {self._jump_link(ch, mid, guild.id)}")
             else:
                 bullets.append(f"- Entry {n}: **{title}**")
 
         docs_section = "\n".join(bullets) if bullets else "_(no links available)_"
+
+        to_line = f"To: **{party_name}**"
+        if agent_name and via_relation:
+            to_line = f"To: **{agent_name}**, {via_relation} for **{party_name}**"
+
         return (
             f"**SERVICE OF PROCESS**\n"
             f"Case: **{cap}**, `{case_number}`\n"
-            f"To: **{target_name}**\n\n"
+            f"{to_line}\n\n"
             f"You are hereby served with the following filings. Deadlines run from the time of this notice unless otherwise ordered.\n\n"
             f"**Included documents:**\n{docs_section}\n\n"
             f"— Sent by authority of the Court’s electronic filing system."
         )
 
 
-    @court.command(name="serve", description="Serve a party and auto-docket proof (DM + Public Post by default)")
+
+    @court.command(name="serve", description="Serve a party (or their agent/rep) and auto-docket proof (DM + Public Post by default)")
     @app_commands.choices(deliver=[
         app_commands.Choice(name="Both (DM + Public Post)", value="both"),
         app_commands.Choice(name="Direct Message only", value="dm"),
         app_commands.Choice(name="Public Post only", value="post"),
     ])
+    @app_commands.choices(relation=[
+        app_commands.Choice(name="Agent", value="agent"),
+        app_commands.Choice(name="Representative", value="representative"),
+    ])
     @app_commands.describe(
         case_number="Case number",
         deliver="How to serve (default: Both)",
-        party_user="(Option A) Discord member to serve",
-        party="(Option B) Non-user party (pick from autocomplete)",
+        # identify the PARTY:
+        party_user="(Option A) Discord member party",
+        party="(Option B) Non-user party (choose from autocomplete)",
+        # optionally identify an AGENT/REP if party is non-user or you prefer serving the agent:
+        party_agent_user="Agent/Representative as a Discord member (optional)",
+        party_agent="Agent/Representative as plain text (optional)",
+        relation="Relationship of the agent to the party (default: Agent)",
         channel="If Public Post, where to post (defaults to case’s venue)",
         documents="Comma-separated docket entry numbers to include (default: 1 = Complaint)"
     )
@@ -1855,11 +1877,15 @@ class SpideyCourts(commands.Cog):
         deliver: app_commands.Choice[str] = None,
         party_user: discord.Member | None = None,
         party: str | None = None,
+        party_agent_user: discord.Member | None = None,
+        party_agent: str | None = None,
+        relation: app_commands.Choice[str] | None = None,
         channel: discord.TextChannel | None = None,
         documents: str | None = None,
     ):
         await interaction.response.defer(ephemeral=True)
         deliver_mode = (deliver.value if deliver else "both")
+        relation_val = (relation.value if relation else "agent")
 
         case = self.court_data.get(case_number)
         if not isinstance(case, dict):
@@ -1870,7 +1896,7 @@ class SpideyCourts(commands.Cog):
         if (party_user is None) == (party is None):
             return await interaction.followup.send("❌ Specify either `party_user` or `party`.", ephemeral=True)
 
-        # resolve party record
+        # resolve target party record + name + pid
         target = None
         if party_user:
             for side in ("plaintiffs", "defendants"):
@@ -1892,8 +1918,17 @@ class SpideyCourts(commands.Cog):
             if not target:
                 return await interaction.followup.send("❌ That party is not listed in this case.", ephemeral=True)
 
-        target_name = target.get("name") or (party_user.display_name if party_user else "Unknown")
+        party_name = target.get("name") or (party_user.display_name if party_user else "Unknown")
+        party_pid = target["pid"]
         is_user_party = (target.get("kind") == "user" and target.get("id") is not None)
+
+        # agent resolution (optional)
+        agent_is_user = bool(party_agent_user)
+        agent_name = None
+        if party_agent_user:
+            agent_name = party_agent_user.display_name
+        elif party_agent:
+            agent_name = party_agent.strip() or None
 
         # which filings to include (default: entry 1)
         try:
@@ -1901,41 +1936,65 @@ class SpideyCourts(commands.Cog):
         except ValueError:
             return await interaction.followup.send("❌ `documents` must be entry numbers like `1, 2, 4`.", ephemeral=True)
 
-        # Build packet text
-        packet = self._build_service_packet_text(interaction.guild, case, case_number, target_name, doc_list)
+        # Build packet text (reflect agent if present)
+        packet = self._build_service_packet_text(
+            interaction.guild, case, case_number, party_name, doc_list,
+            via_relation=relation_val if agent_name else None,
+            agent_name=agent_name
+        )
 
-        target_chan = channel or COURT_STEPS_CHANNEL_ID
+        # venue for public post
+        venue_key = case.get("venue")
+        venue_channel_id = VENUE_CHANNEL_MAP.get(venue_key)
+        venue_channel = self.bot.get_channel(venue_channel_id) if venue_channel_id else None
+        target_chan = channel or venue_channel
 
-        # Record attempts
         attempts = []
+        dm_target_user = None
 
-        # 1) DM attempt (only for user parties) — do unless deliver == "post"
-        if is_user_party and party_user and deliver_mode in ("both", "dm"):
+        # Decide who to DM (priority: agent_user, else party_user if user party)
+        if agent_is_user:
+            dm_target_user = party_agent_user
+        elif is_user_party and party_user:
+            dm_target_user = party_user
+
+        # Guard: if deliver == dm but we have no DM-able target
+        if deliver_mode == "dm" and not dm_target_user:
+            return await interaction.followup.send("❌ DM-only service requires a Discord user (party or agent). Provide `party_agent_user` or use Public Post.", ephemeral=True)
+
+        # 1) DM attempt (if applicable)
+        if dm_target_user and deliver_mode in ("both", "dm"):
             try:
-                dm_msg = await party_user.send(packet, allowed_mentions=discord.AllowedMentions.none())
+                dm_msg = await dm_target_user.send(packet, allowed_mentions=discord.AllowedMentions.none())
                 attempts.append({
                     "method": "dm",
                     "ok": True,
                     "channel_id": dm_msg.channel.id,
                     "message_id": dm_msg.id,
                     "link": self._jump_link(dm_msg.channel.id, dm_msg.id, None),
+                    "target": ("agent" if agent_is_user else "party"),
                 })
-            except discord.Forbidden as e:
-                attempts.append({"method": "dm", "ok": False, "error": "DMs closed"})
+            except discord.Forbidden:
+                attempts.append({"method": "dm", "ok": False, "error": "DMs closed", "target": ("agent" if agent_is_user else "party")})
             except Exception as e:
-                attempts.append({"method": "dm", "ok": False, "error": f"{type(e).__name__}: {e}"})
+                attempts.append({"method": "dm", "ok": False, "error": f"{type(e).__name__}: {e}", "target": ("agent" if agent_is_user else "party")})
 
         # 2) Public Post (always for non-users; for users unless deliver == "dm")
-        public_needed = (deliver_mode in ("both", "post")) or (not is_user_party)
+        public_needed = (deliver_mode in ("both", "post")) or (not dm_target_user)
         post_link = None
         thread_id = None
+        post_header = f"**Service of Process — {case_number} — "
+        if agent_name:
+            post_header += f"{agent_name} ({relation_val} for {party_name})**"
+        else:
+            post_header += f"{party_name}**"
+
         if public_needed:
             if not target_chan:
                 return await interaction.followup.send("❌ No channel available for public posting. Specify `channel:`.", ephemeral=True)
-            header = f"**Service of Process — {case_number} — {target_name}**"
-            anchor = await target_chan.send(header, allowed_mentions=discord.AllowedMentions.none())
+            anchor = await target_chan.send(post_header, allowed_mentions=discord.AllowedMentions.none())
             thread = await target_chan.create_thread(
-                name=f"Service: {case_number} — {target_name}",
+                name=f"Service: {case_number} — {party_name}",
                 message=anchor,
                 auto_archive_duration=10080
             )
@@ -1948,13 +2007,21 @@ class SpideyCourts(commands.Cog):
                 "channel_id": thread.id,
                 "message_id": msg.id,
                 "link": post_link,
+                "target": ("agent" if agent_name else "party"),
             })
 
         # Persist service status keyed by party PID
         svc = case.setdefault("service", {})
-        svc[target["pid"]] = {
+        svc[party_pid] = {
             "timestamp": datetime.now(UTC).isoformat(),
             "by": interaction.user.id,
+            "deliver": deliver_mode,
+            "relation": (relation_val if agent_name else None),
+            "agent": (
+                {"kind": "user", "id": party_agent_user.id, "name": agent_name}
+                if agent_is_user else
+                ({"kind": "text", "name": agent_name} if agent_name else None)
+            ),
             "attempts": attempts,
         }
 
@@ -1963,9 +2030,11 @@ class SpideyCourts(commands.Cog):
         dm_att = next((a for a in attempts if a["method"] == "dm"), None)
         post_att = next((a for a in attempts if a["method"] == "post"), None)
         if dm_att:
-            lines.append(f"- DM: {('OK — ' + dm_att['link']) if dm_att.get('ok') else ('FAILED — ' + dm_att.get('error',''))}")
+            who = "agent" if dm_att.get("target") == "agent" else "party"
+            lines.append(f"- DM to {who}: {('OK — ' + dm_att['link']) if dm_att.get('ok') else ('FAILED — ' + dm_att.get('error',''))}")
         if post_att:
-            lines.append(f"- Public Thread: OK — {post_att['link']}")
+            who = "agent" if post_att.get("target") == "agent" else "party"
+            lines.append(f"- Public thread ({who}): OK — {post_att['link']}")
         proof_text = "Proofs:\n" + "\n".join(lines) if lines else "No proof links available."
 
         filings = case.setdefault("filings", [])
@@ -1975,7 +2044,12 @@ class SpideyCourts(commands.Cog):
             "author": interaction.user.name,
             "author_id": interaction.user.id,
             "timestamp": datetime.now(UTC).isoformat(),
-            "content": f"Served **{target_name}** by **{'DM and Public Post' if (dm_att and post_att) else ('DM' if dm_att else 'Public Post')}**.\n{proof_text}",
+            "content": (
+                f"Served **{party_name}**"
+                + (f" via **{relation_val}** **{agent_name}**" if agent_name else "")
+                + f" by **{'DM and Public Post' if (dm_att and post_att) else ('DM' if dm_att else 'Public Post')}**.\n"
+                + proof_text
+            ),
             "related_to": min(doc_list) if doc_list else None,
             "channel_id": (post_att or dm_att or {}).get("channel_id"),
             "message_id": (post_att or dm_att or {}).get("message_id"),
@@ -1983,16 +2057,16 @@ class SpideyCourts(commands.Cog):
 
         save_json(COURT_FILE, self.court_data)
 
-        # Confirm with links
-        confirm_bits = []
-        if dm_att:
-            confirm_bits.append("DM " + ("✅" if dm_att["ok"] else "❌"))
-        if post_att:
-            confirm_bits.append("Public Post ✅")
+        # Confirmation
+        bits = []
+        if dm_att: bits.append("DM " + ("✅" if dm_att["ok"] else "❌"))
+        if post_att: bits.append("Public Post ✅")
+        agent_note = f" (served {relation_val}: {agent_name})" if agent_name else ""
         await interaction.followup.send(
-            "✅ Service recorded: " + ", ".join(confirm_bits) + (f"\nPublic thread: {post_link}" if post_link else ""),
+            f"✅ Service recorded for **{party_name}**{agent_note}: " + ", ".join(bits) + (f"\nPublic thread: {post_link}" if post_link else ""),
             ephemeral=True
         )
+
 
 
 
