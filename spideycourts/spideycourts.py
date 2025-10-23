@@ -252,6 +252,50 @@ async def _read_attachment_text(att: discord.Attachment) -> str:
 
     return ""
 
+def _split_for_discord(self, text: str, *, first_prefix: str = "", hard_limit: int = 2000) -> list[str]:
+    """
+    Split text into message-sized chunks that fit Discord's 2000-char limit.
+    Respects paragraph/space boundaries when possible.
+    The first chunk includes `first_prefix`.
+    """
+    text = text or ""
+    chunks = []
+    remaining = text
+
+    # how many chars available in the first message after prefix
+    first_room = hard_limit - len(first_prefix)
+    if first_room <= 0:
+        first_room = hard_limit
+
+    def _take(block, room):
+        if len(block) <= room:
+            return len(block)
+        # prefer paragraph break
+        cut = block.rfind("\n\n", 0, room)
+        if cut == -1:
+            # prefer line break
+            cut = block.rfind("\n", 0, room)
+        if cut == -1:
+            # prefer space
+            cut = block.rfind(" ", 0, room)
+        if cut == -1:
+            cut = room
+        return cut
+
+    # first chunk
+    n = _take(remaining, first_room)
+    first_body = remaining[:n].rstrip()
+    chunks.append(first_prefix + first_body)
+    remaining = remaining[n:].lstrip()
+
+    # subsequent chunks up to hard_limit each
+    while remaining:
+        n = _take(remaining, hard_limit)
+        body = remaining[:n].rstrip()
+        chunks.append(body)
+        remaining = remaining[n:].lstrip()
+
+    return chunks
 
 class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
     def __init__(
@@ -290,7 +334,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             label="Complaint Text",
             placeholder="Enter the facts and legal basis for your complaint.",
             style=discord.TextStyle.paragraph,
-            max_length=1800,
+            max_length=4000,
             required=True,
         )
         self.add_item(self.statutes_at_issue)
@@ -411,9 +455,44 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         summary = header + "\n" + "\n".join(lines)
         await venue_channel.send(summary)
 
-        filing_msg = await venue_channel.send(f"**Complaint Document - {case_number}**\n\n{self.complaint_text.value}")
-        court_data[case_number]["filings"][0]["message_id"] = filing_msg.id
-        court_data[case_number]["filings"][0]["channel_id"] = filing_msg.channel.id
+        venue_channel = self.bot.get_channel(venue_channel_id)
+
+        # Compose the full complaint body (include statutes header if present)
+        statutes_hdr = ""
+        if self.statutes_at_issue.value.strip():
+            statutes_hdr = f"**Statutes at issue:** {self.statutes_at_issue.value.strip()}\n\n"
+        full_text = statutes_hdr + self.complaint_text.value
+
+        # Split into safe chunks and send; thread if needed
+        title = f"**Complaint Document — {case_number}**\n\n"
+        parts = self.bot.get_cog("SpideyCourts")._split_for_discord(full_text, first_prefix=title, hard_limit=2000)
+
+        first_msg = await venue_channel.send(parts[0])
+        case = court_data[case_number]
+        case["filings"][0]["message_id"] = first_msg.id
+        case["filings"][0]["channel_id"] = first_msg.channel.id
+
+        if len(parts) > 1:
+            # Create a thread anchored to the first message
+            thread_name = f"Complaint Thread — {case_number}"
+            thread = await venue_channel.create_thread(
+                name=thread_name,
+                message=first_msg,
+                auto_archive_duration=10080
+            )
+
+            # Post the remaining chunks as part of the same document (no new docket entries)
+            extra_ids = []
+            for body in parts[1:]:
+                msg = await thread.send(body)
+                extra_ids.append(msg.id)
+
+            # Attach thread + message ids to Entry 1 for reference
+            filing0 = case["filings"][0]
+            filing0["thread_id"] = thread.id
+            # include first message id then all thread message ids
+            filing0["message_ids"] = [first_msg.id] + extra_ids
+
 
         save_json(COURT_FILE, court_data)
         await interaction.response.send_message(f"✅ Complaint filed under `{case_number}`.", ephemeral=True)
@@ -1683,138 +1762,319 @@ class SpideyCourts(commands.Cog):
             return
         
         await interaction.response.send_modal(DocumentFilingModal(bot=self.bot, case_number=case_number, case_dict=case_data, related_docs=related_docs))
-        
 
-    @court.command(name="serve", description="Serve a party with a complaint")
-    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    @app_commands.describe(
-        case_number="The case number to serve",
-        defendant="The defendant being served",
-        method="The method of service"
-    )
-    @app_commands.choices(method=[
-        app_commands.Choice(name="Mention in court channel", value="mention"),
-        app_commands.Choice(name="Direct Message", value="dm"),
-        app_commands.Choice(name="Both", value="both")
-    ])
-    @app_commands.autocomplete(case_number=case_autocomplete)
-    async def serve(self, interaction: discord.Interaction, case_number: str, defendant: discord.Member, method: app_commands.Choice[str]):
-        await interaction.response.defer(ephemeral=True)
-
-        # Validate case
+    async def party_autocomplete(self, interaction: discord.Interaction, current: str):
+        choices = []
+        q = (current or "").lower()
+        case_number = getattr(interaction.namespace, "case_number", "") or ""
         case = self.court_data.get(case_number)
-        if not case:
-            await interaction.followup.send("❌ Case not found.", ephemeral=True)
-            return
+        if not isinstance(case, dict):
+            return []
+        # ensure normalized structure
+        try:
+            await self._normalize_case(interaction.guild, case)
+        except Exception:
+            return []
 
-        # Validate defendant
-        valid_parties = [case.get("defendant")] + case.get("additional_defendants", [])
-        if str(defendant.id) not in map(str, valid_parties):
-            await interaction.followup.send("❌ This user is not listed as a defendant in the case.", ephemeral=True)
-            return
+        for side in ("plaintiffs", "defendants"):
+            for p in (case.get("parties", {}).get(side) or []):
+                name = p.get("name") or "Unknown"
+                if (not q) or (q in name.lower()):
+                    # label is human text; value encodes the PID
+                    choices.append(app_commands.Choice(name=name, value=f"pid:{p.get('pid')}"))
+                    if len(choices) >= 25:
+                        return choices
+        return choices
 
+    def _jump_link(self, channel_id: int, message_id: int, guild_id: int | None = None) -> str:
+        """Make a Discord jump link. Use @me for DMs."""
+        gid = "@me" if guild_id in (None, 0) else str(guild_id)
+        return f"https://discord.com/channels/{gid}/{channel_id}/{message_id}"
 
-        # Format notification
-        plaintiff_name = await self.try_get_display_name(interaction.guild, case.get("plaintiff"))
-        defendant_name = await self.try_get_display_name(interaction.guild, case.get("defendant"))
-        venue_id = VENUE_CHANNEL_MAP.get(case.get("venue"))
-        venue = self.bot.get_channel(venue_id).mention if venue_id else "Unknown Venue"
-        service_notice = (
-            f"📨 **You have been served.**\n\n"
-            f"A complaint has been filed against you in the case:\n\n"
-            f"`{plaintiff_name} v. {defendant_name}`\n"
-            f"Case Number: `{case_number}`\n"
-            f"Venue: {venue}\n\n"
-            f"You are required to respond within 72 hours. Failure to respond may result in a default judgment."
+    def _build_service_packet_text(self, guild: discord.Guild, case: dict, case_number: str, target_name: str, doc_entries: list[int]) -> str:
+        # Best-effort caption (no awaits)
+        cap = case.get("_cached_caption")
+        if not cap:
+            try:
+                parties = case.get("parties") or {}
+                pls = parties.get("plaintiffs") or []
+                dfs = parties.get("defendants") or []
+                left = (pls[0].get("name") if pls else None) or str(case.get("plaintiff", "Unknown"))
+                right = (dfs[0].get("name") if dfs else None) or str(case.get("defendant", "Unknown"))
+                style = (case.get("caption") or {}).get("style", "v").lower()
+                cap = f"In re {left}" if style == "in_re" else f"{left} v. {right}"
+            except Exception:
+                cap = "Unknown v. Unknown"
+            case["_cached_caption"] = cap
+
+        bullets = []
+        filings = case.get("filings") or []
+        for n in doc_entries:
+            try:
+                f = next(f for f in filings if f.get("entry") == n)
+            except StopIteration:
+                continue
+            title = f.get("document_type", "Document")
+            ch = f.get("channel_id")
+            mid = f.get("message_id")
+            if ch and mid:
+                bullets.append(f"- Entry {n}: **{title}** — {self._jump_link(ch, mid, guild.id)}")
+            else:
+                bullets.append(f"- Entry {n}: **{title}**")
+
+        docs_section = "\n".join(bullets) if bullets else "_(no links available)_"
+        return (
+            f"**SERVICE OF PROCESS**\n"
+            f"Case: **{cap}**, `{case_number}`\n"
+            f"To: **{target_name}**\n\n"
+            f"You are hereby served with the following filings. Deadlines run from the time of this notice unless otherwise ordered.\n\n"
+            f"**Included documents:**\n{docs_section}\n\n"
+            f"— Sent by authority of the Court’s electronic filing system."
         )
 
-        # Notify defendant
-        served_publicly = False
-        if method.value in ["mention", "both"]:
-            channel_id = COURT_STEPS_CHANNEL_ID  # public place to post
-            channel = self.bot.get_channel(channel_id)
-            if channel:
-                await channel.send(f"{defendant.mention}\n{service_notice}")
-                served_publicly = True
 
-        if method.value in ["dm", "both"]:
+    @court.command(name="serve", description="Serve a party and auto-docket proof (DM + Public Post by default)")
+    @app_commands.choices(deliver=[
+        app_commands.Choice(name="Both (DM + Public Post)", value="both"),
+        app_commands.Choice(name="Direct Message only", value="dm"),
+        app_commands.Choice(name="Public Post only", value="post"),
+    ])
+    @app_commands.describe(
+        case_number="Case number",
+        deliver="How to serve (default: Both)",
+        party_user="(Option A) Discord member to serve",
+        party="(Option B) Non-user party (pick from autocomplete)",
+        channel="If Public Post, where to post (defaults to case’s venue)",
+        documents="Comma-separated docket entry numbers to include (default: 1 = Complaint)"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete, party=party_autocomplete)
+    async def serve(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        deliver: app_commands.Choice[str] = None,
+        party_user: discord.Member | None = None,
+        party: str | None = None,
+        channel: discord.TextChannel | None = None,
+        documents: str | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+        deliver_mode = (deliver.value if deliver else "both")
+
+        case = self.court_data.get(case_number)
+        if not isinstance(case, dict):
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+
+        # exactly one of party_user or party
+        if (party_user is None) == (party is None):
+            return await interaction.followup.send("❌ Specify either `party_user` or `party`.", ephemeral=True)
+
+        # resolve party record
+        target = None
+        if party_user:
+            for side in ("plaintiffs", "defendants"):
+                for p in (case.get("parties", {}).get(side) or []):
+                    if p.get("kind") == "user" and int(p.get("id", 0)) == int(party_user.id):
+                        target = p; break
+                if target: break
+            if not target:
+                return await interaction.followup.send("❌ That user is not listed as a party in this case.", ephemeral=True)
+        else:
+            pid = party.removeprefix("pid:") if party and party.startswith("pid:") else None
+            if not pid:
+                return await interaction.followup.send("❌ Invalid party selection.", ephemeral=True)
+            for side in ("plaintiffs", "defendants"):
+                for p in (case.get("parties", {}).get(side) or []):
+                    if p.get("pid") == pid:
+                        target = p; break
+                if target: break
+            if not target:
+                return await interaction.followup.send("❌ That party is not listed in this case.", ephemeral=True)
+
+        target_name = target.get("name") or (party_user.display_name if party_user else "Unknown")
+        is_user_party = (target.get("kind") == "user" and target.get("id") is not None)
+
+        # which filings to include (default: entry 1)
+        try:
+            doc_list = [int(x.strip()) for x in (documents or "1").split(",") if x.strip()]
+        except ValueError:
+            return await interaction.followup.send("❌ `documents` must be entry numbers like `1, 2, 4`.", ephemeral=True)
+
+        # Build packet text
+        packet = self._build_service_packet_text(interaction.guild, case, case_number, target_name, doc_list)
+
+        target_chan = channel or COURT_STEPS_CHANNEL_ID
+
+        # Record attempts
+        attempts = []
+
+        # 1) DM attempt (only for user parties) — do unless deliver == "post"
+        if is_user_party and party_user and deliver_mode in ("both", "dm"):
             try:
-                await defendant.send(service_notice)
-            except discord.Forbidden:
-                if not served_publicly:
-                    await interaction.followup.send("❌ Could not DM the defendant and no public mention made.", ephemeral=True)
-                    return
+                dm_msg = await party_user.send(packet, allowed_mentions=discord.AllowedMentions.none())
+                attempts.append({
+                    "method": "dm",
+                    "ok": True,
+                    "channel_id": dm_msg.channel.id,
+                    "message_id": dm_msg.id,
+                    "link": self._jump_link(dm_msg.channel.id, dm_msg.id, None),
+                })
+            except discord.Forbidden as e:
+                attempts.append({"method": "dm", "ok": False, "error": "DMs closed"})
+            except Exception as e:
+                attempts.append({"method": "dm", "ok": False, "error": f"{type(e).__name__}: {e}"})
 
-        # Record service
-        service_data = case.setdefault("service", {})
-        service_data[str(defendant.id)] = {
-            "method": method.value,
-            "served_at": datetime.now(UTC).isoformat(),
-            "served_by": interaction.user.id
+        # 2) Public Post (always for non-users; for users unless deliver == "dm")
+        public_needed = (deliver_mode in ("both", "post")) or (not is_user_party)
+        post_link = None
+        thread_id = None
+        if public_needed:
+            if not target_chan:
+                return await interaction.followup.send("❌ No channel available for public posting. Specify `channel:`.", ephemeral=True)
+            header = f"**Service of Process — {case_number} — {target_name}**"
+            anchor = await target_chan.send(header, allowed_mentions=discord.AllowedMentions.none())
+            thread = await target_chan.create_thread(
+                name=f"Service: {case_number} — {target_name}",
+                message=anchor,
+                auto_archive_duration=10080
+            )
+            msg = await thread.send(packet, allowed_mentions=discord.AllowedMentions.none())
+            post_link = self._jump_link(thread.id, msg.id, interaction.guild.id)
+            thread_id = thread.id
+            attempts.append({
+                "method": "post",
+                "ok": True,
+                "channel_id": thread.id,
+                "message_id": msg.id,
+                "link": post_link,
+            })
+
+        # Persist service status keyed by party PID
+        svc = case.setdefault("service", {})
+        svc[target["pid"]] = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "by": interaction.user.id,
+            "attempts": attempts,
         }
 
-        # Update status
-        case["status"] = "ready_for_response"
+        # Docket one consolidated Proof of Service
+        lines = []
+        dm_att = next((a for a in attempts if a["method"] == "dm"), None)
+        post_att = next((a for a in attempts if a["method"] == "post"), None)
+        if dm_att:
+            lines.append(f"- DM: {('OK — ' + dm_att['link']) if dm_att.get('ok') else ('FAILED — ' + dm_att.get('error',''))}")
+        if post_att:
+            lines.append(f"- Public Thread: OK — {post_att['link']}")
+        proof_text = "Proofs:\n" + "\n".join(lines) if lines else "No proof links available."
 
-        # Add docket entry
         filings = case.setdefault("filings", [])
-        entry_num = len(filings) + 1
-        timestamp = datetime.now(UTC).isoformat()
         filings.append({
-            "entry": entry_num,
+            "entry": len(filings) + 1,
             "document_type": "Proof of Service",
             "author": interaction.user.name,
             "author_id": interaction.user.id,
-            "content": f"Served {defendant.display_name} via {method.name}.",
-            "timestamp": timestamp
+            "timestamp": datetime.now(UTC).isoformat(),
+            "content": f"Served **{target_name}** by **{'DM and Public Post' if (dm_att and post_att) else ('DM' if dm_att else 'Public Post')}**.\n{proof_text}",
+            "related_to": min(doc_list) if doc_list else None,
+            "channel_id": (post_att or dm_att or {}).get("channel_id"),
+            "message_id": (post_att or dm_att or {}).get("message_id"),
         })
 
         save_json(COURT_FILE, self.court_data)
 
-        await interaction.followup.send(f"✅ {defendant.display_name} has been served via {method.name}. Docket updated (Entry {entry_num}).", ephemeral=True)
+        # Confirm with links
+        confirm_bits = []
+        if dm_att:
+            confirm_bits.append("DM " + ("✅" if dm_att["ok"] else "❌"))
+        if post_att:
+            confirm_bits.append("Public Post ✅")
+        await interaction.followup.send(
+            "✅ Service recorded: " + ", ".join(confirm_bits) + (f"\nPublic thread: {post_link}" if post_link else ""),
+            ephemeral=True
+        )
+
+
+
+    
+
+    
+    def _find_party_by_pid(self, case: dict, pid: str) -> dict | None:
+        for side in ("plaintiffs", "defendants"):
+            for p in (case.get("parties", {}).get(side) or []):
+                if p.get("pid") == pid:
+                    return p
+        return None
+
+    def _find_party_by_user(self, case: dict, user_id: int) -> dict | None:
+        for side in ("plaintiffs", "defendants"):
+            for p in (case.get("parties", {}).get(side) or []):
+                if p.get("kind") == "user" and int(p.get("id", 0)) == int(user_id):
+                    return p
+        return None
+
 
     @court.command(name="notice_of_appearance", description="File a Notice of Appearance in a case")
     @app_commands.describe(
         case_number="The case in which you are appearing",
-        party="The party you are representing (must be named in the case)"
+        party_user="(Option A) The Discord member you represent",
+        party="(Option B) A non-user party; pick from suggestions"
     )
-    @app_commands.autocomplete(case_number=case_autocomplete)
-    async def notice_of_appearance(self, interaction: discord.Interaction, case_number: str, party: discord.Member):
+    @app_commands.autocomplete(case_number=case_autocomplete, party=party_autocomplete)
+    async def notice_of_appearance(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        party_user: discord.Member | None = None,
+        party: str | None = None,
+    ):
         await interaction.response.defer(ephemeral=True)
-
         case = self.court_data.get(case_number)
-        if not case:
-            await interaction.followup.send("❌ Case not found.", ephemeral=True)
-            return
+        if not isinstance(case, dict):
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
 
-        valid_parties = [case.get("plaintiff"), case.get("defendant")] + case.get("additional_defendants", [])
-        if str(party.id) not in map(str, valid_parties):
-            await interaction.followup.send("❌ That user is not a listed party in this case.", ephemeral=True)
-            return
+        # require exactly one
+        if (party_user is None) == (party is None):
+            return await interaction.followup.send("❌ Specify either `party_user` or `party`.", ephemeral=True)
 
-        # Save appearance
-        counsel_map = case.setdefault("counsel_of_record", {})
-        counsel_map[str(party.id)] = interaction.user.id
+        # resolve to a party record
+        target = None
+        if party_user:
+            target = self._find_party_by_user(case, party_user.id)
+        else:
+            pid = party.removeprefix("pid:") if party and party.startswith("pid:") else None
+            if pid:
+                target = self._find_party_by_pid(case, pid)
+            else:
+                # fallback by exact name match
+                for side in ("plaintiffs", "defendants"):
+                    for p in (case.get("parties", {}).get(side) or []):
+                        if (p.get("name") or "") == (party or ""):
+                            target = p; break
+                    if target: break
 
-        # Add to docket
+        if not target:
+            return await interaction.followup.send("❌ That party is not listed in this case.", ephemeral=True)
+
+        # write counsel mappings
+        case.setdefault("counsel_by_pid", {})[target["pid"]] = interaction.user.id
+        if target.get("kind") == "user" and target.get("id"):
+            case.setdefault("counsel_of_record", {})[str(target["id"])] = interaction.user.id  # legacy compat
+
+        # docket entry
         filings = case.setdefault("filings", [])
-        entry = len(filings) + 1
-        timestamp = datetime.now(UTC).isoformat()
-        party_name = await self.try_get_display_name(interaction.guild, party.id)
-        author_name = await self.try_get_display_name(interaction.guild, interaction.user.id)
-
         filings.append({
-            "entry": entry,
+            "entry": len(filings) + 1,
             "document_type": "Notice of Appearance",
             "author": interaction.user.name,
             "author_id": interaction.user.id,
-            "content": f"{author_name} appeared on behalf of {party_name}.",
-            "timestamp": timestamp
+            "timestamp": datetime.now(UTC).isoformat(),
+            "content": f"{(await self.try_get_display_name(interaction.guild, interaction.user.id))} appeared on behalf of {target.get('name')}.",
         })
-
         save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(f"✅ Appearance noted for **{target.get('name')}**.", ephemeral=True)
 
-        await interaction.followup.send(f"✅ {author_name} has appeared on behalf of {party_name} in {case_number}.", ephemeral=True)
 
     
     @court.command(name="schedule", description="Schedule a conference, hearing, or trial")
