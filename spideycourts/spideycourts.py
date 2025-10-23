@@ -1943,11 +1943,8 @@ class SpideyCourts(commands.Cog):
             agent_name=agent_name
         )
 
-        # venue for public post
-        venue_key = case.get("venue")
-        venue_channel_id = VENUE_CHANNEL_MAP.get(venue_key)
-        venue_channel = self.bot.get_channel(venue_channel_id) if venue_channel_id else None
-        target_chan = channel or venue_channel
+
+        target_chan = channel or self.bot.get_channel(COURT_STEPS_CHANNEL_ID)
 
         attempts = []
         dm_target_user = None
@@ -1980,9 +1977,12 @@ class SpideyCourts(commands.Cog):
                 attempts.append({"method": "dm", "ok": False, "error": f"{type(e).__name__}: {e}", "target": ("agent" if agent_is_user else "party")})
 
         # 2) Public Post (always for non-users; for users unless deliver == "dm")
+        # 2) Public Post (always for non-users; for users unless deliver == "dm")
         public_needed = (deliver_mode in ("both", "post")) or (not dm_target_user)
         post_link = None
         thread_id = None
+
+        # Build header text
         post_header = f"**Service of Process — {case_number} — "
         if agent_name:
             post_header += f"{agent_name} ({relation_val} for {party_name})**"
@@ -1992,13 +1992,33 @@ class SpideyCourts(commands.Cog):
         if public_needed:
             if not target_chan:
                 return await interaction.followup.send("❌ No channel available for public posting. Specify `channel:`.", ephemeral=True)
-            anchor = await target_chan.send(post_header, allowed_mentions=discord.AllowedMentions.none())
+
+            # Decide who to ping: the party_user and/or party_agent_user
+            users_to_ping = []
+            if is_user_party and party_user:
+                users_to_ping.append(party_user)
+            if party_agent_user:
+                users_to_ping.append(party_agent_user)
+
+            # De-dupe and build mention line + whitelist
+            users_to_ping = list({u.id: u for u in users_to_ping}.values())
+            mention_line = " ".join(u.mention for u in users_to_ping)
+            allowed = discord.AllowedMentions(users=users_to_ping, roles=False, everyone=False) if users_to_ping else discord.AllowedMentions.none()
+
+            # Anchor with (optional) pings
+            anchor = await target_chan.send(
+                post_header + (f"\n{mention_line}" if mention_line else ""),
+                allowed_mentions=allowed
+            )
+
+            # Thread + packet (no mentions to avoid double pings)
             thread = await target_chan.create_thread(
                 name=f"Service: {case_number} — {party_name}",
                 message=anchor,
                 auto_archive_duration=10080
             )
             msg = await thread.send(packet, allowed_mentions=discord.AllowedMentions.none())
+
             post_link = self._jump_link(thread.id, msg.id, interaction.guild.id)
             thread_id = thread.id
             attempts.append({
@@ -2009,6 +2029,7 @@ class SpideyCourts(commands.Cog):
                 "link": post_link,
                 "target": ("agent" if agent_name else "party"),
             })
+
 
         # Persist service status keyed by party PID
         svc = case.setdefault("service", {})
