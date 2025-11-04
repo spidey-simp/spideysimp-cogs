@@ -38,7 +38,7 @@ def title(s: str) -> str:
 class Dictionary(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.session = Optional[ClientSession] = None
+        self.session = None
         try:
             self._wordlist = wordfreq.top_n_list('en', 60000)
         except Exception:
