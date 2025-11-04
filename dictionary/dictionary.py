@@ -67,48 +67,61 @@ class Dictionary(commands.Cog):
         except Exception as e:
             return {"error": {"title": "Error", "message": str(e)}}
                 
-    def fold_entries(self, data: list) -> Tuple[Dict[str, List[dict]], List[dict], List[str]]:
+    def fold_entries(self, data: list) -> tuple[dict[str, list[dict]], list[dict], list[str]]:
         """Return (by_pos, phonetics, sources).
-        by_pos maps canonical pos -> list of {'definition': str, 'example': Optional[str]}
-        phonetics is the concatenated phonetics arrays from entries
-        sources is a list of sourceUrls
-        """
-        by_pos: Dict[str, List[dict]] = {}
-        phonetics: List[dict] = []
-        sources: List[str] = []
 
+        by_pos maps canonical pos -> list of dicts with:
+            - definition: str
+            - example: Optional[str]
+            - synonyms: list[str]
+            - antonyms: list[str]
+        """
+        by_pos: dict[str, list[dict]] = {}
+        phonetics: list[dict] = []
+        sources: list[str] = []
 
         for entry in data:
-            phonetics.extend(entry.get("phonetics", []) or [])
-            for url in entry.get("sourceUrls", []) or []:
+            phonetics.extend(entry.get("phonetics") or [])
+            for url in entry.get("sourceUrls") or []:
                 if url not in sources:
                     sources.append(url)
-            for meaning in entry.get("meanings", []) or []:
+
+            for meaning in entry.get("meanings") or []:
                 pos = normalize_pos(meaning.get("partOfSpeech", "other"))
-                defs = meaning.get("definitions", []) or []
-                for d in defs:
-                    item = {"definition": d.get("definition", ""), "example": d.get("example")}
-                    by_pos.setdefault(pos, []).append(item)
+                m_syn = set(meaning.get("synonyms") or [])
+                m_ant = set(meaning.get("antonyms") or [])
+                for d in (meaning.get("definitions") or []):
+                    syns = set(d.get("synonyms") or []) | m_syn
+                    ants = set(d.get("antonyms") or []) | m_ant
+                    by_pos.setdefault(pos, []).append({
+                        "definition": d.get("definition", ""),
+                        "example": d.get("example"),
+                        "synonyms": sorted(syns) if syns else [],
+                        "antonyms": sorted(ants) if ants else [],
+                    })
+
         return by_pos, phonetics, sources
+
     
     def _format_def_lines(
         self,
         defs: list[dict],
         *,
         start_index: int = 1,
-        style: str = "numbers",      # "numbers" or "bullets"
-        examples: int = 2,           # how many examples to inline
-        max_chars: int = 1000        # stay under Discord field cap
+        style: str = "numbers",   # "numbers" or "bullets"
+        examples: int = 2,        # how many examples to include
+        max_chars: int = 1000     # stay under Discord field cap
     ) -> tuple[str, int]:
         lines: list[str] = []
         idx = start_index
         for i, d in enumerate(defs):
             prefix = f"{idx}. " if style == "numbers" else "• "
-            line = f"{prefix}{d['definition']}"
-            if i < examples and d.get("example"):
-                ex = d["example"].strip()
+            line = f"{prefix}{d.get('definition','')}"
+            if i < examples and (ex := d.get("example")):
+                ex = ex.strip()
                 if len(ex) > 140:
                     ex = ex[:137] + "…"
+                # separate line for example
                 line += f"\n    _e.g., {ex}_"
             tentative = "\n".join(lines + [line])
             if len(tentative) > max_chars:
@@ -117,20 +130,22 @@ class Dictionary(commands.Cog):
             idx += 1
         return "\n".join(lines), idx
 
+
     
     def build_summary_embed(
         self,
         word: str,
-        by_pos: Dict[str, List[dict]],
-        phonetics: List[dict],
-        sources: List[str],
-        pos_filter: Optional[str] = None,
+        by_pos: dict[str, list[dict]],
+        phonetics: list[dict],
+        sources: list[str],
+        *,
+        pos_filter: str | None = None,
         per_pos_limit: int = 8,
-        ) -> discord.Embed:
+        list_style: str = "numbers",
+    ) -> discord.Embed:
         e = discord.Embed(title=f"Definition of {word}", color=discord.Color.blurple())
 
-
-        # phonetic + one audio
+        # one phonetic + one audio, if present
         text_phon = next((p.get("text") for p in phonetics if p.get("text")), None)
         audio = next((p.get("audio") for p in phonetics if p.get("audio")), None)
         if text_phon:
@@ -138,45 +153,65 @@ class Dictionary(commands.Cog):
         if audio:
             e.add_field(name="Audio", value=audio, inline=False)
 
-
         keys = [pos_filter] if pos_filter else sorted(by_pos.keys())
         added_any = False
+
+        def _dedup(seq):
+            seen=set(); out=[]
+            for x in seq:
+                if x and x not in seen:
+                    seen.add(x); out.append(x)
+            return out
+
         for pos in keys:
             defs = by_pos.get(pos, [])
             if not defs:
                 continue
             added_any = True
+
             shown = defs[:per_pos_limit]
             value, _ = self._format_def_lines(
-                shown, start_index=1, style="numbers", examples=2, max_chars=1000
+                shown, start_index=1, style=list_style, examples=2, max_chars=1000
             )
             extra = len(defs) - len(shown)
             if extra > 0:
                 value += f"\n(+{extra} more)"
             e.add_field(name=title(pos), value=value or "—", inline=False)
 
+            # POS-level synonyms/antonyms (compact)
+            syns = _dedup([s for it in defs for s in (it.get("synonyms") or [])])[:12]
+            ants = _dedup([a for it in defs for a in (it.get("antonyms") or [])])[:12]
+            if syns:
+                syn_str = ", ".join(syns)
+                if len(syn_str) > 1000: syn_str = syn_str[:997] + "…"
+                e.add_field(name=f"{title(pos)} — Synonyms", value=syn_str, inline=False)
+            if ants:
+                ant_str = ", ".join(ants)
+                if len(ant_str) > 1000: ant_str = ant_str[:997] + "…"
+                e.add_field(name=f"{title(pos)} — Antonyms", value=ant_str, inline=False)
 
         if not added_any:
             e.description = "No definitions found for the requested part of speech."
 
-
         if sources:
             e.set_footer(text="Source: " + ", ".join(sources[:2]))
-
         return e
+
 
     def build_pages(
         self,
         word: str,
-        by_pos: Dict[str, List[dict]],
-        phonetics: List[dict],
-        sources: List[str],
-        pos_filter: Optional[str] = None,
+        by_pos: dict[str, list[dict]],
+        phonetics: list[dict],
+        sources: list[str],
+        *,
+        pos_filter: str | None = None,
         budget: int = 5200,
         max_fields: int = 20,
         defs_per_field: int = 8,
-    ) -> List[discord.Embed]:
-        pages: List[discord.Embed] = []
+        list_style: str = "numbers",
+    ) -> list[discord.Embed]:
+        pages: list[discord.Embed] = []
 
         # One-time top info for the very first page only
         def apply_top_info(embed: discord.Embed, first_page: bool) -> None:
@@ -190,6 +225,13 @@ class Dictionary(commands.Cog):
             if sources:
                 embed.set_footer(text="Source: " + ", ".join(sources[:2]))
 
+        def _dedup(seq):
+            seen=set(); out=[]
+            for x in seq:
+                if x and x not in seen:
+                    seen.add(x); out.append(x)
+            return out
+
         pos_keys = [pos_filter] if pos_filter else sorted(by_pos.keys())
         first = True
         for pos in pos_keys:
@@ -197,7 +239,8 @@ class Dictionary(commands.Cog):
             if not defs:
                 continue
 
-            chunk_fields: List[Tuple[str, str]] = []
+            index = 1  # continue numbering across fields/pages for this POS
+            chunk_fields: list[tuple[str, str]] = []
             char_count = 0
             fields_used = 0
 
@@ -208,20 +251,31 @@ class Dictionary(commands.Cog):
                 embed = discord.Embed(title=f"{word} — {title(pos)}", color=discord.Color.blurple())
                 for name, value in chunk_fields:
                     embed.add_field(name=name, value=value, inline=False)
+
+                # On the first page for this POS, include synonyms/antonyms
+                if first:
+                    syns = _dedup([s for it in defs for s in (it.get("synonyms") or [])])[:12]
+                    ants = _dedup([a for it in defs for a in (it.get("antonyms") or [])])[:12]
+                    if syns:
+                        syn_str = ", ".join(syns)
+                        if len(syn_str) > 1000: syn_str = syn_str[:997] + "…"
+                        embed.add_field(name=f"{title(pos)} — Synonyms", value=syn_str, inline=False)
+                    if ants:
+                        ant_str = ", ".join(ants)
+                        if len(ant_str) > 1000: ant_str = ant_str[:997] + "…"
+                        embed.add_field(name=f"{title(pos)} — Antonyms", value=ant_str, inline=False)
+
                 apply_top_info(embed, first)
                 pages.append(embed)
                 chunk_fields, char_count, fields_used = [], 0, 0
                 first = False
 
-            index = 1
-            # Make fields of defs_per_field items
             for i in range(0, len(defs), defs_per_field):
                 items = defs[i:i + defs_per_field]
                 value, index = self._format_def_lines(
-                    items, start_index=index, style="numbers", examples=0, max_chars=1000
+                    items, start_index=index, style=list_style, examples=0, max_chars=1000
                 )
                 name = f"{title(pos)} {i // defs_per_field + 1}"
-
                 need = len(name) + len(value)
                 if fields_used + 1 > max_fields or char_count + need > budget:
                     flush()
@@ -234,6 +288,7 @@ class Dictionary(commands.Cog):
         if not pages:
             pages.append(discord.Embed(description="No definitions found."))
         return pages
+
 
     
     class DefinitionPaginator(discord.ui.View):
@@ -337,6 +392,7 @@ class Dictionary(commands.Cog):
         mode: str = "summary",
         truncate: bool = True,
         max_embeds: int = 3,
+        list_style: str = "numbers",
     ) -> None:
         await interaction.response.defer(thinking=True)
         word_l = word.strip().lower()
@@ -380,14 +436,15 @@ class Dictionary(commands.Cog):
 
 
         if mode == "summary":
-            embed = self.build_summary_embed(word_l, by_pos, phonetics, sources, pos_filter=pos_filter)
+            embed = self.build_summary_embed(word_l, by_pos, phonetics, sources,
+                                         pos_filter=pos_filter, list_style=list_style)
             await interaction.followup.send(embed=embed)
             return
 
 
         # Full mode
-        pages = self.build_pages(word_l, by_pos, phonetics, sources, pos_filter=pos_filter)
-
+        pages = self.build_pages(word_l, by_pos, phonetics, sources,
+                             pos_filter=pos_filter, list_style=list_style)
 
         if truncate or len(pages) > 5:
             # Use paginator (always better UX for many pages)
