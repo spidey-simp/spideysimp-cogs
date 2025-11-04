@@ -159,11 +159,10 @@ class Dictionary(commands.Cog):
         budget: int = 5200,
         max_fields: int = 20,
         defs_per_field: int = 8,
-        ) -> List[discord.Embed]:
+    ) -> List[discord.Embed]:
         pages: List[discord.Embed] = []
 
-
-    # One-time top info for the very first page only
+        # One-time top info for the very first page only
         def apply_top_info(embed: discord.Embed, first_page: bool) -> None:
             if first_page:
                 text_phon = next((p.get("text") for p in phonetics if p.get("text")), None)
@@ -175,7 +174,6 @@ class Dictionary(commands.Cog):
             if sources:
                 embed.set_footer(text="Source: " + ", ".join(sources[:2]))
 
-
         pos_keys = [pos_filter] if pos_filter else sorted(by_pos.keys())
         first = True
         for pos in pos_keys:
@@ -183,50 +181,42 @@ class Dictionary(commands.Cog):
             if not defs:
                 continue
 
-
             chunk_fields: List[Tuple[str, str]] = []
             char_count = 0
             fields_used = 0
 
-
             def flush() -> None:
-                    nonlocal chunk_fields, char_count, fields_used, first
-                    if not chunk_fields:
-                        return
-                    embed = discord.Embed(title=f"{word} — {title(pos)}", color=discord.Color.blurple())
-                    for name, value in chunk_fields:
-                        embed.add_field(name=name, value=value, inline=False)
-                    apply_top_info(embed, first)
-                    pages.append(embed)
-                    chunk_fields, char_count, fields_used = [], 0, 0
-                    first = False
+                nonlocal chunk_fields, char_count, fields_used, first
+                if not chunk_fields:
+                    return
+                embed = discord.Embed(title=f"{word} — {title(pos)}", color=discord.Color.blurple())
+                for name, value in chunk_fields:
+                    embed.add_field(name=name, value=value, inline=False)
+                apply_top_info(embed, first)
+                pages.append(embed)
+                chunk_fields, char_count, fields_used = [], 0, 0
+                first = False
 
-
-                # Make fields of defs_per_field items
+            # Make fields of defs_per_field items
             for i in range(0, len(defs), defs_per_field):
-                    items = defs[i:i + defs_per_field]
-                    text = []
-                    for d in items:
-                        line = f"• {d['definition']}"
-                        text.append(line)
-                    value = "\n".join(text)
-                    if len(value) > 1000:
-                        value = value[:997] + "…"
-                    name = f"{title(pos)} {i // defs_per_field + 1}"
-                    need = len(name) + len(value)
-                    if fields_used + 1 > max_fields or char_count + need > budget:
-                        flush()
-                    chunk_fields.append((name, value))
-                    fields_used += 1
-                    char_count += need
-
+                items = defs[i:i + defs_per_field]
+                value = "\n".join(f"• {d['definition']}" for d in items)
+                if len(value) > 1000:
+                    value = value[:997] + "…"
+                name = f"{title(pos)} {i // defs_per_field + 1}"
+                need = len(name) + len(value)
+                if fields_used + 1 > max_fields or char_count + need > budget:
+                    flush()
+                chunk_fields.append((name, value))
+                fields_used += 1
+                char_count += need
 
             flush()
-
 
         if not pages:
             pages.append(discord.Embed(description="No definitions found."))
         return pages
+
     
     class DefinitionPaginator(discord.ui.View):
         def __init__(self, pages: List[discord.Embed], *, timeout: float = 120):
@@ -325,8 +315,8 @@ class Dictionary(commands.Cog):
         self,
         interaction: discord.Interaction,
         word: str,
-        pos: Optional[app_commands.Choice[str]] = None,
-        mode: app_commands.Choice[str] = MODE_CHOICES[0],
+        pos: Optional[str] = None,
+        mode: str = "summary",
         truncate: bool = True,
         max_embeds: int = 3,
     ) -> None:
@@ -362,7 +352,7 @@ class Dictionary(commands.Cog):
 
         # Parse list of entries
         by_pos, phonetics, sources = self.fold_entries(data) # type: ignore[arg-type]
-        pos_filter = normalize_pos(pos.value) if pos else None
+        pos_filter = normalize_pos(pos) if pos else None
         if pos_filter:
             # filter to selected pos only
             by_pos = {k: v for (k, v) in by_pos.items() if normalize_pos(k) == pos_filter}
@@ -371,7 +361,7 @@ class Dictionary(commands.Cog):
                 return
 
 
-        if mode.value == "summary":
+        if mode == "summary":
             embed = self.build_summary_embed(word_l, by_pos, phonetics, sources, pos_filter=pos_filter)
             await interaction.followup.send(embed=embed)
             return
