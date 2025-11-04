@@ -154,7 +154,6 @@ class Dictionary(commands.Cog):
             if extra > 0:
                 value += f"\n(+{extra} more)"
             e.add_field(name=title(pos), value=value or "—", inline=False)
-            e=value or "—", inline=False)
 
 
         if not added_any:
