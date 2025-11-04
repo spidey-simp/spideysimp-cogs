@@ -91,6 +91,33 @@ class Dictionary(commands.Cog):
                     by_pos.setdefault(pos, []).append(item)
         return by_pos, phonetics, sources
     
+    def _format_def_lines(
+        self,
+        defs: list[dict],
+        *,
+        start_index: int = 1,
+        style: str = "numbers",      # "numbers" or "bullets"
+        examples: int = 2,           # how many examples to inline
+        max_chars: int = 1000        # stay under Discord field cap
+    ) -> tuple[str, int]:
+        lines: list[str] = []
+        idx = start_index
+        for i, d in enumerate(defs):
+            prefix = f"{idx}. " if style == "numbers" else "• "
+            line = f"{prefix}{d['definition']}"
+            if i < examples and d.get("example"):
+                ex = d["example"].strip()
+                if len(ex) > 140:
+                    ex = ex[:137] + "…"
+                line += f"\n    _e.g., {ex}_"
+            tentative = "\n".join(lines + [line])
+            if len(tentative) > max_chars:
+                break
+            lines.append(line)
+            idx += 1
+        return "\n".join(lines), idx
+
+    
     def build_summary_embed(
         self,
         word: str,
@@ -120,24 +147,14 @@ class Dictionary(commands.Cog):
                 continue
             added_any = True
             shown = defs[:per_pos_limit]
-            # build bullet list, include examples for first 1-2 items if space allows
-            bullets: List[str] = []
-            for i, d in enumerate(shown):
-                line = f"• {d['definition']}"
-                if i < 2 and d.get("example"):
-                    ex = d["example"].strip()
-                    # keep examples short
-                    if len(ex) > 140:
-                        ex = ex[:137] + "…"
-                    line += f"\n _e.g., {ex}_"
-                bullets.append(line)
-            value = "\n".join(bullets)
-            if len(value) > 1000:
-                value = value[:997] + "…"
+            value, _ = self._format_def_lines(
+                shown, start_index=1, style="numbers", examples=2, max_chars=1000
+            )
             extra = len(defs) - len(shown)
             if extra > 0:
                 value += f"\n(+{extra} more)"
             e.add_field(name=title(pos), value=value or "—", inline=False)
+            e=value or "—", inline=False)
 
 
         if not added_any:
@@ -197,13 +214,15 @@ class Dictionary(commands.Cog):
                 chunk_fields, char_count, fields_used = [], 0, 0
                 first = False
 
+            index = 1
             # Make fields of defs_per_field items
             for i in range(0, len(defs), defs_per_field):
                 items = defs[i:i + defs_per_field]
-                value = "\n".join(f"• {d['definition']}" for d in items)
-                if len(value) > 1000:
-                    value = value[:997] + "…"
+                value, index = self._format_def_lines(
+                    items, start_index=index, style="numbers", examples=0, max_chars=1000
+                )
                 name = f"{title(pos)} {i // defs_per_field + 1}"
+
                 need = len(name) + len(value)
                 if fields_used + 1 > max_fields or char_count + need > budget:
                     flush()
