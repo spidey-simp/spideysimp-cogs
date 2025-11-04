@@ -3,7 +3,7 @@ import asyncio
 import discord
 from discord import app_commands
 from discord.ext import tasks
-from discord import Object
+from matplotlib import lines
 from redbot.core import commands
 import json
 import os
@@ -15,7 +15,6 @@ import re
 import random
 from dataclasses import dataclass, asdict
 import time, uuid
-import io, re, json
 from typing import Optional
 
 
@@ -77,6 +76,25 @@ PROCEEDING_TYPES = [
 "Other"
 ]
 
+CASE_KEY_RX = re.compile(r'^\d+:\d{2}-(cv|cr)-\d{6}-[A-Z]+$')
+
+def _next_case_seq_scan(self) -> int:
+    """Scan existing keys and return next sequential 6-digit docket number."""
+    max_seq = 0
+    for k in self.court_data.keys():
+        if not isinstance(k, str):
+            continue
+        m = CASE_KEY_RX.match(k)
+        if m:
+            # k looks like "1:25-cv-000123-SS"
+            try:
+                seq = int(k.split('-')[2])
+                if seq > max_seq:
+                    max_seq = seq
+            except Exception:
+                continue
+    return max_seq + 1
+
 REPORTER_KEY = "_reporter"
 
 # How big a “page” is (must be < 2000)
@@ -102,18 +120,38 @@ REPORTERS = {
 }
 
 # Bluebook-ish court parentheticals (you can tweak anytime)
-COURT_PAREN = {
-    # Supreme — not used (S.R. itself implies Supreme), kept here for completeness
-    "ssc": {"long": "S.S.C.", "short": "S.S.C."},
-
-    # Circuit
-    "first_circuit": {"long": "1st Cir.", "short": "1st Cir."},
-
-    # Districts — customize these to your taste
-    "gen_chat":      {"long": "D. Commons", "short": "D.C."},
-    "public_square": {"long": "D. Dist. Parker",  "short": "D.D.P."},
-    "swgoh":         {"long": "D. Gaming",     "short": "D.G."},
+VENUE_PAREN = {
+    "public_square": "D.D.P.",      # District Court for the District of Parker
+    "gen_chat":      "D. Commons",  # Commons District Court
+    "swgoh":         "D. Gaming",   # Gaming District Court
+    "first_circuit": "1st Cir.",
+    "ssc":           "",            # Supreme Court: often year only
 }
+
+VENUE_DIVISION = {
+    "public_square": "Spideyton Div.",  # include only if you want division shown
+}
+
+def _court_parenthetical(self, *, case: dict, reporter_key: str | None = None,
+                        override: str | None = None) -> str:
+    if override:
+        return override
+    year = datetime.now(UTC).year
+    venue = (case or {}).get("venue")
+
+    # Supreme: prefer just the year unless you want an explicit court label
+    if venue == "ssc" or (reporter_key == "supreme"):
+        court = ""  # or "S.R. Sup. Ct." if you want it spelled out
+        return f"({(court + ' ') if court else ''}{year})"
+
+    court = VENUE_PAREN.get(venue, "D. ???")
+    return f"({court} {year})"
+
+
+
+
+
+
 
 GOV_DEFAULTS = {
     "country": "The Spidey Republic",
@@ -307,6 +345,8 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         *,
         criminal: bool = False,
         government: str | None = None,
+        original_jurisdiction: bool = False,
+        oj_basis: str | None = None,
     ):
         super().__init__()
         self.bot = bot
@@ -314,7 +354,9 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         self.plaintiff = plaintiff
         self.defendant = defendant
         self.criminal = bool(criminal)
-        self.government = government
+        self.government = government 
+        self.original_jurisdiction = bool(original_jurisdiction)
+        self.oj_basis = oj_basis
 
         self.statutes_at_issue = discord.ui.TextInput(
             label="Statutes at Issue (optional)",
@@ -395,11 +437,15 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         # 2) Case number with proper type
         typ = "cr" if self.criminal else "cv"
         court_data = self.bot.get_cog("SpideyCourts").court_data
-        case_number = f"1:{interaction.created_at.year % 100:02d}-{typ}-{len(court_data)+1:06d}-{JUDGE_INITS.get(self.venue, 'SS')}"
+        judge_inits = None if self.venue == "ssc" else JUDGE_INITS.get(self.venue, "SS")
+        seq = self.bot.get_cog("SpideyCourts")._next_case_seq_scan(typ)
+        case_number = f"1:{interaction.created_at.year % 100:02d}-{typ}-{seq:06d}{'-' if judge_inits else ''}{judge_inits}"
+
 
         # 3) Initial case dict (always include filings[0])
-        judge_name = JUDGE_VENUES.get(self.venue, {}).get("name", "SS")
-        judge_id   = JUDGE_VENUES.get(self.venue, {}).get("id", 684457913250480143)
+        if not self.venue == "ssc":
+            judge_name = JUDGE_VENUES.get(self.venue, {}).get("name", "SS")
+            judge_id   = JUDGE_VENUES.get(self.venue, {}).get("id", 684457913250480143)
 
 
         court_data[case_number] = {
@@ -409,10 +455,13 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             "additional_defendants": extra_vals,
             "counsel_for_plaintiff": counsel_pl,
             "venue": self.venue,
-            "judge": judge_name,
-            "judge_id": judge_id,
+            "judge": judge_name if not self.venue == "ssc" else "Supreme Court",
+            "judge_id": judge_id if not self.venue == "ssc" else None,
             "case_type": case_type,
             "is_criminal": is_criminal,
+            "government": self.government if self.criminal else None,
+            "original_jurisdiction": self.original_jurisdiction,
+            "oj_basis": self.oj_basis,
             "filings": [{
                 "entry": 1,
                 "document_type": "Complaint" if not self.criminal else "Criminal Complaint",
@@ -442,7 +491,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
                 f"**Defendant:** {self.format_party(interaction.guild, df_val)}",
             ]
         else:
-            header = "📁 **New Complaint Filed**"
+            header = "📁 **New Supreme Court Complaint Filed**" if self.venue == "ssc" else "📁 **New Complaint Filed**"
             lines = [
                 f"**Case Number:** `{case_number}`",
                 f"**Plaintiff:** {self.format_party(interaction.guild, pl_val)}",
@@ -450,6 +499,10 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
             ]
         if extra_vals:
             lines.append("**Additional Defendants:** " + ", ".join(self.format_party(interaction.guild, v) for v in extra_vals))
+        BASIS_LABEL = {"diplomats": "Ambassadors/Public Ministers/Consuls", "state_party": "A State is a Party"}
+        if self.venue == "ssc":
+            lines.append("**Basis of Jurisdiction:** Original jurisdiction — " + BASIS_LABEL.get(self.oj_basis, str(self.oj_basis)))
+
         lines.append(f"Filed by: {interaction.user.mention}")
 
         summary = header + "\n" + "\n".join(lines)
@@ -465,7 +518,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
 
         # Split into safe chunks and send; thread if needed
         title = f"**Complaint Document — {case_number}**\n\n"
-        parts = self.bot.get_cog("SpideyCourts")._split_for_discord(full_text, first_prefix=title, hard_limit=2000)
+        parts = _split_for_discord(full_text, first_prefix=title, hard_limit=2000)
 
         first_msg = await venue_channel.send(parts[0])
         case = court_data[case_number]
@@ -727,7 +780,7 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
 
         # Forum channel
         forum = cog.bot.get_channel(rep_conf["forum_id"])
-        if not forum or str(getattr(forum, "type", "")).lower() != "forum":
+        if not forum or forum.type is not discord.ChannelType.forum:
             return await interaction.followup.send("❌ Reporter forum not found.", ephemeral=True)
 
         # Caption & citation
@@ -738,10 +791,9 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
         first_page = rep_bucket["current_page"]
         year = datetime.now(UTC).year
 
-        court_paren = cog._court_parenthetical(
+        court_paren = _court_parenthetical(
             case=case,
             reporter_key=rep_key,
-            style=self.paren_style,
             override=self.parenthetical_override
         )
         citation = cog._make_citation(rep_conf["abbr"], vol, first_page, year, court_paren=court_paren)
@@ -766,10 +818,12 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
         # Create thread (works with Thread or ThreadWithMessage)
         created = await forum.create_thread(
             name=f"{caption} — {citation}",
-            content=starter,
-            allowed_mentions=discord.AllowedMentions.none()
+            content=starter
         )
-        thread = getattr(created, "thread", created)
+        if isinstance(created, tuple):
+            thread, starter_msg = created
+        else:
+            thread, starter_msg = created, None
         starter_msg = getattr(created, "message", None)
 
         page_message_ids = []
@@ -778,7 +832,6 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
                 m = await thread.send(pg, allowed_mentions=discord.AllowedMentions.none())
                 page_message_ids.append(m.id)
         except Exception as e:
-            # abort and clean up — DO NOT advance pointers
             try:
                 await thread.delete(reason=f"Reporter publish failed: {e}")
             except Exception:
@@ -793,18 +846,19 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
             "year": year,
             "volume": vol,
             "first_page": first_page,
-            "pages": num_pages,
+            "pages": len(pages),
             "thread_id": thread.id,
             "starter_message_id": (starter_msg.id if starter_msg else None),
             "page_message_ids": page_message_ids,
             "keywords": [k.strip() for k in (self.keywords.value or "").split(",") if k.strip()],
         })
-        rep_bucket["current_page"] = first_page + num_pages  # advance pointer now that it's real
+        rep_bucket["current_page"] = first_page + len(pages)
 
         cog.court_data[REPORTER_KEY] = rep_root
         save_json(COURT_FILE, cog.court_data)
 
-        # Optional: docket that it was published
+        # Docket the publication with a link that actually jumps into the thread
+        first_content_msg_id = page_message_ids[0] if page_message_ids else (starter_msg.id if starter_msg else None)
         filings = case.setdefault("filings", [])
         filings.append({
             "entry": len(filings) + 1,
@@ -813,8 +867,8 @@ class ReporterPublishModal(discord.ui.Modal, title="Publish to Reporter"):
             "author_id": interaction.user.id,
             "timestamp": datetime.now(UTC).isoformat(),
             "content": f"Published as {citation} ({rep_key})",
-            "channel_id": rep_conf["forum_id"],
-            "message_id": page_message_ids[0] if page_message_ids else None,
+            "channel_id": thread.id,                      # ← thread, not forum
+            "message_id": first_content_msg_id,           # ← a message inside that thread
         })
         save_json(COURT_FILE, cog.court_data)
 
@@ -966,7 +1020,7 @@ class SpideyCourts(commands.Cog):
 
         # We prefer embeds for readability, but descriptions cap at 4096.
         CHUNK = 3800  # leave headroom for formatting
-        for i, part in enumerate(_chunks(body, CHUNK), start=1):
+        for i, part in enumerate(self._chunks(body, CHUNK), start=1):
             e = discord.Embed(
                 title=None if not make_thread else f"Part {i}",
                 description=part,
@@ -1161,19 +1215,6 @@ class SpideyCourts(commands.Cog):
         initials = "".join(w[0] for w in long_parts if w and w[0].isalpha()).upper()
         return f"D.{'.'.join(list(initials))}."
 
-    def _court_parenthetical(self, case: dict, reporter_key: str, style: str = DEFAULT_PAREN_STYLE, override: str | None = None) -> str | None:
-        if not self._needs_court_parenthetical(reporter_key):
-            return None  # Supreme: no court name in parenthetical
-        if override:
-            return override.strip()
-        key = case.get("venue")
-        if reporter_key == "circuit":
-            key = key or "first_circuit"
-        if key in COURT_PAREN:
-            return COURT_PAREN[key]["short" if style == "short" else "long"]
-        if reporter_key == "district":
-            return self._auto_district_parenthetical(key or "", style)
-        return "Ct. App."
 
     def _make_citation(self, abbr: str, vol: int, first_page: int, year: int, court_paren: str | None = None, pin: int | None = None) -> str:
         """
@@ -1414,15 +1455,20 @@ class SpideyCourts(commands.Cog):
         defendant_user="Defendant is a discord member",
         venue="Venue for the complaint",
         criminal="Is this a criminal complaint?",
-        government="Government name or level (e.g. 'country' to use default)"
+        government="Government name or level (e.g. 'country' to use default)",
+        original_jurisdiction="Check if filing in SSC under Art. III §2 cl.2",
+        oj_basis="Why SSC has original jurisdiction"
     )
     @app_commands.choices(
         venue=[
             app_commands.Choice(name="Commons District Court", value="gen_chat"),
             app_commands.Choice(name="Gaming District Court", value="swgoh"),
             app_commands.Choice(name="District of Parker District Court", value="public_square"),
-            app_commands.Choice(name="First Circuit", value="first_circuit"),
-            app_commands.Choice(name="Supreme Court", value="ssc"),
+            app_commands.Choice(name="Supreme Court (Art. III §2 cl.2 only)", value="ssc"),
+        ],
+        oj_basis=[
+            app_commands.Choice(name="Ambassadors/Public Ministers/Consuls", value="diplomats"),
+            app_commands.Choice(name="State as a Party", value="state_party"),
         ]
     )
     async def file_complaint(
@@ -1435,6 +1481,8 @@ class SpideyCourts(commands.Cog):
         defendant_user: discord.Member | None = None,
         criminal: bool = False,
         government: str | None = None,
+        original_jurisdiction: bool = False,
+        oj_basis: str | None = None,
     ):
         # basic validation (civil must have distinct sides)
         if not criminal:
@@ -1444,16 +1492,32 @@ class SpideyCourts(commands.Cog):
             return await interaction.response.send_message("❌ Defendant is required.", ephemeral=True)
 
         # merge text+member into one display string per side
-        if plaintiff_user:
-            plaintiff = plaintiff_user.display_name if not plaintiff else f"{plaintiff_user.display_name} and {plaintiff}"
-        if defendant_user:
-            defendant = defendant_user.display_name if not defendant else f"{defendant_user.display_name} and {defendant}"
+        pl_payload = plaintiff_user or plaintiff    # Member OR str
+        df_payload = defendant_user or defendant  
+
+        if venue == "ssc":
+            if not original_jurisdiction:
+                return await interaction.response.send_message(
+                    "❌ The Supreme Court accepts only **original-jurisdiction** filings. Check the OJ box and select a basis.",
+                    ephemeral=True
+                )
+            if not oj_basis:
+                return await interaction.response.send_message(
+                    "❌ Select an **Original Jurisdiction basis** (diplomats or state as party).",
+                    ephemeral=True
+                )
+        else:
+            original_jurisdiction = False
+            oj_basis = None
 
         await interaction.response.send_modal(
             ComplaintFilingModal(
-                self.bot, venue, plaintiff, defendant, criminal=criminal, government=government
+                self.bot, venue, pl_payload, df_payload,
+                criminal=criminal, government=government,
+                original_jurisdiction=original_jurisdiction, oj_basis=oj_basis
             )
         )
+        
     
     def _coerce_user_id(self, value) -> int | None:
         """Return an int user id if value looks like one (raw int/str/mention), else None."""
@@ -1591,8 +1655,8 @@ class SpideyCourts(commands.Cog):
 
         header = (
             f"**Docket for Case {caption}, {case_number}**\n\n"
-            f"Counsel for {'Plaintiff' if not is_criminal else 'Prosecution'}: {counsel_pl or '<@Unknown>'}\n"
-            f"Counsel for Defendant: {counsel_df or '<@Unknown>'}\n"
+            f"Counsel for {'Plaintiff' if not is_criminal else 'Prosecution'}: {counsel_pl or 'Unknown'}\n"
+            f"Counsel for Defendant: {counsel_df or 'Unknown'}\n"
             f"Venue: {venue_name}\n"
             f"Judge: {judge}\n"
         )
@@ -1790,6 +1854,7 @@ class SpideyCourts(commands.Cog):
         """Make a Discord jump link. Use @me for DMs."""
         gid = "@me" if guild_id in (None, 0) else str(guild_id)
         return f"https://discord.com/channels/{gid}/{channel_id}/{message_id}"
+
 
     def _build_service_packet_text(
         self,
@@ -2972,31 +3037,6 @@ class SpideyCourts(commands.Cog):
 
         await interaction.followup.send("❌ Citation not found in the Reporter.", ephemeral=True)
 
-    @court.command(name="reporter_preview", description="Preview citation and page count before publishing.")
-    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    @app_commands.autocomplete(case_number=case_autocomplete)
-    @app_commands.choices(reporter_override=[
-        app_commands.Choice(name="District (SPIDEYLAW)", value="district"),
-        app_commands.Choice(name="Circuit (F.)", value="circuit"),
-        app_commands.Choice(name="Supreme (S.R.)", value="supreme"),
-    ])
-    async def reporter_preview(self, interaction: discord.Interaction, case_number: str, entry: int, reporter_override: app_commands.Choice[str] | None = None):
-        await interaction.response.defer(ephemeral=True)
-        case = self.court_data.get(case_number)
-        if not case:
-            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
-        rep_key = reporter_override.value if reporter_override else self._get_reporter_for_case(case)
-        rep_root = self._ensure_reporter(); bucket = rep_root[rep_key]
-        opinion = await self._gather_opinion_text_from_docket(case, entry)
-        if not opinion:
-            return await interaction.followup.send("❌ Couldn’t locate opinion text.", ephemeral=True)
-        pages = self._paginate_for_reporter(opinion, TARGET_CHARS_PER_PAGE)
-        num = len(pages)
-        vol, first_page, year = bucket["current_volume"], bucket["current_page"], datetime.now(UTC).year
-        abbr = REPORTERS[rep_key]["abbr"]
-        paren = self._court_parenthetical(case, rep_key)
-        cite = self._make_citation(abbr, vol, first_page, year, court_paren=paren)
-        await interaction.followup.send(f"📘 **Preview**: will publish as `{cite}` and use **{num} page(s)** (ending at p. {first_page+num-1}).", ephemeral=True)
 
 
     @court.command(name="reporter_retract", description="Retract a published opinion (last-only to preserve page numbering).")
