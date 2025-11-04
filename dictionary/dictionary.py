@@ -38,7 +38,7 @@ def title(s: str) -> str:
 class Dictionary(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.session = ClientSession | None = None
+        self.session = Optional[ClientSession] = None
         try:
             self._wordlist = wordfreq.top_n_list('en', 60000)
         except Exception:
@@ -176,20 +176,20 @@ class Dictionary(commands.Cog):
                 embed.set_footer(text="Source: " + ", ".join(sources[:2]))
 
 
-            pos_keys = [pos_filter] if pos_filter else sorted(by_pos.keys())
-            first = True
-            for pos in pos_keys:
-                defs = by_pos.get(pos, [])
-                if not defs:
-                    continue
+        pos_keys = [pos_filter] if pos_filter else sorted(by_pos.keys())
+        first = True
+        for pos in pos_keys:
+            defs = by_pos.get(pos, [])
+            if not defs:
+                continue
 
 
-                chunk_fields: List[Tuple[str, str]] = []
-                char_count = 0
-                fields_used = 0
+            chunk_fields: List[Tuple[str, str]] = []
+            char_count = 0
+            fields_used = 0
 
 
-                def flush() -> None:
+            def flush() -> None:
                     nonlocal chunk_fields, char_count, fields_used, first
                     if not chunk_fields:
                         return
@@ -203,7 +203,7 @@ class Dictionary(commands.Cog):
 
 
                 # Make fields of defs_per_field items
-                for i in range(0, len(defs), defs_per_field):
+            for i in range(0, len(defs), defs_per_field):
                     items = defs[i:i + defs_per_field]
                     text = []
                     for d in items:
@@ -221,7 +221,7 @@ class Dictionary(commands.Cog):
                     char_count += need
 
 
-                flush()
+            flush()
 
 
         if not pages:
@@ -308,14 +308,6 @@ class Dictionary(commands.Cog):
         app_commands.Choice(name="full", value="full"),
         ]
     
-    @commands.command(name="define", aliases=["definition", "dict"])
-    async def define(self, ctx: commands.Context, *, word: str):
-        definition_data = await self.fetch_definition(word)
-        if not definition_data:
-            await ctx.send("No definition found.")
-            return
-        embed = await self.build_embed(word, definition_data)
-        await ctx.send(embed=embed)
     
     
 
@@ -410,7 +402,7 @@ class Dictionary(commands.Cog):
             f"There are **{len(pages) - len(to_send)}** more page(s). Rerun with `mode: full` (default) to use the paginator.")
 
     # --- Prefix command (quick summary) ---
-    @commands.command(name="define", aliases=["def", "d"])
+    @commands.command(name="define", aliases=["def"])
     @commands.cooldown(3, 10, BucketType.user)
     async def define_prefix(self, ctx: commands.Context, *, query: str):
         """
