@@ -78,22 +78,6 @@ PROCEEDING_TYPES = [
 
 CASE_KEY_RX = re.compile(r'^\d+:\d{2}-(cv|cr)-\d{6}-[A-Z]+$')
 
-def _next_case_seq_scan(self) -> int:
-    """Scan existing keys and return next sequential 6-digit docket number."""
-    max_seq = 0
-    for k in self.court_data.keys():
-        if not isinstance(k, str):
-            continue
-        m = CASE_KEY_RX.match(k)
-        if m:
-            # k looks like "1:25-cv-000123-SS"
-            try:
-                seq = int(k.split('-')[2])
-                if seq > max_seq:
-                    max_seq = seq
-            except Exception:
-                continue
-    return max_seq + 1
 
 REPORTER_KEY = "_reporter"
 
@@ -995,6 +979,23 @@ class SpideyCourts(commands.Cog):
     @show_cases.before_loop
     async def _ready(self):
         await self.bot.wait_until_ready()
+    
+    def _next_case_seq_scan(self) -> int:
+        """Scan existing keys and return next sequential 6-digit docket number."""
+        max_seq = 0
+        for k in self.court_data.keys():
+            if not isinstance(k, str):
+                continue
+            m = CASE_KEY_RX.match(k)
+            if m:
+                # k looks like "1:25-cv-000123-SS"
+                try:
+                    seq = int(k.split('-')[2])
+                    if seq > max_seq:
+                        max_seq = seq
+                except Exception:
+                    continue
+        return max_seq + 1
 
     # ---------- Long text posting ----------
     def _chunks(self, s: str, n: int):
