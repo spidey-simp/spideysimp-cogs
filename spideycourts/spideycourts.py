@@ -2815,7 +2815,8 @@ class SpideyCourts(commands.Cog):
             "case_number": case_number,
         }
         self._steno_sessions[ch.id] = sess
-        await ctx.send(f"🟢 The {title} has begun and the stenographer has **started** recording in {ch.mention} (mode=`{mode}`, locked={'`on`' if lock else '`off`'}).")
+        case_yes = " for" + f"{case_number}" if case_number else ""
+        await ctx.send(f"🟢 The {title} has begun{case_yes}, and the stenographer has **started** recording in {ch.mention} (mode=`{mode}`, locked={'`on`' if lock else '`off`'}).")
 
 
     @steno.command(name="stop", aliases=("finalize", "end"))
