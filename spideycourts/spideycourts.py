@@ -290,7 +290,7 @@ async def _read_attachment_text(att: discord.Attachment) -> str:
 
     return ""
 
-def _split_for_discord(self, text: str, *, first_prefix: str = "", hard_limit: int = 2000) -> list[str]:
+def _split_for_discord(text: str, *, first_prefix: str = "", hard_limit: int = 2000) -> list[str]:
     """
     Split text into message-sized chunks that fit Discord's 2000-char limit.
     Respects paragraph/space boundaries when possible.

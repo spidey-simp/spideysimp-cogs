@@ -1,0 +1,134 @@
+Title I. Syllabus
+Section 1. Congressional Authority
+The Congress has the power to regulate interstate commerce, to tax and spend, to borrow on the credit of the republic, and to coin money. All of these powers contribute to the creation of banking regulation.
+
+Section 2. Summary
+The act is created with the following purposes in mind: opening banks; dispersing loans; regulating the financial sector; and opening a bank and reserve.
+
+Section 3. Executive Agent
+The act shall create a position in the Presidential Cabinet to be the Secretary of Treasury and Commerce who shall jointly oversee those facets. The act shall also create a Federal Reserve Chair to oversee the Federal Reserve.
+
+Title II. Codification
+(To be codified as 12 S.R.C. § 21-__)
+§ 20. Definitions
+“Commissioner” means the Secretary of Treasury and Commerce or a designee in that department. “Department of Commerce” means the Joint Commerce and Treasury Department, which shall be further codified not within this Title. “Category” means the jurisdiction designated in the organization certificate. “Spidey Reserve discount rate” means the Reserve’s primary discount-window rate; if no discount rate is published, it means the policy rate + 1%. “District” means the Spidey Reserve district(s) as designated by the Board.
+§ 21. Formation of national banking associations; incorporators; articles of association
+Associations for carrying on the business of banking under this Title may be formed by any number of citizens. They shall enter into articles of association, which shall specify in general terms the object for which the association is formed, and may contain any other provisions, not inconsistent with law, which the association may see fit to adopt for the regulation of its business and the conduct of its affairs. These articles shall be signed by the persons uniting to form the association, and a copy of them shall be forwarded to the Department of Commerce, to be filed and preserved in the office therein. Except as otherwise specifically provided by law, or by the articles of association of the particular national banking association, the articles of association of a national banking association may be amended with respect to any lawful matter, and any action requiring the approval of the stockholders of such association may be had by the approving vote of the holders of a majority of the voting shares of the stock of the association obtained at a meeting of the stockholders called and held pursuant to notice given by direct message at least ten days prior to the meeting or pursuant to a waiver of such notice given by all stockholders entitled to receive notice of such meeting. A certified copy of every amendment to the articles of association adopted by the shareholders of a national banking association shall be forwarded to the Department of Commerce, to be filed and preserved in the office therein.
+§ 22. Organization certificate
+The persons uniting to form such an association shall, under their hands, make an organization certificate, which shall specifically state:
+First. The name assumed by such association; which name shall include the word “national”.
+Second. The place where its operations of discount and deposit are to be carried on, designating the Category.
+Third. The amount of capital stock and the number of shares into which the same is to be divided.
+Fourth. The names and places of residence of the shareholders and the number of shares held by each of them.
+Fifth. The fact that the certificate is made to enable such persons to avail themselves of the advantages of this Title.
+§ 23. Acknowledgement and filing of certificate
+The organization certificate shall be acknowledged before a judge of some court of record, or notary public; and shall be, together with the acknowledgment thereof, authenticated by the seal of such court, or notary, transmitted to the Department of Commerce, which shall record and carefully preserve the same in its office.
+§ 24. Corporate powers of associations
+Upon filing articles of association and an organization certificate, an association becomes a body corporate and may:
+First. Adopt and use a corporate seal.
+Second. Have succession until (i) dissolved by shareholders owning two-thirds of stock, (ii) its franchise is forfeited for violation of law, (iii) terminated by Act of Congress, or (iv) placed in receivership and wound up.
+Third. Make contracts.
+Fourth. Sue and be sued in law or equity.
+Fifth. Elect directors and, through its board, appoint and remove officers, define duties, require bonds, and fill vacancies.
+Sixth. Adopt by-laws, not inconsistent with law, governing stock transfer, director elections, officer appointments, property transfers, business conduct, and exercise of privileges.
+Seventh. Banking and securities.
+(A) Exercise incidental powers necessary to banking, including discounting/negotiating notes, drafts, and bills of exchange; receiving deposits; buying/selling exchange, coin, and bullion; making loans on personal security; and obtaining, issuing, and circulating notes under this Title.
+(B) Agent-only securities dealing: purchase and sell without recourse, solely on customer order and for the customer’s account. No proprietary dealing or underwriting, except as expressly permitted herein.
+(C) Purchase investment securities for its own account subject to regulation by the Commissioner, including a single-obligor cap of 10% of paid-in, unimpaired capital + 10% of unimpaired surplus. “Investment securities” means marketable debt obligations (bonds, notes, or debentures) as further defined by rule. Except as otherwise permitted by law, no purchase for its own account of corporate stock.
+(D) Exempt obligations. The limits in (B)–(C) do not apply to obligations of the Spidey Republic; general obligations of any State or political subdivision; and obligations of government corporations, government-sponsored enterprises, or multilateral development banks designated by regulation. The Commissioner shall publish and update the designation list. Foreign sovereign or sub-sovereign obligations are ineligible unless expressly designated.
+(E) [Reserved.]
+(F) Bankers’ banks. The association may purchase stock of a “bankers’ bank” or its holding company—owned exclusively by depository institutions/holding companies and serving only them (and their officers, directors, and employees)—subject to (i) holdings ≤ 10% of the association’s capital and surplus in any such issuer and (ii) not more than 5% of any class of voting securities.
+(G) Exempt securities types. The limits in (C) do not apply to (i) regulation-designated private-offer exemptions, (ii) small-business-related securities, and (iii) mortgage-related securities, each as defined by rule and subject to minimum issue-size or aggregate-price thresholds.
+Eighth. Contribute to community, charitable, or benevolent instrumentalities conducive to public welfare, to the extent State law allows State banks to do the same.
+Ninth. Issue and sell securities guaranteed under housing-finance laws, as provided by regulation.
+Tenth. [Omitted]
+Eleventh. Public-welfare investments. Make investments—directly or through subsidiaries—primarily to promote the public welfare (including housing, services, or jobs for low- and moderate-income communities), provided no unlimited liability is assumed. The Commissioner shall set project and aggregate limits by rule; absent a higher cap granted by order upon findings of adequate capitalization and no significant deposit-insurance risk, aggregate public-welfare investments may not exceed 5% of paid-in, unimpaired capital stock + 5% of unimpaired surplus, and in no case exceed 15% + 15%.
+§ 26. Secretary of Commerce to determine if association can commence business
+Whenever a certificate is transmitted to the Department of Commerce, and the association transmitting the same notifies the Department that all of its capital stock has been duly paid in, and that such association has complied with all the provisions of this Title, the Secretary of Commerce or duly appointed deputies shall examine the condition of the association for compliance with all of the Title and to ensure such capital and stock exists, then the Secretary or appointed deputies shall approve the commencement of a banking business. If not, they shall send a notice to the association declaring why they cannot commence business.
+§ 27. Certificate of Authority to Commence Banking
+If the association is found compliant under § 26, the Commissioner shall issue a certificate to commence business, signed and dated, within 7 days of approval.
+§ 30. Change of name or location
+A national bank may change its name or principal office with Commissioner approval and notice to shareholders; changes take effect on the approval date. Any civil action that commenced prior to the name change will have the caption updated to match the new name, and no judgment shall be precluded.
+§ 51. Preferred stock; rights; definitions.
+(a)	Preferred stock must be fully paid and approved by the Commissioner before issuance; the approval shall certify the paid-in amount.
+(b)	Preferred holders have voting rights if authorized and receive dividends in priority to common.
+(c)	“Common stock” means stock other than preferred; “capital” means unimpaired common and preferred; “capital stock” means outstanding common stock.
+§ 52. Par value of Stocks and Transfer
+Capital stock shall be divided into shares of $100 or such lesser par as the articles provide; shares are personal property transferable on the association’s books per by-laws.
+§ 53. Paid in Capital Stocks
+All capital stocks must be fully paid in prior to an association commencing business.
+§ 55. Deficiency; Assessments
+On notice of unpaid or impaired capital, the association shall cure within 3 months by pro-rata assessment on shareholders or other approved measures; failure may result in receivership.
+§ 56. Prohibition on withdrawal of capital; Unearned Dividends
+No withdrawal of capital. No dividend except as allowed by § 60.
+§ 59. Reduction of capital
+(a)	In general. Subject to the approval of the Department of Commerce, an association under this title, may reduce its capital by a vote of two-thirds of the shareholders (by stockholdings).
+(b)	Shareholder distribution authorized. As part of the reduction plan, As part of the reduction plan, the association may distribute cash to the shareholders only to the extent remaining capital meets statutory and regulatory requirements.
+§ 60. Dividends
+Dividends may be declared only from net income, and may not exceed current-year net income plus retained net income of the prior two years, minus required transfers, unless the Commissioner approves.
+§ 71. Election
+(a)	In General. The affairs of each association shall be managed by a board of directors elected by the shareholders. The number of directors shall be fixed by by-laws, not fewer than five.
+(b)	Waiver. The Commissioner may permit:
+(1)	three directors if there are < 5 shareholders or assets < 250,000;
+(2)	one managing director if there is only one shareholder.
+Waivers last up to 2 years, renewable on a safety-and-soundness finding.
+§ 72. Qualifications
+Each director (or managing director) shall be a citizen, except the Commissioner may waive citizenship for up to one director. Residency may be satisfied by virtual presence in the Category as defined by rule.
+§ 73. Oath
+Before serving, each director (or managing director) shall take the prescribed oath to faithfully discharge duties and comply with law; filing may be by message to the Commissioner.
+§ 81. Place of business
+Business is conducted at the principal office specified in the organization certificate and at any branches approved by the Commissioner.
+§ 83. Loans by bank on its own stock
+A bank shall not lend on the security of its own stock.
+§ 84. Limitations on Loans
+Obligations to one borrower may not exceed 15% of unimpaired capital and surplus, plus 10% if the excess is fully secured by readily marketable collateral; combinations/exclusions by regulation. Related interests must be combined as one borrower as defined by regulation.
+§ 85. Interest Rate
+A national bank may charge interest at the rate allowed by the laws of the Category where the bank is located; if no rate is fixed by Category law, it may charge the greater of 7 percent or 1 percentage point above the Spidey Reserve discount rate on 90-day commercial paper for the district where the bank is located, and such interest may be taken in advance.
+§ 86. Usury interest; penalty for taking
+Knowingly taking interest above § 85 forfeits all interest; the payer may recover twice the interest paid within the statutory period.
+§ 90. Government depositaries; financial agents.
+The Treasury may designate national banks as depositaries of public moneys and as financial agents of the Republic, upon terms and security prescribed by the Commissioner.
+§ 91. Transfers in contemplation of insolvency
+Any transfer of assets, preference, or lien made after the commission of an act of insolvency or in contemplation thereof, with a view to prefer a creditor, is voidable by the receiver.
+§ 92. Trust powers
+A national bank may act as trustee, executor, administrator, registrar, transfer agent, or custodian, and exercise other fiduciary powers as authorized by regulation, subject to fiduciary standards and capital requirements.
+§ 93. Rules and orders; violations.
+The Commissioner may issue rules, guidance, and orders to carry out this Title. For violations, the Commissioner may issue cease-and-desist orders, assess civil money penalties, and remove or suspend an institution-affiliated party, after notice and opportunity to be heard.
+Derivative suits. A shareholder holding ≥ 1% of outstanding common or ≥ 1 share may bring a shareholder derivative action on behalf of the association after 30 days’ written demand on the board (or managing director) unless demand would be futile. Relief shall inure to the association; the court may award reasonable attorneys’ fees from any recovery.
+§ 94. Venue of actions.
+Actions against a national bank may be brought in the Category where its principal office is located or as otherwise provided by law. A name change under § 30 does not affect venue or jurisdiction in a pending action.
+§ 221. Definitions
+Wherever the word “bank” is used in this Act, the word shall be held to include Category banks, banking associations, and trust companies except where national banks or Federal Reserve banks are specified.
+The term “member bank” shall refer to any bank that has become a member of the reserve banks created by this Act.
+The term “board” shall be held to mean Federal Reserve Board and “district” shall mean the Federal Reserve district. “Reserve bank” shall mean the Federal Reserve Bank. 
+“Bonds and notes” shall refer to certificates of indebtedness and Treasury bills issued under section 3104 of Title 31.
+§ 222. Membership of national banks
+Within 90 days of commencing business, a national bank shall become a member bank by subscribing to and paying for Reserve Bank stock in the amount and manner prescribed by Board regulation.
+§ 225. Name; Maintenance of long run growth of monetary and credit aggregates; Appearances before Congress
+The Federal Reserve Bank shall be named “Federal Reserve Bank of the Spidey Republic” and shall have a channel created in the District of Parker. The Board of Governors of the Federal Reserve System shall maintain long run growth of the monetary and credit aggregates commensurate with the economy’s long run potential to increase production, so as to promote the goals of maximum employment, stable prices, and moderate long-term interest rates. The Board must compile reports throughout their procedures for the purposes of presenting to the Congress in event they are summoned to testify before the Congress.
+§ 241. Creation; membership
+The Board shall be composed of 5 members total, including the Secretary of Commerce and Treasury, to be appointed the President by and with the advice and consent of the Senate. The term of each member, except the Secretary, shall last one year.
+§ 244. Chairman
+A chairman shall be designated to preside over the Board to conduct good service. The chairman shall be nominated by the President from the existing Board by and with the advice and consent of the Senate.
+§ 248. Enumerated Powers of the Board
+The Board shall have power to:
+(1) issue rules, orders, and guidance to carry out this Title and the business of the Federal Reserve System;
+(2) supervise and examine Reserve Banks and member banks for compliance with law and Board regulations, and require reports;
+(3) approve, suspend, or remove Reserve Bank directors or officers for cause, and require corrective action;
+(4) set the discount rate at which the Reserve Bank may extend credit, and prescribe terms and collateral for such credit consistent with § 85 and Board regulation;
+(5) conduct open-market operations in obligations of the Spidey Republic and other eligible instruments designated by regulation, and appoint a trading agent to carry out such operations;
+(6) prescribe reserve requirements by regulation and define deposits and transaction accounts for that purpose;
+(7) regulate and operate payment, clearing, and settlement services, including check collection and electronic funds transfers, and set related fees and terms;
+(8) arrange for the issue, custody, and retirement of Reserve notes and prescribe collateral and procedures consistent with Board regulation;
+(9) prescribe capital, liquidity, and risk-management standards for member banks as necessary for safety and soundness (in coordination with the Commissioner);
+(10) in unusual and exigent circumstances, authorize broad-based credit facilities against adequate collateral at a penalty rate, on terms and disclosures set by regulation;
+(11) collect and publish monetary and credit statistics and such other data as are necessary for policy;
+(12) delegate functions to the Reserve Bank and revoke such delegations;
+(13) assess expenses of the Board and Reserve Bank as provided by regulation; and
+(14) enforce this section and Board regulations by order and civil money penalties as provided in § 93.
+Open-market directives. Open-market operations shall be conducted under Board directive, recorded in writing, and periodically published in summary.
+Emergency lending guardrails. Actions under § 248(10) must be broad-based, secured by sufficient collateral, offered at a penalty rate, and not for the purpose of aiding a single failing firm; the Board shall report such actions to Congress in summary.
+§ 531. Exemption from taxation
+The Federal Reserve Bank is exempt from taxation.
+§ 541. Tax on Banks
+All banks in the Spidey Republic shall pay a duty of one-half of one percent based on the amount of its notes in circulation to the Treasury of the Republic every half-year.

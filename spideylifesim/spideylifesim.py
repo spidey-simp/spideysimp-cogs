@@ -15,6 +15,9 @@ from discord import Member, Guild, File
 from collections import Counter
 import humanize
 from functools import partial
+import time
+from discord import app_commands
+
 
 
 from redbot.core import Config, checks, commands, bank
@@ -274,22 +277,17 @@ class SpideyLifeSim(Cog):
             )
         else:
             return
- 
-    @commands.group(aliases=["sls"])
-    async def spideylifesim(self, ctx: commands.Context):
-        """Don't forget to set up your profile first!"""
-        return
+        
+    sls = app_commands.Group(name="spideylifesim", description="Don't forget to set up your profile first!")
+    skills = app_commands.Group(name="skills", description="Commands related to skills.", parent=sls)
+    careers = app_commands.Group(name="careers", description="Commands related to careers.", parent=sls)
+    store = app_commands.Group(name="store", description="Commands related to the store.", parent=sls)
+    profile = app_commands.Group(name="profile", description="Commands related to user profiles.", parent=sls)
 
-    
-    @commands.group(aliases=["slss"])
-    async def slsstore(self, ctx: commands.Context):
-        """Purchaseable items are shown here and they cycle every 6 hours."""
-        return
-    
-    @slsstore.command(name="storeview", aliases=["sv"])
-    async def slsstore_storeview(self, ctx: commands.Context):
+    @store.command(name="storeview", description="View the currently in-store items!")
+    async def slsstore_storeview(self, interaction: discord.Interaction):
         """View the currently in-store items!"""
-        currency = await bank.get_currency_name(ctx.guild)
+        currency = await bank.get_currency_name(interaction.guild)
         items = [FOODITEMS, SKILLITEMS, VEHICLES, ENTERTAINMENT, LUXURYITEMS]
         store_items = [item.get(store_slots[i]) for i, item in enumerate(items)]
         store_title = "Here's what's available in the shop right now:"
@@ -315,76 +313,89 @@ class SpideyLifeSim(Cog):
 
         embed = discord.Embed(title=store_title, description=store_items_text, color=discord.Color.red())
         embed.set_image(url=store_image)
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
-    @slsstore.command(name="purchase", aliases=["p"])
-    async def slsstore_purchase(self, ctx: commands.Context, storeslot: int = 0, itemcount: int = 1):
+    @store.command(name="purchase", description="Purchase an item from the store by specifying its slot number.")
+    @app_commands.describe(storeslot="The store slot number (1-5) of the item you want to purchase.", itemcount="The number of items you want to purchase (default is 1).")
+    async def slsstore_purchase(self, interaction: discord.Interaction, storeslot: int, itemcount: int = 1):
         """Input the store slot of the item you want to purchase in the command!"""
         if not (1 <= storeslot <= 5):
-            await ctx.send("The store slot provided doesn't exist. Please input one of the store slots from 1-5.")
+            await interaction.response.send_message("The store slot provided doesn't exist. Please input one of the store slots from 1-5.")
             return
 
         item_for_purchase = store_slots[storeslot - 1]
         item_cost = ALLITEMS.get(item_for_purchase)
         if itemcount <= 0:
-            await ctx.send(f"I don't think it's possible to buy {itemcount} items.")
+            await interaction.response.send_message(f"I don't think it's possible to buy {itemcount} items.")
             return
         if itemcount > 10:
-            await ctx.send("That seems like a lot... Maybe buy a little less!")
+            await interaction.response.send_message("That seems like a lot... Maybe buy a little less!")
             return
 
-        currency = await bank.get_currency_name(ctx.guild)
+        currency = await bank.get_currency_name(interaction.guild)
         total_cost = item_cost * itemcount
-        if not await bank.can_spend(ctx.author, total_cost):
-            await ctx.send(f"You have an insufficient balance! You need {total_cost} {currency}.")
+        if not await bank.can_spend(interaction.user, total_cost):
+            await interaction.response.send_message(f"You have an insufficient balance! You need {total_cost} {currency}.")
             return
 
-        await bank.withdraw_credits(ctx.author, total_cost)
-        async with self.config.member(ctx.author).userinventory() as inventory:
+        await bank.withdraw_credits(interaction.user, total_cost)
+        async with self.config.member(interaction.user).userinventory() as inventory:
             inventory.extend([item_for_purchase] * itemcount)
 
-        user_balance = await bank.get_balance(ctx.author)
+        user_balance = await bank.get_balance(interaction.user)
         item_plural = "s" if itemcount > 1 else ""
-        await ctx.send(f"You have successfully purchased {itemcount} {item_for_purchase}{item_plural}.\n"
+        await interaction.response.send_message(f"You have successfully purchased {itemcount} {item_for_purchase}{item_plural}.\n"
                    f"Remaining balance: {humanize.intcomma(user_balance)} {currency}.")
 
-    @slsstore.command(name="sellitem", aliases=["si"])
-    async def slsstore_sellitem(self, ctx: commands.Context, count: int = 1, *, itemtosell: str = None):
+    async def inventory_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        """Autocomplete function for inventory items."""
+        current = current.lower()
+        user_inventory = await self.config.member(interaction.user).userinventory()
+        unique_items = set(user_inventory)
+        choices = []
+        for item in unique_items:
+            if current in item.lower():
+                choices.append(app_commands.Choice(name=item, value=item))
+        return choices[:25]
+
+    @store.command(name="sellitem", description="Sell items which returns 80% of their original value.")
+    @app_commands.describe(itemtosell="The item you want to sell (case-sensitive).", count="The number of items you want to sell (default is 1).")
+    async def slsstore_sellitem(self, interaction: discord.Interaction, count: int = 1, *, itemtosell: str):
         """Sell items which returns 80% of their original value. Case-sensitive."""
         if not itemtosell:
-            await ctx.send("Please specify the item you want to sell.")
+            await interaction.response.send_message("Please specify the item you want to sell.")
             return
         if count <= 0:
-            await ctx.send("How can you sell items you don't have? :thinking:")
+            await interaction.response.send_message("How can you sell items you don't have? :thinking:")
             return
 
-        user_inventory = await self.config.member(ctx.author).userinventory()
+        user_inventory = await self.config.member(interaction.user).userinventory()
         if itemtosell not in user_inventory:
-            await ctx.send(f"You don't have {itemtosell}. Check your inventory for spelling and case.")
+            await interaction.response.send_message(f"You don't have {itemtosell}. Check your inventory for spelling and case.")
             return
-        currency = await bank.get_currency_name(ctx.guild)
+        currency = await bank.get_currency_name(interaction.guild)
         original_price = ALLITEMS.get(itemtosell)
         sell_price = round(original_price * 0.8)
-        async with self.config.member(ctx.author).userinventory() as inventory:
+        async with self.config.member(interaction.user).userinventory() as inventory:
             for _ in range(min(count, inventory.count(itemtosell))):
                 inventory.remove(itemtosell)
-                await bank.deposit_credits(ctx.author, sell_price)
+                await bank.deposit_credits(interaction.user, sell_price)
 
-        user_balance = await bank.get_balance(ctx.author)
+        user_balance = await bank.get_balance(interaction.user)
         item_plural = "s" if count > 1 else ""
-        await ctx.send(f"You sold {count} {itemtosell}{item_plural}. New balance: {humanize.intcomma(user_balance)} {currency}.")
+        await interaction.response.send_message(f"You sold {count} {itemtosell}{item_plural}. New balance: {humanize.intcomma(user_balance)} {currency}.")
 
-    @commands.group(aliases=["slsp"])
-    async def slsprofile(self, ctx: commands.Context):
-        """See everything about your profile in these settings!"""
     
-    @slsprofile.command(name="userprofile", aliases=["up"])
-    async def slsprofile_userprofile(self, ctx: commands.Context):
+    @profile.command(name="userprofile", description="See your user profile or another's.")
+    @app_commands.describe(user="The user whose profile you want to view.")
+    async def slsprofile_userprofile(self, interaction: discord.Interaction, user: discord.Member = None):
         """See your user profile."""
-        user_data = await self.config.member(ctx.author).all()
-        profilename = user_data["username"] if user_data["username"] != "None" else ctx.author.display_name
-        currency = await bank.get_currency_name(ctx.guild)
-        userbalance = await bank.get_balance(ctx.author)
+        if user is None:
+            user = interaction.user
+        user_data = await self.config.member(user).all()
+        profilename = user_data["username"] if user_data["username"] != "None" else user.display_name
+        currency = await bank.get_currency_name(interaction.guild)
+        userbalance = await bank.get_balance(user)
         alignment = user_data["alignment"]
         alignmentprogress = self.alignmentmanager.generate_alignment_bar(alignment)
         profileheader = "Here is your profile!"
@@ -397,217 +408,175 @@ class SpideyLifeSim(Cog):
             f"**Account Balance:** {humanize.intcomma(userbalance)} {currency}\n"
             f"**Alignment:**\n{alignmentprogress}\n"
         )
-        await self.display_profile(ctx, profileheader, profiledescription, user_data["userpic"])
+        await self.display_profile(interaction, profileheader, profiledescription, user_data["userpic"])
 
-    @slsprofile.command(name="setname", aliases=["sn"])
-    async def slsprofile_setname(self, ctx: commands.Context, *, name: str):
+    @profile.command(name="setname", description="Change your profile name!")
+    @app_commands.describe(name="The new name you want to set for your profile.")
+    async def profile_setname(self, interaction: discord.Interaction, *, name: str):
         """Change your profile name!"""
-        await self.update_and_confirm(ctx, "username", name)
+        await self.update_and_confirm(interaction, "username", name)
 
-    @slsprofile.command(name="setgender", aliases=["sg"])
-    async def slsprofile_setgender(self, ctx: commands.Context, *, gender: str):
+    @profile.command(name="setgender", description="Set your gender.")
+    @app_commands.describe(gender="Your gender.")
+    async def profile_setgender(self, interaction: discord.Interaction, *, gender: str):
         """Set your gender."""
-        await self.update_and_confirm(ctx, "usergender", gender)
+        await self.update_and_confirm(interaction, "usergender", gender)
 
-    @slsprofile.command(name="setpic", aliases=["sp"])
-    async def slsprofile_setpic(self, ctx: commands.Context, *, link: str):
+    @profile.command(name="setpic", description="Set your profile image.")
+    @app_commands.describe(link="The link to the image you want to set as your profile picture.")
+    async def profile_setpic(self, interaction: discord.Interaction, *, link: str):
         """Set your profile image."""
-        await self.update_and_confirm(ctx, "userpic", link)
+        if not (link.startswith("http://") or link.startswith("https://")):
+            await interaction.response.send_message("Please provide a valid URL starting with http:// or https://")
+            return
+        await self.update_and_confirm(interaction, "userpic", link)
 
-    @slsprofile.command(name="inventory", aliases=["i"])
-    async def slsprofile_inventory(self, ctx: commands.Context):
+    @profile.command(name="inventory", description="View your inventory.")
+    async def profile_inventory(self, interaction: discord.Interaction):
         """View your inventory."""
-        userinventory = await self.config.member(ctx.author).userinventory()
+        userinventory = await self.config.member(interaction.user).userinventory()
         item_counts = Counter(userinventory)
         formatted_items = [f"{count}x - {item}" if count > 1 else item for item, count in item_counts.items()]
         message = "```Here are all the items you have:\n- " + "\n- ".join(formatted_items) + "```"
-        await ctx.send(message)
+        await interaction.response.send_message(message)
 
-    @slsprofile.command(name="otherprofile", aliases=["op"])
-    async def slsprofile_otherprofile(self, ctx: commands.Context, user: discord.Member = None):
-        """See another user's profile."""
-        if not user:
-            await ctx.send("```Please specify a user to view their profile.```")
-            return
-        user_data = await self.config.member(user).all()
-        profilename = user_data["username"] if user_data["username"] != "None" else user.display_name
-        currency = await bank.get_currency_name(ctx.guild)
-        userbalance = await bank.get_balance(user)
-        alignment = user_data["alignment"]
-        alignmentprogress = self.alignmentmanager.generate_alignment_bar(alignment)
-    
-        profileheader = "Here is the user's profile!"
-        profiledescription = (
-            f"**Name:** {profilename}\n"
-            f"**Gender:** {user_data['usergender']}\n"
-            f"**Profession:** {user_data['userjob']} in the {user_data['careerfield']} field\n"
-            f"**Traits:** {', '.join(user_data['usertraits'])}\n"
-            f"**Granted Traits:**{', '.join(user_data['grantedtraits'])}\n"
-            f"**Account Balance:** {humanize.intcomma(userbalance)} {currency}\n"
-            f"**Alignment:**\n{alignmentprogress}\n"
-        )
-        await self.display_profile(ctx, profileheader, profiledescription, user_data["userpic"])
 
-    @slsprofile.command(name="resetprofile", aliases=["rp"])
-    async def slsprofile_resetprofile(self, ctx: commands.Context):
+    @profile.command(name="resetprofile", description="Reset profile data - Not Undoable.")
+    async def profile_resetprofile(self, interaction: discord.Interaction):
         """Reset profile data."""
         await self.confirm_action(
-            ctx, 
+            interaction, 
             "This will completely reset your profile data! `Confirm` or `Cancel`", 
             self.reset_user_profile, 
-            ctx.author
+            interaction.user
         )
 
-    @slsprofile.command(name="emptyaccount", aliases=["ea"])
-    async def slsprofile_emptyaccount(self, ctx: commands.Context):
+    @profile.command(name="emptyaccount", description="Empty your Red Discord bank account - Not Undoable.")
+    async def profile_emptyaccount(self, interaction: discord.Interaction):
         """Reset your bank balance to 0."""
-        balance = await bank.get_balance(ctx.author)
+        balance = await bank.get_balance(interaction.user)
         await self.confirm_action(
-            ctx, 
+            interaction,
             "This will empty your bank account! `Confirm` or `Cancel`", 
             lambda user: bank.withdraw_credits(user, balance), 
-            ctx.author
+            interaction.user
         )
-    
-    @slsprofile.command(name="setalignment", aliases=["sa"])
-    async def slsprofile_setalignment(self, ctx: commands.Context):
+
+    @profile.command(name="setalignment", description="Set your alignment to good or evil if you're neutral.")
+    @app_commands.describe(alignment = "Choose your alignment: good or evil.")
+    async def profile_setalignment(self, interaction: discord.Interaction, alignment: str):
         """Only works if you're neutral. Otherwise you'll have to influence alignment with actions."""
-        allymilestone = await self.config.member(ctx.author).allymilestone()
-        learnedstances = await self.config.member(ctx.author).learnedstances()
+        allymilestone = await self.config.member(interaction.user).allymilestone()
+        learnedstances = await self.config.member(interaction.user).learnedstances()
 
         if allymilestone != "Neutral":
-            await ctx.send("You can't set your alignment if you're already aligned.")
+            await interaction.response.send_message("You can't set your alignment if you're already aligned.")
             return
-        
-        await ctx.send("Are you going to fight for `good` or `evil`?")
-        def check(message): return message.author == ctx.author and message.content.lower() in ["good", "evil"]
 
+        await interaction.response.send_message("Are you going to fight for `good` or `evil`?")
+        def check(message): return message.author == interaction.user and message.content.lower() in ["good", "evil"]
         try:
             message = await self.bot.wait_for('message', timeout=30.0, check=check)
             if message.content.lower() == "good":
-                await self.config.member(ctx.author).allymilestone.set("Radiant Wanderer")
-                await self.config.member(ctx.author).alignment.set(25)
+                await self.config.member(interaction.user).allymilestone.set("Radiant Wanderer")
+                await self.config.member(interaction.user).alignment.set(25)
                 learnedstances["Good"] = True
-                await self.config.member(ctx.author).learnedstances.set(learnedstances)
-                await ctx.send("You have successfully joined the path to good.")
+                await self.config.member(interaction.user).learnedstances.set(learnedstances)
+                await interaction.response.send_message("You have successfully joined the path to good.")
             elif message.content.lower() == "evil":
-                await self.config.member(ctx.author).allymilestone.set("Veiled Wanderer")
-                await self.config.member(ctx.author).alignment.set(-25)
+                await self.config.member(interaction.user).allymilestone.set("Veiled Wanderer")
+                await self.config.member(interaction.user).alignment.set(-25)
                 learnedstances["Evil"] = True
-                await self.config.member(ctx.author).learnedstances.set(learnedstances)
-                await ctx.send("You have successfully joined the path to evil.")
+                await self.config.member(interaction.user).learnedstances.set(learnedstances)
+                await interaction.response.send_message("You have successfully joined the path to evil.")
             else:
-                await ctx.send("That doesn't appear to be one of the accepted alignments. Try again.")
+                await interaction.response.send_message("That doesn't appear to be one of the accepted alignments. Try again.")
                 return
         except asyncio.TimeoutError:
-            await ctx.send("The prompt timed out. Please try again.")
+            await interaction.response.send_message("The prompt timed out. Please try again.")
             return
     
-    @slsprofile.command(name="aligndebug", aliases=["ad"])
-    @commands.is_owner()
-    async def slsprofile_aligndebug(self, ctx: commands.Context, side: str = None, amt: int = 0):
-        """Debugging alignment."""
-        if side == None:
-            await ctx.send("You need to enter a side for the command!")
-            return
-        
-        if side not in ["positive", "negative"]:
-            await ctx.send("Please enter either `positive` or `negative`.")
-            return
-        
-        if amt == 0:
-            await ctx.send("The point of this command is to change the alignment not have it with 0 change.")
-            return
-        
-        alignment = await self.config.member(ctx.author).alignment()
-        usertraits = await self.config.member(ctx.author).usertraits()
-        newalignment, newmilestone, newtraits = await self.alignmentmanager.changealignment(ctx, side, amt, alignment, usertraits)
-        await self.config.member(ctx.author).alignment.set(newalignment)
-        await self.config.member(ctx.author).allymilestone.set(newmilestone)
-        if newtraits != None:
-            await self.config.member(ctx.author).usertraits.set(newtraits)
-        await ctx.send(f"Your alignment has been changed by {amt} toward the {side} side.")
-        await ctx.send(f"Your new alignment is {newalignment} and your new milestone is {newmilestone}")
-
+  
     
-    @slsprofile.command(name="traitsview", aliases=["tv"])
-    async def slsprofile_traitview(self, ctx: commands.Context):
+    @profile.command(name="traitsview", description="View traits and their descriptions via categories.")
+    @app_commands.describe(category = "Choose a category: hindrances, social, values, nature, or interests.")
+    @app_commands.choices(category=[
+        app_commands.Choice(name="Hindrances", value="hindrances"),
+        app_commands.Choice(name="Social", value="social"),
+        app_commands.Choice(name="Values", value="values"),
+        app_commands.Choice(name="Nature", value="nature"),
+        app_commands.Choice(name="Interests", value="interests")
+    ])
+    async def profile_traitsview(self, interaction: discord.Interaction, category: str):
         """View traits and their descriptions via categories."""
-        await ctx.send("Choose a category to see the traits for? `hindrances`, `social`, `values`, `nature`, or `interests`")
-        def check(m):
-            return m.author == ctx.author and m.content.lower() in ["hindrances", "social", "values", "nature", "interests"]
-        try:
-            response = await self.bot.wait_for('message', timeout=30.0, check=check)
-            if response.content.lower() == "hindrances":
-                data = HINDRANCES
-            elif response.content.lower() == "social":
-                data = SOCIALTRAITS
-            elif response.content.lower() == "values":
-                data = VALUETRAITS
-            elif response.content.lower() == "nature":
-                data = NATURETRAITS
-            elif response.content.lower() == "interests":
-                data = INTERESTTRAITS
-            else:
-                await ctx.send("Looks like maybe you typed the category wrong! Try again please!")
-                return
-            pages = paginate(data)
-            current_page = 0
+        response = category.lower()
+        if response == "hindrances":
+            data = HINDRANCES
+        elif response == "social":
+            data = SOCIALTRAITS
+        elif response == "values":
+            data = VALUETRAITS
+        elif response == "nature":
+            data = NATURETRAITS
+        elif response == "interests":
+            data = INTERESTTRAITS
+        else:
+            await interaction.response.send_message("Looks like maybe you typed the category wrong! Try again please!")
+            return
+        pages = paginate(data)
+        current_page = 0
 
-            message = await ctx.send(pages[current_page])
+        message = await interaction.response.send_message(pages[current_page])
 
-            await message.add_reaction("⬅️") 
-            await message.add_reaction("➡️") 
+        await message.add_reaction("⬅️") 
+        await message.add_reaction("➡️") 
 
-            def reaction_check(reaction, user):
-                return user == ctx.author and reaction.message.id == message.id
+        def reaction_check(reaction, user):
+            return user == interaction.user and reaction.message.id == message.id
 
-            while True:
-                try:
-                    reaction, _ = await self.bot.wait_for("reaction_add", timeout=60.0, check=reaction_check)
-                    if str(reaction.emoji) == "➡️":
-                        if current_page == len(pages) - 1:
-                            current_page = 0
-                        else:
-                            current_page += 1
-                        await message.edit(content=pages[current_page])
-                        try:
-                            await message.remove_reaction("➡️", ctx.author)
-                        except discord.Forbidden:
-                            pass
-                    elif str(reaction.emoji) == "⬅️":
-                        if current_page == 0:
+        while True:
+            try:
+                reaction, _ = await self.bot.wait_for("reaction_add", timeout=60.0, check=reaction_check)
+                if str(reaction.emoji) == "➡️":
+                    if current_page == len(pages) - 1:
+                        current_page = 0
+                    else:
+                        current_page += 1
+                    await message.edit(content=pages[current_page])
+                    try:
+                        await message.remove_reaction("➡️", interaction.user)
+                    except discord.Forbidden:
+                        pass
+                elif str(reaction.emoji) == "⬅️":
+                    if current_page == 0:
                             current_page = len(pages) - 1
-                        else:
+                    else:
                             current_page -= 1
-                        await message.edit(content=pages[current_page])
-                        try:
-                            await message.remove_reaction("⬅️", ctx.author)
-                        except discord.Forbidden:
-                            pass
+                    await message.edit(content=pages[current_page])
+                    try:
+                        await message.remove_reaction("⬅️", interaction.user)
+                    except discord.Forbidden:
+                        pass
+            except asyncio.TimeoutError:
+                await message.remove_reaction("➡️", self.bot.user)
+                await message.remove_reaction("⬅️", self.bot.user)
+                pass
 
-                except asyncio.TimeoutError:
-                    await message.remove_reaction("➡️", self.bot.user)
-                    await message.remove_reaction("⬅️", self.bot.user)
-                    pass
-
-        except asyncio.TimeoutError:
-            await ctx.send("You took too long to respond. Command cancelled.")   
+    
             
-    @slsprofile.command(name="addtraits", aliases=["at"])
-    async def slsprofile_addtraits(self, ctx: commands.Context):
+    @profile.command(name="addtraits", description="Add up to 5 traits, ensuring one is a hindrance.")
+    async def slsprofile_addtraits(self, interaction: discord.Interaction):
         """Allows users to add up to 5 traits, ensuring one is a hindrance. Cannot change traits once they're set unless you reset your profile."""
-        user_traits = await self.config.member(ctx.author).usertraits()
+        user_traits = await self.config.member(interaction.user).usertraits()
 
         if len(user_traits) >= 5:
-            await ctx.send("You already have the maximum number of traits (5). If you want to change your traits, you'll have to reset your profile or ask an admin to remove the traits.")
+            await interaction.response.send_message("You already have the maximum number of traits (5). If you want to change your traits, you'll have to reset your profile or ask an admin to remove the traits.")
             return
 
         hindrance_traits = list(HINDRANCES.keys())
-        selected_hindrance = await self.select_trait(ctx, hindrance_traits, "hindrance", 1)
-
+        selected_hindrance = await self.select_trait(interaction, hindrance_traits, "hindrance", 1)
         if not selected_hindrance:
-            await ctx.send("No hindrance was selected. Please try the command again.")
+            await interaction.response.send_message("No hindrance was selected. Please try the command again.")
             return
 
         user_traits.extend(selected_hindrance)
@@ -621,16 +590,16 @@ class SpideyLifeSim(Cog):
         }.keys())
 
         
-        selected_additional_traits = await self.select_trait(ctx, all_traits, "all traits", 4, user_traits)
+        selected_additional_traits = await self.select_trait(interaction, all_traits, "all traits", 4, user_traits)
         if len(selected_additional_traits) != 4:
-            await ctx.send("You didn't select enough traits. Please try the command again.")
+            await interaction.response.send_message("You didn't select enough traits. Please try the command again.")
             return
 
         user_traits.extend(selected_additional_traits)
-        await self.config.member(ctx.author).usertraits.set(user_traits)
-        await ctx.send(f"Profile updated! Your traits are now:\n{', '.join(user_traits)}")
+        await self.config.member(interaction.user).usertraits.set(user_traits)
+        await interaction.response.send_message(f"Profile updated! Your traits are now:\n{', '.join(user_traits)}")
 
-    async def select_trait(self, ctx, traits, category, max_traits, current_traits=[]):
+    async def select_trait(self, interaction, traits, category, max_traits, current_traits=[]):
         """Displays a trait selection page."""
         traits_per_page = 10
         total_pages = (len(traits) + traits_per_page - 1) // traits_per_page
@@ -696,7 +665,7 @@ class SpideyLifeSim(Cog):
             view.stop()
 
         embed, page_traits = build_embed(current_page)
-        message = await ctx.send(embed=embed, view=create_view(page_traits))
+        message = await interaction.response.send_message(embed=embed, view=create_view(page_traits))
 
         try:
             while len(selected_traits) < max_traits:
@@ -704,19 +673,16 @@ class SpideyLifeSim(Cog):
             await message.delete()
             return selected_traits
         except Exception as e:
-            await ctx.send(f"An error occurred: {e}")
+            await interaction.response.send_message(f"An error occurred: {e}")
             return []
     
 
-    @slsprofile.command(name="removetraits", aliases=["rt"])
-    @commands.is_owner()
-    async def slsprofile_removetraits(self, ctx: commands.Context, user: discord.Member = None) -> None:
+    @profile.command(name="removetraits", description="Remove all traits from a user's profile. Admins only.")
+    @app_commands.has_permissions(administrator=True)
+    async def slsprofile_removetraits(self, interaction: discord.Interaction, user: discord.Member) -> None:
         """Only usable by bot owners. This command is here for legitimate accidental trait additions. The idea is traits should not be changed during the lifetime of a character."""
-        if user == None:
-            await ctx.send("Don't forget to type the user's name!")
-            return
         await self.config.member(user).usertraits.set([])
-        await ctx.send(f"{user}'s traits have been deleted successfully.")
+        await interaction.response.send_message(f"{user}'s traits have been deleted successfully.")
 
 
     async def update_and_confirm(self, ctx, attribute, value):
@@ -764,21 +730,18 @@ class SpideyLifeSim(Cog):
         await self.config.member(member).learnedskills.set(LEARNEDSKILLS)
         await self.config.member(member).learnedstances.set(STANCES)
 
-    @commands.group(aliases=["slssk"])
-    async def slsskills(self, ctx: commands.Context):
-        """Work on or check your skill levels!"""
-        return
 
-    @slsskills.command(name="skillindex", aliases=["si"])
-    async def slsskills_skillindex(self, ctx: commands.Context):
+
+    @skills.command(name="skillindex", description="See all available skills!")
+    async def slsskills_skillindex(self, interaction: discord.Interaction):
         """See all available skills!"""
         skills_text = "```Here are all the available skills:\n- " + "\n- ".join(SKILLSLIST) + "```"
-        await ctx.send(skills_text)
+        await interaction.response.send_message(skills_text)
 
-    @slsskills.command(name="skillprogress", aliases=["sp"])
-    async def slsskills_skillprogress(self, ctx: commands.Context):
+    @skills.command(name="skillprogress", description="Show your skill progress with progress bars!")
+    async def slsskills_skillprogress(self, interaction: discord.Interaction):
         """Show your skill progress with progress bars!"""
-        skillslist = await self.config.member(ctx.author).skillslist()
+        skillslist = await self.config.member(interaction.user).skillslist()
 
         def generate_progress_bar(percentage):
             """Generate a progress bar with blocks for a percentage."""
@@ -795,53 +758,66 @@ class SpideyLifeSim(Cog):
                 f"- {key}\nLevel {value[0]} {generate_progress_bar(value[1])}"
                 for key, value in filtered_skills.items()
             ) + "```"
-        await ctx.send(skillresult)
+        await interaction.response.send_message(skillresult)
+    
+    async def skills_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        """Autocomplete function for skills."""
+        current = current.lower()
+        choices = []
+        for skill in SKILLSLIST.keys():
+            if current in skill.lower():
+                choices.append(app_commands.Choice(name=skill, value=skill))
+        return choices[:25]
 
-    @slsskills.command(name="practice", aliases=["p"])
-    async def slsskills_practice(self, ctx: commands.Context, skillname: str = None):
+    @skills.command(name="practice", description="Work on a skill of your choice.")
+    @app_commands.describe(skillname="The skill you want to practice.")
+    @app_commands.autocomplete(skillname=skills_autocomplete)
+    async def slsskills_practice(self, interaction: discord.Interaction, skillname: str):
         """Work on a skill of your choice (case-sensitive; starts with capitals)."""
         if skillname not in SKILLSLIST:
-            await ctx.send("```This skill is not one of the accepted skills! Please consult the skill index and try again!```")
+            await interaction.response.send_message("```This skill is not one of the accepted skills! Please consult the skill index and try again!```")
             return
 
-        if await self.is_on_cooldown(ctx, skillname):
+        if await self.is_on_cooldown(interaction, skillname):
             return
 
-        if not await self.has_required_items(ctx, skillname):
+        if not await self.has_required_items(interaction, skillname):
             return
 
-        await self.practice_skill(ctx, skillname)
+        await self.practice_skill(interaction, skillname)
         cooldown_duration = timedelta(minutes=60)  # Adjust duration as needed
         current_time = datetime.now()
-        user_cooldowns = skill_cooldowns.get(ctx.author.id, {})
+        user_cooldowns = skill_cooldowns.get(interaction.user.id, {})
         user_cooldowns[skillname] = current_time + cooldown_duration
-        skill_cooldowns[ctx.author.id] = user_cooldowns
+        skill_cooldowns[interaction.user.id] = user_cooldowns
 
-    async def is_on_cooldown(self, ctx, skillname):
+    async def is_on_cooldown(self, interaction, skillname):
         """Check if the user is on cooldown for a skill."""
         current_time = datetime.now()
-        user_cooldowns = skill_cooldowns.get(ctx.author.id, {})
+        user_cooldowns = skill_cooldowns.get(interaction.user.id, {})
         if skillname in user_cooldowns:
             cooldown_time = user_cooldowns[skillname]
             if current_time < cooldown_time:
                 remaining_seconds = (cooldown_time - current_time).total_seconds()
                 minutes, seconds = divmod(int(remaining_seconds), 60)
-                await ctx.send(f"```You're so tired from practicing {skillname}. Try waiting {minutes} minutes and {seconds} seconds to practice again.```" if minutes else f"```You're so tired from practicing {skillname}. Try waiting {seconds} seconds to practice again.```")
+                await interaction.response.send_message(f"```You're so tired from practicing {skillname}. Try waiting {minutes} minutes and {seconds} seconds to practice again.```" if minutes else f"```You're so tired from practicing {skillname}. Try waiting {seconds} seconds to practice again.```")
                 return True
         return False
 
-    async def has_required_items(self, ctx, skillname):
+    async def has_required_items(self, interaction, skillname):
         """Check if the user has the required items to practice a skill."""
         skillsinfo = SKILLSLIST.get(skillname, [])
         if len(skillsinfo) < 4:
             return True
         required_items = skillsinfo[3]
-        userinventory = await self.config.member(ctx.author).userinventory()
+        userinventory = await self.config.member(interaction.user).userinventory()
         if required_items and not any(item in userinventory for item in required_items):
-            await ctx.send(f"```You need one of these items to practice {skillname}: {', '.join(required_items)}. Buy them from the store!```")
+            await interaction.response.send_message(f"```You need one of these items to practice {skillname}: {', '.join(required_items)}. Buy them from the store!```")
             return False
         return True
     
+    # decide whether to do this or not
+    '''
     @slsskills.command(name="study", aliases=["s"])
     @commands.cooldown(rate=1, per=1800, type=BucketType.user)
     async def slsskills_study(self, ctx: commands.Context):
@@ -937,7 +913,7 @@ class SpideyLifeSim(Cog):
             await ctx.send(f"You have discovered the stance **{validstance}**! Feel free to use it in duels!")
             learnedstances[validstance] = True
             await self.config.member(ctx.author).learnedstances.set(learnedstances)
-            
+    
     
     @slsskills.command(name="learn", aliases=["l"])
     @commands.cooldown(rate=1, per=1800, type=BucketType.user)
@@ -1004,35 +980,56 @@ class SpideyLifeSim(Cog):
                            description=description)
         await ctx.send(embed=em)
 
+    '''
 
-    @commands.group(aliases=["slsc"])
-    async def slscareers(self, ctx: commands.Context):
-        """Join a career and rise the ranks to the top of your field!"""
-        return
+
         
-    @slscareers.command(name="careerindex", aliases=["ci"])
-    async def slscareers_careerindex(self, ctx: commands.Context):
+    @careers.command(name="careerindex", description="See an index of all available careers!")
+    async def slscareers_careerindex(self, interaction: discord.Interaction):
         """See an index of all available careers!"""
         indexseparator = "\n- "
-        await ctx.send(f"```Here is a list of all the available career paths:\n- {indexseparator.join(ALLJOBS)}```")
+        await interaction.response.send_message(f"```Here is a list of all the available career paths:\n- {indexseparator.join(ALLJOBS)}```")
 
-    @slscareers.command(name="aboutcareer", aliases=["ac"])
-    async def slscareers_aboutcareer(self, ctx: commands.Context, careername: str = None):
+    async def career_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        """Autocomplete function for careers."""
+        current = current.lower()
+        choices = []
+        for career in ALLJOBS.keys():
+            if current in career.lower():
+                choices.append(app_commands.Choice(name=career, value=career))
+        return choices[:25]
+
+    async def subcareer_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        """Autocomplete function for subcareers."""
+        current = current.lower()
+        top_level_career = interaction.namespace.careername
+        if top_level_career not in ALLJOBS:
+            return []
+        choices = []
+        for subcareer in SUBJOBS.keys():
+            if current in subcareer.lower() and subcareer in CAREEROPPOSITE[top_level_career]:
+                choices.append(app_commands.Choice(name=subcareer, value=subcareer))
+        return choices[:25]
+
+    @careers.command(name="aboutcareer", description="See more information about a particular career!")
+    @app_commands.describe(careername="The career you want to learn about.")
+    @app_commands.autocomplete(careername=career_autocomplete)
+    async def slscareers_aboutcareer(self, interaction: discord.Interaction, careername: str):
         """See more information about a particular career! Ensure correct spelling/capitalization."""
         if not careername:
-            await ctx.send("```Please specify the career you want to learn about!```")
+            await interaction.response.send_message("```Please specify the career you want to learn about!```")
             return
     
         if careername not in ALLJOBS:
-            await ctx.send("```The specified career wasn't found. Double-check spelling and try again!```")
+            await interaction.response.send_message("```The specified career wasn't found. Double-check spelling and try again!```")
             return
         
         jobdict = ALLJOBS
         if ALLJOBS[careername] == None:
             jobdict = SUBJOBS
             jobopts = CAREEROPPOSITE[careername]
-            await ctx.send(f"Would you like to see the career information for `{jobopts[0]}` or `{jobopts[1]}`?")
-            def check(message): return message.author == ctx.author and message.content in jobopts
+            await interaction.response.send_message(f"Would you like to see the career information for `{jobopts[0]}` or `{jobopts[1]}`?")
+            def check(message): return message.author == interaction.user and message.content in jobopts
 
             try: 
                 message = await self.bot.wait_for('message', timeout=30.0, check=check)
@@ -1041,10 +1038,10 @@ class SpideyLifeSim(Cog):
                 elif message.content == jobopts[1]:
                     careername = jobopts[1]
                 else:
-                    await ctx.send("Please check your spelling and try again.")
+                    await interaction.response.send_message("Please check your spelling and try again.")
                     return
             except asyncio.TimeoutError:
-                await ctx.send("Prompt timed out. Please try again.")
+                await interaction.response.send_message("Prompt timed out. Please try again.")
                 return
 
         jobinfo = jobdict[careername]
@@ -1055,52 +1052,54 @@ class SpideyLifeSim(Cog):
             color=discord.Color.red()
         )
         em.set_image(url=jobinfo[1])
-        await ctx.send(embed=em)
+        await interaction.response.send_message(embed=em)
 
-    @slscareers.command(name="careerapply", aliases=["ca"])
-    async def slscareers_careerapply(self, ctx: commands.Context, jobname: str = None):
+    @careers.command(name="careerapply", description="Apply to a career of your choosing!")
+    @app_commands.describe(jobname="The career you want to apply for.")
+    @app_commands.autocomplete(jobname=career_autocomplete)
+    async def slscareers_careerapply(self, interaction: discord.Interaction, jobname: str):
         """Apply to a career of your choosing!"""
         if not jobname:
-            await ctx.send("```Specify a job name to apply!```")
+            await interaction.response.send_message("```Specify a job name to apply!```")
             return
 
-        userjob = await self.config.member(ctx.author).userjob()
-        careerfield = await self.config.member(ctx.author).careerfield()
-    
+        userjob = await self.config.member(interaction.user).userjob()
+        careerfield = await self.config.member(interaction.user).careerfield()
+
         if careerfield == jobname:
-            await ctx.send("```You're already in that career!```")
+            await interaction.response.send_message("```You're already in that career!```")
             return
         if userjob != "Unemployed":
-            await ctx.send("```Quit your existing job before applying to a new one!```")
+            await interaction.response.send_message("```Quit your existing job before applying to a new one!```")
             return
         if jobname not in ALLJOBS:
-            await ctx.send("```Job not found. Try retyping it!```")
+            await interaction.response.send_message("```Job not found. Try retyping it!```")
             return
         
         maindict = ALLJOBS
         if ALLJOBS.get(jobname) == None:
             maindict = SUBJOBS
             jobopts = CAREEROPPOSITE.get(jobname)
-            alignment = await self.config.member(ctx.author).alignment()
+            alignment = await self.config.member(interaction.user).alignment()
             if alignment > 0:
-                await ctx.send("Because you are good, the following career seems ideal for you:")
+                await interaction.response.send_message("Because you are good, the following career seems ideal for you:")
                 jobname = jobopts[0]
             elif alignment < 0:
-                await ctx.send("Because you are evil, the following career seems ideal for you:")
+                await interaction.response.send_message("Because you are evil, the following career seems ideal for you:")
                 jobname = jobopts[1]
             else:
-                await ctx.send("You need to have an alignment for that career path!")
+                await interaction.response.send_message("You need to have an alignment for that career path!")
                 return
             
     
         jobdict = globals().get(jobname)
         if not jobdict:
-            await ctx.send("```Internal error! Contact support if this persists.```")
+            await interaction.response.send_message("```Internal error! Contact support if this persists.```")
             return
 
         maincareerlist = maindict[jobname]
         requiredskills = maincareerlist[4]
-        currency = await bank.get_currency_name(ctx.guild)
+        currency = await bank.get_currency_name(interaction.guild)
         startercareer = list(jobdict.keys())[0]
         description, salary = jobdict[startercareer][:2]
     
@@ -1116,44 +1115,42 @@ class SpideyLifeSim(Cog):
             color=discord.Color.red()
         )
         em.set_image(url=maincareerlist[1])
-        await ctx.send(embed=em)
-        await ctx.send("Type `Confirm` to secure this job or `Cancel` to cancel.")
+        await interaction.response.send_message(embed=em)
+        await interaction.response.send_message("Type `Confirm` to secure this job or `Cancel` to cancel.")
 
         def check(message):
-            return message.author == ctx.author and message.content.lower() in ["confirm", "cancel"]
-
+            return message.author == interaction.user and message.content.lower() in ["confirm", "cancel"]
         try:
             message = await self.bot.wait_for('message', timeout=30.0, check=check)
             if message.content.lower() == "confirm":
-                await ctx.send(f"Congratulations {ctx.author.mention}, you've been hired for the {jobname} job!")
-                await self.config.member(ctx.author).userjob.set(startercareer)
-                await self.config.member(ctx.author).careerfield.set(jobname)
-                await self.config.member(ctx.author).careerlevel.set(1)
-                await self.config.member(ctx.author).salary.set(salary)
-                async with self.config.member(ctx.author).userinventory() as inventory:
+                await interaction.response.send_message(f"Congratulations {interaction.user.mention}, you've been hired for the {jobname} job!")
+                await self.config.member(interaction.user).userjob.set(startercareer)
+                await self.config.member(interaction.user).careerfield.set(jobname)
+                await self.config.member(interaction.user).careerlevel.set(1)
+                await self.config.member(interaction.user).salary.set(salary)
+                async with self.config.member(interaction.user).userinventory() as inventory:
                     inventory.extend(maincareerlist[3])
                 recruitmessage = discord.Embed(title=f"Message from {maincareerlist[2]}", description=f"{maincareerlist[6]}")
                 recruitmessage.set_thumbnail(url=maincareerlist[5])
-                await ctx.send(embed=recruitmessage)
+                await interaction.response.send_message(embed=recruitmessage)
             else:
-                await ctx.send(f"Application for {jobname} has been canceled.")
+                await interaction.response.send_message(f"Application for {jobname} has been canceled.")
         except asyncio.TimeoutError:
-            await ctx.send("Response timeout! Application canceled.")
+            await interaction.response.send_message("Response timeout! Application canceled.")
 
-    @slscareers.command(name="quitjob", aliases=["qj"])
-    async def slscareers_quitjob(self, ctx: commands.Context):
+    @careers.command(name="quitjob", description="Quit your job with this function!")
+    async def slscareers_quitjob(self, interaction: discord.Interaction):
         """Quit your job with this function!"""
-        userjob = await self.config.member(ctx.author).userjob()
-        careerfield = await self.config.member(ctx.author).careerfield()
-
+        userjob = await self.config.member(interaction.user).userjob()
+        careerfield = await self.config.member(interaction.user).careerfield()
         if userjob == "Unemployed":
-            await ctx.send("You can't quit a job if you don't have a job.")
+            await interaction.response.send_message("You can't quit a job if you don't have a job.")
             return
-        
-        await ctx.send(f"Are you sure you want to quit your job as a {userjob}? Type `Yes` or `No`.")
+
+        await interaction.response.send_message(f"Are you sure you want to quit your job as a {userjob}? Type `Yes` or `No`.")
     
         def check(message):
-            return message.author == ctx.author and message.content.lower() in ["yes", "no"]
+            return message.author == interaction.user and message.content.lower() in ["yes", "no"]
 
         if careerfield in SUBJOBS.keys():
             maincareerlist = SUBJOBS[careerfield]
@@ -1163,43 +1160,49 @@ class SpideyLifeSim(Cog):
         try:
             message = await self.bot.wait_for('message', timeout=30.0, check=check)
             if message.content.lower() == "yes":
-                await ctx.send("You have quit your job!")
-                await self.config.member(ctx.author).userjob.set("Unemployed")
-                await self.config.member(ctx.author).careerfield.set("Unemployed")
-                await self.config.member(ctx.author).careerprog.set(0)
-                await self.config.member(ctx.author).careerlevel.set(0)
-                await self.config.member(ctx.author).salary.set(0)
+                await interaction.response.send_message("You have quit your job!")
+                await self.config.member(interaction.user).userjob.set("Unemployed")
+                await self.config.member(interaction.user).careerfield.set("Unemployed")
+                await self.config.member(interaction.user).careerprog.set(0)
+                await self.config.member(interaction.user).careerlevel.set(0)
+                await self.config.member(interaction.user).salary.set(0)
                 for i in maincareerlist[3]:
-                    async with self.config.member(ctx.author).userinventory() as inventory:
+                    async with self.config.member(interaction.user).userinventory() as inventory:
                         if i in inventory:
                             inventory.remove(i)
                 leavemessage = discord.Embed(title=f"Message from {maincareerlist[2]}", description=f"{maincareerlist[7]}")
                 leavemessage.set_thumbnail(url=maincareerlist[5])
-                await ctx.send(embed=leavemessage)
+                await interaction.response.send_message(embed=leavemessage)
             else:
-                await ctx.send("Resignation canceled.")
+                await interaction.response.send_message("Resignation canceled.")
         except asyncio.TimeoutError:
-            await ctx.send("Response timeout! Please run the command again if you want to quit.")
+            await interaction.response.send_message("Response timeout! Please run the command again if you want to quit.")
 
-    @slscareers.command(name="gotowork", aliases=["gtw"])
-    async def slscareers_gotowork(self, ctx: commands.Context):
+    @careers.command(name="gotowork", description="Go to work at your job!")
+    @app_commands.describe(effort="How much effort to put into work today?")
+    @app_commands.choices(effort=[
+        app_commands.Choice(name="Low", value="low"),
+        app_commands.Choice(name="Medium", value="medium"),
+        app_commands.Choice(name="High", value="high")
+    ])
+    async def slscareers_gotowork(self, interaction: discord.Interaction, effort: str):
         """Go to work at your job!"""
-        user_id = ctx.author.id
-        userjob = await self.config.member(ctx.author).userjob()
-        careerfield = await self.config.member(ctx.author).careerfield()
-        careerprog = await self.config.member(ctx.author).careerprog()
-        careerlevel = await self.config.member(ctx.author).careerlevel()
-        skillslist = await self.config.member(ctx.author).skillslist()
-        salary = await self.config.member(ctx.author).salary()
-        usertraits = await self.config.member(ctx.author).usertraits()
-        username = await self.config.member(ctx.author).username()
-        consechigheffort = await self.config.member(ctx.author).consechigheffort()
-        burnoutapplied = await self.config.member(ctx.author).burnoutapplied()
-        grantedtraits = await self.config.member(ctx.author).grantedtraits()
-        alignment = await self.config.member(ctx.author).alignment()
+        user_id = interaction.user.id
+        userjob = await self.config.member(interaction.user).userjob()
+        careerfield = await self.config.member(interaction.user).careerfield()
+        careerprog = await self.config.member(interaction.user).careerprog()
+        careerlevel = await self.config.member(interaction.user).careerlevel()
+        skillslist = await self.config.member(interaction.user).skillslist()
+        salary = await self.config.member(interaction.user).salary()
+        usertraits = await self.config.member(interaction.user).usertraits()
+        username = await self.config.member(interaction.user).username()
+        consechigheffort = await self.config.member(interaction.user).consechigheffort()
+        burnoutapplied = await self.config.member(interaction.user).burnoutapplied()
+        grantedtraits = await self.config.member(interaction.user).grantedtraits()
+        alignment = await self.config.member(interaction.user).alignment()
         burnoutbool = None
         if username == "None":
-            username = ctx.author.display_name
+            username = interaction.user.display_name
 
         current_time = datetime.now()
         last_work_time = work_cooldowns.get(user_id)
@@ -1208,11 +1211,11 @@ class SpideyLifeSim(Cog):
             remaining_time = timedelta(days=1) - (current_time - last_work_time)
             hours, remainder = divmod(remaining_time.seconds, 3600)
             minutes, _ = divmod(remainder, 60)
-            await ctx.send(f"```You can only go to work once every day. Try again in {hours} hours and {minutes} minutes.```")
+            await interaction.response.send_message(f"```You can only go to work once every day. Try again in {hours} hours and {minutes} minutes.```")
             return
 
         if userjob == "Unemployed":
-            await ctx.send("```You need a job to go to work!```")
+            await interaction.response.send_message("```You need a job to go to work!```")
             return
         firebool = False
         oppositecareer = None
@@ -1229,21 +1232,21 @@ class SpideyLifeSim(Cog):
                 break
             
         if firebool == True:
-            await ctx.send(f"You are becoming too {'evil' if oppvalue == 1 else 'good'} for the {careerfield} field. Your supervisor has words to say:")
+            await interaction.response.send_message(f"You are becoming too {'evil' if oppvalue == 1 else 'good'} for the {careerfield} field. Your supervisor has words to say:")
             em = discord.Embed(
                 title=f"Message from {SUBJOBS.get(careerfield)[2]}",
                 description=f"{SUBJOBS.get(careerfield)[8]}"
             )
             em.set_thumbnail(url=SUBJOBS.get(careerfield)[5])
-            await ctx.send(embed=em)
+            await interaction.response.send_message(embed=em)
             afterlevel = careerlevel - 2 if careerlevel - 2 > 0 else 1
-            await self.config.member(ctx.author).userjob.set("Unemployed")
-            await self.config.member(ctx.author).careerfield.set("Unemployed")
-            await self.config.member(ctx.author).careerprog.set(0)
-            await self.config.member(ctx.author).careerlevel.set(0)
-            await self.config.member(ctx.author).salary.set(0)
+            await self.config.member(interaction.user).userjob.set("Unemployed")
+            await self.config.member(interaction.user).careerfield.set("Unemployed")
+            await self.config.member(interaction.user).careerprog.set(0)
+            await self.config.member(interaction.user).careerlevel.set(0)
+            await self.config.member(interaction.user).salary.set(0)
             for i in SUBJOBS.get(careerfield)[3]:
-                async with self.config.member(ctx.author).userinventory() as inventory:
+                async with self.config.member(interaction.user).userinventory() as inventory:
                     if i in inventory:
                         inventory.remove(i)
                 
@@ -1256,34 +1259,34 @@ class SpideyLifeSim(Cog):
                 description = f"{opposingcareer[9]}"
             )
             em2.set_thumbnail(url=opposingcareer[5])
-            await ctx.send(embed=em2)
-            currency = await bank.get_currency_name(ctx.guild)
+            await interaction.response.send_message(embed=em2)
+            currency = await bank.get_currency_name(interaction.guild)
             nextposition = list(oppdict.keys())[afterlevel - 1]
             nextsalary = oppdict[nextposition][1]
-            await ctx.send(
+            await interaction.response.send_message(
                 f"You are being offered the position: {nextposition}, starting at level {afterlevel} "
                 f"with a daily salary of {humanize.intcomma(nextsalary)} {currency}. Do you accept? `yes` or `no`"
             )
             def check(message):
-                    return message.author == ctx.author and message.content.lower() in ['yes', 'no']
+                    return message.author == interaction.user and message.content.lower() in ['yes', 'no']
 
             try:
                 message = await self.bot.wait_for('message', timeout=30.0, check=check)
                 if message.content.lower() == "yes":
-                    await self.config.member(ctx.author).userjob.set(nextposition)
-                    await self.config.member(ctx.author).careerfield.set(oppcareername)
-                    await self.config.member(ctx.author).salary.set(nextsalary)
-                    await self.config.member(ctx.author).careerlevel.set(afterlevel)
+                    await self.config.member(interaction.user).userjob.set(nextposition)
+                    await self.config.member(interaction.user).careerfield.set(oppcareername)
+                    await self.config.member(interaction.user).salary.set(nextsalary)
+                    await self.config.member(interaction.user).careerlevel.set(afterlevel)
                     for i in opposingcareer[3]:
-                        async with self.config.member(ctx.author).userinventory() as inventory:
+                        async with self.config.member(interaction.user).userinventory() as inventory:
                             inventory.append(i)
-                    await ctx.send("You have accepted the offer and started your new career!")
+                    await interaction.response.send_message("You have accepted the offer and started your new career!")
                     return
                 else:
-                    await ctx.send("You declined the offer. You are currently unemployed.")
+                    await interaction.response.send_message("You declined the offer. You are currently unemployed.")
                     return
             except asyncio.TimeoutError:
-                await ctx.send("Your response timed out. Unfortunately, the offer is no longer on the table.")
+                await interaction.response.send_message("Your response timed out. Unfortunately, the offer is no longer on the table.")
                 return
 
 
@@ -1293,40 +1296,35 @@ class SpideyLifeSim(Cog):
                 burnoutdate = datetime.fromisoformat(burnoutapplied)
                 if current_time - burnoutdate > timedelta(days=7):
                     grantedtraits.remove("Burned Out")
-                    await self.config.member(ctx.author).grantedtraits.set(grantedtraits)
-                    await self.config.member(ctx.author).burnoutapplied.set(None)
-                    await ctx.send("You've recovered from your burnout and feel refreshed!")
+                    await self.config.member(interaction.user).grantedtraits.set(grantedtraits)
+                    await self.config.member(interaction.user).burnoutapplied.set(None)
+                    await interaction.response.send_message("You've recovered from your burnout and feel refreshed!")
                 else:
-                    await ctx.send(
+                    await interaction.response.send_message(
                         "You're burned out! Your performance will be signifcantly reduced.\n"
                         "Try taking it easy for a day to recover."
                     )
             else:
                 grantedtraits.remove("Burned Out")
-                await self.config.member(ctx.author).grantedtraits.set(grantedtraits)
-                await ctx.send("There has been an error with your traits. You appear to have burnout but no set burnout date. Burned Out was removed from your traits, but if you ever see this error again, please report it.")
-        
-        await ctx.send("How much effort would you like to put into your work today? `High`, `Normal`, `Low`")
-        def check(message):
-            return message.author == ctx.author and message.content.lower() in ["high", "normal", "low"]
-        
+                await self.config.member(interaction.user).grantedtraits.set(grantedtraits)
+                await interaction.response.send_message("There has been an error with your traits. You appear to have burnout but no set burnout date. Burned Out was removed from your traits, but if you ever see this error again, please report it.")
+
         goodtraits = ["Driven Achiever", "Disciplined", "Workaholic", "Lucky"]
         badtraits = ["Lazy", "Reckless", "Pessimist", "Absent-Minded", "Insane", "Defiant Rebel", "Easily Frightened"]
         notraits = ["Lazy", "Absent-Minded", "Defiant Rebel"]
         yestraits = ["Driven Achiever", "Disciplined", "Workaholic"]
         preclusiontraits = []
-        try:
-            message = await self.bot.wait_for('message', timeout=30.0, check=check)
-            effort = message.content.lower()
-            if effort == "high":
+
+        effort = message.content.lower()
+        if effort == "high":
                 for trait in notraits:
                     if trait in usertraits:
                         preclusiontraits.append(trait)
                 if preclusiontraits:
-                    await ctx.send(f"{username} has the traits {', '.join(preclusiontraits)} and can't work hard because of them.")
+                    await interaction.response.send_message(f"{username} has the traits {', '.join(preclusiontraits)} and can't work hard because of them.")
                     return
                 if "Burned Out" in grantedtraits: 
-                    await ctx.send("You're burned out and can't push yourself any harder.")
+                    await interaction.response.send_message("You're burned out and can't push yourself any harder.")
                     return
                 consechigheffort += 1
                 burnoutthreshold = 4 if any(trait in usertraits for trait in yestraits) else 3
@@ -1334,29 +1332,26 @@ class SpideyLifeSim(Cog):
                     burnoutbool = True
                 effort_modifier = random.randint(30, 60)
 
-            if effort == "normal":
+        if effort == "normal":
                 effort_modifier = random.randint(15, 45)
                 if "Burned Out" in grantedtraits and any(trait in usertraits for trait in yestraits):
                     burnoutbool = False
 
-            if effort == "low":
+        if effort == "low":
                 for trait in yestraits:
                     if trait in usertraits:
                         preclusiontraits.append(trait)
                 if preclusiontraits:
-                    await ctx.send(f"Because {username} has the traits {usertraits}, they aren't content with putting in low effort at work.")
+                    await interaction.response.send_message(f"Because {username} has the traits {usertraits}, they aren't content with putting in low effort at work.")
                     return
                 if "Burned Out" in grantedtraits:
                     burnoutbool = False
                 effort_modifier = random.randint(-10, 10)
-        except asyncio.TimeoutError:
-            await ctx.send("It appears that you forgot to type how much effort to put into work!")
-            return
         
         if effort != "high":
             consechigheffort = 0
         
-        await self.config.member(ctx.author).consechigheffort.set(consechigheffort)
+        await self.config.member(interaction.user).consechigheffort.set(consechigheffort)
         
         work_cooldowns[user_id] = current_time
 
@@ -1377,7 +1372,7 @@ class SpideyLifeSim(Cog):
         if "Burned Out" in usertraits:
             burnoutpenalty = abs(jobaddperc) * 0.5
             jobaddperc -= burnoutpenalty
-            await ctx.send("Your performance was reduced by 50% due to burnout.")
+            await interaction.followup.send("Your performance was reduced by 50% due to burnout.")
         
         newjobperc = careerprog + jobaddperc
         jobdict = globals().get(careerfield)
@@ -1386,51 +1381,51 @@ class SpideyLifeSim(Cog):
         promotionsalary = round(promotionsalary * (random.randint(100, 115) / 100))
         promotionbonus = round(promotionbonus * (random.randint(100, 115) / 100))
         promotionlevel = careerlevel + 1
-        currency = await bank.get_currency_name(ctx.guild)
+        currency = await bank.get_currency_name(interaction.guild)
 
-        if newjobperc >= 100:
+        if newjobperc >= 100 and promotionlevel <= 10:
             if all(promotionlevel <= skill_value for skill_value in skill_values):
                 newjobperc -= 100
-                await self.config.member(ctx.author).userjob.set(promotioncareer)
-                await self.config.member(ctx.author).careerlevel.set(promotionlevel)
-                await self.config.member(ctx.author).salary.set(promotionsalary)
-                await bank.deposit_credits(ctx.author, promotionbonus)
-                await ctx.send(
+                await self.config.member(interaction.user).userjob.set(promotioncareer)
+                await self.config.member(interaction.user).careerlevel.set(promotionlevel)
+                await self.config.member(interaction.user).salary.set(promotionsalary)
+                await bank.deposit_credits(interaction.user, promotionbonus)
+                await interaction.response.send_message(
                     f"Promoted from {userjob} to {promotioncareer}!\n"
                     f"New salary: {humanize.intcomma(promotionsalary)} {currency}, with a bonus of {humanize.intcomma(promotionbonus)} {currency}."
                 )
             else:
                 newjobperc = 99
                 missing_skills = [skill for skill, value in zip(jobskillreq, skill_values) if promotionlevel > value]
-                await ctx.send(f"Increase your {', '.join(missing_skills)} skill(s) to level {promotionlevel} for promotion!")
+                await interaction.response.send_message(f"Increase your {', '.join(missing_skills)} skill(s) to level {promotionlevel} for promotion!")
 
         if burnoutbool is not None:
             if burnoutbool == True:
                 grantedtraits.append("Burned Out")
-                await self.config.member(ctx.author).grantedtraits.set(grantedtraits)
-                await self.config.member(ctx.author).burnoutapplied.set(datetime.now().isoformat())
-                await ctx.send("You pushed yourself too hard at work over the past couple days. You're burnt out now. Consider taking it easy.")
+                await self.config.member(interaction.user).grantedtraits.set(grantedtraits)
+                await self.config.member(interaction.user).burnoutapplied.set(datetime.now().isoformat())
+                await interaction.response.send_message("You pushed yourself too hard at work over the past couple days. You're burnt out now. Consider taking it easy.")
             elif burnoutbool == False:
                 grantedtraits.remove("Burned Out")
-                await self.config.member(ctx.author).grantedtraits.set(grantedtraits)
-                await self.config.member(ctx.author).burnoutapplied.set(None)
-                await ctx.send(f"You've recovered from your burnout by putting in a more manageable effort today!")
+                await self.config.member(interaction.user).grantedtraits.set(grantedtraits)
+                await self.config.member(interaction.user).burnoutapplied.set(None)
+                await interaction.response.send_message("You've recovered from your burnout by putting in a more manageable effort today!")
 
-        await bank.deposit_credits(ctx.author, salary)
-        await self.config.member(ctx.author).careerprog.set(newjobperc)
-        await ctx.send(f"Worked in the {careerfield} Field, earning {humanize.intcomma(salary)} {currency}.")
+        await bank.deposit_credits(interaction.user, salary)
+        await self.config.member(interaction.user).careerprog.set(newjobperc)
+        await interaction.response.send_message(f"Worked in the {careerfield} Field, earning {humanize.intcomma(salary)} {currency}.")
 
-    @slscareers.command(name="careerreview", aliases=["cr"])
-    async def slscareers_careerreview(self, ctx: commands.Context):
+    @careers.command(name="careerreview", description="Review current career information.")
+    async def slscareers_careerreview(self, interaction: discord.Interaction):
         """Review current career information."""
-        userjob = await self.config.member(ctx.author).userjob()
-        careerfield = await self.config.member(ctx.author).careerfield()
-        careerprog = await self.config.member(ctx.author).careerprog()
-        careerlevel = await self.config.member(ctx.author).careerlevel()
-        salary = await self.config.member(ctx.author).salary()
-        username = await self.config.member(ctx.author).username()
-        currency = await bank.get_currency_name(ctx.guild)
-        burnoutapplied = await self.config.member(ctx.author).burnoutapplied()
+        userjob = await self.config.member(interaction.user).userjob()
+        careerfield = await self.config.member(interaction.user).careerfield()
+        careerprog = await self.config.member(interaction.user).careerprog()
+        careerlevel = await self.config.member(interaction.user).careerlevel()
+        salary = await self.config.member(interaction.user).salary()
+        username = await self.config.member(interaction.user).username()
+        currency = await bank.get_currency_name(interaction.guild)
+        burnoutapplied = await self.config.member(interaction.user).burnoutapplied()
         burnoutdesc = ""
         if "Burned Out" in grantedtraits:
             burnoutdate = datetime.fromisoformat(burnoutapplied)
@@ -1441,10 +1436,10 @@ class SpideyLifeSim(Cog):
             jobdict = SUBJOBS
         jobinfo = jobdict.get(careerfield)
         if not jobinfo:
-            await ctx.send("```Career information not found.```")
+            await interaction.response.send_message("```Career information not found.```")
             return
         if userjob == "Unemployed":
-            await ctx.send("```You are currently unemployed.```")
+            await interaction.response.send_message("```You are currently unemployed.```")
             return
 
         progressionbar = f"[{'█' * (careerprog // 10)}{'░' * (10 - careerprog // 10)}]"
@@ -1456,13 +1451,4 @@ class SpideyLifeSim(Cog):
             color=discord.Color.red()
         )
         em.set_image(url=jobinfo[1])
-        await ctx.send(embed=em)
-
-    @commands.group(aliases=["slsa"])
-    async def slsactions(self, ctx: commands.Context):
-        """Use items in your inventory for various purposes."""
-        return
-    
-    @slsactions.command(name="duel", aliases=["d"])
-    async def slsactions_duel(self, ctx: commands.Context, user: discord.Member = None) -> None:
-        """Duel is temporarily under construction! It is being overhauled. Pardon our dust."""
+        await interaction.response.send_message(embed=em)
