@@ -422,7 +422,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         typ = "cr" if self.criminal else "cv"
         court_data = self.bot.get_cog("SpideyCourts").court_data
         judge_inits = None if self.venue == "ssc" else JUDGE_INITS.get(self.venue, "SS")
-        seq = self.bot.get_cog("SpideyCourts")._next_case_seq_scan(typ)
+        seq = self.bot.get_cog("SpideyCourts")._next_case_seq_scan()
         case_number = f"1:{interaction.created_at.year % 100:02d}-{typ}-{seq:06d}{'-' if judge_inits else ''}{judge_inits}"
 
 
