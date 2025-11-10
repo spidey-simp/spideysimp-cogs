@@ -3003,7 +3003,7 @@ class SpideyCourts(commands.Cog):
         await interaction.followup.send(f"✅ Case `{case_number}` removed from public filings.", ephemeral=True)
         channel = self.bot.get_channel(COURT_STEPS_CHANNEL_ID)
         if channel:
-            await channel.send(f"❌ Case `{case_number}` has been removed from the public filings by order of the Court.\nIt was removed by: `{interaction.user.mention}` for `{reason}`.")
+            await channel.send(f"❌ Case `{case_number}` has been removed from the public filings by order of the Court.\nIt was removed by: `{interaction.user.display_name}` for `{reason}`.")
         
 
     @court.command(name="reporter_cite", description="Open a Reporter citation (SPIDEYLAW / F. / S.R.).")
