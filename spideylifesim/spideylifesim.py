@@ -21,13 +21,9 @@ from discord import app_commands
 
 
 from redbot.core import Config, checks, commands, bank
-from redbot.core.bot import Red
 from redbot.core.config import Config
 from redbot.core.commands import Cog
-from redbot.core.i18n import Translator
-from redbot.core.utils import AsyncIter
-from redbot.core.utils.chat_formatting import humanize_number
-from redbot.core.errors import BankPruneError
+
 
 from .storestuff import FOODITEMS, SKILLITEMS, VEHICLES, ENTERTAINMENT, LUXURYITEMS, ALLITEMS
 from .skills import SKILLSLIST, MAGICSTANCES, MAGICSKILLS, BROADSWORDSKILLS, LIGHTSABERSKILLS, CUTLASSSKILLS, FORCEPOWERS, FORCESTANCES, SKILLTREES
@@ -206,10 +202,13 @@ class SpideyLifeSim(Cog):
         """Nothing to delete"""
         return
     
-    async def practice_skill(self, ctx, skillname, progress: bool = True, user: discord.Member = None):
+
+
+
+
+    async def practice_skill(self, interaction:discord.Interaction, skillname:str, progress: bool = True, user: discord.Member = None):
         """Handle the skill practice process with a progress bar."""
-        if user is None:
-            user = ctx.author
+        user = user or interaction.user
         skillslist = await self.config.member(user).skillslist()
         username = await self.config.member(user).username()
         if username == "None":
@@ -219,7 +218,7 @@ class SpideyLifeSim(Cog):
         skillvalues = skillslist.get(skillname, [0, 0, [], []])
         print(f"Debug: skillvalues for {skillname} are {skillvalues}")
         if len(skillvalues) < 2:
-            await ctx.send(f"Error: Invalid data for {skillname}. If you see this error, please report it.")
+            await interaction.followup.send(f"Error: Invalid data for {skillname}. If you see this error, please report it.")
             return
         
         skilllevel, skillprogress = skillvalues[:2]
@@ -233,7 +232,7 @@ class SpideyLifeSim(Cog):
         }
         for trait, forbidden_skills in forbidden_traits.items():
             if trait in usertraits and skillname in forbidden_skills:
-                await ctx.send(
+                await interaction.followup.send(
                     f"```Your {trait} trait prevents you from practicing {skillname}.```"
                 )
                 return
@@ -255,16 +254,16 @@ class SpideyLifeSim(Cog):
         if skilllevel >= 10:
             skilllevel = 10
             skillslist[skillname] = [skilllevel, 100]
-            await ctx.send(f"You have maxed {skillname}! You cannot get it any higher!")
+            await interaction.followup.send(f"You have maxed {skillname}! You cannot get it any higher!")
             return
 
         if newskillperc >= 100:
             newskillperc -= 100
             skilllevel += 1
-            await ctx.send(f"Congratulations, {username}! Your {skillname} skill is now Level {skilllevel}!")
+            await interaction.followup.send(f"Congratulations, {username}! Your {skillname} skill is now Level {skilllevel}!")
 
         skillslist[skillname] = [skilllevel, newskillperc]
-        await self.config.member(ctx.author).skillslist.set(skillslist)
+        await self.config.member(user).skillslist.set(skillslist)
         if progress == True:
             def generate_progress_bar(percentage):
                 """Generate a progress bar with blocks for a percentage."""
@@ -272,7 +271,7 @@ class SpideyLifeSim(Cog):
                 empty_blocks = 10 - filled_blocks
                 return f"[{'█' * filled_blocks}{'░' * empty_blocks}]"
 
-            await ctx.send(
+            await interaction.followup.send(
                 f"```You improved {skillname} skill by {skilladdperc}%, reaching {generate_progress_bar(newskillperc)} towards Level {skilllevel + 1}.```"
             )
         else:
@@ -308,7 +307,7 @@ class SpideyLifeSim(Cog):
         async with aiohttp.ClientSession(headers={"Connection": "keep-alive"}) as session:
             async with session.get(store_image, ssl=False) as response:
                 if response.status != 200:
-                    await ctx.send("Failed to fetch store image.")
+                    await interaction.response.send_message("Failed to fetch store image.")
                     return
 
         embed = discord.Embed(title=store_title, description=store_items_text, color=discord.Color.red())

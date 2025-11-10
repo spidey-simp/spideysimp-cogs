@@ -77,7 +77,8 @@ PROCEEDING_TYPES = [
 ]
 
 CASE_KEY_RX = re.compile(r'^\d+:\d{2}-(cv|cr)-\d{6}-[A-Z]+$')
-
+DEPO_RX  = re.compile(r'^(?P<tag>Q|A|O)\s*:\s*(?P<text>.+)$', re.IGNORECASE)
+TRIAL_RX = re.compile(r'^(?P<label>[^:]{1,64})\s*:\s*(?P<text>.+)$')
 
 REPORTER_KEY = "_reporter"
 
@@ -2612,6 +2613,245 @@ class SpideyCourts(commands.Cog):
         save_json(COURT_FILE, self.court_data)
         await interaction.followup.send(f"✅ Appeal filed to **{target_court.name}**. New case: `{new_case_number}`.", ephemeral=True)
 
+    def _init_steno_store(self):
+        if not hasattr(self, "_steno_sessions"):
+            # channel_id -> session dict
+            self._steno_sessions = {}
+
+    def _steno_now(self):
+        return datetime.now(UTC).isoformat()
+
+    # ---------- STENO: helpers ----------
+    def _steno_can_capture(self, sess, message: discord.Message) -> bool:
+        if message.author.bot:
+            return False
+        # allowlist check (optional)
+        allowed = sess.get("allowed_users")
+        if allowed and message.author.id not in allowed:
+            return False
+        return True
+
+    def _steno_parse_line(self, sess, content: str):
+        mode = sess.get("mode", "trial")
+        aliases = sess.get("aliases", {})
+        if mode == "depo":
+            m = DEPO_RX.match(content.strip())
+            if not m:
+                return None
+            tag = m.group("tag").upper()
+            text = m.group("text").strip()
+            speaker = {"Q": "Questioner", "A": "Witness", "O": "Objector"}[tag]
+            # allow aliasing those canonical roles if you want
+            speaker = aliases.get(speaker.lower(), speaker)
+            return {"speaker": speaker, "role": tag, "text": text}
+        else:
+            m = TRIAL_RX.match(content.strip())
+            if not m:
+                return None
+            raw = m.group("label").strip()
+            text = m.group("text").strip()
+            # normalize via aliases (case-insensitive keys)
+            key = raw.lower()
+            speaker = aliases.get(key, raw)
+            return {"speaker": speaker, "role": None, "text": text}
+
+    def _steno_capture(self, sess, message: discord.Message):
+        # returns True if captured
+        parsed = self._steno_parse_line(sess, message.content)
+        if not parsed:
+            return False
+        entry = {
+            "ts": self._steno_now(),
+            "msg_id": message.id,
+            "user_id": message.author.id,
+            "speaker": parsed["speaker"],
+            "role": parsed["role"],  # Q/A/O or None
+            "text": parsed["text"],
+        }
+        sess["lines"].append(entry)
+        return True
+
+    def _steno_format_export(self, sess):
+        header = []
+        header.append("=== TRANSCRIPT ===")
+        if sess.get("case_number"):
+            header.append(f"Case: {sess['case_number']}")
+        header.append(f"Channel: #{getattr(sess.get('channel'), 'name', 'unknown')}")
+        header.append(f"Mode: {sess.get('mode','trial')}")
+        header.append(f"Locked: {bool(sess.get('locked'))}")
+        header.append(f"Started: {sess.get('started_at')}")
+        header.append(f"Started by: {sess.get('starter_name','Unknown')}")
+        header.append("")
+
+        body = []
+        for i, ln in enumerate(sess.get("lines", []), start=1):
+            stamp = ln["ts"]
+            who = ln["speaker"]
+            if sess.get("mode") == "depo" and ln["role"] in ("Q","A","O"):
+                body.append(f"{ln['role']}: {ln['text']}")
+            else:
+                body.append(f"{who}: {ln['text']}")
+        text = "\n".join(header + body)
+        return text
+
+    # ---------- STENO: listener ----------
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        self._init_steno_store()
+        sess = self._steno_sessions.get(getattr(message.channel, "id", None))
+        if not sess:
+            return
+        if not self._steno_can_capture(sess, message):
+            return
+        # lock means: only lines that parse are captured
+        captured = self._steno_capture(sess, message)
+        if captured:
+            try:
+                await message.add_reaction("📝")
+            except Exception:
+                pass
+        elif sess.get("locked"):
+            # ignore silently (or drop a subtle ❔ if you want)
+            return
+
+    # ---------- STENO: commands ----------
+    @commands.group(name="steno", invoke_without_command=True)
+    async def steno(self, ctx: commands.Context):
+        """Stenographer tools (prefix)."""
+        await ctx.send("Use subcommands: start | stop | status | alias | allow | export")
+
+    @steno.command(name="start")
+    async def steno_start(
+        self, ctx: commands.Context,
+        mode: str = "trial",  # "trial" or "depo"
+        case_number: str = None,
+        lock: bool = True
+    ):
+        """Start capturing in this channel. Example: [p]steno start depo 1:25-cv-000123-SS true"""
+        self._init_steno_store()
+        ch = ctx.channel
+        if ch.id in self._steno_sessions:
+            return await ctx.send("❌ Already running in this channel. Use `[p]steno stop` first.")
+        mode = (mode or "trial").lower()
+        if mode not in ("trial","depo"):
+            return await ctx.send("❌ Mode must be `trial` or `depo`.")
+        sess = {
+            "channel": ch,
+            "channel_id": ch.id,
+            "guild_id": ctx.guild.id if ctx.guild else None,
+            "mode": mode,
+            "locked": bool(lock),
+            "allowed_users": set(),   # optional allowlist (empty means anyone)
+            "aliases": {},            # case-insensitive map
+            "lines": [],
+            "started_at": self._steno_now(),
+            "started_by": ctx.author.id,
+            "starter_name": ctx.author.display_name,
+            "case_number": case_number,
+        }
+        self._steno_sessions[ch.id] = sess
+        await ctx.send(f"🟢 Steno **started** in {ch.mention} (mode=`{mode}`, locked={'`on`' if lock else '`off`'}).")
+
+    @steno.command(name="stop")
+    async def steno_stop(self, ctx: commands.Context):
+        """Stop capturing in this channel."""
+        self._init_steno_store()
+        sess = self._steno_sessions.pop(ctx.channel.id, None)
+        if not sess:
+            return await ctx.send("❌ No active steno session here.")
+        # optionally persist snapshot into COURT_FILE under _transcripts
+        root = self.court_data
+        tx = root.setdefault("_transcripts", [])
+        tx.append({
+            "case_number": sess.get("case_number"),
+            "channel_id": sess.get("channel_id"),
+            "guild_id": sess.get("guild_id"),
+            "mode": sess.get("mode"),
+            "locked": sess.get("locked"),
+            "started_at": sess.get("started_at"),
+            "stopped_at": self._steno_now(),
+            "lines": sess.get("lines", []),
+        })
+        save_json(COURT_FILE, root)
+        await ctx.send("🔴 Steno **stopped**. Use `[p]steno export` to download.")
+
+    @steno.command(name="status")
+    async def steno_status(self, ctx: commands.Context):
+        self._init_steno_store()
+        sess = self._steno_sessions.get(ctx.channel.id)
+        if not sess:
+            return await ctx.send("ℹ️ No active steno session in this channel.")
+        lines = sess.get("lines", [])
+        preview = "\n".join(
+            f"• {ln['speaker']}: {ln['text'][:60]}{'…' if len(ln['text'])>60 else ''}"
+            for ln in lines[-5:]
+        ) or "(no lines yet)"
+        await ctx.send(
+            f"📋 **Steno status**\n"
+            f"Mode: `{sess['mode']}` | Locked: `{sess['locked']}` | Lines: `{len(lines)}`\n"
+            f"Case: `{sess.get('case_number') or 'N/A'}` | Started: `{sess['started_at']}`\n"
+            f"Recent:\n{preview}"
+        )
+
+    @steno.command(name="alias")
+    async def steno_alias(self, ctx: commands.Context, *, mapping: str):
+        """
+        Add/remove a label alias. Example:
+        [p]steno alias Pl. Counsel -> Plaintiff's Counsel
+        [p]steno alias Witness -> WITNESS   (normalizes case)
+        [p]steno alias Pl. Counsel ->       (removes)
+        """
+        self._init_steno_store()
+        sess = self._steno_sessions.get(ctx.channel.id)
+        if not sess:
+            return await ctx.send("❌ No active steno session.")
+        if "->" not in mapping:
+            return await ctx.send("❌ Use `left -> right` (right may be blank to remove).")
+        left, right = [part.strip() for part in mapping.split("->", 1)]
+        key = left.lower()
+        if right:
+            sess["aliases"][key] = right
+            await ctx.send(f"✅ Alias set: **{left}** → **{right}**")
+        else:
+            sess["aliases"].pop(key, None)
+            await ctx.send(f"🗑️ Alias removed: **{left}**")
+
+    @steno.command(name="allow")
+    async def steno_allow(self, ctx: commands.Context, member: discord.Member = None):
+        """
+        Toggle per-user allowlist. If any users are added, only those users' messages are eligible for capture.
+        Use again on the same user to remove them. Use with 0 args to show the list.
+        """
+        self._init_steno_store()
+        sess = self._steno_sessions.get(ctx.channel.id)
+        if not sess:
+            return await ctx.send("❌ No active steno session.")
+        allowed: set = sess["allowed_users"]
+        if not member:
+            if not allowed:
+                return await ctx.send("No allowlist set (any user can contribute).")
+            names = []
+            for uid in allowed:
+                m = ctx.guild.get_member(uid)
+                names.append(m.display_name if m else f"<@{uid}>")
+            return await ctx.send("Allowed users: " + ", ".join(names))
+        if member.id in allowed:
+            allowed.remove(member.id)
+            return await ctx.send(f"➖ Removed **{member.display_name}** from allowlist.")
+        allowed.add(member.id)
+        await ctx.send(f"➕ Added **{member.display_name}** to allowlist.")
+
+    @steno.command(name="export")
+    async def steno_export(self, ctx: commands.Context):
+        """Export current transcript to a .txt file."""
+        self._init_steno_store()
+        sess = self._steno_sessions.get(ctx.channel.id)
+        if not sess:
+            return await ctx.send("❌ No active steno session.")
+        text = self._steno_format_export(sess)
+        fname = f"transcript_{(sess.get('case_number') or 'session')}.txt".replace(":","-")
+        fp = io.BytesIO(text.encode("utf-8"))
+        await ctx.send(file=discord.File(fp, filename=fname))
     
     @court.command(name="appeal_disposition", description="Enter a disposition in an appellate case, optionally with remand.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
