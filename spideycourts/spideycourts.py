@@ -2980,6 +2980,31 @@ class SpideyCourts(commands.Cog):
             parenthetical_override=parenthetical_override
         ))
 
+    @court.command(name="remove_from_filings", description="Remove a case from the public filings.")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
+    @app_commands.describe(case_number="Case number", reason="Reason for removal")
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    async def remove_from_filings(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        reason: str,
+    ):
+        await interaction.response.defer(ephemeral=True)
+        case = self.court_data.get(case_number)
+        if not case:
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+        case["in_filings"] = False
+        try:
+            del self.court_data[case_number]
+        except KeyError:
+            pass
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(f"✅ Case `{case_number}` removed from public filings.", ephemeral=True)
+        channel = self.bot.get_channel(COURT_STEPS_CHANNEL_ID)
+        if channel:
+            await channel.send(f"❌ Case `{case_number}` has been removed from the public filings by order of the Court.\nIt was removed by: `{interaction.user.mention}` for `{reason}`.")
+        
 
     @court.command(name="reporter_cite", description="Open a Reporter citation (SPIDEYLAW / F. / S.R.).")
     @app_commands.describe(citation="e.g., '1 S.R. 5' or '1 SPIDEYLAW 1, 5'")
