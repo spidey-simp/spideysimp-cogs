@@ -2675,15 +2675,18 @@ class SpideyCourts(commands.Cog):
     def _steno_format_export(self, sess):
         header = []
         header.append("=== TRANSCRIPT ===")
+        if sess.get("title"):
+            header.append(f"Proceeding: {sess['title']}")  # <-- NEW
         if sess.get("case_number"):
             header.append(f"Case: {sess['case_number']}")
         header.append(f"Channel: #{getattr(sess.get('channel'), 'name', 'unknown')}")
-        header.append(f"Mode: {sess.get('mode','trial')}")
+        header.append(f"Mode: {sess.get('mode','hearing')}")
         header.append(f"Locked: {bool(sess.get('locked'))}")
-        time_convert = datetime.fromisoformat(sess.get('started_at')).strftime("%Y-%m-%d %H:%M %Z")
-        header.append(f"Started: {time_convert}")
+        header.append(f"Started: {sess.get('started_at')}")
         header.append(f"Started by: {sess.get('starter_name','Unknown')}")
+        header.append(f"This document has been certified by the court reporter as a true and accurate transcript.")
         header.append("")
+
 
         body = []
         for i, ln in enumerate(sess.get("lines", []), start=1):
@@ -2772,15 +2775,18 @@ class SpideyCourts(commands.Cog):
         await ctx.send("Use subcommands: start | stop | status | alias | allow | export")
 
     @steno.command(name="start")
-    async def steno_start(self, ctx: commands.Context, mode: str = "trial", case_number: str = None, lock: bool = True):
+    async def steno_start(self, ctx: commands.Context, mode: str = "hearing", case_number: str = None, lock: bool = True, *, title: str = None):
+        """Start capturing. Example:
+        [p]steno start hearing 1:25-cv-000001-SS true title:Oral Argument on MSJ
+        [p]steno start depo 25cv1 true title:Deposition of John Doe"""
         self._init_steno_store()
         ch = ctx.channel
         if ch.id in self._steno_sessions:
             return await ctx.send("❌ Already running in this channel. Use `[p]steno stop` first.")
 
-        mode = (mode or "trial").lower()
-        if mode not in ("trial", "depo"):
-            return await ctx.send("❌ Mode must be `trial` or `depo`.")
+        mode = (mode or "hearing").lower()
+        if mode not in ("hearing", "depo"):
+            return await ctx.send("❌ Mode must be `hearing` or `depo`.")
 
         # Resolve shorthand to a *real* case key when possible
         if case_number and not case_number.strip().startswith("1:"):
@@ -2790,11 +2796,15 @@ class SpideyCourts(commands.Cog):
             else:
                 await ctx.send("⚠️ Couldn’t find a case matching that token; starting unattached. You can annotate the case later with `[p]steno alias Case -> 1:25-cv-...-XX`")
 
+        default_title = "Deposition" if mode == "depo" else "Hearing"
+        title = (title or default_title).strip()
+
         sess = {
             "channel": ch,
             "channel_id": ch.id,
             "guild_id": ctx.guild.id if ctx.guild else None,
             "mode": mode,
+            "title": title,
             "locked": bool(lock),
             "allowed_users": set(),
             "aliases": {},
@@ -2805,7 +2815,7 @@ class SpideyCourts(commands.Cog):
             "case_number": case_number,
         }
         self._steno_sessions[ch.id] = sess
-        await ctx.send(f"🟢 Steno **started** in {ch.mention} (mode=`{mode}`, locked={'`on`' if lock else '`off`'}).")
+        await ctx.send(f"🟢 The {title} has begun and the stenographer has **started** recording in {ch.mention} (mode=`{mode}`, locked={'`on`' if lock else '`off`'}).")
 
 
     @steno.command(name="stop", aliases=("finalize", "end"))
@@ -2820,7 +2830,10 @@ class SpideyCourts(commands.Cog):
         # 1) Build the export text BEFORE we tear anything down
         text = self._steno_format_export(sess)
         ts = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S")
-        default_name = f"transcript_{(sess.get('case_number') or 'session')}_{ts}.txt".replace(":", "-")
+        def _slug(self, s: str) -> str:
+            return re.sub(r'[^A-Za-z0-9._-]+', '_', (s or '').strip())[:60] or 'session'
+        t_slug = self._slug(sess.get("title") or "")
+        default_name = f"transcript_{t_slug}_{(sess.get('case_number') or 'N_A')}_{ts}.txt".replace(":", "-")
         fname = (filename or default_name).strip() or default_name
 
         # 2) Persist a snapshot to COURT_FILE (for audit/history)
@@ -2857,13 +2870,14 @@ class SpideyCourts(commands.Cog):
             f"• {ln['speaker']}: {ln['text'][:60]}{'…' if len(ln['text'])>60 else ''}"
             for ln in lines[-5:]
         ) or "(no lines yet)"
-        formatted_start = datetime.fromisoformat(sess['started_at']).strftime("%Y-%m-%d %H:%M %Z")
         await ctx.send(
             f"📋 **Steno status**\n"
+            f"Title: `{sess.get('title','(untitled)')}`\n"
             f"Mode: `{sess['mode']}` | Locked: `{sess['locked']}` | Lines: `{len(lines)}`\n"
-            f"Case: `{sess.get('case_number') or 'N/A'}` | Started: `{formatted_start}`\n"
+            f"Case: `{sess.get('case_number') or 'N/A'}` | Started: `{sess['started_at']}`\n"
             f"Recent:\n{preview}"
         )
+
 
     @steno.command(name="alias")
     async def steno_alias(self, ctx: commands.Context, *, mapping: str):
@@ -2922,7 +2936,10 @@ class SpideyCourts(commands.Cog):
             return await ctx.send("❌ No active steno session.")
         text = self._steno_format_export(sess)
         ts = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S")
-        default_name = f"transcript_{(sess.get('case_number') or 'session')}_SNAP_{ts}.txt".replace(":", "-")
+        def _slug(self, s: str) -> str:
+            return re.sub(r'[^A-Za-z0-9._-]+', '_', (s or '').strip())[:60] or 'session'
+        t_slug = self._slug(sess.get("title") or "")
+        default_name = f"transcript_{t_slug}_{(sess.get('case_number') or 'N_A')}_SNAP_{ts}.txt".replace(":", "-")
         fname = (filename or default_name).strip() or default_name
         fp = io.BytesIO(text.encode("utf-8"))
         await ctx.send("📄 Snapshot exported (session still running).", file=discord.File(fp, filename=fname))
