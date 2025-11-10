@@ -16,7 +16,7 @@ import random
 from dataclasses import dataclass, asdict
 import time, uuid
 from typing import Optional
-
+from discord import AllowedMentions
 
 
 
@@ -2621,6 +2621,22 @@ class SpideyCourts(commands.Cog):
 
     def _steno_now(self):
         return datetime.now(UTC).isoformat()
+    
+    def _steno_hb(self, sess: dict) -> dict:
+        """Per-channel heartbeat state."""
+        return sess.setdefault("_hb", {
+            "remaining": 15,         # send a heartbeat every 15 captured lines
+            "cooldown": 120.0,       # ...but not more than once every 120s
+            "next_time": 0.0,
+            "enabled": True,         # can be toggled with [p]steno nags off
+        })
+
+    def _steno_warn_state(self, sess: dict) -> dict:
+        """Per-channel, per-user warn cooldown for locked rejections."""
+        return sess.setdefault("_warn", {
+            "per_user": {},          # user_id -> last_warn_monotonic
+            "cooldown": 45.0,        # don’t warn same user more than once / 45s
+        })
 
     # ---------- STENO: helpers ----------
     def _steno_can_capture(self, sess, message: discord.Message) -> bool:
@@ -2682,7 +2698,8 @@ class SpideyCourts(commands.Cog):
         header.append(f"Channel: #{getattr(sess.get('channel'), 'name', 'unknown')}")
         header.append(f"Mode: {sess.get('mode','hearing')}")
         header.append(f"Locked: {bool(sess.get('locked'))}")
-        header.append(f"Started: {sess.get('started_at')}")
+        time_formatting = datetime.fromisoformat(sess.get("started_at")).strftime("%B %d, %Y at %I:%M %p %Z") if sess.get("started_at") else "unknown"
+        header.append(f"Started: {time_formatting}")
         header.append(f"Started by: {sess.get('starter_name','Unknown')}")
         header.append(f"This document has been certified by the court reporter as a true and accurate transcript.")
         header.append("")
@@ -2708,19 +2725,43 @@ class SpideyCourts(commands.Cog):
             return
         if not self._steno_can_capture(sess, message):
             return
-        # lock means: only lines that parse are captured
+
         captured = self._steno_capture(sess, message)
+
+        now = time.monotonic()
+        hb = self._steno_hb(sess)
+
         if captured:
-            self.steno_is_listening -= 1
-            if self.steno_is_listening < 0:
-                self.steno_is_listening = 10  # reset counter
+            # HEARTBEAT (throttled)
+            if hb["enabled"]:
+                hb["remaining"] -= 1
+                if hb["remaining"] <= 0 and now >= hb["next_time"]:
+                    hb["remaining"] = 15
+                    hb["next_time"] = now + hb["cooldown"]
+                    try:
+                        await message.reply(
+                            "🗒️ Still listening…",
+                            mention_author=False,
+                            allowed_mentions=AllowedMentions.none()
+                        )
+                    except Exception:
+                        pass
+            return
+
+        # LOCKED rejection (per-user cooldown)
+        if sess.get("locked"):
+            warn = self._steno_warn_state(sess)
+            last = warn["per_user"].get(message.author.id, 0.0)
+            if now - last >= warn["cooldown"]:
+                warn["per_user"][message.author.id] = now
                 try:
-                    await message.reply("Still listening...", mention_author=False)
+                    await message.reply(
+                        "That message wasn't recorded. Steno is locked and only captures properly formatted lines.",
+                        mention_author=False,
+                        allowed_mentions=AllowedMentions.none()
+                    )
                 except Exception:
                     pass
-        elif sess.get("locked"):
-            await message.reply("That message wasn't recorded. Steno is locked and only captures properly formatted lines.", mention_author=False)
-            return
 
     def _resolve_case_token(self, token: str) -> str | None:
         """
@@ -2815,7 +2856,7 @@ class SpideyCourts(commands.Cog):
             "case_number": case_number,
         }
         self._steno_sessions[ch.id] = sess
-        case_yes = " for" + f"{case_number}" if case_number else ""
+        case_yes = " for" + f" {case_number}" if case_number else ""
         await ctx.send(f"🟢 The {title} has begun{case_yes}, and the stenographer has **started** recording in {ch.mention} (mode=`{mode}`, locked={'`on`' if lock else '`off`'}).")
 
 
