@@ -2830,9 +2830,9 @@ class SpideyCourts(commands.Cog):
         # 1) Build the export text BEFORE we tear anything down
         text = self._steno_format_export(sess)
         ts = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S")
-        def _slug(self, s: str) -> str:
+        def _slug(s: str) -> str:
             return re.sub(r'[^A-Za-z0-9._-]+', '_', (s or '').strip())[:60] or 'session'
-        t_slug = self._slug(sess.get("title") or "")
+        t_slug = _slug(sess.get("title") or "")
         default_name = f"transcript_{t_slug}_{(sess.get('case_number') or 'N_A')}_{ts}.txt".replace(":", "-")
         fname = (filename or default_name).strip() or default_name
 
@@ -2936,9 +2936,9 @@ class SpideyCourts(commands.Cog):
             return await ctx.send("❌ No active steno session.")
         text = self._steno_format_export(sess)
         ts = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S")
-        def _slug(self, s: str) -> str:
+        def _slug( s: str) -> str:
             return re.sub(r'[^A-Za-z0-9._-]+', '_', (s or '').strip())[:60] or 'session'
-        t_slug = self._slug(sess.get("title") or "")
+        t_slug = _slug(sess.get("title") or "")
         default_name = f"transcript_{t_slug}_{(sess.get('case_number') or 'N_A')}_SNAP_{ts}.txt".replace(":", "-")
         fname = (filename or default_name).strip() or default_name
         fp = io.BytesIO(text.encode("utf-8"))
