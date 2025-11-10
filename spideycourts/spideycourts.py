@@ -912,6 +912,7 @@ class SpideyCourts(commands.Cog):
         self.court_data = load_json(COURT_FILE)
         self.show_applicants.start()
         self.show_cases.start()
+        self.steno_is_listening = 5
     
     def cog_unload(self):
         """Stop the daily task when the cog is unloaded."""
@@ -2707,13 +2708,62 @@ class SpideyCourts(commands.Cog):
         # lock means: only lines that parse are captured
         captured = self._steno_capture(sess, message)
         if captured:
-            try:
-                await message.add_reaction("📝")
-            except Exception:
-                pass
+            self.steno_is_listening -= 1
+            if self.steno_is_listening < 0:
+                self.steno_is_listening = 10  # reset counter
+                try:
+                    await message.reply("Still listening...", mention_author=False)
+                except Exception:
+                    pass
         elif sess.get("locked"):
-            # ignore silently (or drop a subtle ❔ if you want)
+            await message.reply("That message wasn't recorded. Steno is locked and only captures properly formatted lines.", mention_author=False)
             return
+
+    def _resolve_case_token(self, token: str) -> str | None:
+        """
+        Resolve a shorthand like '251' to an existing case key.
+        Interprets first 2 digits as YY, remaining as the sequence.
+        Scans both cv/cr and any judge initials. Returns the exact case key or None.
+        """
+        raw = re.sub(r'\D', '', token or '')
+        if len(raw) < 3:
+            return None
+
+        year = raw[:2]                    # '25'
+        try:
+            seq6 = f"{int(raw[2:]):06d}"  # '000001' for '251' as written; change if you want '51'
+        except ValueError:
+            return None
+
+        # Try to match existing cases: 1:YY-(cv|cr)-SEQ6-<INITS>
+        pat_cv = re.compile(rf"^\d+:{year}-cv-{seq6}-[A-Z]+$")
+        pat_cr = re.compile(rf"^\d+:{year}-cr-{seq6}-[A-Z]+$")
+
+        for key in self.court_data.keys():
+            if not isinstance(key, str):
+                continue
+            if pat_cv.match(key) or pat_cr.match(key):
+                return key
+
+        return None  # no match found
+
+    def _case_shorthand(self, token: str) -> str | None:
+        """
+        Back-compat wrapper: try to resolve to an existing case; if none, build a naive default.
+        NOTE: default assumes cv and 'SS'. Prefer real resolution when possible.
+        """
+        resolved = self._resolve_case_token(token)
+        if resolved:
+            return resolved
+
+        raw = re.sub(r'\D', '', token or '')
+        if len(raw) < 3:
+            return None
+
+        year = raw[:2]
+        seq6 = f"{int(raw[2:]):06d}"
+        # Fallback (least-wrong guess). Consider swapping 'SS' for venue-based initials if you know the venue.
+        return f"1:{year}-cv-{seq6}-SS"
 
     # ---------- STENO: commands ----------
     @commands.group(name="steno", invoke_without_command=True)
@@ -2722,28 +2772,32 @@ class SpideyCourts(commands.Cog):
         await ctx.send("Use subcommands: start | stop | status | alias | allow | export")
 
     @steno.command(name="start")
-    async def steno_start(
-        self, ctx: commands.Context,
-        mode: str = "trial",  # "trial" or "depo"
-        case_number: str = None,
-        lock: bool = True
-    ):
-        """Start capturing in this channel. Example: [p]steno start depo 1:25-cv-000123-SS true"""
+    async def steno_start(self, ctx: commands.Context, mode: str = "trial", case_number: str = None, lock: bool = True):
         self._init_steno_store()
         ch = ctx.channel
         if ch.id in self._steno_sessions:
             return await ctx.send("❌ Already running in this channel. Use `[p]steno stop` first.")
+
         mode = (mode or "trial").lower()
-        if mode not in ("trial","depo"):
+        if mode not in ("trial", "depo"):
             return await ctx.send("❌ Mode must be `trial` or `depo`.")
+
+        # Resolve shorthand to a *real* case key when possible
+        if case_number and not case_number.strip().startswith("1:"):
+            resolved = self._case_shorthand(case_number.strip())
+            if resolved:
+                case_number = resolved
+            else:
+                await ctx.send("⚠️ Couldn’t find a case matching that token; starting unattached. You can annotate the case later with `[p]steno alias Case -> 1:25-cv-...-XX`")
+
         sess = {
             "channel": ch,
             "channel_id": ch.id,
             "guild_id": ctx.guild.id if ctx.guild else None,
             "mode": mode,
             "locked": bool(lock),
-            "allowed_users": set(),   # optional allowlist (empty means anyone)
-            "aliases": {},            # case-insensitive map
+            "allowed_users": set(),
+            "aliases": {},
             "lines": [],
             "started_at": self._steno_now(),
             "started_by": ctx.author.id,
@@ -2753,14 +2807,23 @@ class SpideyCourts(commands.Cog):
         self._steno_sessions[ch.id] = sess
         await ctx.send(f"🟢 Steno **started** in {ch.mention} (mode=`{mode}`, locked={'`on`' if lock else '`off`'}).")
 
-    @steno.command(name="stop")
-    async def steno_stop(self, ctx: commands.Context):
-        """Stop capturing in this channel."""
+
+    @steno.command(name="stop", aliases=("finalize", "end"))
+    async def steno_stop(self, ctx: commands.Context, *, filename: str = None):
+        """Stop capturing in this channel and immediately export the transcript."""
         self._init_steno_store()
-        sess = self._steno_sessions.pop(ctx.channel.id, None)
+        ch_id = ctx.channel.id
+        sess = self._steno_sessions.get(ch_id)
         if not sess:
             return await ctx.send("❌ No active steno session here.")
-        # optionally persist snapshot into COURT_FILE under _transcripts
+
+        # 1) Build the export text BEFORE we tear anything down
+        text = self._steno_format_export(sess)
+        ts = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S")
+        default_name = f"transcript_{(sess.get('case_number') or 'session')}_{ts}.txt".replace(":", "-")
+        fname = (filename or default_name).strip() or default_name
+
+        # 2) Persist a snapshot to COURT_FILE (for audit/history)
         root = self.court_data
         tx = root.setdefault("_transcripts", [])
         tx.append({
@@ -2771,10 +2834,17 @@ class SpideyCourts(commands.Cog):
             "locked": sess.get("locked"),
             "started_at": sess.get("started_at"),
             "stopped_at": self._steno_now(),
-            "lines": sess.get("lines", []),
+            "lines": list(sess.get("lines", [])),  # copy for safety
         })
         save_json(COURT_FILE, root)
-        await ctx.send("🔴 Steno **stopped**. Use `[p]steno export` to download.")
+
+        # 3) Send the file to the channel
+        fp = io.BytesIO(text.encode("utf-8"))
+        await ctx.send("🔴 Steno **stopped**. Transcript attached.", file=discord.File(fp, filename=fname))
+
+        # 4) Finally, remove the live session
+        self._steno_sessions.pop(ch_id, None)
+
 
     @steno.command(name="status")
     async def steno_status(self, ctx: commands.Context):
@@ -2844,17 +2914,19 @@ class SpideyCourts(commands.Cog):
         await ctx.send(f"➕ Added **{member.display_name}** to allowlist.")
 
     @steno.command(name="export")
-    async def steno_export(self, ctx: commands.Context):
-        """Export current transcript to a .txt file."""
+    async def steno_export(self, ctx: commands.Context, *, filename: str = None):
+        """Export the current transcript without stopping."""
         self._init_steno_store()
         sess = self._steno_sessions.get(ctx.channel.id)
         if not sess:
             return await ctx.send("❌ No active steno session.")
         text = self._steno_format_export(sess)
-        fname = f"transcript_{(sess.get('case_number') or 'session')}.txt".replace(":","-")
+        ts = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S")
+        default_name = f"transcript_{(sess.get('case_number') or 'session')}_SNAP_{ts}.txt".replace(":", "-")
+        fname = (filename or default_name).strip() or default_name
         fp = io.BytesIO(text.encode("utf-8"))
-        await ctx.send(file=discord.File(fp, filename=fname))
-    
+        await ctx.send("📄 Snapshot exported (session still running).", file=discord.File(fp, filename=fname))
+
     @court.command(name="appeal_disposition", description="Enter a disposition in an appellate case, optionally with remand.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
