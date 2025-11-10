@@ -2679,7 +2679,8 @@ class SpideyCourts(commands.Cog):
         header.append(f"Channel: #{getattr(sess.get('channel'), 'name', 'unknown')}")
         header.append(f"Mode: {sess.get('mode','trial')}")
         header.append(f"Locked: {bool(sess.get('locked'))}")
-        header.append(f"Started: {sess.get('started_at')}")
+        time_convert = datetime.fromisoformat(sess.get('started_at')).strftime("%Y-%m-%d %H:%M %Z")
+        header.append(f"Started: {time_convert}")
         header.append(f"Started by: {sess.get('starter_name','Unknown')}")
         header.append("")
 
@@ -2786,10 +2787,11 @@ class SpideyCourts(commands.Cog):
             f"• {ln['speaker']}: {ln['text'][:60]}{'…' if len(ln['text'])>60 else ''}"
             for ln in lines[-5:]
         ) or "(no lines yet)"
+        formatted_start = datetime.fromisoformat(sess['started_at']).strftime("%Y-%m-%d %H:%M %Z")
         await ctx.send(
             f"📋 **Steno status**\n"
             f"Mode: `{sess['mode']}` | Locked: `{sess['locked']}` | Lines: `{len(lines)}`\n"
-            f"Case: `{sess.get('case_number') or 'N/A'}` | Started: `{sess['started_at']}`\n"
+            f"Case: `{sess.get('case_number') or 'N/A'}` | Started: `{formatted_start}`\n"
             f"Recent:\n{preview}"
         )
 
