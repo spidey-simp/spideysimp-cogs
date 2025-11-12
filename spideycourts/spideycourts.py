@@ -1481,7 +1481,8 @@ class SpideyCourts(commands.Cog):
 
     
     court = app_commands.Group(name="court", description="Court related commands")
-    service = app_commands.Group(name="service", description="Service of process commands", parent=court)
+    service = app_commands.Group(name="service", description="Service of process commands for spidey courts")
+    reporter = app_commands.Group(name="reporter", description="Court reporter commands")
 
     def is_judge(self, interaction: discord.Interaction) -> bool:
         return any(role.id == FED_JUDICIARY_ROLE_ID for role in interaction.user.roles)
@@ -3773,7 +3774,7 @@ class SpideyCourts(commands.Cog):
         return await interaction.followup.send("❌ Unknown action.", ephemeral=True)
 
 
-    @court.command(name="reporter_publish", description="Publish a docketed opinion to the appropriate Reporter.")
+    @reporter.command(name="publish", description="Publish a docketed opinion to the appropriate Reporter.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.choices(reporter_override=[
@@ -3797,8 +3798,8 @@ class SpideyCourts(commands.Cog):
         interaction: discord.Interaction,
         case_number: str,
         entry: int,
-        reporter_override: app_commands.Choice[str] | None = None,
-        paren_style: app_commands.Choice[str] | None = None,
+        reporter_override: str | None = None,
+        paren_style: str | None = None,
         parenthetical_override: str | None = None,
     ):
         case = self.court_data.get(case_number)
@@ -3846,9 +3847,9 @@ class SpideyCourts(commands.Cog):
             await channel.send(f"❌ Case `{case_number}` has been removed from the public filings by order of the Court.\nIt was removed by: `{interaction.user.display_name}` for `{reason}`.")
         
 
-    @court.command(name="reporter_cite", description="Open a Reporter citation (SPIDEYLAW / F. / S.R.).")
+    @reporter.command(name="cite", description="Open a Reporter citation (SPIDEYLAW / F. / S.R.).")
     @app_commands.describe(citation="e.g., '1 S.R. 5' or '1 SPIDEYLAW 1, 5'")
-    async def reporter_cite(self, interaction: discord.Interaction, citation: str):
+    async def cite(self, interaction: discord.Interaction, citation: str):
         await interaction.response.defer(ephemeral=True)
         m = CITE_MULTI_RX.match(citation or "")
         if not m:
@@ -3905,7 +3906,7 @@ class SpideyCourts(commands.Cog):
 
 
 
-    @court.command(name="reporter_retract", description="Retract a published opinion (last-only to preserve page numbering).")
+    @reporter.command(name="retract", description="Retract a published opinion (last-only to preserve page numbering).")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         citation="e.g., '1 F. 12' or '1 S.R. 1' (preferred)",
