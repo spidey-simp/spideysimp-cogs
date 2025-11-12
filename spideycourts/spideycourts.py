@@ -4,10 +4,10 @@ import discord
 from discord import app_commands
 from discord.ext import tasks
 from matplotlib import lines
-from redbot.core import commands
+from redbot.core import commands, bank
 import json
 import os
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta, timezone
 from typing import List
 import textwrap
 import io
@@ -82,6 +82,19 @@ TRIAL_RX = re.compile(r'^(?P<label>[^:]{1,64})\s*:\s*(?P<text>.+)$')
 
 REPORTER_KEY = "_reporter"
 
+# --- Service timing knobs (tweak to taste) ---
+ANSWER_DAYS_AFTER_SERVICE = 7      # your local Rule 12 clock for served (non-waiver) defendants
+SERVICE_LIMIT_DAYS       = 14      # Rule 4(m) time to complete service
+
+# --- Clerk signature for summons ---
+CLERK_NAME  = "Clerk of Court"
+CLERK_TITLE = "Spidey Republic Courts"
+
+
+SERVICE_FEE_MIN = 40
+SERVICE_FEE_MAX = 200
+SERVICE_FEE_MEMO = "Rule 4(d)(2) service costs for failure to waive"
+
 # How big a “page” is (must be < 2000)
 TARGET_CHARS_PER_PAGE = 1400
 
@@ -134,6 +147,7 @@ def _court_parenthetical(self, *, case: dict, reporter_key: str | None = None,
 
 
 
+UTC = timezone.utc
 
 
 
@@ -982,6 +996,13 @@ class SpideyCourts(commands.Cog):
     async def _ready(self):
         await self.bot.wait_until_ready()
     
+    def _deadline_days(self, start: datetime, days: int) -> str:
+        return (start + timedelta(days=days)).date().isoformat()
+
+    def _deadline_timestamp(self, start: datetime, hours: int) -> str:
+        dt = start + timedelta(hours=hours)
+        return dt.strftime("%Y-%m-%d %H:%M %Z")
+    
     def _next_case_seq_scan(self) -> int:
         """Scan existing keys and return next sequential 6-digit docket number."""
         max_seq = 0
@@ -1122,6 +1143,22 @@ class SpideyCourts(commands.Cog):
                 lines.append(f"    ↳ Exhibit {ex_num}: {ex_desc}")
 
         return lines
+
+    def _docket(self, case: dict, author: discord.Member, document_type: str, content: str,
+            channel_id: int | None = None, message_id: int | None = None) -> int:
+        filings = case.setdefault("filings", [])
+        entry_no = len(filings) + 1
+        filings.append({
+            "entry": entry_no,
+            "document_type": document_type,
+            "author": author.name,
+            "author_id": author.id,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "content": content,
+            "channel_id": channel_id,
+            "message_id": message_id,
+        })
+        return entry_no
 
     def _build_docket_pages(self, header: str, lines: list[str], max_chars: int = 1900) -> list[str]:
         """Pack lines into pages under the limit (header repeated each page)."""
@@ -1444,6 +1481,7 @@ class SpideyCourts(commands.Cog):
 
     
     court = app_commands.Group(name="court", description="Court related commands")
+    service = app_commands.Group(name="service", description="Service of process commands", parent=court)
 
     def is_judge(self, interaction: discord.Interaction) -> bool:
         return any(role.id == FED_JUDICIARY_ROLE_ID for role in interaction.user.roles)
@@ -1911,10 +1949,421 @@ class SpideyCourts(commands.Cog):
             f"**Included documents:**\n{docs_section}\n\n"
             f"— Sent by authority of the Court’s electronic filing system."
         )
+    
+    def _parse_iso(self, s: str | None) -> datetime | None:
+        if not s: return None
+        try:
+            return datetime.fromisoformat(s)
+        except Exception:
+            return None
+
+    def _waiver_window_expired(self, svc_node: dict) -> bool:
+        """True if a waiver was requested and the return window has elapsed with no waiver returned."""
+        req = svc_node.get("waiver_requested") or {}
+        if not req:
+            return False
+        if svc_node.get("waiver_returned"):
+            return False
+        # prefer the explicit return_by timestamp, else 48h from sent_ts
+        now = datetime.now(UTC)
+        rb = req.get("return_by")
+        if rb:
+            try:
+                # return_by here is a pretty string; fall back to sent_ts + 48h
+                # If you stored ISO, parse directly; if not, we assume elapsed if now >= rb-ish time
+                # To be safe, also compare sent_ts + 48h.
+                sent = self._parse_iso(req.get("sent_ts")) or now - timedelta(days=9999)
+                return now >= (sent + timedelta(hours=int(req.get("return_hours", 48))))
+            except Exception:
+                pass
+        # fallback: sent_ts + 48h
+        sent = self._parse_iso(req.get("sent_ts"))
+        if not sent:
+            return False
+        return now >= (sent + timedelta(hours=int(req.get("return_hours", 48))))
+
+    async def _try_withdraw_service_fee(self, guild: discord.Guild, user_id: int, amount: int) -> tuple[bool, str]:
+        """
+        Attempt to withdraw fee from a Discord user using Red's bank.
+        Returns (ok, message).
+        """
+        if bank is None:
+            return False, "Bank module unavailable"
+        member = guild.get_member(int(user_id))
+        if not member:
+            return False, "User not found in guild"
+        try:
+            # Red v3 bank API (common): withdraw_credits(member, amount)
+            await bank.withdraw_credits(member, amount)
+            return True, "charged"
+        except Exception as e:
+            return False, f"{type(e).__name__}: {e}"
+
+
+    @service.command(name="request_waiver", description="Send Rule 4(d) Notice of Lawsuit and Request to Waive Service")
+    @app_commands.describe(
+        case_number="Case number",
+        party_user="Defendant (Discord member) OR choose a non-user party below",
+        party="Non-user defendant (choose from autocomplete)",
+        return_hours="Time allowed to return waiver (min 48h; default 48)",
+        deliver="Both (default), DM only, or Public Post only",
+        channel="If Public Post, where to post (default: Courthouse Steps → venue)"
+    )
+    @app_commands.choices(deliver=[
+        app_commands.Choice(name="Both (DM + Public Post)", value="both"),
+        app_commands.Choice(name="Direct Message only", value="dm"),
+        app_commands.Choice(name="Public Post only", value="post"),
+    ])
+    @app_commands.autocomplete(case_number=case_autocomplete, party=party_autocomplete)
+    async def service_request_waiver(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        party_user: discord.Member | None = None,
+        party: str | None = None,
+        return_hours: int = 48,
+        deliver: str | None = None,
+        channel: discord.TextChannel | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+        case = self.court_data.get(case_number)
+        if not isinstance(case, dict):
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+
+        # resolve defendant (user or pid:xxx)
+        if (party_user is None) == (party is None):
+            return await interaction.followup.send("❌ Specify either `party_user` or `party`.", ephemeral=True)
+
+        target = None
+        if party_user:
+            for p in (case.get("parties", {}).get("defendants") or []):
+                if p.get("kind") == "user" and int(p.get("id",0)) == int(party_user.id):
+                    target = p; break
+            if not target:
+                return await interaction.followup.send("❌ That user is not listed as a defendant.", ephemeral=True)
+        else:
+            pid = party.removeprefix("pid:") if party and party.startswith("pid:") else None
+            for p in (case.get("parties", {}).get("defendants") or []):
+                if p.get("pid") == pid:
+                    target = p; break
+            if not target:
+                return await interaction.followup.send("❌ That party is not listed as a defendant.", ephemeral=True)
+
+        party_name = target.get("name") or (party_user.display_name if party_user else "Unknown")
+        party_pid  = target["pid"]
+
+        deliver_mode = (deliver.value if deliver else "both")
+
+        # prefer Courthouse Steps; fallback to venue channel
+        steps_chan = self.bot.get_channel(COURT_STEPS_CHANNEL_ID) if 'COURT_STEPS_CHANNEL_ID' in globals() else None
+        venue_id   = VENUE_CHANNEL_MAP.get(case.get("venue"))
+        venue_chan = self.bot.get_channel(venue_id) if venue_id else None
+        post_chan  = channel or steps_chan or venue_chan
+        if deliver_mode in ("post","both") and not post_chan:
+            return await interaction.followup.send("❌ No channel available for public posting. Provide `channel:`.", ephemeral=True)
+
+        sent_at = datetime.now(UTC)
+        hrs = max(int(return_hours or 48), 48)           # Rule 4(d)(1)(F)
+        return_by_ts = self._deadline_timestamp(sent_at, hrs)
+        answer_due   = self._deadline_days(sent_at, 7)   # Rule 4(d)(3)
+
+        cap = case.get("_cached_caption") or await self._caption_from_parties(interaction.guild, case)
+        notice = (
+            f"**Notice of Lawsuit and Request to Waive Service (Rule 4(d))**\n"
+            f"Case: **{cap}**, `{case_number}`\n"
+            f"To: **{party_name}**\n\n"
+            f"A lawsuit has been filed against you in this Court. A copy of the complaint is included. "
+            f"This is **not** a summons. To avoid expenses, you may waive service by signing and returning a waiver.\n\n"
+            f"• **Date sent:** {sent_at.strftime('%Y-%m-%d %H:%M %Z')}\n"
+            f"• **Time to return waiver:** at least **{hrs} hours** (by **{return_by_ts}**)\n"
+            f"• **If you waive, your answer is due:** **{answer_due}** (7 days from the send date)\n\n"
+            f"If you do **not** return a signed waiver without good cause, the Court **must** impose the later service expenses and "
+            f"reasonable fees to collect them. (Rule 4(d)(2))\n\n"
+            f"_Sent by direct message or other reliable means per Rule 4(d)(1)(G)._"
+        )
+
+        attempts, dm_msg, post_link, thread_id = [], None, None, None
+        if deliver_mode in ("both","dm") and party_user:
+            try:
+                dm_msg = await party_user.send(notice, allowed_mentions=discord.AllowedMentions.none())
+                attempts.append({"method":"dm","ok":True,"channel_id":dm_msg.channel.id,"message_id":dm_msg.id,
+                                "link": self._jump_link(dm_msg.channel.id, dm_msg.id, None)})
+            except Exception as e:
+                attempts.append({"method":"dm","ok":False,"error":f"{type(e).__name__}: {e}"})
+
+        if deliver_mode in ("both","post"):
+            anchor = await post_chan.send(f"**Rule 4(d) Waiver Request — {case_number} — {party_name}**",
+                                        allowed_mentions=discord.AllowedMentions.none())
+            thread = await post_chan.create_thread(
+                name=f"Waiver: {case_number} — {party_name}",
+                message=anchor,
+                auto_archive_duration=10080
+            )
+            m = await thread.send(notice, allowed_mentions=discord.AllowedMentions.none())
+            post_link = self._jump_link(thread.id, m.id, interaction.guild.id)
+            thread_id = thread.id
+            attempts.append({"method":"post","ok":True,"channel_id":thread.id,"message_id":m.id,"link":post_link})
+
+        # persist service node
+        svc = case.setdefault("service", {})
+        node = svc.setdefault(party_pid, {})
+        node["waiver_requested"] = {
+            "sent_ts": sent_at.isoformat(),
+            "by": interaction.user.id,
+            "return_hours": hrs,
+            "return_by": return_by_ts,
+            "answer_if_waived": answer_due,
+            "attempts": attempts,
+        }
+
+        # docket
+        proofs = []
+        for a in attempts:
+            if a.get("ok"):
+                tag = "DM" if a["method"] == "dm" else "Public thread"
+                proofs.append(f"- {tag}: {a['link']}")
+            else:
+                proofs.append(f"- DM FAILED — {a.get('error','unknown')}")
+
+        content = (f"Rule 4(d) waiver requested from **{party_name}**.\n"
+                f"Return window: **≥ {hrs} hours** (by **{return_by_ts}**). If waived, answer due **{answer_due}**.\n"
+                + ("\n".join(proofs) if proofs else ""))
+        entry_no = self._docket(
+            case, interaction.user, "Rule 4(d) Waiver Requested", content,
+            channel_id=(thread_id or (dm_msg.channel.id if dm_msg else None)),
+            message_id=((m.id if deliver_mode in ('both','post') else (dm_msg.id if dm_msg else None)) if 'm' in locals() else None)
+        )
+
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(f"✅ Waiver request sent for **{party_name}** (Entry {entry_no}).", ephemeral=True)
+
+
+    @service.command(name="waive_service", description="Return a Rule 4(d) waiver of service")
+    @app_commands.describe(
+        case_number="Case number",
+        party_user="Defendant (Discord member) OR choose a non-user party below",
+        party="Non-user defendant (choose from autocomplete)",
+        signer="Name of signer (defaults to your display name)",
+        channel="Optional public channel to file the waiver notice"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete, party=party_autocomplete)
+    async def service_waive_service(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        party_user: discord.Member | None = None,
+        party: str | None = None,
+        signer: str | None = None,
+        channel: discord.TextChannel | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+        case = self.court_data.get(case_number)
+        if not isinstance(case, dict):
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+
+        if (party_user is None) == (party is None):
+            return await interaction.followup.send("❌ Specify either `party_user` or `party`.", ephemeral=True)
+
+        target = None
+        if party_user:
+            for p in (case.get("parties", {}).get("defendants") or []):
+                if p.get("kind") == "user" and int(p.get("id",0)) == int(party_user.id):
+                    target = p; break
+            if not target:
+                return await interaction.followup.send("❌ That user is not listed as a defendant.", ephemeral=True)
+        else:
+            pid = party.removeprefix("pid:") if party and party.startswith("pid:") else None
+            for p in (case.get("parties", {}).get("defendants") or []):
+                if p.get("pid") == pid:
+                    target = p; break
+            if not target:
+                return await interaction.followup.send("❌ That party is not listed as a defendant.", ephemeral=True)
+
+        party_name = target.get("name") or (party_user.display_name if party_user else "Unknown")
+        party_pid  = target["pid"]
+
+        svc = case.setdefault("service", {}).setdefault(party_pid, {})
+        req = svc.get("waiver_requested")
+        sent_at = datetime.fromisoformat(req["sent_ts"]) if req and req.get("sent_ts") else datetime.now(UTC)
+        answer_due = self._deadline_days(sent_at, 7)  # Rule 4(d)(3)
+
+        signer_name = (signer or interaction.user.display_name).strip()
+        stamp = datetime.now(UTC)
+
+        text = (
+            f"**Waiver of Service (Rule 4(d))**\n"
+            f"Case: `{case_number}`\n"
+            f"Party: **{party_name}**\n"
+            f"Signer: **{signer_name}**\n"
+            f"Date: {stamp.date().isoformat()}\n\n"
+            f"By returning this waiver, the party acknowledges receipt of a Rule 4(d) request and agrees to waive service of summons. "
+            f"Per Rule 4(d)(3)–(4), proof of service is not required and the time to answer expires **{answer_due}**."
+        )
+
+        msg = None
+        if channel:
+            msg = await channel.send(text, allowed_mentions=discord.AllowedMentions.none())
+
+        svc["waiver_returned"] = {
+            "ts": stamp.isoformat(),
+            "by": interaction.user.id,
+            "signer": signer_name,
+            "answer_due": answer_due,
+            "message_id": (msg.id if msg else None),
+            "channel_id": (channel.id if channel else None),
+        }
+        svc["served"] = {
+            "ts": stamp.isoformat(),
+            "method": "waiver",
+            "answer_due": answer_due,
+        }
+
+        entry_no = self._docket(
+            case, interaction.user, "Waiver of Service Returned",
+            f"Waiver returned by **{party_name}** (signed by **{signer_name}**). Answer due **{answer_due}**. "
+            f"(Proof of service not required — Rule 4(d)(4).)",
+            channel_id=(channel.id if channel else None),
+            message_id=(msg.id if msg else None),
+        )
+
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(
+            f"✅ Waiver recorded for **{party_name}** (Entry {entry_no}). Answer due **{answer_due}**.",
+            ephemeral=True
+        )
+    
+    @service.command(name="issue_summons", description="Issue a Rule 4 summons for a specific defendant")
+    @app_commands.describe(
+        case_number="Case number",
+        party_user="Defendant (Discord member) OR choose a non-user party below",
+        party="Non-user defendant (choose from autocomplete)",
+        channel="Public spot to post the summons (default: Courthouse Steps → venue)"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete, party=party_autocomplete)
+    async def service_issue_summons(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        party_user: discord.Member | None = None,
+        party: str | None = None,
+        channel: discord.TextChannel | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+        case = self.court_data.get(case_number)
+        if not isinstance(case, dict):
+            return await interaction.followup.send("❌ Case not found.", ephemeral=True)
+        await self._normalize_case(interaction.guild, case)
+
+        # resolve exactly one defendant
+        if (party_user is None) == (party is None):
+            return await interaction.followup.send("❌ Specify either `party_user` or `party`.", ephemeral=True)
+
+        target = None
+        if party_user:
+            for p in (case.get("parties", {}).get("defendants") or []):
+                if p.get("kind") == "user" and int(p.get("id",0)) == int(party_user.id):
+                    target = p; break
+            if not target:
+                return await interaction.followup.send("❌ That user is not listed as a defendant.", ephemeral=True)
+        else:
+            pid = party.removeprefix("pid:") if party and party.startswith("pid:") else None
+            for p in (case.get("parties", {}).get("defendants") or []):
+                if p.get("pid") == pid:
+                    target = p; break
+            if not target:
+                return await interaction.followup.send("❌ That party is not listed as a defendant.", ephemeral=True)
+
+        party_name = target.get("name") or (party_user.display_name if party_user else "Unknown")
+        party_pid  = target["pid"]
+
+        # where to post
+        steps_chan = self.bot.get_channel(COURT_STEPS_CHANNEL_ID) if 'COURT_STEPS_CHANNEL_ID' in globals() else None
+        venue_id   = VENUE_CHANNEL_MAP.get(case.get("venue"))
+        venue_chan = self.bot.get_channel(venue_id) if venue_id else None
+        post_chan  = channel or steps_chan or venue_chan
+        if not post_chan:
+            return await interaction.followup.send("❌ No channel available to post the summons. Provide `channel:`.", ephemeral=True)
+
+        # caption and parties
+        cap = case.get("_cached_caption") or await self._caption_from_parties(interaction.guild, case)
+
+        # who is “plaintiff’s attorney / plaintiff” line?
+        pl_lawyer = None
+        try:
+            # prefer counsel-of-record for the plaintiff if present
+            pls = (case.get("parties",{}) or {}).get("plaintiffs") or []
+            pl_primary = pls[0] if pls else None
+            if pl_primary and pl_primary.get("kind") == "user":
+                pid_user = str(pl_primary.get("id"))
+                cor = (case.get("counsel_of_record") or {})
+                atty_id = cor.get(pid_user)
+                if atty_id:
+                    m = interaction.guild.get_member(int(atty_id))
+                    if m: pl_lawyer = m.display_name
+        except Exception:
+            pass
+        if not pl_lawyer:
+            # fallback to filer’s display name if we can identify from entry 1
+            first = (case.get("filings") or [{}])[0]
+            auth_id = first.get("author_id")
+            m = interaction.guild.get_member(int(auth_id)) if auth_id else None
+            pl_lawyer = m.display_name if m else first.get("author") or "Unrepresented Plaintiff"
+
+        # compute the service deadline window for info box
+        filed_ts = None
+        try:
+            filed_ts = datetime.fromisoformat((case.get("filings") or [{}])[0].get("timestamp"))
+        except Exception:
+            filed_ts = datetime.now(UTC)
+        serve_deadline = (filed_ts + timedelta(days=SERVICE_LIMIT_DAYS)).date().isoformat()
+
+        # make the summons text
+        summon_text = (
+            f"**SUMMONS (Rule 4)**\n"
+            f"Case: **{cap}**, `{case_number}`\n\n"
+            f"**To the Defendant:** {party_name}\n\n"
+            f"You are hereby summoned and required to appear and defend against the complaint in this action.\n\n"
+            f"**Court & Parties:** {cap}\n"
+            f"**Plaintiff’s Attorney / Plaintiff (if unrepresented):** {pl_lawyer}\n"
+            f"**Time to appear/defend:** within **{ANSWER_DAYS_AFTER_SERVICE} days after service** of this summons and complaint.\n"
+            f"**Warning:** If you fail to appear and defend, default judgment may be entered against you for the relief demanded.\n\n"
+            f"**Issued by:** {CLERK_NAME}, {CLERK_TITLE}\n"
+            f"**Processed through the Court** on {datetime.now(UTC).strftime('%Y-%m-%d %H:%M %Z')}.\n"
+            f"_A separate copy must be issued for each defendant to be served (Rule 4(b))._\n\n"
+            f"**Note:** Under Rule 4(m), service should be completed by **{serve_deadline}** unless otherwise ordered."
+        )
+
+        # post & cache link
+        header = await post_chan.send(f"**Summons — {case_number} — {party_name}**")
+        msg    = await post_chan.create_thread(name=f"Summons: {case_number} — {party_name}", message=header, auto_archive_duration=10080)
+        body   = await msg.send(summon_text)
+
+        # store under service node
+        svc = case.setdefault("service", {})
+        node = svc.setdefault(party_pid, {})
+        node["summons"] = {
+            "issued_ts": datetime.now(UTC).isoformat(),
+            "by": interaction.user.id,
+            "channel_id": msg.id,
+            "message_id": body.id,
+            "link": self._jump_link(msg.id, body.id, interaction.guild.id),
+        }
+
+        # docket
+        entry_no = self._docket(
+            case, interaction.user, "Summons Issued",
+            f"Summons issued for **{party_name}**. Link: {node['summons']['link']}",
+            channel_id=msg.id, message_id=body.id
+        )
+        save_json(COURT_FILE, self.court_data)
+        await interaction.followup.send(f"✅ Summons issued for **{party_name}** (Entry {entry_no}).", ephemeral=True)
 
 
 
-    @court.command(name="serve", description="Serve a party (or their agent/rep) and auto-docket proof (DM + Public Post by default)")
+
+    @service.command(name="serve", description="Serve a party (or their agent/rep) and auto-docket proof (DM + Public Post by default)")
     @app_commands.choices(deliver=[
         app_commands.Choice(name="Both (DM + Public Post)", value="both"),
         app_commands.Choice(name="Direct Message only", value="dm"),
@@ -1927,196 +2376,170 @@ class SpideyCourts(commands.Cog):
     @app_commands.describe(
         case_number="Case number",
         deliver="How to serve (default: Both)",
-        # identify the PARTY:
         party_user="(Option A) Discord member party",
         party="(Option B) Non-user party (choose from autocomplete)",
-        # optionally identify an AGENT/REP if party is non-user or you prefer serving the agent:
         party_agent_user="Agent/Representative as a Discord member (optional)",
         party_agent="Agent/Representative as plain text (optional)",
         relation="Relationship of the agent to the party (default: Agent)",
-        channel="If Public Post, where to post (defaults to case’s venue)",
-        documents="Comma-separated docket entry numbers to include (default: 1 = Complaint)"
+        channel="If Public Post, where to post (default: Courthouse Steps → venue)",
+        documents="Comma-separated docket entry numbers to include",
+        attach_summons="If true, includes a link to any issued summons for this party",
+        assess_fee="Charge Rule 4(d)(2) service costs if waiver not returned (default: true)"
     )
     @app_commands.autocomplete(case_number=case_autocomplete, party=party_autocomplete)
-    async def serve(
+    async def service_serve(
         self,
         interaction: discord.Interaction,
         case_number: str,
-        deliver: app_commands.Choice[str] = None,
+        deliver: str | None = None,
         party_user: discord.Member | None = None,
         party: str | None = None,
         party_agent_user: discord.Member | None = None,
         party_agent: str | None = None,
-        relation: app_commands.Choice[str] | None = None,
+        relation: str | None = None,
         channel: discord.TextChannel | None = None,
         documents: str | None = None,
+        attach_summons: bool = True,
+        assess_fee: bool = True
     ):
         await interaction.response.defer(ephemeral=True)
-        deliver_mode = (deliver.value if deliver else "both")
-        relation_val = (relation.value if relation else "agent")
-
         case = self.court_data.get(case_number)
         if not isinstance(case, dict):
             return await interaction.followup.send("❌ Case not found.", ephemeral=True)
         await self._normalize_case(interaction.guild, case)
 
-        # exactly one of party_user or party
+        # resolve party (exactly one)
         if (party_user is None) == (party is None):
             return await interaction.followup.send("❌ Specify either `party_user` or `party`.", ephemeral=True)
 
-        # resolve target party record + name + pid
         target = None
         if party_user:
-            for side in ("plaintiffs", "defendants"):
-                for p in (case.get("parties", {}).get(side) or []):
-                    if p.get("kind") == "user" and int(p.get("id", 0)) == int(party_user.id):
-                        target = p; break
-                if target: break
+            for p in (case.get("parties", {}).get("defendants") or []):
+                if p.get("kind") == "user" and int(p.get("id",0)) == int(party_user.id):
+                    target = p; break
             if not target:
-                return await interaction.followup.send("❌ That user is not listed as a party in this case.", ephemeral=True)
+                return await interaction.followup.send("❌ That user is not listed as a defendant.", ephemeral=True)
         else:
             pid = party.removeprefix("pid:") if party and party.startswith("pid:") else None
-            if not pid:
-                return await interaction.followup.send("❌ Invalid party selection.", ephemeral=True)
-            for side in ("plaintiffs", "defendants"):
-                for p in (case.get("parties", {}).get(side) or []):
-                    if p.get("pid") == pid:
-                        target = p; break
-                if target: break
+            for p in (case.get("parties", {}).get("defendants") or []):
+                if p.get("pid") == pid:
+                    target = p; break
             if not target:
-                return await interaction.followup.send("❌ That party is not listed in this case.", ephemeral=True)
+                return await interaction.followup.send("❌ That party is not listed as a defendant.", ephemeral=True)
 
-        party_name = target.get("name") or (party_user.display_name if party_user else "Unknown")
-        party_pid = target["pid"]
-        is_user_party = (target.get("kind") == "user" and target.get("id") is not None)
+        party_name     = target.get("name") or (party_user.display_name if party_user else "Unknown")
+        party_pid      = target["pid"]
+        is_user_party  = (target.get("kind") == "user" and target.get("id") is not None)
 
-        # agent resolution (optional)
+        # agent
+        rel_val    = (relation.value if relation else "agent")
+        agent_name = (party_agent_user.display_name if party_agent_user else (party_agent.strip() if party_agent else None))
         agent_is_user = bool(party_agent_user)
-        agent_name = None
-        if party_agent_user:
-            agent_name = party_agent_user.display_name
-        elif party_agent:
-            agent_name = party_agent.strip() or None
 
-        # which filings to include (default: entry 1)
+        # channels
+        steps_chan = self.bot.get_channel(COURT_STEPS_CHANNEL_ID) if 'COURT_STEPS_CHANNEL_ID' in globals() else None
+        venue_id   = VENUE_CHANNEL_MAP.get(case.get("venue"))
+        venue_chan = self.bot.get_channel(venue_id) if venue_id else None
+        post_chan  = channel or steps_chan or venue_chan
+
+        deliver_mode = (deliver.value if deliver else "both")
+        if deliver_mode in ("post","both") and not post_chan:
+            return await interaction.followup.send("❌ No channel available for public posting. Provide `channel:`.", ephemeral=True)
+
+        # docs list
         try:
             doc_list = [int(x.strip()) for x in (documents or "1").split(",") if x.strip()]
         except ValueError:
             return await interaction.followup.send("❌ `documents` must be entry numbers like `1, 2, 4`.", ephemeral=True)
 
-        # Build packet text (reflect agent if present)
+        # service deadline check (Rule 4(m))
+        filed_ts = None
+        try:
+            filed_ts = datetime.fromisoformat((case.get("filings") or [{}])[0].get("timestamp"))
+        except Exception:
+            filed_ts = datetime.now(UTC)
+        limit_date = (filed_ts + timedelta(days=SERVICE_LIMIT_DAYS)).date().isoformat()
+
+        # gather packet: include summons link if requested
+        extra = ""
+        if attach_summons:
+            summ = ((case.get("service") or {}).get(party_pid) or {}).get("summons")
+            if summ and summ.get("link"):
+                extra = f"\n\n**Summons:** {summ['link']}"
         packet = self._build_service_packet_text(
             interaction.guild, case, case_number, party_name, doc_list,
-            via_relation=relation_val if agent_name else None,
+            via_relation=(rel_val if agent_name else None),
             agent_name=agent_name
-        )
+        ) + extra
 
-
-        target_chan = channel or self.bot.get_channel(COURT_STEPS_CHANNEL_ID)
+        # Allowed mentions (only ping actual users we’re serving)
+        allowed = discord.AllowedMentions.none()
+        ping_users = []
+        if party_user: ping_users.append(party_user)
+        if party_agent_user: ping_users.append(party_agent_user)
+        if ping_users:
+            allowed = discord.AllowedMentions(users=[u for u in ping_users], roles=False, everyone=False, replied_user=False)
 
         attempts = []
-        dm_target_user = None
+        dm_target_user = party_agent_user or (party_user if is_user_party else None)
 
-        # Decide who to DM (priority: agent_user, else party_user if user party)
-        if agent_is_user:
-            dm_target_user = party_agent_user
-        elif is_user_party and party_user:
-            dm_target_user = party_user
-
-        # Guard: if deliver == dm but we have no DM-able target
-        if deliver_mode == "dm" and not dm_target_user:
-            return await interaction.followup.send("❌ DM-only service requires a Discord user (party or agent). Provide `party_agent_user` or use Public Post.", ephemeral=True)
-
-        # 1) DM attempt (if applicable)
-        if dm_target_user and deliver_mode in ("both", "dm"):
+        # DM
+        if dm_target_user and deliver_mode in ("both","dm"):
             try:
                 dm_msg = await dm_target_user.send(packet, allowed_mentions=discord.AllowedMentions.none())
                 attempts.append({
-                    "method": "dm",
-                    "ok": True,
-                    "channel_id": dm_msg.channel.id,
-                    "message_id": dm_msg.id,
+                    "method": "dm", "ok": True,
+                    "channel_id": dm_msg.channel.id, "message_id": dm_msg.id,
                     "link": self._jump_link(dm_msg.channel.id, dm_msg.id, None),
                     "target": ("agent" if agent_is_user else "party"),
                 })
-            except discord.Forbidden:
-                attempts.append({"method": "dm", "ok": False, "error": "DMs closed", "target": ("agent" if agent_is_user else "party")})
             except Exception as e:
-                attempts.append({"method": "dm", "ok": False, "error": f"{type(e).__name__}: {e}", "target": ("agent" if agent_is_user else "party")})
+                attempts.append({"method":"dm","ok":False,"error":f"{type(e).__name__}: {e}", "target": ("agent" if agent_is_user else "party")})
 
-        # 2) Public Post (always for non-users; for users unless deliver == "dm")
-        # 2) Public Post (always for non-users; for users unless deliver == "dm")
-        public_needed = (deliver_mode in ("both", "post")) or (not dm_target_user)
-        post_link = None
-        thread_id = None
-
-        # Build header text
-        post_header = f"**Service of Process — {case_number} — "
-        if agent_name:
-            post_header += f"{agent_name} ({relation_val} for {party_name})**"
-        else:
-            post_header += f"{party_name}**"
-
-        if public_needed:
-            if not target_chan:
-                return await interaction.followup.send("❌ No channel available for public posting. Specify `channel:`.", ephemeral=True)
-
-            # Decide who to ping: the party_user and/or party_agent_user
-            users_to_ping = []
-            if is_user_party and party_user:
-                users_to_ping.append(party_user)
-            if party_agent_user:
-                users_to_ping.append(party_agent_user)
-
-            # De-dupe and build mention line + whitelist
-            users_to_ping = list({u.id: u for u in users_to_ping}.values())
-            mention_line = " ".join(u.mention for u in users_to_ping)
-            allowed = discord.AllowedMentions(users=users_to_ping, roles=False, everyone=False) if users_to_ping else discord.AllowedMentions.none()
-
-            # Anchor with (optional) pings
-            anchor = await target_chan.send(
-                post_header + (f"\n{mention_line}" if mention_line else ""),
-                allowed_mentions=allowed
-            )
-
-            # Thread + packet (no mentions to avoid double pings)
-            thread = await target_chan.create_thread(
+        # Public Post
+        post_link, thread_id = None, None
+        if deliver_mode in ("both","post") or not dm_target_user:
+            anchor_text = f"**Service of Process — {case_number} — "
+            anchor_text += f"{agent_name} ({rel_val} for {party_name})**" if agent_name else f"{party_name}**"
+            anchor = await post_chan.send(anchor_text, allowed_mentions=allowed)
+            thread = await post_chan.create_thread(
                 name=f"Service: {case_number} — {party_name}",
                 message=anchor,
                 auto_archive_duration=10080
             )
-            msg = await thread.send(packet, allowed_mentions=discord.AllowedMentions.none())
-
+            msg = await thread.send(packet, allowed_mentions=allowed)
             post_link = self._jump_link(thread.id, msg.id, interaction.guild.id)
             thread_id = thread.id
             attempts.append({
-                "method": "post",
-                "ok": True,
-                "channel_id": thread.id,
-                "message_id": msg.id,
-                "link": post_link,
-                "target": ("agent" if agent_name else "party"),
+                "method": "post", "ok": True,
+                "channel_id": thread.id, "message_id": msg.id,
+                "link": post_link, "target": ("agent" if agent_name else "party"),
             })
 
-
-        # Persist service status keyed by party PID
+        # Persist service → served_ts & answer_due
+        stamp = datetime.now(UTC)
         svc = case.setdefault("service", {})
-        svc[party_pid] = {
-            "timestamp": datetime.now(UTC).isoformat(),
+        node = svc.setdefault(party_pid, {})
+        node["served"] = {
+            "ts": stamp.isoformat(),
             "by": interaction.user.id,
             "deliver": deliver_mode,
-            "relation": (relation_val if agent_name else None),
+            "relation": (rel_val if agent_name else None),
             "agent": (
-                {"kind": "user", "id": party_agent_user.id, "name": agent_name}
-                if agent_is_user else
-                ({"kind": "text", "name": agent_name} if agent_name else None)
+                {"kind":"user","id":party_agent_user.id,"name":agent_name} if agent_is_user else
+                ({"kind":"text","name":agent_name} if agent_name else None)
             ),
             "attempts": attempts,
+            "answer_due": (stamp + timedelta(days=ANSWER_DAYS_AFTER_SERVICE)).date().isoformat(),
+            "rule_4m_deadline": limit_date,
         }
+        attempts = []
+        dm_target_user = party_agent_user or (party_user if is_user_party else None)
 
-        # Docket one consolidated Proof of Service
+
+        # Docket proof
         lines = []
-        dm_att = next((a for a in attempts if a["method"] == "dm"), None)
+        dm_att   = next((a for a in attempts if a["method"] == "dm"), None)
         post_att = next((a for a in attempts if a["method"] == "post"), None)
         if dm_att:
             who = "agent" if dm_att.get("target") == "agent" else "party"
@@ -2124,39 +2547,83 @@ class SpideyCourts(commands.Cog):
         if post_att:
             who = "agent" if post_att.get("target") == "agent" else "party"
             lines.append(f"- Public thread ({who}): OK — {post_att['link']}")
-        proof_text = "Proofs:\n" + "\n".join(lines) if lines else "No proof links available."
+        latenote = ""
+        if stamp.date().isoformat() > limit_date:
+            latenote = f"\n⚠️ Service occurred after Rule 4(m) deadline ({limit_date})."
+        
+        # --- Rule 4(d)(2) fee assessment (on failure to waive) ---
+        fee_note = ""  # appended into docket/confirmation
+        svc_all = case.setdefault("service", {})
+        svc_node = svc_all.setdefault(party_pid, {})
+
+        should_charge = (
+            assess_fee
+            and party_user  # only charge if the defendant is a user we can bill
+            and self._waiver_window_expired(svc_node)
+            and not (svc_node.get("fee_assessed") and svc_node["fee_assessed"].get("charged"))  # idempotent
+        )
+
+        if should_charge:
+            amount = random.randint(SERVICE_FEE_MIN, SERVICE_FEE_MAX)
+            ok, msg = await self._try_withdraw_service_fee(interaction.guild, party_user.id, amount)
+            svc_node["fee_assessed"] = {
+                "charged": bool(ok),
+                "amount": amount,
+                "by": interaction.user.id,
+                "ts": datetime.now(UTC).isoformat(),
+                "memo": SERVICE_FEE_MEMO,
+                "reason": None if ok else msg,
+            }
+            if ok:
+                fee_note = f"\nService cost assessed under Rule 4(d)(2): **{amount}** credits (charged to {party_user.mention})."
+            else:
+                fee_note = (
+                    f"\nService cost under Rule 4(d)(2) **{amount}** credits could not be auto-charged"
+                    f" (reason: {msg}). Clerk/judge may tax costs later."
+                )
+        elif assess_fee and party_user and svc_node.get("waiver_requested") and not svc_node.get("waiver_returned"):
+            # Waiver requested but window may not have expired yet—log that fee may apply later
+            fee_note = "\nNote: Waiver was requested. If not returned by the deadline, service costs may be taxed per Rule 4(d)(2)."
+
+        content = (
+            f"Served **{party_name}**"
+            + (f" via **{rel_val}** **{agent_name}**" if agent_name else "")
+            + f" by **{'DM and Public Post' if (dm_att and post_att) else ('DM' if dm_att else 'Public Post')}**.\n"
+            + ("\n".join(lines) if lines else "No proof links available.")
+            + f"\nAnswer due: **{node['served']['answer_due']}**. Rule 4(m) deadline: **{limit_date}**."
+            + (f"{fee_note}" if fee_note else "")
+        )
 
         filings = case.setdefault("filings", [])
         filings.append({
-            "entry": len(filings) + 1,
+            "entry": len(filings)+1,
             "document_type": "Proof of Service",
             "author": interaction.user.name,
             "author_id": interaction.user.id,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "content": (
-                f"Served **{party_name}**"
-                + (f" via **{relation_val}** **{agent_name}**" if agent_name else "")
-                + f" by **{'DM and Public Post' if (dm_att and post_att) else ('DM' if dm_att else 'Public Post')}**.\n"
-                + proof_text
-            ),
+            "timestamp": stamp.isoformat(),
+            "content": content,
             "related_to": min(doc_list) if doc_list else None,
             "channel_id": (post_att or dm_att or {}).get("channel_id"),
             "message_id": (post_att or dm_att or {}).get("message_id"),
         })
 
+        
+
         save_json(COURT_FILE, self.court_data)
 
-        # Confirmation
         bits = []
         if dm_att: bits.append("DM " + ("✅" if dm_att["ok"] else "❌"))
         if post_att: bits.append("Public Post ✅")
-        agent_note = f" (served {relation_val}: {agent_name})" if agent_name else ""
+        agent_note = f" (served {rel_val}: {agent_name})" if agent_name else ""
+        suffix = ""
+        if fee_note and "assessed" in fee_note:
+            suffix = f"\n💸 {fee_note.strip()}"
         await interaction.followup.send(
-            f"✅ Service recorded for **{party_name}**{agent_note}: " + ", ".join(bits) + (f"\nPublic thread: {post_link}" if post_link else ""),
+            f"✅ Service recorded for **{party_name}**{agent_note}: " + ", ".join(bits)
+            + (f"\nPublic thread: {post_link}" if post_link else "")
+            + suffix,
             ephemeral=True
         )
-
-
 
 
     
