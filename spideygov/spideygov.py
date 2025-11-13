@@ -1772,6 +1772,8 @@ class SpideyGov(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         """Give PENDING role and open an intake thread with a residency question."""
         guild = member.guild
+        if guild.id != 1287645024309477460:
+            return
         try:
             pend = guild.get_role(PENDING_RESIDENT)
             if pend and pend not in member.roles:
