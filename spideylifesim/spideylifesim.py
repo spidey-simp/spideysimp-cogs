@@ -145,7 +145,7 @@ class SpideyLifeSim(Cog):
         store_slots.insert(3, entertainmentdefault)
         store_slots.insert(4, luxurydefault)
 
-        self.storerefresh_task = None
+        self.storerefresh.start()
 
         self.config.register_member(
             userinventory=[],
@@ -169,17 +169,15 @@ class SpideyLifeSim(Cog):
             learnableabilities = []
         )
 
-    def cog_load(self):
-        self.storerefresh_task = asyncio.create_task(self.storerefresh())
+
     
     def cog_unload(self):
-        if self.storerefresh_task and not self.storerefresh_task.cancelled():
-            self.storerefresh_task.cancel()
+        self.storerefresh.cancel()
 
+    @tasks.loop(hours=6)
     async def storerefresh(self):
-        global next_refresh_time
-        while True:
-            del store_slots[0:4]
+
+            store_slots.clear()
             fooditem = random.choice(list(FOODITEMS.keys()))
             skillitem = random.choice(list(SKILLITEMS.keys()))
             vehicleitem = random.choice(list(VEHICLES.keys()))
@@ -190,13 +188,7 @@ class SpideyLifeSim(Cog):
             store_slots.insert(2, vehicleitem)
             store_slots.insert(3, entertainmentitem)
             store_slots.insert(4, luxuryitem)
-            next_refresh_time = datetime.now() + timedelta(hours=6)
-            wait_seconds = (next_refresh_time - datetime.now()).total_seconds()
-            try:
-                await asyncio.sleep(wait_seconds)
-        
-            except asyncio.CancelledError:
-                store_slots.clear()
+
 
     async def red_delete_data_for_user(self, **kwargs):
         """Nothing to delete"""
@@ -291,12 +283,23 @@ class SpideyLifeSim(Cog):
         store_items = [item.get(store_slots[i]) for i, item in enumerate(items)]
         store_title = "Here's what's available in the shop right now:"
 
-        remaining_time = (next_refresh_time - datetime.now()).total_seconds() if next_refresh_time else None
-        cooldown_timer = (
-            f"**Next refresh in:** {int(remaining_time // 3600)}h {int(remaining_time % 3600 // 60)}m {int(remaining_time % 60)}s"
-            if remaining_time
-            else "Next refresh time is being calculated."
+        next_iter = getattr(self.storerefresh, "next_iteration", None) or getattr(
+            self.storerefresh, "_next_iteration", None
         )
+        if next_iter is not None:
+            now = datetime.now(next_iter.tzinfo) if next_iter.tzinfo else datetime.now()
+            remaining = (next_iter - now).total_seconds()
+
+            if remaining < 0:
+                remaining = 0
+            
+            remaining = int(remaining)
+            hours, remainder = divmod(remaining, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            cooldown_timer = f"**Next refresh in:** {hours}h {minutes}m {seconds}s"
+        else:
+            cooldown_timer = "Next refresh time is being calculated."
+
 
         store_items_text = "\n".join(
             [f"**Slot {i + 1}:** {humanize.intcomma(item)} {currency} for {store_slots[i]}" for i, item in enumerate(store_items)]

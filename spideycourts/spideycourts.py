@@ -547,6 +547,21 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
 
 
         save_json(COURT_FILE, court_data)
+        sp_cog = self.bot.get_cog("SpideyCourts")
+        if sp_cog:
+            case = court_data[case_number]
+            first_filing = case["filings"][0]
+
+            await sp_cog._notify_case_users_of_event(
+                guild=interaction.guild,
+                case_number=case_number,
+                case=case,
+                title="New Criminal Complaint filed" if self.criminal
+                      else "New Complaint filed",
+                body=f"Entry [1]: {'Criminal ' if self.criminal else ''}Complaint filed by {interaction.user.display_name}.",
+                filing=first_filing,
+                filer_id=interaction.user.id,
+            )
         await interaction.response.send_message(f"✅ Complaint filed under `{case_number}`.", ephemeral=True)
 
 class DocumentFilingModal(discord.ui.Modal, title="File another document"):
@@ -634,7 +649,16 @@ class DocumentFilingModal(discord.ui.Modal, title="File another document"):
 
         save_json(COURT_FILE, cog.court_data)  # use the cog you already fetched
 
-
+        case = cog.court_data.get(self.case_number)
+        await cog._notify_case_users_of_event(
+            guild=interaction.guild,
+            case_number=self.case_number,
+            case=case,
+            title=f"{self.doc_title.value} filed",
+            body=f"Document filed by {interaction.user.display_name}.",
+            filing=new_doc,
+            filer_id=interaction.user.id
+        )
         await interaction.followup.send(f"✅ Document filed as docket entry #{entry_num}.", ephemeral=True)
 
 class OrderModal(discord.ui.Modal, title="Issue Order / Opinion"):
@@ -1480,12 +1504,125 @@ class SpideyCourts(commands.Cog):
 
 
     
-    court = app_commands.Group(name="court", description="Court related commands")
-    service = app_commands.Group(name="service", description="Service of process commands for spidey courts")
-    reporter = app_commands.Group(name="reporter", description="Court reporter commands")
+    court = app_commands.Group(name="court", description="Attorney-related commands")
+    judge = app_commands.Group(name="judge", description="Judge-facing commands")
 
     def is_judge(self, interaction: discord.Interaction) -> bool:
         return any(role.id == FED_JUDICIARY_ROLE_ID for role in interaction.user.roles)
+
+
+    async def _notify_case_users_of_event(
+        self,
+        guild: discord.Guild,
+        case_number: str,
+        case: dict,
+        *,
+        title: str,
+        body: str | None = None,
+        filing: dict | None = None,
+        filer_id: int | None = None,
+    ) -> None:
+        """
+        DM notice recipients about a case event.
+
+        Recipients = union of:
+        - case["parties_to_be_noticed"] (explicit watchers, user IDs),
+        - counsel_of_record user IDs,
+        - judge for the case / venue.
+
+        Then we drop `filer_id` from the set so:
+        • Attorney filer -> judge + other attorneys + watchers
+        • Judge filer    -> attorneys + watchers (no self-DM)
+        """
+
+        # --- explicit watchers ---
+        watchers_raw = case.get("parties_to_be_noticed") or []
+        watcher_ids: set[int] = set()
+        for v in watchers_raw:
+            try:
+                watcher_ids.add(int(v))
+            except (TypeError, ValueError):
+                continue
+
+        # --- counsel_of_record values are user IDs ---
+        cofr = case.get("counsel_of_record") or {}
+        cofr_ids: set[int] = set()
+        for v in cofr.values():
+            try:
+                cofr_ids.add(int(v))
+            except (TypeError, ValueError):
+                continue
+
+        # --- judge for this case / venue ---
+        judge_ids: set[int] = set()
+        j_id = case.get("judge_id")
+        if isinstance(j_id, int):
+            judge_ids.add(j_id)
+        else:
+            # fallback from venue map if judge_id not stored yet
+            venue_key = case.get("venue")
+            j_cfg = JUDGE_VENUES.get(venue_key) if venue_key else None
+            if j_cfg:
+                fallback = j_cfg.get("id")
+                if isinstance(fallback, int):
+                    judge_ids.add(fallback)
+
+        # --- full recipient set ---
+        recipients: set[int] = set()
+        recipients |= watcher_ids
+        recipients |= cofr_ids
+        recipients |= judge_ids
+
+        # don't DM the filer
+        if filer_id is not None:
+            try:
+                recipients.discard(int(filer_id))
+            except (TypeError, ValueError):
+                pass
+
+        if not recipients:
+            return
+
+        # --- caption + optional jump link ---
+        try:
+            caption = await self._caption_from_parties(guild, case)
+        except Exception:
+            caption = "Unknown v. Unknown"
+
+        jump = None
+        if filing:
+            ch_id = filing.get("channel_id")
+            msg_id = filing.get("message_id")
+            if ch_id and msg_id:
+                try:
+                    jump = self._jump_link(ch_id, msg_id, guild.id)
+                except Exception:
+                    jump = None
+
+        lines = [
+            f"{title}",
+            f"Case `{case_number}` — **{caption}**",
+        ]
+        if body:
+            lines.append(body)
+        if jump:
+            lines.append("")
+            lines.append(jump)
+
+        dm_text = "\n".join(lines)
+
+        # --- fire off DMs ---
+        for uid in recipients:
+            member = guild.get_member(uid)
+            if not member:
+                continue
+            try:
+                await member.send(dm_text, allowed_mentions=discord.AllowedMentions.none())
+            except discord.Forbidden:
+                # DMs closed; not your circus.
+                continue
+            except Exception:
+                continue
 
 
     
@@ -1511,6 +1648,9 @@ class SpideyCourts(commands.Cog):
         oj_basis=[
             app_commands.Choice(name="Ambassadors/Public Ministers/Consuls", value="diplomats"),
             app_commands.Choice(name="State as a Party", value="state_party"),
+        ],
+        government=[
+            app_commands.Choice(name="Spidey Republic", value="country")
         ]
     )
     async def file_complaint(
@@ -1530,9 +1670,21 @@ class SpideyCourts(commands.Cog):
         if not criminal:
             if (plaintiff is None and plaintiff_user is None):
                 return await interaction.response.send_message("❌ Civil filing requires distinct plaintiff and defendant.", ephemeral=True)
+            government = None
         if defendant is None and defendant_user is None:
             return await interaction.response.send_message("❌ Defendant is required.", ephemeral=True)
+        FED_PROSECUTOR_ROLE_ID = 1438663599588638832
+        has_prosecutor_role = any(r.id == FED_PROSECUTOR_ROLE_ID for r in getattr(interaction.user, "roles", []))
 
+        if criminal and not has_prosecutor_role:
+            return await interaction.response.send_message(
+                "❌ You must have the Federal Prosecutor role to file a criminal complaint.",
+                ephemeral=True
+            )
+
+        if criminal and (plaintiff is not None or plaintiff_user is not None):
+            plaintiff = None
+            plaintiff_user = None
         # merge text+member into one display string per side
         pl_payload = plaintiff_user or plaintiff    # Member OR str
         df_payload = defendant_user or defendant  
@@ -1716,7 +1868,7 @@ class SpideyCourts(commands.Cog):
         )
 
 
-    @court.command(name="connect_document", description="Manually update the link for a document.")
+    @judge.command(name="connect_document", description="Manually update the link for a document.")
     @app_commands.describe(
         case_number="Case number (e.g., 1:25-cv-000001-SS)",
         doc_num="Docket entry number",
@@ -1836,6 +1988,15 @@ class SpideyCourts(commands.Cog):
         save_json(COURT_FILE, self.court_data)
         await interaction.followup.send(f"✅ Exhibit #{exhibit_num} filed successfully for Docket Entry #{entry_num}.", ephemeral=True)
 
+        await self._notify_case_users_of_event(
+            guild=interaction.guild,
+            case_number=case_number,
+            case=case_data,
+            title="New Exhibit Filed",
+            body=f"Exhibit #{exhibit_num} filed by {interaction.user.display_name}. It was attached to docket entry #{entry_num}.",
+            filing=doc,
+            filer_id=interaction.user.id
+        )
 
     @court.command(name="file_document", description="File other documents for a case.")
     @app_commands.describe(
@@ -1851,6 +2012,9 @@ class SpideyCourts(commands.Cog):
         app_commands.Choice(name="Countermotion", value="countermotion"),
         app_commands.Choice(name="Amendment", value="amended"),
         app_commands.Choice(name="Supplement", value="supplemental"),
+        app_commands.Choice(name="Declaration", value="declaration"),
+        app_commands.Choice(name="Affidavit", value="affidavit"),
+        app_commands.Choice(name="Brief", value="brief"),
         app_commands.Choice(name="Other (answer, etc.)", value="other")
     ])
     async def file_document(self, interaction:discord.Interaction, case_number:str, document_type:str, related_docs:str=None):
@@ -1862,7 +2026,7 @@ class SpideyCourts(commands.Cog):
 
         case_data = self.court_data[case_number]
         
-        related_doc_reqs = ["response", "reply", "countermotion", "amended", "supplemental"]
+        related_doc_reqs = ["response", "reply", "countermotion", "amended", "supplemental", "declaration"]
         if document_type in related_doc_reqs and not related_docs:
             await interaction.response.send_message("That kind of document should have at least one related document. Please confer with the docket to see other docket numbers.")
             return
@@ -2001,7 +2165,7 @@ class SpideyCourts(commands.Cog):
             return False, f"{type(e).__name__}: {e}"
 
 
-    @service.command(name="request_waiver", description="Send Rule 4(d) Notice of Lawsuit and Request to Waive Service")
+    @court.command(name="request_waiver", description="Send Rule 4(d) Notice of Lawsuit and Request to Waive Service")
     @app_commands.describe(
         case_number="Case number",
         party_user="Defendant (Discord member) OR choose a non-user party below",
@@ -2054,7 +2218,7 @@ class SpideyCourts(commands.Cog):
         party_name = target.get("name") or (party_user.display_name if party_user else "Unknown")
         party_pid  = target["pid"]
 
-        deliver_mode = (deliver.value if deliver else "both")
+        deliver_mode = (deliver if deliver else "both")
 
         # prefer Courthouse Steps; fallback to venue channel
         steps_chan = self.bot.get_channel(COURT_STEPS_CHANNEL_ID) if 'COURT_STEPS_CHANNEL_ID' in globals() else None
@@ -2140,7 +2304,7 @@ class SpideyCourts(commands.Cog):
         await interaction.followup.send(f"✅ Waiver request sent for **{party_name}** (Entry {entry_no}).", ephemeral=True)
 
 
-    @service.command(name="waive_service", description="Return a Rule 4(d) waiver of service")
+    @court.command(name="waive_service", description="Return a Rule 4(d) waiver of service")
     @app_commands.describe(
         case_number="Case number",
         party_user="Defendant (Discord member) OR choose a non-user party below",
@@ -2234,8 +2398,8 @@ class SpideyCourts(commands.Cog):
             f"✅ Waiver recorded for **{party_name}** (Entry {entry_no}). Answer due **{answer_due}**.",
             ephemeral=True
         )
-    
-    @service.command(name="issue_summons", description="Issue a Rule 4 summons for a specific defendant")
+
+    @court.command(name="issue_summons", description="Issue a Rule 4 summons for a specific defendant")
     @app_commands.describe(
         case_number="Case number",
         party_user="Defendant (Discord member) OR choose a non-user party below",
@@ -2364,7 +2528,8 @@ class SpideyCourts(commands.Cog):
 
 
 
-    @service.command(name="serve", description="Serve a party (or their agent/rep) and auto-docket proof (DM + Public Post by default)")
+    @judge.command(name="serve", description="Serve a party (or their agent/rep) and auto-docket proof (DM + Public Post by default)")
+    @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.choices(deliver=[
         app_commands.Choice(name="Both (DM + Public Post)", value="both"),
         app_commands.Choice(name="Direct Message only", value="dm"),
@@ -2433,7 +2598,7 @@ class SpideyCourts(commands.Cog):
         is_user_party  = (target.get("kind") == "user" and target.get("id") is not None)
 
         # agent
-        rel_val    = (relation.value if relation else "agent")
+        rel_val    = (relation if relation else "agent")
         agent_name = (party_agent_user.display_name if party_agent_user else (party_agent.strip() if party_agent else None))
         agent_is_user = bool(party_agent_user)
 
@@ -2443,7 +2608,7 @@ class SpideyCourts(commands.Cog):
         venue_chan = self.bot.get_channel(venue_id) if venue_id else None
         post_chan  = channel or steps_chan or venue_chan
 
-        deliver_mode = (deliver.value if deliver else "both")
+        deliver_mode = (deliver if deliver else "both")
         if deliver_mode in ("post","both") and not post_chan:
             return await interaction.followup.send("❌ No channel available for public posting. Provide `channel:`.", ephemeral=True)
 
@@ -2704,11 +2869,22 @@ class SpideyCourts(commands.Cog):
             "content": f"{(await self.try_get_display_name(interaction.guild, interaction.user.id))} appeared on behalf of {target.get('name')}.",
         })
         save_json(COURT_FILE, self.court_data)
+        filing_num = len(filings) - 1
+        filing = case["filings"][filing_num]
+        self._notify_case_users_of_event(
+            guild=interaction.guild,
+            case_number=case_number,
+            case=case,
+            title="Notice of Appearance Filed",
+            body=f"{(await self.try_get_display_name(interaction.guild, interaction.user.id))} has filed a Notice of Appearance on behalf of **{target.get('name')}** in case `{case_number}`.",
+            filing=filing,
+            filer_id=interaction.user.id
+        )
         await interaction.followup.send(f"✅ Appearance noted for **{target.get('name')}**.", ephemeral=True)
 
 
     
-    @court.command(name="schedule", description="Schedule a conference, hearing, or trial")
+    @judge.command(name="schedule", description="Schedule a conference, hearing, or trial")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         case_number="The case you're scheduling for (e.g., 1:25-cv-000001-SS)",
@@ -2723,7 +2899,7 @@ class SpideyCourts(commands.Cog):
         self,
         interaction: discord.Interaction,
         case_number: str,
-        event_type: app_commands.Choice[str],
+        event_type: str,
         date: str,
         time: str,
         notes: str | None = None,
@@ -2752,10 +2928,10 @@ class SpideyCourts(commands.Cog):
         # Public notice on courthouse steps
         steps_ch = self.bot.get_channel(COURT_STEPS_CHANNEL_ID)
         notice = (
-            f"📅 **{event_type.value} Scheduled**\n\n"
+            f"📅 **{event_type} Scheduled**\n\n"
             f"**Case:** {plaintiff_name} v. {defendant_name}\n"
             f"**Case No.:** `{case_number}`\n"
-            f"**Proceeding:** {event_type.value}\n"
+            f"**Proceeding:** {event_type}\n"
             f"**Date:** {local_dt.strftime('%m/%d/%y')}\n"
             f"**Time:** {local_dt.strftime('%I:%M %p')}\n"
             f"**Location:** {venue_mention}"
@@ -2770,7 +2946,7 @@ class SpideyCourts(commands.Cog):
         # Persist lightweight schedule record (optional but handy)
         schedule_list = case.setdefault("schedule", [])
         schedule_list.append({
-            "event_type": event_type.value,
+            "event_type": event_type,
             "scheduled_for_local": local_dt.strftime("%m/%d/%y %I:%M %p"),
             "notes": notes,
             "created_by": interaction.user.id,
@@ -2784,7 +2960,7 @@ class SpideyCourts(commands.Cog):
         entry = len(filings) + 1
         filings.append({
             "entry": entry,
-            "document_type": f"{event_type.value} Scheduled",
+            "document_type": f"{event_type} Scheduled",
             "author": interaction.user.name,
             "author_id": interaction.user.id,
             "timestamp": datetime.now(UTC).isoformat(),
@@ -2794,16 +2970,28 @@ class SpideyCourts(commands.Cog):
             "related_docs": [],  # optional
             "content": f"Set for {local_dt.strftime('%m/%d/%y at %I:%M %p')}" + (f" | Notes: {notes}" if notes else "")
         })
+        filing_num = len(filings) - 1
+        filing = case["filings"][filing_num]
+        self._notify_case_users_of_event(
+            guild=interaction.guild,
+            case_number=case_number,
+            case=case,
+            title=f"{event_type} Scheduled",
+            body=(f"**{event_type}** scheduled for `{case_number}` on {local_dt.strftime('%m/%d/%y at %I:%M %p')}."),
+            filing=filing,
+            filer_id=interaction.user.id
+        )
+
 
         save_json(COURT_FILE, self.court_data)
         await interaction.followup.send(
-            f"✅ Scheduled **{event_type.value}** for `{case_number}` on {local_dt.strftime('%m/%d/%y at %I:%M %p')}. "
+            f"✅ Scheduled **{event_type}** for `{case_number}` on {local_dt.strftime('%m/%d/%y at %I:%M %p')}. "
             f"Docket entry #{entry} added.",
             ephemeral=True
         )
 
     
-    @court.command(name="order", description="Issue an Order / Opinion (optionally resolves a motion).")
+    @judge.command(name="order", description="Issue an Order / Opinion (optionally resolves a motion).")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         case_number="Case number (e.g., 1:25-cv-000001-SS)",
@@ -2827,9 +3015,9 @@ class SpideyCourts(commands.Cog):
         self,
         interaction: discord.Interaction,
         case_number: str,
-        order_type: app_commands.Choice[str],
+        order_type: str,
         related_entry: int | None = None,
-        outcome: app_commands.Choice[str] | None = None,
+        outcome: str | None = None,
         file: discord.Attachment | None = None,
         summary: str | None = None,
     ):
@@ -2849,9 +3037,9 @@ class SpideyCourts(commands.Cog):
                 OrderModal(
                     bot=self.bot,
                     case_number=case_number,
-                    order_type=order_type.value,
+                    order_type=order_type,
                     related_entry=related_entry,
-                    outcome=(outcome.value if outcome else None),
+                    outcome=(outcome if outcome else None),
                 )
             )
 
@@ -2872,7 +3060,7 @@ class SpideyCourts(commands.Cog):
         if not venue_ch:
             return await interaction.followup.send("❌ Venue channel not found.", ephemeral=True)
 
-        title_head = f"{order_type.value} — {case_number}"
+        title_head = f"{order_type} — {case_number}"
 
         try:
             if len(content) <= 1800:
@@ -2899,13 +3087,13 @@ class SpideyCourts(commands.Cog):
         entry_no = len(filings) + 1
         doc = {
             "entry": entry_no,
-            "document_type": order_type.value,
+            "document_type": order_type,
             "author": interaction.user.name,
             "author_id": interaction.user.id,
             "timestamp": datetime.now(UTC).isoformat(),
             "message_id": msg.id,
             "channel_id": msg.channel.id,
-            "content": (f"Outcome: {outcome.value}" if outcome else None),
+            "content": (f"Outcome: {outcome}" if outcome else None),
         }
         if thread_id:
             doc["thread_id"] = thread_id
@@ -2920,15 +3108,24 @@ class SpideyCourts(commands.Cog):
             if rel:
                 rel["resolved"] = True
                 if outcome:
-                    rel["ruling_outcome"] = outcome.value
+                    rel["ruling_outcome"] = outcome
 
         save_json(COURT_FILE, self.court_data)
-        await interaction.followup.send(f"✅ {order_type.value} docketed as Entry {entry_no}.", ephemeral=True)
+        filing_num = entry_no
+        filing = case["filings"][filing_num]
+        self._notify_case_users_of_event(
+            guild=interaction.guild,
+            case_number=case_number,
+            case=case,
+            title=f"{order_type} Issued",
+            content=f"The judge has issued an {order_type} in case `{case_number}`.",
+            filing=filing,
+            filer_id=interaction.user.id
+        )
+        await interaction.followup.send(f"✅ {order_type} docketed as Entry {entry_no}.", ephemeral=True)
 
 
-
-
-    @court.command(name="enter_judgment", description="Enter final judgment and close the case.")
+    @judge.command(name="enter_judgment", description="Enter final judgment and close the case.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         case_number="Case number",
@@ -2952,9 +3149,9 @@ class SpideyCourts(commands.Cog):
         self,
         interaction: discord.Interaction,
         case_number: str,
-        judgment_type: app_commands.Choice[str],
+        judgment_type: str,
         judgment_text: str,
-        prejudice: app_commands.Choice[str] | None = None,
+        prejudice: str | None = None,
     ):
         await interaction.response.defer(ephemeral=True)
 
@@ -2963,8 +3160,8 @@ class SpideyCourts(commands.Cog):
             return await interaction.followup.send("❌ Case not found.", ephemeral=True)
 
         steps = self.bot.get_channel(COURT_STEPS_CHANNEL_ID)
-        tail = f" ({prejudice.value})" if (judgment_type.value == "Dismissal" and prejudice) else ""
-        body = f"⚖️ **Judgment Entered**\n\n`{case_number}`\n**Type:** {judgment_type.value}{tail}\n{textwrap.shorten(judgment_text, 180)}"
+        tail = f" {prejudice}" if (judgment_type == "Dismissal" and prejudice) else ""
+        body = f"⚖️ **Judgment Entered**\n\n`{case_number}`\n**Type:** {judgment_type}{tail}\n{textwrap.shorten(judgment_text, 180)}"
         msg = await steps.send(body) if steps else None
 
         filings = case.setdefault("filings", [])
@@ -2977,12 +3174,12 @@ class SpideyCourts(commands.Cog):
             "timestamp": datetime.now(UTC).isoformat(),
             "message_id": (msg.id if msg else None),
             "channel_id": (steps.id if steps else None),
-            "content": f"{judgment_type.value}{tail} — {judgment_text}"
+            "content": f"{judgment_type}{tail} — {judgment_text}"
         })
 
         case["status"] = "closed"
         save_json(COURT_FILE, self.court_data)
-        await interaction.followup.send(f"✅ {judgment_type.value} entered (Entry {entry}). Case **closed**.", ephemeral=True)
+        await interaction.followup.send(f"✅ {judgment_type} entered (Entry {entry}). Case **closed**.", ephemeral=True)
 
 
     
@@ -3002,7 +3199,7 @@ class SpideyCourts(commands.Cog):
         self,
         interaction: discord.Interaction,
         case_number: str,
-        target_court: app_commands.Choice[str],
+        target_court: str,
         reason: str,
         as_cert: bool = False,
     ):
@@ -3012,7 +3209,7 @@ class SpideyCourts(commands.Cog):
         if not orig:
             return await interaction.followup.send("❌ Original case not found.", ephemeral=True)
 
-        target_venue = target_court.value
+        target_venue = target_court
         # Build new appellate case number in your familiar format
         judge_inits = JUDGE_INITS.get(target_venue, "AP")
         new_seq = len(self.court_data) + 1
@@ -3454,7 +3651,7 @@ class SpideyCourts(commands.Cog):
         fp = io.BytesIO(text.encode("utf-8"))
         await ctx.send("📄 Snapshot exported (session still running).", file=discord.File(fp, filename=fname))
 
-    @court.command(name="appeal_disposition", description="Enter a disposition in an appellate case, optionally with remand.")
+    @judge.command(name="appeal_disposition", description="Enter a disposition in an appellate case, optionally with remand.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         appellate_case="The appellate case number",
@@ -3477,7 +3674,7 @@ class SpideyCourts(commands.Cog):
         self,
         interaction: discord.Interaction,
         appellate_case: str,
-        outcome: app_commands.Choice[str],
+        outcome: str,
         text: str,
         remand: bool = False,
         instructions: str | None = None,
@@ -3500,7 +3697,7 @@ class SpideyCourts(commands.Cog):
             body = (
                 f"📜 **Appellate Disposition**\n\n"
                 f"Case `{appellate_case}` — {pl} v. {df}\n"
-                f"Outcome: **{outcome.value}**\n"
+                f"Outcome: **{outcome}**\n"
                 f"{text}"
             )
             if remand and origin_case_no:
@@ -3520,7 +3717,7 @@ class SpideyCourts(commands.Cog):
             "timestamp": datetime.now(UTC).isoformat(),
             "message_id": (link_msg.id if link_msg else None),
             "channel_id": (steps.id if steps else None),
-            "content": f"{outcome.value}: {text}",
+            "content": f"{outcome}: {text}",
             "related_docs": []
         })
         app_case["status"] = "closed"
@@ -3545,8 +3742,107 @@ class SpideyCourts(commands.Cog):
         save_json(COURT_FILE, self.court_data)
         await interaction.followup.send(f"✅ Disposition recorded for `{appellate_case}`.", ephemeral=True)
 
+    @court.command(
+        name="parties_to_be_noticed",
+        description="List or edit the parties to be noticed in a case."
+    )
+    @app_commands.describe(
+        case_number="Case number",
+        action="Action to perform (list, add, remove)",
+        party="Discord user to add/remove from notice list"
+    )
+    @app_commands.autocomplete(case_number=case_autocomplete)
+    @app_commands.choices(action=[
+        app_commands.Choice(name="List", value="list"),
+        app_commands.Choice(name="Add", value="add"),
+        app_commands.Choice(name="Remove", value="remove"),
+    ])
+    async def parties_to_be_noticed(
+        self,
+        interaction: discord.Interaction,
+        case_number: str,
+        action: str,
+        party: discord.Member | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
 
-    @court.command(name="pocket_dep", description="Pocket courtroom deputy: quick announcements/actions.")
+        case = self.court_data.get(case_number)
+        if not case:
+            await interaction.followup.send("❌ Case not found.", ephemeral=True)
+            return
+
+        action_val = action 
+
+        # Ensure we have a list of user IDs
+        noticed_raw = case.setdefault("parties_to_be_noticed", [])
+        noticed_ids = {int(x) for x in noticed_raw if isinstance(x, int)}
+
+        # counsel_of_record is: {party_key: attorney_user_id}
+        cofr = case.get("counsel_of_record") or {}
+        cofr_ids = {int(v) for v in cofr.values() if isinstance(v, int)}
+
+        # On first use, if empty, seed with counsel-of-record
+        if not noticed_ids and cofr_ids:
+            noticed_ids |= cofr_ids
+
+        if action_val == "list":
+            if not noticed_ids:
+                await interaction.followup.send("No parties are currently set to be noticed.", ephemeral=True)
+                return
+
+            names = []
+            for uid in sorted(noticed_ids):
+                m = interaction.guild.get_member(uid)
+                names.append(m.display_name if m else f"<@{uid}>")
+
+            await interaction.followup.send(
+                "Parties to be noticed: " + ", ".join(names),
+                ephemeral=True
+            )
+            # persist in case we seeded
+            case["parties_to_be_noticed"] = list(noticed_ids)
+            save_json(COURT_FILE, self.court_data)
+            return
+
+        # For add/remove we need a party argument
+        if party is None:
+            await interaction.followup.send("Please provide a party (Discord user) to add/remove.", ephemeral=True)
+            return
+
+        if action_val == "add":
+            noticed_ids.add(party.id)
+            case["parties_to_be_noticed"] = list(noticed_ids)
+            save_json(COURT_FILE, self.court_data)
+            await interaction.followup.send(
+                f"✅ Added {party.display_name} to parties to be noticed.",
+                ephemeral=True
+            )
+
+        elif action_val == "remove":
+            # Don’t allow removing counsel-of-record
+            if party.id in cofr_ids:
+                await interaction.followup.send(
+                    f"❌ Cannot remove {party.display_name}; they are counsel of record.",
+                    ephemeral=True
+                )
+                return
+
+            if party.id in noticed_ids:
+                noticed_ids.remove(party.id)
+                case["parties_to_be_noticed"] = list(noticed_ids)
+                save_json(COURT_FILE, self.court_data)
+                await interaction.followup.send(
+                    f"✅ Removed {party.display_name} from parties to be noticed.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.followup.send(
+                    f"❌ {party.display_name} is not currently in the notice list.",
+                    ephemeral=True
+                )
+
+
+    @judge.command(name="pocket_dep", description="Pocket courtroom deputy: quick announcements/actions.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         instruction="What should the deputy do?",
@@ -3569,7 +3865,7 @@ class SpideyCourts(commands.Cog):
     async def pocket_dep(
         self,
         interaction: discord.Interaction,
-        instruction: app_commands.Choice[str],
+        instruction: str,
         case_number: str | None = None,
         person: discord.Member | None = None,
         affirm: bool = False,
@@ -3580,7 +3876,7 @@ class SpideyCourts(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         # Defaults: a smidge longer where users need to respond
-        default_pause = 7.0 if instruction.value == "swear_witness" else 3.0
+        default_pause = 7.0 if instruction == "swear_witness" else 3.0
         pause = float(pace_seconds) if pace_seconds is not None else default_pause
 
         async def _need_case() -> dict | None:
@@ -3594,7 +3890,7 @@ class SpideyCourts(commands.Cog):
             return c
 
         # INTRODUCE
-        if instruction.value == "introduce":
+        if instruction == "introduce":
             case = await _need_case()
             if not case:
                 return
@@ -3610,7 +3906,7 @@ class SpideyCourts(commands.Cog):
             return await interaction.followup.send("✅ Introduced.", ephemeral=True)
 
         # CALL CASE
-        if instruction.value == "call_case":
+        if instruction == "call_case":
             case = await _need_case()
             if not case:
                 return
@@ -3622,7 +3918,7 @@ class SpideyCourts(commands.Cog):
             return await interaction.followup.send("✅ Case called.", ephemeral=True)
 
         # SWEAR WITNESS
-        if instruction.value == "swear_witness":
+        if instruction == "swear_witness":
             if not person:
                 return await interaction.followup.send("❌ Please provide the witness in `person`.", ephemeral=True)
             style = "affirm" if affirm else "swear"
@@ -3637,21 +3933,21 @@ class SpideyCourts(commands.Cog):
             return await interaction.followup.send("✅ Witness oath prompted.", ephemeral=True)
 
         # RECESS
-        if instruction.value == "recess":
+        if instruction == "recess":
             await interaction.channel.send("🔔 All rise. The Court will take a brief recess.")
             await asyncio.sleep(pause)
             await interaction.channel.send("You may be seated. (Recess.)")
             return await interaction.followup.send("✅ Recess announced.", ephemeral=True)
 
         # ADJOURN
-        if instruction.value == "adjourn":
+        if instruction == "adjourn":
             await interaction.channel.send("🔔 All rise. This Court is **adjourned**.")
             await asyncio.sleep(pause)
             await interaction.channel.send("You may be seated.")
             return await interaction.followup.send("✅ Adjournment announced.", ephemeral=True)
 
         # CONFIRM SCHEDULE (pull most recent from case['schedule'])
-        if instruction.value == "confirm_schedule":
+        if instruction == "confirm_schedule":
             case = await _need_case()
             if not case:
                 return
@@ -3665,7 +3961,7 @@ class SpideyCourts(commands.Cog):
             return await interaction.followup.send("✅ Schedule confirmed.", ephemeral=True)
 
         # MINUTE ORDER (free-form deputy confirmation)
-        if instruction.value == "minute_order":
+        if instruction == "minute_order":
             # need a case number to docket it
             if not case_number:
                 return await interaction.followup.send("❌ Provide `case_number` to docket the minute order.", ephemeral=True)
@@ -3721,7 +4017,7 @@ class SpideyCourts(commands.Cog):
         self,
         interaction: discord.Interaction,
         case_number: str,
-        action: app_commands.Choice[str],
+        action: str,
         party: discord.Member,
         new_counsel: discord.Member | None = None
     ):
@@ -3735,7 +4031,7 @@ class SpideyCourts(commands.Cog):
         filings = case.setdefault("filings", [])
         entry = len(filings) + 1
 
-        if action.value == "substitute":
+        if action == "substitute":
             if new_counsel is None:
                 return await interaction.followup.send("❌ For Substitute, provide `new_counsel`.", ephemeral=True)
             cofr = case.setdefault("counsel_of_record", {})
@@ -3754,7 +4050,7 @@ class SpideyCourts(commands.Cog):
             save_json(COURT_FILE, self.court_data)
             return await interaction.followup.send("✅ Substitution recorded.", ephemeral=True)
 
-        if action.value == "withdraw":
+        if action == "withdraw":
             cofr = case.get("counsel_of_record", {})
             if str(party.id) not in cofr:
                 return await interaction.followup.send("❌ No counsel of record to withdraw.", ephemeral=True)
@@ -3774,7 +4070,7 @@ class SpideyCourts(commands.Cog):
         return await interaction.followup.send("❌ Unknown action.", ephemeral=True)
 
 
-    @reporter.command(name="publish", description="Publish a docketed opinion to the appropriate Reporter.")
+    @judge.command(name="reporter_publish", description="Publish a docketed opinion to the appropriate Reporter.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.choices(reporter_override=[
@@ -3816,12 +4112,12 @@ class SpideyCourts(commands.Cog):
             bot=self.bot,
             case_number=case_number,
             entry=entry,
-            reporter_key=(reporter_override.value if reporter_override else None),
-            paren_style=(paren_style.value if paren_style else DEFAULT_PAREN_STYLE),
+            reporter_key=(reporter_override if reporter_override else None),
+            paren_style=(paren_style if paren_style else DEFAULT_PAREN_STYLE),
             parenthetical_override=parenthetical_override
         ))
 
-    @court.command(name="remove_from_filings", description="Remove a case from the public filings.")
+    @judge.command(name="remove_from_filings", description="Remove a case from the public filings.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(case_number="Case number", reason="Reason for removal")
     @app_commands.autocomplete(case_number=case_autocomplete)
@@ -3847,7 +4143,7 @@ class SpideyCourts(commands.Cog):
             await channel.send(f"❌ Case `{case_number}` has been removed from the public filings by order of the Court.\nIt was removed by: `{interaction.user.display_name}` for `{reason}`.")
         
 
-    @reporter.command(name="cite", description="Open a Reporter citation (SPIDEYLAW / F. / S.R.).")
+    @judge.command(name="cite", description="Open a Reporter citation (SPIDEYLAW / F. / S.R.).")
     @app_commands.describe(citation="e.g., '1 S.R. 5' or '1 SPIDEYLAW 1, 5'")
     async def cite(self, interaction: discord.Interaction, citation: str):
         await interaction.response.defer(ephemeral=True)
@@ -3906,7 +4202,7 @@ class SpideyCourts(commands.Cog):
 
 
 
-    @reporter.command(name="retract", description="Retract a published opinion (last-only to preserve page numbering).")
+    @judge.command(name="reporter_retract", description="Retract a published opinion (last-only to preserve page numbering).")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.describe(
         citation="e.g., '1 F. 12' or '1 S.R. 1' (preferred)",
@@ -3978,7 +4274,7 @@ class SpideyCourts(commands.Cog):
         save_json(COURT_FILE, self.court_data)
         await interaction.followup.send(f"✅ Retracted. Page pointer reset to **p. {start}**.", ephemeral=True)
 
-    @court.command(name="jury_select", description="Summon a random jury from the government pool.")
+    @judge.command(name="jury_select", description="Summon a random jury from the government pool.")
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
     @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.describe(
@@ -4125,7 +4421,7 @@ class SpideyCourts(commands.Cog):
             ephemeral=True
         )
 
-    @court.command(name="set_caption", description="Set or clear a custom case caption (class, org, In re, etc.)")
+    @judge.command(name="set_caption", description="Set or clear a custom case caption (class, org, In re, etc.)")
     @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.choices(style=[
         app_commands.Choice(name="v.", value="v"),
@@ -4142,7 +4438,7 @@ class SpideyCourts(commands.Cog):
         self,
         interaction: discord.Interaction,
         case_number: str,
-        style: app_commands.Choice[str],
+        style: str,
         left: str,
         right: str | None = None,
         reset: bool = False,
@@ -4157,10 +4453,10 @@ class SpideyCourts(commands.Cog):
             save_json(COURT_FILE, self.court_data)
             return await interaction.followup.send("✅ Caption reset to default.", ephemeral=True)
 
-        if style.value == "v" and not right:
+        if style == "v" and not right:
             return await interaction.followup.send("❌ For the “v.” style, please provide `right`.", ephemeral=True)
 
-        case["caption"] = {"style": style.value, "left": left.strip(), "right": (right.strip() if right else None)}
+        case["caption"] = {"style": style, "left": left.strip(), "right": (right.strip() if right else None)}
         save_json(COURT_FILE, self.court_data)
         cap = await self._caption(interaction.guild, case)
         await interaction.followup.send(f"✅ Caption set to: **{cap}**", ephemeral=True)
@@ -4188,7 +4484,7 @@ class SpideyCourts(commands.Cog):
         )
         await interaction.response.send_message(msg, ephemeral=True)
 
-    @court.command(name="party", description="Manage parties (add / remove / replace)")
+    @judge.command(name="party", description="Manage parties (add / remove / replace)")
     @app_commands.choices(action=[
         app_commands.Choice(name="Add", value="add"),
         app_commands.Choice(name="Remove", value="remove"),
@@ -4214,8 +4510,8 @@ class SpideyCourts(commands.Cog):
         self,
         interaction: discord.Interaction,
         case_number: str,
-        action: app_commands.Choice[str],
-        side: app_commands.Choice[str],
+        action: str,
+        side: str,
         party: str | None = None,
         party_name: str | None = None,
         old_name: str | None = None,
@@ -4228,7 +4524,7 @@ class SpideyCourts(commands.Cog):
         await self._normalize_case(interaction.guild, case)
 
         # ADD
-        if action.value == "add":
+        if action == "add":
             if not party or not reason:
                 return await interaction.response.send_message("❌ For Add, provide `party` and `reason`.", ephemeral=True)
             uid = await self._maybe_user_id(party)
@@ -4245,17 +4541,17 @@ class SpideyCourts(commands.Cog):
                 p = Party(id=None, name=name, kind=kind, pid=_uuid(), attorneys=[]).to_dict()
 
             old_caption = await self._caption_from_parties(interaction.guild, case)
-            case["parties"][side.value].append(p)
+            case["parties"][side].append(p)
             new_caption = await self._caption_from_parties(interaction.guild, case)
             self._docket_clerk_notice(case, f"Party added to **{side.name}**: {p['name']}. Reason: {reason}", old_caption, new_caption)
             save_json(COURT_FILE, self.court_data)
             return await interaction.response.send_message(f"✅ Added **{p['name']}** to **{side.name}**.", ephemeral=True)
 
         # REMOVE
-        if action.value == "remove":
+        if action == "remove":
             if not party_name or not reason:
                 return await interaction.response.send_message("❌ For Remove, provide `party_name` and `reason`.", ephemeral=True)
-            lst = case["parties"][side.value]
+            lst = case["parties"][side]
             idx = next((i for i,p in enumerate(lst) if p["name"] == party_name), None)
             if idx is None:
                 return await interaction.response.send_message("❌ Party not found (use /court parties).", ephemeral=True)
@@ -4267,10 +4563,10 @@ class SpideyCourts(commands.Cog):
             return await interaction.response.send_message(f"🗑️ Removed **{removed['name']}** from **{side.name}**.", ephemeral=True)
 
         # REPLACE
-        if action.value == "replace":
+        if action == "replace":
             if not old_name or not new_party or not reason:
                 return await interaction.response.send_message("❌ For Replace, provide `old_name`, `new_party`, and `reason`.", ephemeral=True)
-            lst = case["parties"][side.value]
+            lst = case["parties"][side]
             idx = next((i for i,p in enumerate(lst) if p["name"] == old_name), None)
             if idx is None:
                 return await interaction.response.send_message("❌ Party not found.", ephemeral=True)
@@ -4299,19 +4595,19 @@ class SpideyCourts(commands.Cog):
         return await interaction.response.send_message("❌ Unknown action.", ephemeral=True)
 
 
-    @court.command(name="set_attorney", description="Clerk: add an attorney to a party")
+    @judge.command(name="set_attorney", description="Clerk: add an attorney to a party")
     @app_commands.choices(side=[
         app_commands.Choice(name="Plaintiff", value="plaintiffs"),
         app_commands.Choice(name="Defendant", value="defendants"),
     ])
     @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    async def set_attorney(self, interaction: discord.Interaction, case_number: str, side: app_commands.Choice[str], party_name: str, attorney: discord.Member):
+    async def set_attorney(self, interaction: discord.Interaction, case_number: str, side: str, party_name: str, attorney: discord.Member):
         case = self.court_data.get(case_number)
         if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
         await self._normalize_case(interaction.guild, case)
 
-        p = self._find_party(case, side.value, party_name)
+        p = self._find_party(case, side, party_name)
         if not p: return await interaction.response.send_message("❌ Party not found.", ephemeral=True)
 
         p.setdefault("attorneys", [])
@@ -4322,19 +4618,19 @@ class SpideyCourts(commands.Cog):
         save_json(COURT_FILE, self.court_data)
         await interaction.response.send_message(f"✅ Added <@{attorney.id}> for **{party_name}**.", ephemeral=True)
 
-    @court.command(name="remove_attorney", description="Clerk: remove an attorney from a party")
+    @judge.command(name="remove_attorney", description="Clerk: remove an attorney from a party")
     @app_commands.choices(side=[
         app_commands.Choice(name="Plaintiff", value="plaintiffs"),
         app_commands.Choice(name="Defendant", value="defendants"),
     ])
     @app_commands.autocomplete(case_number=case_autocomplete)
     @app_commands.checks.has_role(FED_JUDICIARY_ROLE_ID)
-    async def remove_attorney(self, interaction: discord.Interaction, case_number: str, side: app_commands.Choice[str], party_name: str, attorney: discord.Member):
+    async def remove_attorney(self, interaction: discord.Interaction, case_number: str, side: str, party_name: str, attorney: discord.Member):
         case = self.court_data.get(case_number)
         if not case: return await interaction.response.send_message("❌ Case not found.", ephemeral=True)
         await self._normalize_case(interaction.guild, case)
 
-        p = self._find_party(case, side.value, party_name)
+        p = self._find_party(case, side, party_name)
         if not p: return await interaction.response.send_message("❌ Party not found.", ephemeral=True)
         try:
             p["attorneys"].remove(attorney.id)
