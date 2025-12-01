@@ -680,7 +680,7 @@ class SpideyLifeSim(Cog):
     
 
     @profile.command(name="removetraits", description="Remove all traits from a user's profile. Admins only.")
-    @app_commands.has_permissions(administrator=True)
+    @app_commands.checks.has_permissions(administrator=True)
     async def slsprofile_removetraits(self, interaction: discord.Interaction, user: discord.Member) -> None:
         """Only usable by bot owners. This command is here for legitimate accidental trait additions. The idea is traits should not be changed during the lifetime of a character."""
         await self.config.member(user).usertraits.set([])
