@@ -1184,7 +1184,7 @@ class SpideyLifeSim(Cog):
     @app_commands.describe(effort="How much effort to put into work today?")
     @app_commands.choices(effort=[
         app_commands.Choice(name="Low", value="low"),
-        app_commands.Choice(name="Medium", value="medium"),
+        app_commands.Choice(name="Normal", value="normal"),
         app_commands.Choice(name="High", value="high")
     ])
     async def slscareers_gotowork(self, interaction: discord.Interaction, effort: str):
