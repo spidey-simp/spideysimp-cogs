@@ -776,8 +776,9 @@ class SpideyLifeSim(Cog):
     @app_commands.autocomplete(skillname=skills_autocomplete)
     async def slsskills_practice(self, interaction: discord.Interaction, skillname: str):
         """Work on a skill of your choice (case-sensitive; starts with capitals)."""
+        await interaction.response.defer(thinking=True)
         if skillname not in SKILLSLIST:
-            await interaction.response.send_message("```This skill is not one of the accepted skills! Please consult the skill index and try again!```")
+            await interaction.followup.send("```This skill is not one of the accepted skills! Please consult the skill index and try again!```")
             return
 
         if await self.is_on_cooldown(interaction, skillname):
