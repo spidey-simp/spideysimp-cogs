@@ -1033,13 +1033,14 @@ class SpideyLifeSim(Cog):
             jobdict = SUBJOBS
             jobopts = CAREEROPPOSITE[careername]
             await interaction.followup.send(f"Would you like to see the career information for `{jobopts[0]}` or `{jobopts[1]}`?")
-            def check(message): return message.author == interaction.user and message.content in jobopts
+            lower_jobopts = [opt.lower() for opt in jobopts]
+            def check(message): return message.author == interaction.user and message.content.lower() in lower_jobopts
 
             try: 
                 message = await self.bot.wait_for('message', timeout=30.0, check=check)
-                if message.content == jobopts[0]:
+                if message.content.lower() == jobopts[0].lower():
                     careername = jobopts[0]
-                elif message.content == jobopts[1]:
+                elif message.content.lower() == jobopts[1].lower():
                     careername = jobopts[1]
                 else:
                     await interaction.followup.send("Please check your spelling and try again.")
