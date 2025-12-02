@@ -1189,6 +1189,7 @@ class SpideyLifeSim(Cog):
     ])
     async def slscareers_gotowork(self, interaction: discord.Interaction, effort: str):
         """Go to work at your job!"""
+        await interaction.response.defer(thinking=True)
         user_id = interaction.user.id
         userjob = await self.config.member(interaction.user).userjob()
         careerfield = await self.config.member(interaction.user).careerfield()
@@ -1213,11 +1214,11 @@ class SpideyLifeSim(Cog):
             remaining_time = timedelta(days=1) - (current_time - last_work_time)
             hours, remainder = divmod(remaining_time.seconds, 3600)
             minutes, _ = divmod(remainder, 60)
-            await interaction.response.send_message(f"```You can only go to work once every day. Try again in {hours} hours and {minutes} minutes.```")
+            await interaction.followup.send(f"```You can only go to work once every day. Try again in {hours} hours and {minutes} minutes.```")
             return
 
         if userjob == "Unemployed":
-            await interaction.response.send_message("```You need a job to go to work!```")
+            await interaction.followup.send("```You need a job to go to work!```")
             return
         firebool = False
         oppositecareer = None
@@ -1234,7 +1235,7 @@ class SpideyLifeSim(Cog):
                 break
             
         if firebool == True:
-            await interaction.response.send_message(f"You are becoming too {'evil' if oppvalue == 1 else 'good'} for the {careerfield} field. Your supervisor has words to say:")
+            await interaction.followup.send(f"You are becoming too {'evil' if oppvalue == 1 else 'good'} for the {careerfield} field. Your supervisor has words to say:")
             em = discord.Embed(
                 title=f"Message from {SUBJOBS.get(careerfield)[2]}",
                 description=f"{SUBJOBS.get(careerfield)[8]}"
@@ -1261,11 +1262,11 @@ class SpideyLifeSim(Cog):
                 description = f"{opposingcareer[9]}"
             )
             em2.set_thumbnail(url=opposingcareer[5])
-            await interaction.response.send_message(embed=em2)
+            await interaction.followup.send(embed=em2)
             currency = await bank.get_currency_name(interaction.guild)
             nextposition = list(oppdict.keys())[afterlevel - 1]
             nextsalary = oppdict[nextposition][1]
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"You are being offered the position: {nextposition}, starting at level {afterlevel} "
                 f"with a daily salary of {humanize.intcomma(nextsalary)} {currency}. Do you accept? `yes` or `no`"
             )
@@ -1282,13 +1283,13 @@ class SpideyLifeSim(Cog):
                     for i in opposingcareer[3]:
                         async with self.config.member(interaction.user).userinventory() as inventory:
                             inventory.append(i)
-                    await interaction.response.send_message("You have accepted the offer and started your new career!")
+                    await interaction.followup.send("You have accepted the offer and started your new career!")
                     return
                 else:
-                    await interaction.response.send_message("You declined the offer. You are currently unemployed.")
+                    await interaction.followup.send("You declined the offer. You are currently unemployed.")
                     return
             except asyncio.TimeoutError:
-                await interaction.response.send_message("Your response timed out. Unfortunately, the offer is no longer on the table.")
+                await interaction.followup.send("Your response timed out. Unfortunately, the offer is no longer on the table.")
                 return
 
 
@@ -1300,16 +1301,16 @@ class SpideyLifeSim(Cog):
                     grantedtraits.remove("Burned Out")
                     await self.config.member(interaction.user).grantedtraits.set(grantedtraits)
                     await self.config.member(interaction.user).burnoutapplied.set(None)
-                    await interaction.response.send_message("You've recovered from your burnout and feel refreshed!")
+                    await interaction.followup.send("You've recovered from your burnout and feel refreshed!")
                 else:
-                    await interaction.response.send_message(
+                    await interaction.followup.send(
                         "You're burned out! Your performance will be signifcantly reduced.\n"
                         "Try taking it easy for a day to recover."
                     )
             else:
                 grantedtraits.remove("Burned Out")
                 await self.config.member(interaction.user).grantedtraits.set(grantedtraits)
-                await interaction.response.send_message("There has been an error with your traits. You appear to have burnout but no set burnout date. Burned Out was removed from your traits, but if you ever see this error again, please report it.")
+                await interaction.followup.send("There has been an error with your traits. You appear to have burnout but no set burnout date. Burned Out was removed from your traits, but if you ever see this error again, please report it.")
 
         goodtraits = ["Driven Achiever", "Disciplined", "Workaholic", "Lucky"]
         badtraits = ["Lazy", "Reckless", "Pessimist", "Absent-Minded", "Insane", "Defiant Rebel", "Easily Frightened"]
@@ -1317,16 +1318,15 @@ class SpideyLifeSim(Cog):
         yestraits = ["Driven Achiever", "Disciplined", "Workaholic"]
         preclusiontraits = []
 
-        effort = message.content.lower()
         if effort == "high":
                 for trait in notraits:
                     if trait in usertraits:
                         preclusiontraits.append(trait)
                 if preclusiontraits:
-                    await interaction.response.send_message(f"{username} has the traits {', '.join(preclusiontraits)} and can't work hard because of them.")
+                    await interaction.followup.send(f"{username} has the traits {', '.join(preclusiontraits)} and can't work hard because of them.")
                     return
                 if "Burned Out" in grantedtraits: 
-                    await interaction.response.send_message("You're burned out and can't push yourself any harder.")
+                    await interaction.followup.send("You're burned out and can't push yourself any harder.")
                     return
                 consechigheffort += 1
                 burnoutthreshold = 4 if any(trait in usertraits for trait in yestraits) else 3
@@ -1344,7 +1344,7 @@ class SpideyLifeSim(Cog):
                     if trait in usertraits:
                         preclusiontraits.append(trait)
                 if preclusiontraits:
-                    await interaction.response.send_message(f"Because {username} has the traits {usertraits}, they aren't content with putting in low effort at work.")
+                    await interaction.followup.send(f"Because {username} has the traits {usertraits}, they aren't content with putting in low effort at work.")
                     return
                 if "Burned Out" in grantedtraits:
                     burnoutbool = False
@@ -1371,7 +1371,7 @@ class SpideyLifeSim(Cog):
 
         jobaddperc = effort_modifier + jobtraitbenefit
 
-        if "Burned Out" in usertraits:
+        if "Burned Out" in grantedtraits:
             burnoutpenalty = abs(jobaddperc) * 0.5
             jobaddperc -= burnoutpenalty
             await interaction.followup.send("Your performance was reduced by 50% due to burnout.")
@@ -1385,37 +1385,43 @@ class SpideyLifeSim(Cog):
         promotionlevel = careerlevel + 1
         currency = await bank.get_currency_name(interaction.guild)
 
-        if newjobperc >= 100 and promotionlevel <= 10:
+        if newjobperc >= 100 and promotionlevel < 10:
             if all(promotionlevel <= skill_value for skill_value in skill_values):
                 newjobperc -= 100
                 await self.config.member(interaction.user).userjob.set(promotioncareer)
                 await self.config.member(interaction.user).careerlevel.set(promotionlevel)
                 await self.config.member(interaction.user).salary.set(promotionsalary)
                 await bank.deposit_credits(interaction.user, promotionbonus)
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     f"Promoted from {userjob} to {promotioncareer}!\n"
                     f"New salary: {humanize.intcomma(promotionsalary)} {currency}, with a bonus of {humanize.intcomma(promotionbonus)} {currency}."
                 )
             else:
                 newjobperc = 99
                 missing_skills = [skill for skill, value in zip(jobskillreq, skill_values) if promotionlevel > value]
-                await interaction.response.send_message(f"Increase your {', '.join(missing_skills)} skill(s) to level {promotionlevel} for promotion!")
+                await interaction.followup.send(f"Increase your {', '.join(missing_skills)} skill(s) to level {promotionlevel} for promotion!")
+        if newjobperc >= 100 and promotionlevel >= 10:
+            newjobperc = 50
+            raiseamount = random.randint(5, 25)
+            salary *= (1 + raiseamount / 100)
+            await self.config.member(interaction.user).salary.set(salary)
+            await interaction.followup.send(f"Because you're already at the maximum level in your career, you have instead received a raise of {raiseamount}% which increases your salary to {humanize.intcomma(round(salary))} {currency}!")
 
         if burnoutbool is not None:
             if burnoutbool == True:
                 grantedtraits.append("Burned Out")
                 await self.config.member(interaction.user).grantedtraits.set(grantedtraits)
                 await self.config.member(interaction.user).burnoutapplied.set(datetime.now().isoformat())
-                await interaction.response.send_message("You pushed yourself too hard at work over the past couple days. You're burnt out now. Consider taking it easy.")
+                await interaction.followup.send("You pushed yourself too hard at work over the past couple days. You're burnt out now. Consider taking it easy.")
             elif burnoutbool == False:
                 grantedtraits.remove("Burned Out")
                 await self.config.member(interaction.user).grantedtraits.set(grantedtraits)
                 await self.config.member(interaction.user).burnoutapplied.set(None)
-                await interaction.response.send_message("You've recovered from your burnout by putting in a more manageable effort today!")
+                await interaction.followup.send("You've recovered from your burnout by putting in a more manageable effort today!")
 
         await bank.deposit_credits(interaction.user, salary)
         await self.config.member(interaction.user).careerprog.set(newjobperc)
-        await interaction.response.send_message(f"Worked in the {careerfield} Field, earning {humanize.intcomma(salary)} {currency}.")
+        await interaction.followup.send(f"Worked in the {careerfield} Field, earning {humanize.intcomma(salary)} {currency}.")
 
     @careers.command(name="careerreview", description="Review current career information.")
     async def slscareers_careerreview(self, interaction: discord.Interaction):
