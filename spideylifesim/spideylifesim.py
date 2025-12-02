@@ -692,12 +692,12 @@ class SpideyLifeSim(Cog):
         await self.config.member(ctx.author).set_raw(attribute, value=value)
         await ctx.send(f"Your {attribute} has been updated to {value}.")
 
-    async def display_profile(self, ctx, title, description, image_url):
+    async def display_profile(self, interaction, title, description, image_url):
         """Helper function to display a profile."""
         em = discord.Embed(title=title, description=description, color=discord.Color.red())
         em.set_image(url=image_url)
-        await ctx.send(embed=em)
-
+        await interaction.response.send_message(embed=em)
+        
     async def confirm_action(self, ctx, message, action, *args):
         """Helper function for confirm/cancel actions."""
         await ctx.send(message)
@@ -1054,7 +1054,7 @@ class SpideyLifeSim(Cog):
         requiredskills = jobinfo[4]
         em = discord.Embed(
             title=careername, 
-            description=f"{jobinfo[0]}\n**Boss:** {jobinfo[2]}\n**Required skill(s):** {', '.join(requiredskills)}", 
+            description=f"{jobinfo[0]}\n**Boss:** {jobinfo[2]}\n**Required skill{'s' if len(requiredskills) != 1 else ''}:** {', '.join(requiredskills)}", 
             color=discord.Color.red()
         )
         em.set_image(url=jobinfo[1])
