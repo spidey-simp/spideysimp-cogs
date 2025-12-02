@@ -1018,19 +1018,21 @@ class SpideyLifeSim(Cog):
     @app_commands.autocomplete(careername=career_autocomplete)
     async def slscareers_aboutcareer(self, interaction: discord.Interaction, careername: str):
         """See more information about a particular career! Ensure correct spelling/capitalization."""
+        await interaction.response.defer(thinking=True)
+        
         if not careername:
-            await interaction.response.send_message("```Please specify the career you want to learn about!```")
+            await interaction.followup.send("```Please specify the career you want to learn about!```")
             return
     
         if careername not in ALLJOBS:
-            await interaction.response.send_message("```The specified career wasn't found. Double-check spelling and try again!```")
+            await interaction.followup.send("```The specified career wasn't found. Double-check spelling and try again!```")
             return
         
         jobdict = ALLJOBS
         if ALLJOBS[careername] == None:
             jobdict = SUBJOBS
             jobopts = CAREEROPPOSITE[careername]
-            await interaction.response.send_message(f"Would you like to see the career information for `{jobopts[0]}` or `{jobopts[1]}`?")
+            await interaction.followup.send(f"Would you like to see the career information for `{jobopts[0]}` or `{jobopts[1]}`?")
             def check(message): return message.author == interaction.user and message.content in jobopts
 
             try: 
@@ -1040,10 +1042,10 @@ class SpideyLifeSim(Cog):
                 elif message.content == jobopts[1]:
                     careername = jobopts[1]
                 else:
-                    await interaction.response.send_message("Please check your spelling and try again.")
+                    await interaction.followup.send("Please check your spelling and try again.")
                     return
             except asyncio.TimeoutError:
-                await interaction.response.send_message("Prompt timed out. Please try again.")
+                await interaction.followup.send("Prompt timed out. Please try again.")
                 return
 
         jobinfo = jobdict[careername]
@@ -1054,7 +1056,7 @@ class SpideyLifeSim(Cog):
             color=discord.Color.red()
         )
         em.set_image(url=jobinfo[1])
-        await interaction.response.send_message(embed=em)
+        await interaction.followup.send(embed=em)
 
     @careers.command(name="careerapply", description="Apply to a career of your choosing!")
     @app_commands.describe(jobname="The career you want to apply for.")
