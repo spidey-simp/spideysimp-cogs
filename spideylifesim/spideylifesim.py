@@ -1381,15 +1381,16 @@ class SpideyLifeSim(Cog):
         
         newjobperc = careerprog + jobaddperc
         jobdict = globals().get(careerfield)
-        promotioncareer = list(jobdict.keys())[careerlevel]
-        promotionsalary, promotionbonus = jobdict[promotioncareer][1:3]
-        promotionsalary = round(promotionsalary * (random.randint(100, 115) / 100))
-        promotionbonus = round(promotionbonus * (random.randint(100, 115) / 100))
-        promotionlevel = careerlevel + 1
+       
         currency = await bank.get_currency_name(interaction.guild)
 
         if newjobperc >= 100 and promotionlevel < 10:
             if all(promotionlevel <= skill_value for skill_value in skill_values):
+                promotioncareer = list(jobdict.keys())[careerlevel]
+                promotionsalary, promotionbonus = jobdict[promotioncareer][1:3]
+                promotionsalary = round(promotionsalary * (random.randint(100, 115) / 100))
+                promotionbonus = round(promotionbonus * (random.randint(100, 115) / 100))
+                promotionlevel = careerlevel + 1
                 newjobperc -= 100
                 await self.config.member(interaction.user).userjob.set(promotioncareer)
                 await self.config.member(interaction.user).careerlevel.set(promotionlevel)
