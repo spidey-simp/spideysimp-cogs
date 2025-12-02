@@ -446,6 +446,7 @@ class SpideyLifeSim(Cog):
     @profile.command(name="resetprofile", description="Reset profile data - Not Undoable.")
     async def profile_resetprofile(self, interaction: discord.Interaction):
         """Reset profile data."""
+        await interaction.response.defer(thinking=True)
         await self.confirm_action(
             interaction, 
             "This will completely reset your profile data! `Confirm` or `Cancel`", 
@@ -456,6 +457,7 @@ class SpideyLifeSim(Cog):
     @profile.command(name="emptyaccount", description="Empty your Red Discord bank account - Not Undoable.")
     async def profile_emptyaccount(self, interaction: discord.Interaction):
         """Reset your bank balance to 0."""
+        await interaction.response.defer(thinking=True)
         balance = await bank.get_balance(interaction.user)
         await self.confirm_action(
             interaction,
@@ -697,21 +699,21 @@ class SpideyLifeSim(Cog):
         em = discord.Embed(title=title, description=description, color=discord.Color.red())
         em.set_image(url=image_url)
         await interaction.response.send_message(embed=em)
-        
-    async def confirm_action(self, ctx, message, action, *args):
+
+    async def confirm_action(self, interaction:discord.Interaction, message:str, action, *args):
         """Helper function for confirm/cancel actions."""
-        await ctx.send(message)
+        await interaction.followup.send(message)
         def check(m):
-            return m.author == ctx.author and m.content.lower() in ["confirm", "cancel"]
+            return m.author == interaction.user and m.content.lower() in ["confirm", "cancel"]
         try:
             response = await self.bot.wait_for('message', timeout=30.0, check=check)
             if response.content.lower() == "confirm":
                 await action(*args)
-                await ctx.send("Action confirmed and executed.")
+                await interaction.followup.send("Action confirmed and executed.")
             else:
-                await ctx.send("Action cancelled.")
+                await interaction.followup.send("Action cancelled.")
         except asyncio.TimeoutError:
-            await ctx.send("You took too long to respond. Command cancelled.")
+            await interaction.followup.send("You took too long to respond. Command cancelled.")
     
     async def reset_user_profile(self, member):
         """Reset all profile data to their default values for a given member."""
