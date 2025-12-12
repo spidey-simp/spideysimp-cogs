@@ -269,7 +269,7 @@ class SpideyLifeSim(Cog):
         else:
             return
         
-    sls = app_commands.Group(name="spideylifesim", description="Don't forget to set up your profile first!")
+    sls = app_commands.Group(name="sls", description="Don't forget to set up your profile first!")
     skills = app_commands.Group(name="skills", description="Commands related to skills.", parent=sls)
     careers = app_commands.Group(name="careers", description="Commands related to careers.", parent=sls)
     store = app_commands.Group(name="store", description="Commands related to the store.", parent=sls)
@@ -317,27 +317,40 @@ class SpideyLifeSim(Cog):
         embed.set_image(url=store_image)
         await interaction.response.send_message(embed=embed)
 
+    async def store_item_autocomplete(self, interaction:discord.Interaction, current:str) -> List[app_commands.Choice[str]]:
+        """Autocomplete function for store items."""
+        current = current.lower()
+        choices = []
+        for i, item in enumerate(store_slots):
+            if current in item.lower():
+                slot = i + 1
+                choices.append(app_commands.Choice(name=f"Slot {slot}: {item}", value=int(slot)))
+        return choices[:25]
+
     @store.command(name="purchase", description="Purchase an item from the store by specifying its slot number.")
     @app_commands.describe(storeslot="The store slot number (1-5) of the item you want to purchase.", itemcount="The number of items you want to purchase (default is 1).")
+    @app_commands.autocomplete(storeslot=store_item_autocomplete)
     async def slsstore_purchase(self, interaction: discord.Interaction, storeslot: int, itemcount: int = 1):
         """Input the store slot of the item you want to purchase in the command!"""
+        await interaction.response.defer(thinking=True)
+        
         if not (1 <= storeslot <= 5):
-            await interaction.response.send_message("The store slot provided doesn't exist. Please input one of the store slots from 1-5.")
+            await interaction.followup.send("The store slot provided doesn't exist. Please input one of the store slots from 1-5 or use the autocomplete feature.")
             return
 
         item_for_purchase = store_slots[storeslot - 1]
         item_cost = ALLITEMS.get(item_for_purchase)
         if itemcount <= 0:
-            await interaction.response.send_message(f"I don't think it's possible to buy {itemcount} items.")
+            await interaction.followup.send(f"I don't think it's possible to buy {itemcount} items.")
             return
-        if itemcount > 10:
-            await interaction.response.send_message("That seems like a lot... Maybe buy a little less!")
+        if itemcount > 100:
+            await interaction.followup.send("That seems like a lot... Maybe buy a little less!")
             return
 
         currency = await bank.get_currency_name(interaction.guild)
         total_cost = item_cost * itemcount
         if not await bank.can_spend(interaction.user, total_cost):
-            await interaction.response.send_message(f"You have an insufficient balance! You need {total_cost} {currency}.")
+            await interaction.followup.send(f"You have an insufficient balance! You need {total_cost} {currency}.")
             return
 
         await bank.withdraw_credits(interaction.user, total_cost)
@@ -346,7 +359,7 @@ class SpideyLifeSim(Cog):
 
         user_balance = await bank.get_balance(interaction.user)
         item_plural = "s" if itemcount > 1 else ""
-        await interaction.response.send_message(f"You have successfully purchased {itemcount} {item_for_purchase}{item_plural}.\n"
+        await interaction.followup.send(f"You have successfully purchased {itemcount} {item_for_purchase}{item_plural}.\n"
                    f"Remaining balance: {humanize.intcomma(user_balance)} {currency}.")
 
     async def inventory_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
@@ -364,16 +377,17 @@ class SpideyLifeSim(Cog):
     @app_commands.describe(itemtosell="The item you want to sell (case-sensitive).", count="The number of items you want to sell (default is 1).")
     async def slsstore_sellitem(self, interaction: discord.Interaction, count: int = 1, *, itemtosell: str):
         """Sell items which returns 80% of their original value. Case-sensitive."""
+        await interaction.response.defer(thinking=True)
         if not itemtosell:
-            await interaction.response.send_message("Please specify the item you want to sell.")
+            await interaction.followup.send("Please specify the item you want to sell.")
             return
         if count <= 0:
-            await interaction.response.send_message("How can you sell items you don't have? :thinking:")
+            await interaction.followup.send("How can you sell items you don't have? :thinking:")
             return
 
         user_inventory = await self.config.member(interaction.user).userinventory()
         if itemtosell not in user_inventory:
-            await interaction.response.send_message(f"You don't have {itemtosell}. Check your inventory for spelling and case.")
+            await interaction.followup.send(f"You don't have {itemtosell}. Check your inventory for spelling and case or use the autocomplete feature.")
             return
         currency = await bank.get_currency_name(interaction.guild)
         original_price = ALLITEMS.get(itemtosell)
@@ -385,7 +399,7 @@ class SpideyLifeSim(Cog):
 
         user_balance = await bank.get_balance(interaction.user)
         item_plural = "s" if count > 1 else ""
-        await interaction.response.send_message(f"You sold {count} {itemtosell}{item_plural}. New balance: {humanize.intcomma(user_balance)} {currency}.")
+        await interaction.followup.send(f"You sold {count} {itemtosell}{item_plural}. New balance: {humanize.intcomma(user_balance)} {currency}.")
 
     
     @profile.command(name="userprofile", description="See your user profile or another's.")
@@ -568,117 +582,267 @@ class SpideyLifeSim(Cog):
 
     
             
-    @profile.command(name="addtraits", description="Add up to 5 traits, ensuring one is a hindrance.")
+    @profile.command(name="addtraits", description="Add exactly 5 traits, ensuring at least one is a hindrance.")
     async def slsprofile_addtraits(self, interaction: discord.Interaction):
-        """Allows users to add up to 5 traits, ensuring one is a hindrance. Cannot change traits once they're set unless you reset your profile."""
+        """One-time trait draft: 1 hindrance + 4 more traits. To change later, reset your profile or ask an admin."""
+        await interaction.response.defer(thinking=True)
+
         user_traits = await self.config.member(interaction.user).usertraits()
 
-        if len(user_traits) >= 5:
-            await interaction.response.send_message("You already have the maximum number of traits (5). If you want to change your traits, you'll have to reset your profile or ask an admin to remove the traits.")
+        # Enforce "one-time only"
+        if user_traits:
+            await interaction.followup.send(
+                "You already have traits set. To change them, you'll need to reset your profile or have an admin remove them."
+            )
             return
 
+        # --- Step 1: pick a hindrance ---
         hindrance_traits = list(HINDRANCES.keys())
-        selected_hindrance = await self.select_trait(interaction, hindrance_traits, "hindrance", 1)
+        selected_hindrance = await self.select_trait(
+            interaction,
+            traits=hindrance_traits,
+            category="hindrance",
+            max_traits=1,
+            current_traits=[]
+        )
+
         if not selected_hindrance:
-            await interaction.response.send_message("No hindrance was selected. Please try the command again.")
+            await interaction.followup.send("No hindrance was selected. Please run the command again if you still want traits.")
             return
 
         user_traits.extend(selected_hindrance)
 
+        # --- Step 2: pick 4 additional traits (can include more hindrances if you want) ---
         all_traits = list({
             **SOCIALTRAITS,
             **VALUETRAITS,
             **NATURETRAITS,
             **INTERESTTRAITS,
-            **HINDRANCES
+            **HINDRANCES,
         }.keys())
 
-        
-        selected_additional_traits = await self.select_trait(interaction, all_traits, "all traits", 4, user_traits)
+        selected_additional_traits = await self.select_trait(
+            interaction,
+            traits=all_traits,
+            category="all traits",
+            max_traits=4,
+            current_traits=user_traits,  # prevents re-selecting the hindrance & handles conflicts
+        )
+
         if len(selected_additional_traits) != 4:
-            await interaction.response.send_message("You didn't select enough traits. Please try the command again.")
+            await interaction.followup.send("You didn't select enough traits. Please run the command again.")
             return
 
         user_traits.extend(selected_additional_traits)
         await self.config.member(interaction.user).usertraits.set(user_traits)
-        await interaction.response.send_message(f"Profile updated! Your traits are now:\n{', '.join(user_traits)}")
+        await interaction.followup.send(f"Profile updated! Your traits are now:\n{', '.join(user_traits)}")
 
-    async def select_trait(self, interaction, traits, category, max_traits, current_traits=[]):
-        """Displays a trait selection page."""
-        traits_per_page = 10
-        total_pages = (len(traits) + traits_per_page - 1) // traits_per_page
-        current_page = 0
-        selected_traits = []
 
-        def build_embed(page):
-            start_idx = page * traits_per_page
-            end_idx = start_idx + traits_per_page
-            page_traits = traits[start_idx:end_idx]
+    class TraitSelectionView(discord.ui.View):
+            def __init__(
+                self,
+                *,
+                user: discord.Member,
+                traits: list[str],
+                category: str,
+                max_traits: int,
+                current_traits: list[str] | None = None,
+                timeout: float = 600.0,
+            ):
+                super().__init__(timeout=timeout)
+                self.user = user
+                self.traits = traits
+                self.category = category
+                self.max_traits = max_traits
+                self.current_traits = set(current_traits or [])
+                self.selected_traits: list[str] = []
+                self.current_page = 0
+                self.traits_per_page = 10
+                self.cancelled = False
+                self.message: discord.Message | None = None
 
-            embed = discord.Embed(
-                title=f"{category.capitalize()} Traits",
-                description="\n".join([f"• **{trait}**" for trait in page_traits]),
-                color=discord.Color.blurple()
-            )
-            embed.set_footer(text=f"Page {page + 1}/{total_pages}")
-            return embed, page_traits
+                self._refresh_items()
 
-        def create_view(page_traits):
-            view = View(timeout=600.0)
-            for trait in page_traits:
-                is_disabled = trait in current_traits or any(conflict in current_traits for conflict in ALLTRAITS.get(trait, {}).get("conflicts", []))
-                button = Button(label=trait, style=discord.ButtonStyle.primary, disabled=is_disabled)
+            # --- helper: which traits are on this page ---
+            def _page_traits(self) -> list[str]:
+                start = self.current_page * self.traits_per_page
+                end = start + self.traits_per_page
+                return self.traits[start:end]
 
-                async def button_callback(interaction, selected_trait=trait):
-                    if max_traits is None or len(selected_traits) < max_traits:
-                        selected_traits.append(selected_trait)
-                        await interaction.response.send_message(f"Trait **{selected_trait}** added!", ephemeral=True)
-                        if len(selected_traits) == max_traits:
-                            view.stop()
-                    else:
-                        await interaction.response.send_message("You've already selected the maximum number of traits!", ephemeral=True)
+            # --- helper: build embed for current page ---
+            def build_embed(self) -> discord.Embed:
+                total_pages = (len(self.traits) + self.traits_per_page - 1) // self.traits_per_page or 1
+                page_traits = self._page_traits()
 
-                button.callback = button_callback
-                view.add_item(button)
+                desc = "\n".join(f"• **{trait}**" for trait in page_traits) or "No traits on this page."
+                embed = discord.Embed(
+                    title=f"{self.category.capitalize()} Traits",
+                    description=desc,
+                    color=discord.Color.blurple(),
+                )
+                embed.set_footer(text=f"Page {self.current_page + 1}/{total_pages}")
+                return embed
 
-            if current_page > 0:
-                prev_button = Button(label="Previous", style=discord.ButtonStyle.green)
-                prev_button.callback = partial(update_message, view=view, page=current_page - 1)
-                view.add_item(prev_button)
+            # --- rebuild all buttons for current page ---
+            def _refresh_items(self) -> None:
+                self.clear_items()
+                page_traits = self._page_traits()
 
-            if current_page < total_pages - 1:
-                next_button = Button(label="Next", style=discord.ButtonStyle.green)
-                next_button.callback = partial(update_message, view=view, page=current_page + 1)
-                view.add_item(next_button)
-            
-            cancel_button = Button(label="Cancel", style=discord.ButtonStyle.danger)
-            cancel_button.callback = lambda interaction: cancel_selection(interaction, view)
-            view.add_item(cancel_button)
+                # Trait buttons
+                for trait in page_traits:
+                    conflicts = ALLTRAITS.get(trait, {}).get("conflicts", [])
+                    disabled = (
+                        trait in self.current_traits
+                        or any(conflict in self.current_traits for conflict in conflicts)
+                    )
 
-            return view
-        
-        async def update_message(interaction, page, view):
-            nonlocal current_page
-            current_page = page
-            embed, page_traits = build_embed(current_page)
-            view = create_view(page_traits)
-            await interaction.response.edit_message(embed=embed, view=view)
-        
-        async def cancel_selection(interaction, view):
-            await interaction.response.send_message("Trait selection cancelled.", ephemeral=True)
-            view.stop()
+                    button = discord.ui.Button(
+                        label=trait,
+                        style=discord.ButtonStyle.primary,
+                        disabled=disabled,
+                    )
 
-        embed, page_traits = build_embed(current_page)
-        message = await interaction.response.send_message(embed=embed, view=create_view(page_traits))
+                    async def on_trait_click(
+                        interaction: discord.Interaction,
+                        t=trait,
+                        disabled_flag=disabled,
+                    ):
+                        # Only the original user can use this selector
+                        if interaction.user.id != self.user.id:
+                            await interaction.response.send_message(
+                                "This isn't your trait selection.", ephemeral=True
+                            )
+                            return
 
+                        if disabled_flag:
+                            await interaction.response.send_message(
+                                "You can't select that trait due to conflicts or duplication.",
+                                ephemeral=True,
+                            )
+                            return
+
+                        if self.max_traits is not None and len(self.selected_traits) >= self.max_traits:
+                            await interaction.response.send_message(
+                                "You've already selected the maximum number of traits.",
+                                ephemeral=True,
+                            )
+                            return
+
+                        self.selected_traits.append(t)
+                        self.current_traits.add(t)
+
+                        await interaction.response.send_message(
+                            f"Trait **{t}** added!", ephemeral=True
+                        )
+
+                        # If we've filled the quota, end the view
+                        if self.max_traits is not None and len(self.selected_traits) >= self.max_traits:
+                            self.stop()
+                        else:
+                            # Rebuild buttons to reflect newly disabled trait + conflicts
+                            self._refresh_items()
+                            if self.message:
+                                await self.message.edit(embed=self.build_embed(), view=self)
+
+                    button.callback = on_trait_click
+                    self.add_item(button)
+
+                # Previous button
+                if self.current_page > 0:
+                    prev_button = discord.ui.Button(label="Previous", style=discord.ButtonStyle.secondary)
+
+                    async def on_prev(interaction: discord.Interaction):
+                        if interaction.user.id != self.user.id:
+                            await interaction.response.send_message(
+                                "This isn't your trait selection.", ephemeral=True
+                            )
+                            return
+
+                        self.current_page -= 1
+                        self._refresh_items()
+                        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+                    prev_button.callback = on_prev
+                    self.add_item(prev_button)
+
+                # Next button
+                if (self.current_page + 1) * self.traits_per_page < len(self.traits):
+                    next_button = discord.ui.Button(label="Next", style=discord.ButtonStyle.secondary)
+
+                    async def on_next(interaction: discord.Interaction):
+                        if interaction.user.id != self.user.id:
+                            await interaction.response.send_message(
+                                "This isn't your trait selection.", ephemeral=True
+                            )
+                            return
+
+                        self.current_page += 1
+                        self._refresh_items()
+                        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+                    next_button.callback = on_next
+                    self.add_item(next_button)
+
+                # Cancel button
+                cancel_button = discord.ui.Button(label="Cancel", style=discord.ButtonStyle.danger)
+
+                async def on_cancel(interaction: discord.Interaction):
+                    if interaction.user.id != self.user.id:
+                        await interaction.response.send_message(
+                            "This isn't your trait selection.", ephemeral=True
+                        )
+                        return
+
+                    self.cancelled = True
+                    await interaction.response.send_message(
+                        "Trait selection cancelled.", ephemeral=True
+                    )
+                    self.stop()
+
+                cancel_button.callback = on_cancel
+                self.add_item(cancel_button)
+
+    async def select_trait(
+        self,
+        interaction: discord.Interaction,
+        traits: list[str],
+        category: str,
+        max_traits: int,
+        current_traits: list[str] | None = None,
+    ) -> list[str]:
+        """Display a paginated trait selector and return the chosen traits (or [] if cancelled/timeout)."""
+        traits = list(traits)  # ensure it's a list copy
+        current_traits = list(current_traits or [])
+
+        view = SpideyLifeSim.TraitSelectionView(
+            user=interaction.user,
+            traits=traits,
+            category=category,
+            max_traits=max_traits,
+            current_traits=current_traits,
+        )
+
+        # initial send (we already deferred in the parent command)
+        message = await interaction.followup.send(
+            embed=view.build_embed(),
+            view=view,
+        )
+        view.message = message
+
+        # wait until user finishes / cancels / timeout
+        await view.wait()
+
+        # disable buttons
         try:
-            while len(selected_traits) < max_traits:
-                await asyncio.sleep(0.1)
-            await message.delete()
-            return selected_traits
-        except Exception as e:
-            await interaction.response.send_message(f"An error occurred: {e}")
+            await message.edit(view=None)
+        except discord.NotFound:
+            pass  # message might have been deleted
+
+        if view.cancelled or not view.selected_traits:
             return []
+
+        return view.selected_traits
+
     
 
     @profile.command(name="removetraits", description="Remove all traits from a user's profile. Admins only.")

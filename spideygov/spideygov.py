@@ -1751,6 +1751,9 @@ class SpideyGov(commands.Cog):
         ensure_constitution_schema(self.federal_registry)
         normalize_registry_order(self.federal_registry)
         self.registry_lock = asyncio.Lock()
+
+        self.SPEAKER_OF_THE_HOUSE = None
+        self.SENATE_MAJORITY_LEADER = None
         
 
     def cog_unload(self):
@@ -2009,6 +2012,7 @@ class SpideyGov(commands.Cog):
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
+
 
     @elections.command(name="party_create", description="Create a new political party")
     @app_commands.describe(name="Full name of the party", abbreviation="Short abbreviation (3-6 chars)", color="Color for the party (hex code, e.g. #ff0000)", desc="Short description (optional)")
@@ -2352,7 +2356,7 @@ class SpideyGov(commands.Cog):
         c["poll_message_id"] = msg.id
         c["status"] = "VOTING"
         ballot_map = {}
-        for cand in certd:
+        for cand in roster:
             label = f"{cand['display']} ({cand.get('party','independent')})"
             p.add_answer(text=label)
             ballot_map[label] = cand['user_id']

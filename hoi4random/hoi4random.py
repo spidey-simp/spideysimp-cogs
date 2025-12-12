@@ -54,10 +54,7 @@ class Hoi4Random(commands.Cog):
         async with aiohttp.ClientSession(headers={"Connection": "keep-alive"}) as session:
             async with session.get(civimage, ssl=False) as response:
                 if response.status != 200:
-                    await interaction.response.send_message(
-                        "There was an error fetching the image. Please try again later.", ephemeral=True
-                    )
-                    return
+                    civimage = None
 
         alignment_choice = random.choice(alignment)
         civresult += f"\n\n**Alignment:** {alignment_choice}"
@@ -65,7 +62,8 @@ class Hoi4Random(commands.Cog):
         em = discord.Embed(
             title=civtitle, description=civresult, color=discord.Color.red()
         )
-        em.set_image(url=civimage)
+        if not civimage:
+            em.set_image(url=civimage)
         await interaction.response.send_message(embed=em)
 
     @hoi4random.command(name="empire_form", description="Get a random Empire to form.")
