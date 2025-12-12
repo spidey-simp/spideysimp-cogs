@@ -51,10 +51,7 @@ class Hoi4Random(commands.Cog):
         civtitle = "Your Hearts of Iron IV leader generation has generated:"
         civresult, civimage = random.choice(list(COUNTRYLIST.items()))
 
-        async with aiohttp.ClientSession(headers={"Connection": "keep-alive"}) as session:
-            async with session.get(civimage, ssl=False) as response:
-                if response.status != 200:
-                    civimage = None
+
 
         alignment_choice = random.choice(alignment)
         civresult += f"\n\n**Alignment:** {alignment_choice}"
