@@ -59,8 +59,8 @@ class Hoi4Random(commands.Cog):
         em = discord.Embed(
             title=civtitle, description=civresult, color=discord.Color.red()
         )
-        if not civimage:
-            em.set_image(url=civimage)
+        
+        em.set_image(url=civimage)
         await interaction.response.send_message(embed=em)
 
     @hoi4random.command(name="empire_form", description="Get a random Empire to form.")
