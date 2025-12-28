@@ -130,7 +130,12 @@ VENUE_DIVISION = {
     "public_square": "Spideyton Div.",  # include only if you want division shown
 }
 
-def _court_parenthetical(self, *, case: dict, reporter_key: str | None = None,
+APPELLATE_PANELS = {
+    "first_circuit": [684457913250480143],
+    "ssc": [684457913250480143]
+}
+
+def _court_parenthetical(*, case: dict, reporter_key: str | None = None,
                         override: str | None = None) -> str:
     if override:
         return override
@@ -438,7 +443,7 @@ class ComplaintFilingModal(discord.ui.Modal, title="File a Complaint"):
         court_data = self.bot.get_cog("SpideyCourts").court_data
         judge_inits = None if self.venue == "ssc" else JUDGE_INITS.get(self.venue, "SS")
         seq = self.bot.get_cog("SpideyCourts")._next_case_seq_scan()
-        case_number = f"1:{interaction.created_at.year % 100:02d}-{typ}-{seq:06d}{'-' if judge_inits else ''}{judge_inits}"
+        case_number = f"1:{interaction.created_at.year % 100:02d}-{typ}-{seq:06d}{'-' if judge_inits else ''}{judge_inits if judge_inits else ''}"
 
 
         # 3) Initial case dict (always include filings[0])
