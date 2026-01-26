@@ -43,6 +43,7 @@ SPEAKER_OF_THE_HOUSE = 1417354436472344586
 SPIDEY_HOUSE = 1302330503399084144
 SENATE_VOTING_CHANNEL = 1334289687996796949
 STATE_DEPARTMENT_CHANNEL = 1424208056459198495
+BOT_DEPARTMENT_CHANNEL = 1423094053247127623
 
 CITIZENSHIP = {
     "commons": 1415927703340716102,
@@ -1775,8 +1776,20 @@ class SpideyGov(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         """Give PENDING role and open an intake thread with a residency question."""
         guild = member.guild
+        
+            
         if guild.id != 1287645024309477460:
             return
+        
+        state_dep = guild.get_channel(STATE_DEPARTMENT_CHANNEL)
+        bot_dep = guild.get_channel(BOT_DEPARTMENT_CHANNEL)
+
+        if member.bot:
+            await member.add_roles(guild.get_role(1288016221383561236), reason="Bot account")
+            await state_dep.send(f"Bot account {member.mention} has been added to the server.")
+            await bot_dep.send(f"A bot account has been added to the server: {member.mention}. If this was not agreed upon by the council, please inform an admin, and they will be removed immediately.")
+            return
+
         try:
             pend = guild.get_role(PENDING_RESIDENT)
             if pend and pend not in member.roles:
@@ -1815,7 +1828,7 @@ class SpideyGov(commands.Cog):
             # swallow — onboarding should not crash join
             pass
 
-        state_dep = guild.get_channel(STATE_DEPARTMENT_CHANNEL)
+        
         await state_dep.send(f"New member {member.mention} joined. Residency intake thread opened: {thread.mention}")
 
     async def elections_contest_autocomplete(self, interaction: discord.Interaction, current: str):
