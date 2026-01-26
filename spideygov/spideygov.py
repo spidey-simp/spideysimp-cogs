@@ -3964,6 +3964,13 @@ class SpideyGov(commands.Cog):
         if state_channel:
             await state_channel.send(f"{applicant.mention} has been processed: {human}{extra}.\n\n— decided by {interaction.user.mention}{' with reason: ' + reason if reason else ''}")
         await interaction.followup.send(f"✅ {applicant.mention}: {human}{extra}.", ephemeral=True)
+        if action in {"deny", "conditional"} and stage == "resident":
+            await member.send(f"Your application to join the Spidey Republic has been {action} for the following reasons:\n\n{reason}\n\nIf you have questions, please contact the State Department.")
+            if action == "deny":
+                await member.kick(reason="Citizenship application denied/conditional")
+        else:
+            await member.send(f"Congratulations! Your application to join the Spidey Republic has been {action}ed as a {stage}.\n\nWelcome!")
+
 
 
     @category.command(name="view_category_info", description="View info about a category")
