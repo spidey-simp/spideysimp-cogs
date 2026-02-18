@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 import io
 import tempfile
+import xml.etree.ElementTree as ET
+import hashlib
 
 try:
     import docx  # python-docx
@@ -34,6 +36,216 @@ REGISTRY_SUSPENDED = True
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FED_REGISTRY_FILE = os.path.join(BASE_DIR, "federal_registry.json")
+
+USC_DIR = os.path.join(BASE_DIR, "usc_store")
+USC_XML_DIR = os.path.join(USC_DIR, "xml")
+USC_JSON_DIR = os.path.join(USC_DIR, "json")
+USC_INDEX_FILE = os.path.join(USC_DIR, "usc_index.json")
+
+os.makedirs(USC_XML_DIR, exist_ok=True)
+os.makedirs(USC_JSON_DIR, exist_ok=True)
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+_indent_re = re.compile(r"indent(\d+)")
+
+def _parse_indent(class_attr: str | None) -> int:
+    if not class_attr:
+        return 0
+    m = _indent_re.search(class_attr)
+    return int(m.group(1)) if m else 0
+
+def _clean_text(s: str) -> str:
+    return " ".join(s.split()).strip()
+
+def _sha256_file(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def _text_blocks_from_content(content_el: ET.Element | None) -> list[dict]:
+    if content_el is None:
+        return []
+    
+    p_children = [c for c in list(content_el) if _local(c.tag) == "p"]
+
+    blocks: list[dict] = []
+
+    if p_children:
+        for p in p_children:
+            text = _clean_text("".join(p.itertext))
+            if not text:
+                continue
+            blocks.append({
+                "indent": _parse_indent(p.attrib.get("class")),
+                "role": p.attrib.get("role", "p"),
+                "text": text,
+            })
+        return blocks
+
+    text = _clean_text("".join(content_el.itertext()))
+    if text:
+        blocks.append({"indent": 0, "role": "p", "text": text})
+    return blocks
+
+UNIT_CHILD_TAGS = {
+    "subsection", "paragraph", "subparagraph", "clause", "subclause", "item", "subitem"
+}
+
+def _parse_unit(el: ET.Element) -> dict:
+    """
+    Parse a <section> or any nested unit (<subsection>, <paragraph>, ...).
+    Keeps only num/heading/text_blocks + nested children.
+    """
+    num_el = el.find("./{*}num")
+    heading_el = el.find("./{*}heading")
+    content_el = el.find("./{*}content")
+
+    num_value = None
+    num_label = None
+    if num_el is not None:
+        num_value = num_el.attrib.get("value")
+        num_label = _clean_text("".join(num_el.itertext()))
+
+    unit = {
+        "identifier": el.attrib.get("identifier"),
+        "num": num_value or num_label,      # key-friendly
+        "label": num_label,                 # display-friendly (e.g., "§ 1." or "(a)")
+        "heading": _clean_text("".join(heading_el.itertext())) if heading_el is not None else None,
+        "text_blocks": _text_blocks_from_content(content_el),
+        "children": {}  # nested units keyed by child.num
+    }
+
+    # Parse nested units (subsection/paragraph/etc.)
+    for child in list(el):
+        lt = _local(child.tag)
+        if lt in UNIT_CHILD_TAGS:
+            parsed = _parse_unit(child)
+            key = parsed["num"] or parsed["label"] or child.attrib.get("identifier") or lt
+            unit["children"][str(key)] = parsed
+
+    return unit
+
+
+def parse_usc_title_xml(xml_path: str) -> dict:
+    """
+    Memory-friendly(ish) parse:
+    - reads <meta>
+    - reads <title> heading
+    - reads <chapter> headings
+    - reads each <section> as it closes
+    """
+    meta: dict = {}
+    title_info: dict = {}
+    chapters: dict[str, dict] = {}
+
+    current_chapter_key: str | None = None
+
+    # Iterparse for large files
+    context = ET.iterparse(xml_path, events=("start", "end"))
+
+    for event, el in context:
+        lt = _local(el.tag)
+
+        # META
+        if event == "end" and lt == "meta":
+            # Pull a few useful bits without caring about namespaces/prefixes.
+            for c in list(el):
+                cl = _local(c.tag)
+                if cl == "title":  # dc:title
+                    meta["dc_title"] = _clean_text("".join(c.itertext()))
+                elif cl == "type":  # dc:type
+                    meta["dc_type"] = _clean_text("".join(c.itertext()))
+                elif cl == "docNumber":
+                    meta["docNumber"] = _clean_text("".join(c.itertext()))
+                elif cl == "docPublicationName":
+                    meta["docPublicationName"] = _clean_text("".join(c.itertext()))
+                elif cl == "publisher":
+                    meta["dc_publisher"] = _clean_text("".join(c.itertext()))
+                elif cl == "created":  # dcterms:created
+                    meta["created"] = _clean_text("".join(c.itertext()))
+                elif cl == "creator":  # dc:creator
+                    meta["dc_creator"] = _clean_text("".join(c.itertext()))
+                elif cl == "property" and c.attrib.get("role") == "is-positive-law":
+                    meta["is_positive_law"] = _clean_text("".join(c.itertext())).lower() == "yes"
+
+            el.clear()
+
+        # TITLE HEADER (the big “Title 1—GENERAL PROVISIONS”)
+        if event == "end" and lt == "title" and (el.attrib.get("identifier", "").startswith("/us/usc/t")):
+            num_el = el.find("./{*}num")
+            heading_el = el.find("./{*}heading")
+            title_info["identifier"] = el.attrib.get("identifier")
+
+            if num_el is not None:
+                title_info["title_number"] = num_el.attrib.get("value") or _clean_text("".join(num_el.itertext()))
+            if heading_el is not None:
+                title_info["heading"] = _clean_text("".join(heading_el.itertext()))
+
+            el.clear()
+
+        # CHAPTER tracking
+        if event == "start" and lt == "chapter":
+            # Derive chapter key from identifier like "/us/usc/t1/ch1"
+            ident = el.attrib.get("identifier", "")
+            m = re.search(r"/ch([^/]+)$", ident)
+            current_chapter_key = m.group(1) if m else ident or "unknown"
+            chapters.setdefault(current_chapter_key, {"heading": None, "identifier": ident, "sections": {}})
+
+        if event == "end" and lt == "chapter":
+            num_el = el.find("./{*}num")
+            heading_el = el.find("./{*}heading")
+            ident = el.attrib.get("identifier", "")
+            m = re.search(r"/ch([^/]+)$", ident)
+            ch_key = m.group(1) if m else ident or current_chapter_key or "unknown"
+
+            ch = chapters.setdefault(ch_key, {"heading": None, "identifier": ident, "sections": {}})
+
+            # Prefer heading text.
+            if heading_el is not None:
+                ch["heading"] = _clean_text("".join(heading_el.itertext()))
+            # Optionally keep chapter label “CHAPTER 1—”
+            if num_el is not None:
+                ch["label"] = _clean_text("".join(num_el.itertext()))
+                ch["num"] = num_el.attrib.get("value") or ch.get("num")
+
+            current_chapter_key = None
+            el.clear()
+
+        # SECTION parsing
+        if event == "end" and lt == "section":
+            parsed = _parse_unit(el)
+
+            # Determine section key from num.value when available (best for lookups)
+            sec_key = parsed["num"]
+            if sec_key is None:
+                ident = parsed.get("identifier") or ""
+                m = re.search(r"/s([^/]+)$", ident)
+                sec_key = m.group(1) if m else ident or "unknown"
+
+            # Attach to current chapter if we have one; else stash under "_".
+            ch_key = current_chapter_key or "_"
+            chapters.setdefault(ch_key, {"heading": None, "identifier": None, "sections": {}})
+            chapters[ch_key]["sections"][str(sec_key)] = parsed
+
+            el.clear()
+
+    # Final structure
+    out = {
+        "meta": meta,
+        "title": {
+            "number": str(title_info.get("title_number") or meta.get("docNumber") or ""),
+            "heading": title_info.get("heading"),
+            "identifier": title_info.get("identifier"),
+        },
+        "chapters": chapters,
+    }
+
+    return out
+
 SENATORS = 1327053499405701142
 REPRESENTATIVES = 1327053334036742215
 SENATE = 1302330234422562887
@@ -115,6 +327,17 @@ def _get_state_channel(bot, guild):
         return guild.get_channel(STATE_DEPARTMENT_CHANNEL) or bot.get_channel(STATE_DEPARTMENT_CHANNEL)
     except Exception:
         return None
+    
+def _load_json(path: str) -> dict:
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_json(path: str, data: dict) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 def _pick_residency_question(reg: dict) -> str:
     bank = reg.get("residency_questions") or []
@@ -2025,6 +2248,7 @@ class SpideyGov(commands.Cog):
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
+    usc = app_commands.Group(name="usc", description="Commands for viewing the U.S.C. and comparisons between S.R.C. and U.S.C.")
 
 
     @elections.command(name="party_create", description="Create a new political party")
@@ -5582,3 +5806,324 @@ class SpideyGov(commands.Cog):
         # Operator ack (public)
         await interaction.response.send_message(f"🚫 **{bill_id}** vetoed.", ephemeral=False)
 
+
+    @usc.command(name="upload_title", description="Upload a USC title XML and parse it to JSON.")
+    @app_commands.describe(file="The OLRC/House USLM XML file for a USC title.",
+                           overwrite="Overwrite existing saved data for this title.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def upload_title(self, interaction: discord.Interaction, file: discord.Attachment, overwrite: bool = False):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+
+        # Basic validation
+        if not file.filename.lower().endswith(".xml"):
+            return await interaction.followup.send("That doesn’t look like an .xml file.", ephemeral=True)
+
+        # Discord may reject huge files; this check helps you fail fast with a clean message.
+        # (The actual max depends on server boosts / Nitro, so treat this as advisory.)
+        if file.size and file.size > 250 * 1024 * 1024:
+            return await interaction.followup.send(
+                f"File is {file.size/1024/1024:.1f}MB — that’s too large for this workflow. "
+                "Split by title (preferred) or host externally and ingest by URL later.",
+                ephemeral=True
+            )
+
+        # Choose a stable storage name.
+        # If they upload "usc01.xml" we keep that; otherwise just use original filename.
+        xml_filename = file.filename
+        xml_path = os.path.join(USC_XML_DIR, xml_filename)
+
+        if os.path.exists(xml_path) and not overwrite:
+            return await interaction.followup.send(
+                f"`{xml_filename}` already exists. Re-run with `overwrite=True` if you want to replace it.",
+                ephemeral=True
+            )
+
+        # Save attachment to disk (streams under the hood)
+        await file.save(xml_path)
+
+        # Parse + write JSON in a worker thread so we don't block the event loop.
+        try:
+            title_data = await asyncio.to_thread(parse_usc_title_xml, xml_path)
+        except Exception as e:
+            return await interaction.followup.send(
+                f"Saved the XML, but parsing failed:\n`{type(e).__name__}: {e}`",
+                ephemeral=True
+            )
+
+        title_num = title_data.get("title", {}).get("number") or "unknown"
+        json_filename = f"usc{str(title_num).zfill(2)}.json" if str(title_num).isdigit() else f"{os.path.splitext(xml_filename)[0]}.json"
+        json_path = os.path.join(USC_JSON_DIR, json_filename)
+
+        _save_json(json_path, title_data)
+
+        # Update index
+        index = _load_json(USC_INDEX_FILE)
+        index.setdefault("titles", {})
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        sha = _sha256_file(xml_path)
+
+        # Count quick stats
+        ch_count = len(title_data.get("chapters", {}))
+        sec_count = sum(len(ch.get("sections", {})) for ch in title_data.get("chapters", {}).values())
+
+        index["titles"][str(title_num)] = {
+            "heading": title_data.get("title", {}).get("heading"),
+            "uploaded_at": now_iso,
+            "uploaded_by": f"{interaction.user} ({interaction.user.id})",
+            "xml_filename": xml_filename,
+            "json_filename": json_filename,
+            "sha256": sha,
+            "chapters": ch_count,
+            "sections": sec_count,
+            "meta": title_data.get("meta", {}),
+        }
+
+        _save_json(USC_INDEX_FILE, index)
+
+        return await interaction.followup.send(
+            f"✅ Uploaded + parsed **Title {title_num}**.\n"
+            f"- Title heading: **{title_data.get('title', {}).get('heading') or 'Unknown'}**\n"
+            f"- Chapters: **{ch_count}** | Sections: **{sec_count}**\n"
+            f"- Saved XML: `{xml_filename}`\n"
+            f"- Saved JSON: `{json_filename}`\n"
+            f"- SHA-256: `{sha[:12]}…`",
+            ephemeral=True
+        )
+    
+    def _usc_load_index(self) -> dict:
+        """Load usc_index.json (lightweight registry of which titles exist)."""
+        try:
+            if not os.path.exists(USC_INDEX_FILE):
+                return {}
+            data = _load_json(USC_INDEX_FILE)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _usc_load_title(self, title_number: int) -> dict:
+        """Load a parsed USC title JSON by number."""
+        index = self._usc_load_index()
+        entry = index.get(str(title_number))
+        if not entry:
+            raise FileNotFoundError(f"Title {title_number} is not in usc_index.json")
+        filename = entry.get("file")
+        if not filename:
+            raise FileNotFoundError(f"Title {title_number} has no file entry in index")
+        title_path = os.path.join(USC_JSON_DIR, filename)
+        if not os.path.exists(title_path):
+            raise FileNotFoundError(f"Missing parsed JSON file for Title {title_number}: {title_path}")
+        data = _load_json(title_path)
+        if not isinstance(data, dict):
+            raise ValueError(f"Parsed title JSON for Title {title_number} is not an object")
+        return data
+
+    @staticmethod
+    def _usc_sanitize_section_ref(section_ref: str) -> str:
+        s = (section_ref or "").strip()
+        # Common user inputs: "§ 1", "1.", "1 U.S.C. 1", etc.
+        s = s.replace("U.S.C.", "").replace("USC", "")
+        s = s.replace("§", "")
+        s = s.replace("\u202f", " ")
+        s = s.strip().strip(".")
+        # collapse internal whitespace
+        s = "".join(s.split())
+        return s
+
+    @staticmethod
+    def _usc_text_blocks_to_lines(text_blocks: list[dict]) -> list[str]:
+        lines: list[str] = []
+        for b in (text_blocks or []):
+            try:
+                indent = int(b.get("indent", 0) or 0)
+            except Exception:
+                indent = 0
+            role = (b.get("role") or "").strip()
+            txt = (b.get("text") or "").strip()
+            if not txt:
+                continue
+            prefix = "- " if role == "listItem" else ""
+            # 2 spaces per indent level looks good in code blocks
+            lines.append(("  " * indent) + prefix + txt)
+        return lines
+
+    @staticmethod
+    def _usc_paginate_lines(lines: list[str], max_chars: int = 1800) -> list[str]:
+        """Split lines into pages that fit comfortably within Discord's message limits."""
+        pages: list[str] = []
+        buf: list[str] = []
+        size = 0
+        for line in lines:
+            add = len(line) + 1
+            if buf and (size + add) > max_chars:
+                pages.append("\n".join(buf))
+                buf = [line]
+                size = len(line)
+            else:
+                buf.append(line)
+                size += add
+        if buf:
+            pages.append("\n".join(buf))
+        return pages or [""]
+
+    def _usc_find_section(self, title_data: dict, section_key: str):
+        """Return (chapter_id, chapter_obj, section_obj) or (None, None, None)."""
+        chapters = (title_data or {}).get("chapters") or {}
+        for ch_id, ch in chapters.items():
+            secs = (ch or {}).get("sections") or {}
+            if section_key in secs:
+                return ch_id, ch, secs[section_key]
+        return None, None, None
+
+    @usc.command(name="list_titles", description="List USC titles that have been uploaded/parsed.")
+    @app_commands.describe(page="Which page of results to show.", public="Post publicly (default: ephemeral).")
+    async def usc_list_titles(self, interaction: discord.Interaction, page: int = 1, public: bool = False):
+        await interaction.response.defer(ephemeral=not public)
+
+        index = self._usc_load_index()
+        if not index:
+            return await interaction.followup.send("No USC titles are indexed yet. Upload one with /usc upload_title.")
+
+        # Sort numerically by title number
+        titles = []
+        for k, v in index.items():
+            try:
+                n = int(k)
+            except Exception:
+                continue
+            titles.append((n, v))
+        titles.sort(key=lambda t: t[0])
+
+        per_page = 12
+        total_pages = max(1, (len(titles) + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        start_i = (page - 1) * per_page
+        chunk = titles[start_i:start_i + per_page]
+
+        desc_lines = []
+        for n, v in chunk:
+            heading = (v.get("title_heading") or "").strip()
+            created = (v.get("created") or "").strip()
+            pos = v.get("is_positive_law")
+            pos_tag = "Positive law" if pos else "Non-positive law"
+            if created:
+                desc_lines.append(f"**Title {n}** — {heading}\n• {pos_tag} • created {created}")
+            else:
+                desc_lines.append(f"**Title {n}** — {heading}\n• {pos_tag}")
+
+        embed = discord.Embed(
+            title="USC titles indexed",
+            description="\n\n".join(desc_lines),
+            color=0x2B2D31,
+        )
+        embed.set_footer(text=f"Page {page}/{total_pages} • Use /usc title_info <title> or /usc section <title> <section>")
+        await interaction.followup.send(embed=embed)
+
+    @usc.command(name="title_info", description="Show metadata and a quick section count for a parsed USC title.")
+    @app_commands.describe(title="Title number (e.g., 1)", public="Post publicly (default: ephemeral).")
+    async def usc_title_info(self, interaction: discord.Interaction, title: int, public: bool = False):
+        await interaction.response.defer(ephemeral=not public)
+
+        try:
+            title_data = self._usc_load_title(title)
+        except Exception as e:
+            return await interaction.followup.send(f"Could not load Title {title}: {e}")
+
+        meta = title_data.get("meta") or {}
+        title_node = title_data.get("title") or {}
+        chapters = title_data.get("chapters") or {}
+
+        chapter_count = len([k for k in chapters.keys() if k != "_"]) or len(chapters)
+        total_sections = 0
+        for ch in chapters.values():
+            total_sections += len((ch or {}).get("sections") or {})
+
+        heading = (title_node.get("heading") or "").strip() or (meta.get("dc:title") or f"Title {title}")
+        created = (meta.get("dcterms:created") or "").strip()
+        is_pos = (meta.get("is-positive-law") or "").strip().lower() == "yes"
+
+        embed = discord.Embed(
+            title=f"Title {title} — {heading}",
+            color=0x2B2D31,
+        )
+        embed.add_field(name="Positive law", value="Yes" if is_pos else "No", inline=True)
+        embed.add_field(name="Created", value=created or "(unknown)", inline=True)
+        embed.add_field(name="Chapters", value=str(chapter_count), inline=True)
+        embed.add_field(name="Sections", value=str(total_sections), inline=True)
+
+        ch_lines = []
+        for ch_id in sorted(chapters.keys(), key=lambda x: (x == "_", x)):
+            ch = chapters.get(ch_id) or {}
+            ch_heading = (ch.get("heading") or "").strip()
+            if not ch_heading:
+                continue
+            ch_num = (ch.get("num") or "").strip()
+            label = f"CHAPTER {ch_num}" if ch_num else f"CHAPTER {ch_id}"
+            ch_lines.append(f"{label} — {ch_heading} ({len((ch.get('sections') or {}))} sections)")
+            if len(ch_lines) >= 10:
+                break
+        if ch_lines:
+            embed.add_field(name="Chapters (preview)", value="\n".join(ch_lines), inline=False)
+
+        embed.set_footer(text="Use /usc section <title> <section> to view text (with indentation).")
+        await interaction.followup.send(embed=embed)
+
+    @usc.command(name="section", description="View a section from an uploaded/parsed USC title.")
+    @app_commands.describe(
+        title="Title number (e.g., 1)",
+        section="Section number (e.g., 1, 2a)",
+        page="Page number if the section is long.",
+        public="Post publicly (default: ephemeral).",
+    )
+    async def usc_section(self, interaction: discord.Interaction, title: int, section: str, page: int = 1, public: bool = False):
+        await interaction.response.defer(ephemeral=not public)
+
+        try:
+            title_data = self._usc_load_title(title)
+        except Exception as e:
+            return await interaction.followup.send(f"Could not load Title {title}: {e}")
+
+        sec_key = self._usc_sanitize_section_ref(section)
+        if not sec_key:
+            return await interaction.followup.send("Please provide a section number like `1` or `2a`.")
+
+        ch_id, ch_obj, sec_obj = self._usc_find_section(title_data, sec_key)
+        if not sec_obj:
+            chapters = title_data.get("chapters") or {}
+            all_keys = []
+            for ch in chapters.values():
+                all_keys.extend(list(((ch or {}).get("sections") or {}).keys()))
+            all_keys = sorted(set(all_keys))
+            suggestions = ", ".join(all_keys[:25])
+            return await interaction.followup.send(
+                f"Section `{sec_key}` not found in Title {title}.\n"
+                f"If you want to sanity-check what parsed: try a known section like one of: {suggestions}"
+            )
+
+        title_heading = ((title_data.get("title") or {}).get("heading") or "").strip() or f"Title {title}"
+        ch_heading = ((ch_obj or {}).get("heading") or "").strip() or "(no chapter heading)"
+        ch_num = ((ch_obj or {}).get("num") or "").strip() or ch_id
+        sec_heading = (sec_obj.get("heading") or "").strip()
+
+        lines = self._usc_text_blocks_to_lines(sec_obj.get("text_blocks") or [])
+        if not lines:
+            return await interaction.followup.send(f"Parsed section exists, but I didn't find any text blocks for Title {title} § {sec_key}.")
+
+        pages = self._usc_paginate_lines(lines, max_chars=1800)
+        total_pages = len(pages)
+        page = max(1, min(page, total_pages))
+
+        body = pages[page - 1]
+        display = f"```\n{body}\n```"
+
+        embed = discord.Embed(
+            title=f"{title} U.S.C. § {sec_key}" + (f" — {sec_heading}" if sec_heading else ""),
+            description=(
+                f"**Title {title} — {title_heading}**\n"
+                f"**Chapter {ch_num} — {ch_heading}**\n\n"
+                f"{display}"
+            ),
+            color=0x2B2D31,
+        )
+        embed.set_footer(text=f"Page {page}/{total_pages} • /usc section {title} {sec_key} page:<n>")
+        await interaction.followup.send(embed=embed)
