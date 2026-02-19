@@ -37,17 +37,17 @@ REGISTRY_SUSPENDED = True
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FED_REGISTRY_FILE = os.path.join(BASE_DIR, "federal_registry.json")
 
-USC_DIR = os.path.join(BASE_DIR, "usc_store")
-USC_XML_DIR = os.path.join(USC_DIR, "xml")
-USC_JSON_DIR = os.path.join(USC_DIR, "json")
-USC_INDEX_FILE = os.path.join(USC_DIR, "usc_index.json")
 
-PROJECT_ROOT = Path(os.getcwd()).resolve()
-USC_STORE_DIR = PROJECT_ROOT / "usc_store"
-USC_INDEX_FILE = USC_STORE_DIR / "usc_index.json"
+USC_XML_DIR = os.path.join(BASE_DIR, "usc_xml")
+USC_JSON_DIR = os.path.join(BASE_DIR, "usc_json")
+USC_INDEX_FILE = os.path.join(BASE_DIR, "usc_index.json")
 
 def ensure_usc_dirs():
-    USC_STORE_DIR.mkdir(parents=True, exist_ok=True)
+    os.makedirs(USC_XML_DIR, exist_ok=True)
+    os.makedirs(USC_JSON_DIR, exist_ok=True)
+
+
+
 
 os.makedirs(USC_XML_DIR, exist_ok=True)
 os.makedirs(USC_JSON_DIR, exist_ok=True)
@@ -6160,7 +6160,7 @@ class SpideyGov(commands.Cog):
         )
         embed.set_footer(text=f"Page {page}/{total_pages} • /usc section {title} {sec_key} page:<n>")
         await interaction.followup.send(embed=embed)
-    
+
     @usc.command(name="debug", description="Debug USC index/storage paths.")
     @app_commands.checks.has_permissions(administrator=True)
     async def usc_debug(self, interaction: discord.Interaction):
@@ -6170,19 +6170,22 @@ class SpideyGov(commands.Cog):
         index = _load_json(USC_INDEX_FILE, default={}) if index_exists else {}
 
         json_files = []
-        if os.path.isdir(USC_STORE_DIR):
-            for fn in os.listdir(USC_STORE_DIR):
+        if os.path.isdir(USC_JSON_DIR):
+            for fn in os.listdir(USC_JSON_DIR):
                 if fn.lower().startswith("usc") and fn.lower().endswith(".json"):
                     json_files.append(fn)
         json_files.sort()
 
+
         keys = sorted(index.keys(), key=lambda x: int(x) if str(x).isdigit() else 10**9)[:25]
 
         msg = (
-            f"USC_STORE_DIR: `{USC_STORE_DIR}`\n"
+            f"USC_XML_DIR: `{USC_XML_DIR}`\n"
+            f"USC_JSON_DIR: `{USC_JSON_DIR}`\n"
             f"USC_INDEX_FILE: `{USC_INDEX_FILE}` (exists: `{index_exists}`)\n"
             f"Index keys (first 25): `{keys}`\n"
-            f"JSON files in store: `{len(json_files)}`\n"
+            f"JSON files found: `{len(json_files)}`\n"
             f"First few JSON files: `{json_files[:10]}`"
         )
+
         await interaction.response.send_message(msg, ephemeral=True)
