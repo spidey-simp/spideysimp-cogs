@@ -20,6 +20,7 @@ import io
 import tempfile
 import xml.etree.ElementTree as ET
 import hashlib
+import sqlite3
 
 try:
     import docx  # python-docx
@@ -38,246 +39,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FED_REGISTRY_FILE = os.path.join(BASE_DIR, "federal_registry.json")
 
 
-USC_XML_DIR = os.path.join(BASE_DIR, "usc_xml")
-USC_JSON_DIR = os.path.join(BASE_DIR, "usc_json")
-USC_INDEX_FILE = os.path.join(BASE_DIR, "usc_index.json")
-
-def ensure_usc_dirs():
-    os.makedirs(USC_XML_DIR, exist_ok=True)
-    os.makedirs(USC_JSON_DIR, exist_ok=True)
-
-
-
-
-os.makedirs(USC_XML_DIR, exist_ok=True)
-os.makedirs(USC_JSON_DIR, exist_ok=True)
-
-def _local(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
-
-_indent_re = re.compile(r"indent(\d+)")
-
-def _parse_indent(class_attr: str | None) -> int:
-    if not class_attr:
-        return 0
-    m = _indent_re.search(class_attr)
-    return int(m.group(1)) if m else 0
-
-def _clean_text(s: str) -> str:
-    return " ".join(s.split()).strip()
-
-def _sha256_file(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-def _text_blocks_from_content(content_el: ET.Element | None) -> list[dict]:
-    if content_el is None:
-        return []
-    
-    p_children = [c for c in list(content_el) if _local(c.tag) == "p"]
-
-    blocks: list[dict] = []
-
-    if p_children:
-        for p in p_children:
-            text = _clean_text("".join(p.itertext()))
-            if not text:
-                continue
-            blocks.append({
-                "indent": _parse_indent(p.attrib.get("class")),
-                "role": p.attrib.get("role", "p"),
-                "text": text,
-            })
-        return blocks
-
-    text = _clean_text("".join(content_el.itertext()))
-    if text:
-        blocks.append({"indent": 0, "role": "p", "text": text})
-    return blocks
-
-UNIT_CHILD_TAGS = {
-    "subsection", "paragraph", "subparagraph", "clause", "subclause", "item", "subitem"
-}
-
-def _parse_unit(el: ET.Element) -> dict:
-    """
-    Parse a <section> or any nested unit (<subsection>, <paragraph>, ...).
-    Keeps only num/heading/text_blocks + nested children.
-    """
-    num_el = el.find("./{*}num")
-    heading_el = el.find("./{*}heading")
-    content_el = el.find("./{*}content")
-
-    num_value = None
-    num_label = None
-    if num_el is not None:
-        num_value = num_el.attrib.get("value")
-        num_label = _clean_text("".join(num_el.itertext()))
-
-    unit = {
-        "identifier": el.attrib.get("identifier"),
-        "num": num_value or num_label,      # key-friendly
-        "label": num_label,                 # display-friendly (e.g., "§ 1." or "(a)")
-        "heading": _clean_text("".join(heading_el.itertext())) if heading_el is not None else None,
-        "text_blocks": _text_blocks_from_content(content_el),
-        "children": {}  # nested units keyed by child.num
-    }
-
-    # Parse nested units (subsection/paragraph/etc.)
-    for child in list(el):
-        lt = _local(child.tag)
-        if lt in UNIT_CHILD_TAGS:
-            parsed = _parse_unit(child)
-            key = parsed["num"] or parsed["label"] or child.attrib.get("identifier") or lt
-            unit["children"][str(key)] = parsed
-
-    return unit
-
-
-def parse_usc_title_xml(xml_path: str) -> dict:
-    """
-    Memory-friendly(ish) parse:
-    - reads <meta>
-    - reads <title> heading
-    - reads <chapter> headings
-    - reads each <section> as it closes
-    """
-    meta: dict = {}
-    title_info: dict = {}
-    chapters: dict[str, dict] = {}
-
-    current_chapter_key: str | None = None
-
-    # Iterparse for large files
-    context = ET.iterparse(xml_path, events=("start", "end"))
-
-    for event, el in context:
-        lt = _local(el.tag)
-
-        # META
-        if event == "end" and lt == "meta":
-            # Pull a few useful bits without caring about namespaces/prefixes.
-            for c in list(el):
-                cl = _local(c.tag)
-                if cl == "title":  # dc:title
-                    meta["dc_title"] = _clean_text("".join(c.itertext()))
-                elif cl == "type":  # dc:type
-                    meta["dc_type"] = _clean_text("".join(c.itertext()))
-                elif cl == "docNumber":
-                    meta["docNumber"] = _clean_text("".join(c.itertext()))
-                elif cl == "docPublicationName":
-                    meta["docPublicationName"] = _clean_text("".join(c.itertext()))
-                elif cl == "publisher":
-                    meta["dc_publisher"] = _clean_text("".join(c.itertext()))
-                elif cl == "created":  # dcterms:created
-                    meta["created"] = _clean_text("".join(c.itertext()))
-                elif cl == "creator":  # dc:creator
-                    meta["dc_creator"] = _clean_text("".join(c.itertext()))
-                elif cl == "property" and c.attrib.get("role") == "is-positive-law":
-                    meta["is_positive_law"] = _clean_text("".join(c.itertext())).lower() == "yes"
-
-            el.clear()
-
-        # TITLE HEADER (the big “Title 1—GENERAL PROVISIONS”)
-        if event == "end" and lt == "title" and (el.attrib.get("identifier", "").startswith("/us/usc/t")):
-            num_el = el.find("./{*}num")
-            heading_el = el.find("./{*}heading")
-            title_info["identifier"] = el.attrib.get("identifier")
-
-            if num_el is not None:
-                title_info["title_number"] = num_el.attrib.get("value") or _clean_text("".join(num_el.itertext()))
-            if heading_el is not None:
-                title_info["heading"] = _clean_text("".join(heading_el.itertext()))
-
-            el.clear()
-
-        # CHAPTER tracking
-        if event == "start" and lt == "chapter":
-            # Derive chapter key from identifier like "/us/usc/t1/ch1"
-            ident = el.attrib.get("identifier", "")
-            m = re.search(r"/ch([^/]+)$", ident)
-            current_chapter_key = m.group(1) if m else ident or "unknown"
-            chapters.setdefault(current_chapter_key, {"heading": None, "identifier": ident, "sections": {}})
-
-        if event == "end" and lt == "chapter":
-            num_el = el.find("./{*}num")
-            heading_el = el.find("./{*}heading")
-            ident = el.attrib.get("identifier", "")
-            m = re.search(r"/ch([^/]+)$", ident)
-            ch_key = m.group(1) if m else ident or current_chapter_key or "unknown"
-
-            ch = chapters.setdefault(ch_key, {"heading": None, "identifier": ident, "sections": {}})
-
-            # Prefer heading text.
-            if heading_el is not None:
-                ch["heading"] = _clean_text("".join(heading_el.itertext()))
-            # Optionally keep chapter label “CHAPTER 1—”
-            if num_el is not None:
-                ch["label"] = _clean_text("".join(num_el.itertext()))
-                ch["num"] = num_el.attrib.get("value") or ch.get("num")
-
-            current_chapter_key = None
-            el.clear()
-
-        # SECTION parsing
-        if event == "end" and lt == "section":
-            parsed = _parse_unit(el)
-
-            # Determine section key from num.value when available (best for lookups)
-            sec_key = parsed["num"]
-            if sec_key is None:
-                ident = parsed.get("identifier") or ""
-                m = re.search(r"/s([^/]+)$", ident)
-                sec_key = m.group(1) if m else ident or "unknown"
-
-            # Attach to current chapter if we have one; else stash under "_".
-            ch_key = current_chapter_key or "_"
-            chapters.setdefault(ch_key, {"heading": None, "identifier": None, "sections": {}})
-            chapters[ch_key]["sections"][str(sec_key)] = parsed
-
-            el.clear()
-
-    # Final structure
-    out = {
-        "meta": meta,
-        "title": {
-            "number": str(title_info.get("title_number") or meta.get("docNumber") or ""),
-            "heading": title_info.get("heading"),
-            "identifier": title_info.get("identifier"),
-        },
-        "chapters": chapters,
-    }
-
-    return out
-
-def normalize_title_key(title: str) -> str:
-    m = re.search(r"\d+", str(title))
-    if not m:
-        return str(title).strip()
-    return str(int(m.group(0)))
-
-def resolve_title_json_path(title: str, index: dict, usc_store_dir: str) -> str:
-    # 1) try index keys
-    k = normalize_title_key(title)
-    entry = index.get(k)
-    if entry and isinstance(entry, dict):
-        p = entry.get("json_path")
-        if p and os.path.exists(p):
-            return p
-
-    # 2) fallback: direct filename guess
-    try:
-        n = int(k)
-        candidate = os.path.join(usc_store_dir, f"usc{n:02d}.json")
-        if os.path.exists(candidate):
-            return candidate
-    except ValueError:
-        pass
-
-    raise KeyError(f"Title {title} is not in usc_index.json (and no uscNN.json fallback found).")
 
 SENATORS = 1327053499405701142
 REPRESENTATIVES = 1327053334036742215
@@ -318,6 +79,489 @@ CLERK_ROLE_ID = 0               # Clerk of the House (for certifications) or lea
 DEFAULT_ELECTION_HOURS = 24
 ELECTIONS_ANNOUNCE_CHANNEL = 1334216429884407808
 
+USC_DB_FILE = os.path.join(BASE_DIR, "usc.sqlite3")
+
+USLM_NS = "http://xml.house.gov/schemas/uslm/1.0"
+STRUCT_TAGS = {"subsection", "paragraph", "subparagraph", "clause", "subclause"}
+
+_indent_re = re.compile(r"indent(\d+)")
+_cite_re = re.compile(
+    r"^\s*(?P<title>\d+)\s*(?:U\.?\s*S\.?\s*C\.?|USC)\s*(?:§+)?\s*(?P<section>[\w\.\-]+)\s*$",
+    re.IGNORECASE,
+)
+
+def _usc_local(tag: str) -> str:
+    return tag.split("}", 1)[1] if "}" in tag else tag
+
+def _usc_norm_ws(s: str | None) -> str:
+    return re.sub(r"\s+", " ", (s or "")).strip()
+
+def _usc_sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+def _usc_db_connect(db_path: str) -> sqlite3.Connection:
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
+    return conn
+
+def _usc_db_init(db_path: str) -> None:
+    conn = _usc_db_connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS usc_titles (
+              title_num      INTEGER PRIMARY KEY,
+              heading        TEXT NOT NULL,
+              created_at     TEXT,
+              imported_at    TEXT,
+              source_sha256  TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS usc_nodes (
+              id         INTEGER PRIMARY KEY AUTOINCREMENT,
+              title_num  INTEGER NOT NULL,
+              node_type  TEXT NOT NULL,
+              num        TEXT,
+              heading    TEXT,
+              identifier TEXT,
+              parent_id  INTEGER,
+              ord        INTEGER,
+              FOREIGN KEY(title_num) REFERENCES usc_titles(title_num)
+            );
+
+            CREATE TABLE IF NOT EXISTS usc_sections (
+              id          INTEGER PRIMARY KEY AUTOINCREMENT,
+              title_num   INTEGER NOT NULL,
+              node_id     INTEGER,
+              section_num TEXT NOT NULL,
+              heading     TEXT,
+              identifier  TEXT,
+              body_text   TEXT,
+              ord         INTEGER,
+              UNIQUE(title_num, section_num),
+              FOREIGN KEY(title_num) REFERENCES usc_titles(title_num),
+              FOREIGN KEY(node_id) REFERENCES usc_nodes(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_usc_nodes_title_ord
+              ON usc_nodes(title_num, ord);
+
+            CREATE INDEX IF NOT EXISTS idx_usc_sections_title_node_ord
+              ON usc_sections(title_num, node_id, ord);
+
+            -- simple FTS for later (not required for the basic commands, but cheap to add now)
+            CREATE VIRTUAL TABLE IF NOT EXISTS usc_sections_fts
+            USING fts5(title_num UNINDEXED, section_num UNINDEXED, heading, body_text);
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+def _usc_render_struct(elem: ET.Element, depth: int = 0) -> list[str]:
+    """
+    Render subsection/paragraph/etc. recursively:
+      (a) text...
+          (1) text...
+              (A) text...
+    """
+    lines: list[str] = []
+
+    num_text = ""
+    content_text = ""
+
+    for ch in list(elem):
+        lt = _usc_local(ch.tag)
+        if lt == "num" and not num_text:
+            num_text = _usc_norm_ws("".join(ch.itertext()))
+        elif lt == "content" and not content_text:
+            content_text = _usc_norm_ws("".join(ch.itertext()))
+
+    head = " ".join([t for t in [num_text, content_text] if t])
+    if head:
+        lines.append(("    " * depth) + head)
+
+    for ch in list(elem):
+        if _usc_local(ch.tag) in STRUCT_TAGS:
+            lines.extend(_usc_render_struct(ch, depth + 1))
+
+    return lines
+
+def _usc_render_section_body(section_elem: ET.Element) -> str:
+    """
+    Render statute text only (skip notes/sourceCredit).
+    Handles:
+      - <content><p class="indent1"> ... </p></content>
+      - direct <subsection>/<paragraph>/... trees
+    """
+    lines: list[str] = []
+
+    # 1) section-level <content> (common)
+    for ch in list(section_elem):
+        lt = _usc_local(ch.tag)
+        if lt != "content":
+            continue
+
+        ps = [c for c in list(ch) if _usc_local(c.tag) == "p"]
+        if ps:
+            for p in ps:
+                cls = p.get("class") or ""
+                m = _indent_re.search(cls)
+                indent = int(m.group(1)) if m else 0
+                txt = _usc_norm_ws("".join(p.itertext()))
+                if txt:
+                    lines.append(("    " * indent) + txt)
+        else:
+            txt = _usc_norm_ws("".join(ch.itertext()))
+            if txt:
+                lines.append(txt)
+
+    # 2) structural children (subsections, etc.)
+    for ch in list(section_elem):
+        if _usc_local(ch.tag) in STRUCT_TAGS:
+            lines.extend(_usc_render_struct(ch, 0))
+
+    return "\n".join(lines).strip()
+
+def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes) -> dict:
+    """
+    Parse one Title XML (USLM), store:
+      - title number
+      - title heading
+      - created date (meta)
+      - chapters (as nodes)
+      - sections (statute text only; no notes)
+    Returns a summary dict.
+    """
+    _usc_db_init(db_path)
+    sha = _usc_sha256(xml_bytes)
+
+    conn = _usc_db_connect(db_path)
+    cur = conn.cursor()
+
+    title_num: int | None = None
+    title_heading: str | None = None
+    created_at: str | None = None
+    prepared = False
+    updated_existing = False
+
+    chapter_ord = 0
+    section_ord = 0
+
+    current_ch = None  # dict with identifier/num/heading/node_id/ord
+
+    def prepare_if_ready() -> None:
+        nonlocal prepared, updated_existing
+        if prepared:
+            return
+        if title_num is None or not title_heading:
+            return
+
+        row = cur.execute(
+            "SELECT title_num, heading, created_at, imported_at, source_sha256 FROM usc_titles WHERE title_num=?",
+            (title_num,),
+        ).fetchone()
+
+        if row and (row["source_sha256"] == sha):
+            # already imported; bail early
+            raise StopIteration
+
+        if row:
+            # replace existing title content
+            updated_existing = True
+            cur.execute("DELETE FROM usc_sections_fts WHERE title_num=?", (title_num,))
+            cur.execute("DELETE FROM usc_sections WHERE title_num=?", (title_num,))
+            cur.execute("DELETE FROM usc_nodes WHERE title_num=?", (title_num,))
+
+        cur.execute(
+            """
+            INSERT INTO usc_titles(title_num, heading, created_at, imported_at, source_sha256)
+            VALUES(?,?,?,?,?)
+            ON CONFLICT(title_num) DO UPDATE SET
+              heading=excluded.heading,
+              created_at=excluded.created_at,
+              imported_at=excluded.imported_at,
+              source_sha256=excluded.source_sha256
+            """,
+            (
+                title_num,
+                title_heading,
+                created_at,
+                discord.utils.utcnow().isoformat(),
+                sha,
+            ),
+        )
+        prepared = True
+
+    try:
+        it = ET.iterparse(io.BytesIO(xml_bytes), events=("start", "end"))
+        stack: list[str] = []
+
+        for ev, el in it:
+            t = _usc_local(el.tag)
+
+            if ev == "start":
+                stack.append(t)
+                if t == "chapter":
+                    chapter_ord += 1
+                    current_ch = {
+                        "identifier": el.get("identifier"),
+                        "num": None,
+                        "heading": None,
+                        "ord": chapter_ord,
+                        "node_id": None,
+                        "_inserted": False,
+                    }
+
+            else:
+                parent = stack[-2] if len(stack) >= 2 else None
+
+                # meta/title basics
+                if t == "docNumber" and parent == "meta" and title_num is None:
+                    try:
+                        title_num = int(_usc_norm_ws(el.text))
+                    except Exception:
+                        title_num = None
+
+                if t == "created" and parent == "meta" and created_at is None:
+                    created_at = _usc_norm_ws(el.text)
+
+                if t == "heading" and parent == "title" and title_heading is None:
+                    title_heading = _usc_norm_ws("".join(el.itertext()))
+
+                # once we have title_num + title_heading we can check dedupe/replace
+                try:
+                    prepare_if_ready()
+                except StopIteration:
+                    # already imported, stop parsing
+                    raise
+
+                # chapter details + insert node as soon as we know num+heading
+                if current_ch is not None:
+                    if t == "num" and parent == "chapter" and current_ch["num"] is None:
+                        v = el.get("value") or _usc_norm_ws("".join(el.itertext()))
+                        current_ch["num"] = _usc_norm_ws(v)
+
+                    if t == "heading" and parent == "chapter" and current_ch["heading"] is None:
+                        current_ch["heading"] = _usc_norm_ws("".join(el.itertext()))
+
+                    if (
+                        prepared
+                        and current_ch["num"]
+                        and current_ch["heading"]
+                        and not current_ch["_inserted"]
+                    ):
+                        cur.execute(
+                            """
+                            INSERT INTO usc_nodes(title_num, node_type, num, heading, identifier, parent_id, ord)
+                            VALUES(?, 'chapter', ?, ?, ?, NULL, ?)
+                            """,
+                            (
+                                title_num,
+                                str(current_ch["num"]),
+                                current_ch["heading"],
+                                current_ch["identifier"],
+                                current_ch["ord"],
+                            ),
+                        )
+                        current_ch["node_id"] = cur.lastrowid
+                        current_ch["_inserted"] = True
+
+                # section end: insert section row + fts row
+                if t == "section":
+                    if not prepared:
+                        # defensive; should not happen in valid files
+                        el.clear()
+                        stack.pop()
+                        continue
+
+                    section_ord += 1
+
+                    sec_num = None
+                    sec_head = None
+                    for c in list(el):
+                        lt = _usc_local(c.tag)
+                        if lt == "num" and sec_num is None:
+                            sec_num = _usc_norm_ws(c.get("value") or "".join(c.itertext()))
+                        elif lt == "heading" and sec_head is None:
+                            sec_head = _usc_norm_ws("".join(c.itertext()))
+
+                    body = _usc_render_section_body(el)
+                    node_id = current_ch["node_id"] if current_ch else None
+
+                    cur.execute(
+                        """
+                        INSERT OR REPLACE INTO usc_sections(title_num, node_id, section_num, heading, identifier, body_text, ord)
+                        VALUES(?,?,?,?,?,?,?)
+                        """,
+                        (
+                            title_num,
+                            node_id,
+                            str(sec_num or ""),
+                            sec_head,
+                            el.get("identifier"),
+                            body,
+                            section_ord,
+                        ),
+                    )
+                    sec_id = cur.lastrowid
+                    cur.execute(
+                        "INSERT INTO usc_sections_fts(rowid, title_num, section_num, heading, body_text) VALUES(?,?,?,?,?)",
+                        (sec_id, title_num, str(sec_num or ""), sec_head or "", body or ""),
+                    )
+
+                    el.clear()
+
+                if t == "chapter":
+                    current_ch = None
+                    el.clear()
+
+                stack.pop()
+
+        conn.commit()
+
+        # counts
+        ch_ct = cur.execute(
+            "SELECT COUNT(*) AS n FROM usc_nodes WHERE title_num=? AND node_type='chapter'",
+            (title_num,),
+        ).fetchone()["n"]
+        sec_ct = cur.execute(
+            "SELECT COUNT(*) AS n FROM usc_sections WHERE title_num=?",
+            (title_num,),
+        ).fetchone()["n"]
+
+        return {
+            "status": "updated" if updated_existing else "imported",
+            "title_num": title_num,
+            "heading": title_heading,
+            "created_at": created_at,
+            "chapters": int(ch_ct),
+            "sections": int(sec_ct),
+            "sha256": sha,
+        }
+
+    except StopIteration:
+        # already imported
+        row = cur.execute(
+            "SELECT title_num, heading, created_at, imported_at, source_sha256 FROM usc_titles WHERE title_num=?",
+            (title_num,),
+        ).fetchone()
+        return {
+            "status": "already_imported",
+            "title_num": row["title_num"] if row else title_num,
+            "heading": row["heading"] if row else title_heading,
+            "created_at": row["created_at"] if row else created_at,
+            "chapters": int(
+                cur.execute(
+                    "SELECT COUNT(*) AS n FROM usc_nodes WHERE title_num=? AND node_type='chapter'",
+                    (title_num,),
+                ).fetchone()["n"]
+            ) if title_num else 0,
+            "sections": int(
+                cur.execute(
+                    "SELECT COUNT(*) AS n FROM usc_sections WHERE title_num=?",
+                    (title_num,),
+                ).fetchone()["n"]
+            ) if title_num else 0,
+            "sha256": row["source_sha256"] if row else sha,
+        }
+    finally:
+        conn.close()
+
+def _usc_db_list_titles(db_path: str) -> list[sqlite3.Row]:
+    _usc_db_init(db_path)
+    conn = _usc_db_connect(db_path)
+    try:
+        return conn.execute(
+            "SELECT title_num, heading, created_at, imported_at FROM usc_titles ORDER BY title_num"
+        ).fetchall()
+    finally:
+        conn.close()
+
+def _usc_db_get_chapters(db_path: str, title_num: int) -> list[sqlite3.Row]:
+    _usc_db_init(db_path)
+    conn = _usc_db_connect(db_path)
+    try:
+        return conn.execute(
+            """
+            SELECT id, num, heading, ord
+            FROM usc_nodes
+            WHERE title_num=? AND node_type='chapter'
+            ORDER BY ord
+            """,
+            (title_num,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+def _usc_db_get_chapter_id(db_path: str, title_num: int, chapter_num: str) -> int | None:
+    conn = _usc_db_connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT id FROM usc_nodes
+            WHERE title_num=? AND node_type='chapter' AND num=?
+            LIMIT 1
+            """,
+            (title_num, str(chapter_num)),
+        ).fetchone()
+        return int(row["id"]) if row else None
+    finally:
+        conn.close()
+
+def _usc_db_get_sections_in_chapter(db_path: str, title_num: int, chapter_id: int) -> list[sqlite3.Row]:
+    conn = _usc_db_connect(db_path)
+    try:
+        return conn.execute(
+            """
+            SELECT section_num, heading
+            FROM usc_sections
+            WHERE title_num=? AND node_id=?
+            ORDER BY ord
+            """,
+            (title_num, chapter_id),
+        ).fetchall()
+    finally:
+        conn.close()
+
+def _usc_db_get_section(db_path: str, title_num: int, section_num: str) -> sqlite3.Row | None:
+    conn = _usc_db_connect(db_path)
+    try:
+        return conn.execute(
+            """
+            SELECT s.section_num, s.heading, s.body_text, s.identifier,
+                   n.num AS chapter_num, n.heading AS chapter_heading
+            FROM usc_sections s
+            LEFT JOIN usc_nodes n ON n.id = s.node_id
+            WHERE s.title_num=? AND s.section_num=?
+            LIMIT 1
+            """,
+            (title_num, str(section_num)),
+        ).fetchone()
+    finally:
+        conn.close()
+
+def _usc_chunk_codeblock(text: str, limit: int = 1900) -> list[str]:
+    lines = (text or "").splitlines()
+    chunks: list[str] = []
+    cur: list[str] = []
+    cur_len = 0
+    for ln in lines:
+        add = len(ln) + 1
+        if cur and (cur_len + add) > limit:
+            chunks.append("\n".join(cur))
+            cur = [ln]
+            cur_len = add
+        else:
+            cur.append(ln)
+            cur_len += add
+    if cur:
+        chunks.append("\n".join(cur))
+    return chunks
 
 CATEGORIES = {
     "commons": {
@@ -2011,6 +2255,13 @@ class SpideyGov(commands.Cog):
 
         self.SPEAKER_OF_THE_HOUSE = None
         self.SENATE_MAJORITY_LEADER = None
+
+        try:
+            _usc_db_init(USC_DB_FILE)
+        except Exception as e:
+            print(f"USC DB init error: {e}")
+        
+        self.usc_lock = asyncio.Lock()
         
 
     def cog_unload(self):
@@ -2281,7 +2532,7 @@ class SpideyGov(commands.Cog):
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
-    usc = app_commands.Group(name="usc", description="Commands for viewing the U.S.C. and comparisons between S.R.C. and U.S.C.")
+    usc = app_commands.Group(name="usc", description="United States Code")
 
 
     @elections.command(name="party_create", description="Create a new political party")
@@ -5840,352 +6091,150 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_message(f"🚫 **{bill_id}** vetoed.", ephemeral=False)
 
 
-    @usc.command(name="upload_title", description="Upload a USC title XML and parse it to JSON.")
-    @app_commands.describe(file="The OLRC/House USLM XML file for a USC title.",
-                           overwrite="Overwrite existing saved data for this title.")
+    @usc.command(name="import", description="Import a USC Title XML (stores title, created date, chapters, sections)")
     @app_commands.checks.has_permissions(administrator=True)
-    async def upload_title(self, interaction: discord.Interaction, file: discord.Attachment, overwrite: bool = False):
-        await interaction.response.defer(thinking=True, ephemeral=True)
+    @app_commands.describe(file="Upload a USLM USC Title XML file (e.g., Title 1)")
+    async def usc_import(self, interaction: discord.Interaction, file: discord.Attachment):
+        await interaction.response.defer(ephemeral=True, thinking=True)
 
-        # Basic validation
         if not file.filename.lower().endswith(".xml"):
-            return await interaction.followup.send("That doesn’t look like an .xml file.", ephemeral=True)
+            return await interaction.followup.send("Upload must be an **.xml** file.", ephemeral=True)
 
-        # Discord may reject huge files; this check helps you fail fast with a clean message.
-        # (The actual max depends on server boosts / Nitro, so treat this as advisory.)
-        if file.size and file.size > 250 * 1024 * 1024:
-            return await interaction.followup.send(
-                f"File is {file.size/1024/1024:.1f}MB — that’s too large for this workflow. "
-                "Split by title (preferred) or host externally and ingest by URL later.",
-                ephemeral=True
-            )
-
-        # Choose a stable storage name.
-        # If they upload "usc01.xml" we keep that; otherwise just use original filename.
-        xml_filename = file.filename
-        xml_path = os.path.join(USC_XML_DIR, xml_filename)
-
-        if os.path.exists(xml_path) and not overwrite:
-            return await interaction.followup.send(
-                f"`{xml_filename}` already exists. Re-run with `overwrite=True` if you want to replace it.",
-                ephemeral=True
-            )
-
-        # Save attachment to disk (streams under the hood)
-        await file.save(xml_path)
-
-        # Parse + write JSON in a worker thread so we don't block the event loop.
         try:
-            title_data = await asyncio.to_thread(parse_usc_title_xml, xml_path)
-        except Exception as e:
-            return await interaction.followup.send(
-                f"Saved the XML, but parsing failed:\n`{type(e).__name__}: {e}`",
-                ephemeral=True
-            )
-
-        title_num = title_data.get("title", {}).get("number") or "unknown"
-        json_filename = f"usc{str(title_num).zfill(2)}.json" if str(title_num).isdigit() else f"{os.path.splitext(xml_filename)[0]}.json"
-        json_path = os.path.join(USC_JSON_DIR, json_filename)
-
-        _save_json(json_path, title_data)
-
-        # Update index
-        index = _load_json(USC_INDEX_FILE)
-        index.setdefault("titles", {})
-
-        now_iso = datetime.now(timezone.utc).isoformat()
-        sha = _sha256_file(xml_path)
-
-        # Count quick stats
-        ch_count = len(title_data.get("chapters", {}))
-        sec_count = sum(len(ch.get("sections", {})) for ch in title_data.get("chapters", {}).values())
-
-        index["titles"][str(title_num)] = {
-            "heading": title_data.get("title", {}).get("heading"),
-            "uploaded_at": now_iso,
-            "uploaded_by": f"{interaction.user} ({interaction.user.id})",
-            "xml_filename": xml_filename,
-            "json_filename": json_filename,
-            "sha256": sha,
-            "chapters": ch_count,
-            "sections": sec_count,
-            "meta": title_data.get("meta", {}),
-        }
-
-        _save_json(USC_INDEX_FILE, index)
-
-        return await interaction.followup.send(
-            f"✅ Uploaded + parsed **Title {title_num}**.\n"
-            f"- Title heading: **{title_data.get('title', {}).get('heading') or 'Unknown'}**\n"
-            f"- Chapters: **{ch_count}** | Sections: **{sec_count}**\n"
-            f"- Saved XML: `{xml_filename}`\n"
-            f"- Saved JSON: `{json_filename}`\n"
-            f"- SHA-256: `{sha[:12]}…`",
-            ephemeral=True
-        )
-    
-    def _usc_load_index(self) -> dict:
-        """Load usc_index.json (lightweight registry of which titles exist)."""
-        try:
-            if not os.path.exists(USC_INDEX_FILE):
-                return {}
-            data = _load_json(USC_INDEX_FILE)
-            return data if isinstance(data, dict) else {}
+            xml_bytes = await file.read()
         except Exception:
-            return {}
+            return await interaction.followup.send("Couldn’t read that attachment.", ephemeral=True)
 
-    def _usc_load_title(self, title_number: int) -> dict:
-        """Load a parsed USC title JSON by number."""
-        index = self._usc_load_index()
-        entry = index.get(str(title_number))
-        if not entry:
-            raise FileNotFoundError(f"Title {title_number} is not in usc_index.json")
-        filename = entry.get("file")
-        if not filename:
-            raise FileNotFoundError(f"Title {title_number} has no file entry in index")
-        title_path = os.path.join(USC_JSON_DIR, filename)
-        if not os.path.exists(title_path):
-            raise FileNotFoundError(f"Missing parsed JSON file for Title {title_number}: {title_path}")
-        data = _load_json(title_path)
-        if not isinstance(data, dict):
-            raise ValueError(f"Parsed title JSON for Title {title_number} is not an object")
-        return data
-
-    @staticmethod
-    def _usc_sanitize_section_ref(section_ref: str) -> str:
-        s = (section_ref or "").strip()
-        # Common user inputs: "§ 1", "1.", "1 U.S.C. 1", etc.
-        s = s.replace("U.S.C.", "").replace("USC", "")
-        s = s.replace("§", "")
-        s = s.replace("\u202f", " ")
-        s = s.strip().strip(".")
-        # collapse internal whitespace
-        s = "".join(s.split())
-        return s
-
-    @staticmethod
-    def _usc_text_blocks_to_lines(text_blocks: list[dict]) -> list[str]:
-        lines: list[str] = []
-        for b in (text_blocks or []):
+        async with self.usc_lock:
             try:
-                indent = int(b.get("indent", 0) or 0)
-            except Exception:
-                indent = 0
-            role = (b.get("role") or "").strip()
-            txt = (b.get("text") or "").strip()
-            if not txt:
-                continue
-            prefix = "- " if role == "listItem" else ""
-            # 2 spaces per indent level looks good in code blocks
-            lines.append(("  " * indent) + prefix + txt)
-        return lines
+                summary = await asyncio.to_thread(_usc_import_xml_bytes, USC_DB_FILE, xml_bytes)
+            except Exception as e:
+                return await interaction.followup.send(f"Import failed: `{e}`", ephemeral=True)
 
-    @staticmethod
-    def _usc_paginate_lines(lines: list[str], max_chars: int = 1800) -> list[str]:
-        """Split lines into pages that fit comfortably within Discord's message limits."""
-        pages: list[str] = []
-        buf: list[str] = []
-        size = 0
-        for line in lines:
-            add = len(line) + 1
-            if buf and (size + add) > max_chars:
-                pages.append("\n".join(buf))
-                buf = [line]
-                size = len(line)
-            else:
-                buf.append(line)
-                size += add
-        if buf:
-            pages.append("\n".join(buf))
-        return pages or [""]
-
-    def _usc_find_section(self, title_data: dict, section_key: str):
-        """Return (chapter_id, chapter_obj, section_obj) or (None, None, None)."""
-        chapters = (title_data or {}).get("chapters") or {}
-        for ch_id, ch in chapters.items():
-            secs = (ch or {}).get("sections") or {}
-            if section_key in secs:
-                return ch_id, ch, secs[section_key]
-        return None, None, None
-
-    @usc.command(name="list_titles", description="List USC titles that have been uploaded/parsed.")
-    @app_commands.describe(page="Which page of results to show.", public="Post publicly (default: ephemeral).")
-    async def usc_list_titles(self, interaction: discord.Interaction, page: int = 1, public: bool = False):
-        await interaction.response.defer(ephemeral=not public)
-
-        index = self._usc_load_index()
-        if not index:
-            return await interaction.followup.send("No USC titles are indexed yet. Upload one with /usc upload_title.")
-
-        # Sort numerically by title number
-        titles = []
-        for k, v in index.items():
-            try:
-                n = int(k)
-            except Exception:
-                continue
-            titles.append((n, v))
-        titles.sort(key=lambda t: t[0])
-
-        per_page = 12
-        total_pages = max(1, (len(titles) + per_page - 1) // per_page)
-        page = max(1, min(page, total_pages))
-        start_i = (page - 1) * per_page
-        chunk = titles[start_i:start_i + per_page]
-
-        desc_lines = []
-        for n, v in chunk:
-            heading = (v.get("title_heading") or "").strip()
-            created = (v.get("created") or "").strip()
-            pos = v.get("is_positive_law")
-            pos_tag = "Positive law" if pos else "Non-positive law"
-            if created:
-                desc_lines.append(f"**Title {n}** — {heading}\n• {pos_tag} • created {created}")
-            else:
-                desc_lines.append(f"**Title {n}** — {heading}\n• {pos_tag}")
-
-        embed = discord.Embed(
-            title="USC titles indexed",
-            description="\n\n".join(desc_lines),
-            color=0x2B2D31,
+        emb = discord.Embed(
+            title=f"USC Title {summary.get('title_num')} — {summary.get('heading') or ''}".strip(),
+            description=f"**Status:** {summary.get('status')}\n"
+                        f"**Created:** {summary.get('created_at') or 'Unknown'}\n"
+                        f"**Chapters:** {summary.get('chapters')}\n"
+                        f"**Sections:** {summary.get('sections')}",
         )
-        embed.set_footer(text=f"Page {page}/{total_pages} • Use /usc title_info <title> or /usc section <title> <section>")
-        await interaction.followup.send(embed=embed)
+        emb.set_footer(text=f"sha256: {summary.get('sha256')[:12]}…")
+        await interaction.followup.send(embed=emb, ephemeral=True)
 
-    @usc.command(name="title_info", description="Show metadata and a quick section count for a parsed USC title.")
-    @app_commands.describe(title="Title number (e.g., 1)", public="Post publicly (default: ephemeral).")
-    async def usc_title_info(self, interaction: discord.Interaction, title: int, public: bool = False):
-        await interaction.response.defer(ephemeral=not public)
+    @usc.command(name="titles", description="List imported USC titles")
+    async def usc_titles(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True)
 
-        try:
-            title_data = self._usc_load_title(title)
-        except Exception as e:
-            return await interaction.followup.send(f"Could not load Title {title}: {e}")
+        rows = await asyncio.to_thread(_usc_db_list_titles, USC_DB_FILE)
+        if not rows:
+            return await interaction.followup.send("No USC titles imported yet. Use `/usc import`.", ephemeral=True)
 
-        meta = title_data.get("meta") or {}
-        title_node = title_data.get("title") or {}
-        chapters = title_data.get("chapters") or {}
+        lines = []
+        for r in rows[:50]:
+            created = r["created_at"] or "Unknown"
+            lines.append(f"**Title {r['title_num']}** — {r['heading']}  *(created {created})*")
 
-        chapter_count = len([k for k in chapters.keys() if k != "_"]) or len(chapters)
-        total_sections = 0
-        for ch in chapters.values():
-            total_sections += len((ch or {}).get("sections") or {})
-
-        heading = (title_node.get("heading") or "").strip() or (meta.get("dc:title") or f"Title {title}")
-        created = (meta.get("dcterms:created") or "").strip()
-        is_pos = (meta.get("is-positive-law") or "").strip().lower() == "yes"
-
-        embed = discord.Embed(
-            title=f"Title {title} — {heading}",
-            color=0x2B2D31,
+        emb = discord.Embed(
+            title="Imported USC Titles",
+            description="\n".join(lines) if lines else "—",
         )
-        embed.add_field(name="Positive law", value="Yes" if is_pos else "No", inline=True)
-        embed.add_field(name="Created", value=created or "(unknown)", inline=True)
-        embed.add_field(name="Chapters", value=str(chapter_count), inline=True)
-        embed.add_field(name="Sections", value=str(total_sections), inline=True)
+        if len(rows) > 50:
+            emb.set_footer(text=f"Showing 50 of {len(rows)} titles.")
+        await interaction.followup.send(embed=emb)
 
-        ch_lines = []
-        for ch_id in sorted(chapters.keys(), key=lambda x: (x == "_", x)):
-            ch = chapters.get(ch_id) or {}
-            ch_heading = (ch.get("heading") or "").strip()
-            if not ch_heading:
-                continue
-            ch_num = (ch.get("num") or "").strip()
-            label = f"CHAPTER {ch_num}" if ch_num else f"CHAPTER {ch_id}"
-            ch_lines.append(f"{label} — {ch_heading} ({len((ch.get('sections') or {}))} sections)")
-            if len(ch_lines) >= 10:
-                break
-        if ch_lines:
-            embed.add_field(name="Chapters (preview)", value="\n".join(ch_lines), inline=False)
+    @usc.command(name="toc", description="Show the table of contents for a title (chapters)")
+    @app_commands.describe(title="Title number (e.g., 1)")
+    async def usc_toc(self, interaction: discord.Interaction, title: int):
+        await interaction.response.defer(thinking=True)
 
-        embed.set_footer(text="Use /usc section <title> <section> to view text (with indentation).")
-        await interaction.followup.send(embed=embed)
+        chapters = await asyncio.to_thread(_usc_db_get_chapters, USC_DB_FILE, int(title))
+        if not chapters:
+            return await interaction.followup.send("That title isn’t imported (or has no chapters).", ephemeral=True)
 
-    @usc.command(name="section", description="View a section from an uploaded/parsed USC title.")
-    @app_commands.describe(
-        title="Title number (e.g., 1)",
-        section="Section number (e.g., 1, 2a)",
-        page="Page number if the section is long.",
-        public="Post publicly (default: ephemeral).",
-    )
-    async def usc_section(self, interaction: discord.Interaction, title: int, section: str, page: int = 1, public: bool = False):
-        await interaction.response.defer(ephemeral=not public)
+        lines = []
+        for ch in chapters:
+            lines.append(f"CHAPTER {ch['num']} — {ch['heading']}")
 
-        try:
-            title_data = self._usc_load_title(title)
-        except Exception as e:
-            return await interaction.followup.send(f"Could not load Title {title}: {e}")
-
-        sec_key = self._usc_sanitize_section_ref(section)
-        if not sec_key:
-            return await interaction.followup.send("Please provide a section number like `1` or `2a`.")
-
-        ch_id, ch_obj, sec_obj = self._usc_find_section(title_data, sec_key)
-        if not sec_obj:
-            chapters = title_data.get("chapters") or {}
-            all_keys = []
-            for ch in chapters.values():
-                all_keys.extend(list(((ch or {}).get("sections") or {}).keys()))
-            all_keys = sorted(set(all_keys))
-            suggestions = ", ".join(all_keys[:25])
-            return await interaction.followup.send(
-                f"Section `{sec_key}` not found in Title {title}.\n"
-                f"If you want to sanity-check what parsed: try a known section like one of: {suggestions}"
-            )
-
-        title_heading = ((title_data.get("title") or {}).get("heading") or "").strip() or f"Title {title}"
-        ch_heading = ((ch_obj or {}).get("heading") or "").strip() or "(no chapter heading)"
-        ch_num = ((ch_obj or {}).get("num") or "").strip() or ch_id
-        sec_heading = (sec_obj.get("heading") or "").strip()
-
-        lines = self._usc_text_blocks_to_lines(sec_obj.get("text_blocks") or [])
-        if not lines:
-            return await interaction.followup.send(f"Parsed section exists, but I didn't find any text blocks for Title {title} § {sec_key}.")
-
-        pages = self._usc_paginate_lines(lines, max_chars=1800)
-        total_pages = len(pages)
-        page = max(1, min(page, total_pages))
-
-        body = pages[page - 1]
-        display = f"```\n{body}\n```"
-
-        embed = discord.Embed(
-            title=f"{title} U.S.C. § {sec_key}" + (f" — {sec_heading}" if sec_heading else ""),
-            description=(
-                f"**Title {title} — {title_heading}**\n"
-                f"**Chapter {ch_num} — {ch_heading}**\n\n"
-                f"{display}"
-            ),
-            color=0x2B2D31,
+        emb = discord.Embed(
+            title=f"USC Title {title} — Table of Contents",
+            description="```text\n" + "\n".join(lines) + "\n```",
         )
-        embed.set_footer(text=f"Page {page}/{total_pages} • /usc section {title} {sec_key} page:<n>")
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=emb)
 
-    @usc.command(name="debug", description="Debug USC index/storage paths.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def usc_debug(self, interaction: discord.Interaction):
-        ensure_usc_dirs()
+    @usc.command(name="chapter", description="List sections in a chapter")
+    @app_commands.describe(title="Title number", chapter="Chapter number (as shown in the TOC)")
+    async def usc_chapter(self, interaction: discord.Interaction, title: int, chapter: str):
+        await interaction.response.defer(thinking=True)
 
-        index_exists = os.path.exists(USC_INDEX_FILE)
-        index = _load_json(USC_INDEX_FILE, default={}) if index_exists else {}
+        chap_id = await asyncio.to_thread(_usc_db_get_chapter_id, USC_DB_FILE, int(title), str(chapter))
+        if not chap_id:
+            return await interaction.followup.send("Couldn’t find that chapter in the DB.", ephemeral=True)
 
-        json_files = []
-        if os.path.isdir(USC_JSON_DIR):
-            for fn in os.listdir(USC_JSON_DIR):
-                if fn.lower().startswith("usc") and fn.lower().endswith(".json"):
-                    json_files.append(fn)
-        json_files.sort()
+        secs = await asyncio.to_thread(_usc_db_get_sections_in_chapter, USC_DB_FILE, int(title), int(chap_id))
+        if not secs:
+            return await interaction.followup.send("No sections found for that chapter.", ephemeral=True)
 
+        lines = []
+        for s in secs[:150]:
+            head = s["heading"] or ""
+            lines.append(f"§ {s['section_num']} — {head}")
 
-        keys = sorted(index.keys(), key=lambda x: int(x) if str(x).isdigit() else 10**9)[:25]
-
-        msg = (
-            f"USC_XML_DIR: `{USC_XML_DIR}`\n"
-            f"USC_JSON_DIR: `{USC_JSON_DIR}`\n"
-            f"USC_INDEX_FILE: `{USC_INDEX_FILE}` (exists: `{index_exists}`)\n"
-            f"Index keys (first 25): `{keys}`\n"
-            f"JSON files found: `{len(json_files)}`\n"
-            f"First few JSON files: `{json_files[:10]}`"
+        emb = discord.Embed(
+            title=f"Title {title}, Chapter {chapter} — Sections",
+            description="```text\n" + "\n".join(lines) + "\n```",
         )
+        if len(secs) > 150:
+            emb.set_footer(text=f"Showing 150 of {len(secs)} sections.")
+        await interaction.followup.send(embed=emb)
 
-        await interaction.response.send_message(msg, ephemeral=True)
+    @usc.command(name="section", description="View a USC section (statute text only)")
+    @app_commands.describe(title="Title number", section="Section number (e.g., 7 or 112a)")
+    async def usc_section(self, interaction: discord.Interaction, title: int, section: str):
+        await interaction.response.defer(thinking=True)
+        row = await asyncio.to_thread(_usc_db_get_section, USC_DB_FILE, int(title), str(section))
+        if not row:
+            return await interaction.followup.send("Section not found (is the title imported?).", ephemeral=True)
+
+        header = f"{title} U.S.C. § {row['section_num']} — {row['heading'] or ''}".strip()
+        where = ""
+        if row["chapter_num"] and row["chapter_heading"]:
+            where = f"Chapter {row['chapter_num']} — {row['chapter_heading']}"
+
+        body = row["body_text"] or "(No statute text found.)"
+        chunks = _usc_chunk_codeblock(body)
+
+        # first message with context
+        emb = discord.Embed(title=header, description=where or None)
+        await interaction.followup.send(embed=emb)
+
+        for chunk in chunks:
+            await interaction.followup.send(f"```text\n{chunk}\n```")
+
+    @usc.command(name="cite", description="Lookup by citation like '1 USC 7'")
+    @app_commands.describe(cite="Example: 1 USC 7 or 1 U.S.C. § 7")
+    async def usc_cite(self, interaction: discord.Interaction, cite: str):
+        await interaction.response.defer(thinking=True)
+
+        m = _cite_re.match(cite or "")
+        if not m:
+            return await interaction.followup.send("Couldn’t parse that. Try like: `1 USC 7`.", ephemeral=True)
+
+        title = int(m.group("title"))
+        section = m.group("section")
+        row = await asyncio.to_thread(_usc_db_get_section, USC_DB_FILE, title, section)
+        if not row:
+            return await interaction.followup.send("Not found (is that title imported?).", ephemeral=True)
+
+        header = f"{title} U.S.C. § {row['section_num']} — {row['heading'] or ''}".strip()
+        where = ""
+        if row["chapter_num"] and row["chapter_heading"]:
+            where = f"Chapter {row['chapter_num']} — {row['chapter_heading']}"
+
+        body = row["body_text"] or "(No statute text found.)"
+        chunks = _usc_chunk_codeblock(body)
+
+        emb = discord.Embed(title=header, description=where or None)
+        await interaction.followup.send(embed=emb)
+
+        for chunk in chunks:
+            await interaction.followup.send(f"```text\n{chunk}\n```")
