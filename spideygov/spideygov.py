@@ -76,7 +76,7 @@ def _text_blocks_from_content(content_el: ET.Element | None) -> list[dict]:
 
     if p_children:
         for p in p_children:
-            text = _clean_text("".join(p.itertext))
+            text = _clean_text("".join(p.itertext()))
             if not text:
                 continue
             blocks.append({
