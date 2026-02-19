@@ -42,6 +42,13 @@ USC_XML_DIR = os.path.join(USC_DIR, "xml")
 USC_JSON_DIR = os.path.join(USC_DIR, "json")
 USC_INDEX_FILE = os.path.join(USC_DIR, "usc_index.json")
 
+PROJECT_ROOT = Path(os.getcwd()).resolve()
+USC_STORE_DIR = PROJECT_ROOT / "usc_store"
+USC_INDEX_FILE = USC_STORE_DIR / "usc_index.json"
+
+def ensure_usc_dirs():
+    USC_STORE_DIR.mkdir(parents=True, exist_ok=True)
+
 os.makedirs(USC_XML_DIR, exist_ok=True)
 os.makedirs(USC_JSON_DIR, exist_ok=True)
 
@@ -245,6 +252,32 @@ def parse_usc_title_xml(xml_path: str) -> dict:
     }
 
     return out
+
+def normalize_title_key(title: str) -> str:
+    m = re.search(r"\d+", str(title))
+    if not m:
+        return str(title).strip()
+    return str(int(m.group(0)))
+
+def resolve_title_json_path(title: str, index: dict, usc_store_dir: str) -> str:
+    # 1) try index keys
+    k = normalize_title_key(title)
+    entry = index.get(k)
+    if entry and isinstance(entry, dict):
+        p = entry.get("json_path")
+        if p and os.path.exists(p):
+            return p
+
+    # 2) fallback: direct filename guess
+    try:
+        n = int(k)
+        candidate = os.path.join(usc_store_dir, f"usc{n:02d}.json")
+        if os.path.exists(candidate):
+            return candidate
+    except ValueError:
+        pass
+
+    raise KeyError(f"Title {title} is not in usc_index.json (and no uscNN.json fallback found).")
 
 SENATORS = 1327053499405701142
 REPRESENTATIVES = 1327053334036742215
@@ -6127,3 +6160,29 @@ class SpideyGov(commands.Cog):
         )
         embed.set_footer(text=f"Page {page}/{total_pages} • /usc section {title} {sec_key} page:<n>")
         await interaction.followup.send(embed=embed)
+    
+    @usc.command(name="debug", description="Debug USC index/storage paths.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def usc_debug(self, interaction: discord.Interaction):
+        ensure_usc_dirs()
+
+        index_exists = os.path.exists(USC_INDEX_FILE)
+        index = _load_json(USC_INDEX_FILE, default={}) if index_exists else {}
+
+        json_files = []
+        if os.path.isdir(USC_STORE_DIR):
+            for fn in os.listdir(USC_STORE_DIR):
+                if fn.lower().startswith("usc") and fn.lower().endswith(".json"):
+                    json_files.append(fn)
+        json_files.sort()
+
+        keys = sorted(index.keys(), key=lambda x: int(x) if str(x).isdigit() else 10**9)[:25]
+
+        msg = (
+            f"USC_STORE_DIR: `{USC_STORE_DIR}`\n"
+            f"USC_INDEX_FILE: `{USC_INDEX_FILE}` (exists: `{index_exists}`)\n"
+            f"Index keys (first 25): `{keys}`\n"
+            f"JSON files in store: `{len(json_files)}`\n"
+            f"First few JSON files: `{json_files[:10]}`"
+        )
+        await interaction.response.send_message(msg, ephemeral=True)
