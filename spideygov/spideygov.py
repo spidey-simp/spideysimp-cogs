@@ -290,6 +290,7 @@ def _usc_render_section_body(section_elem: ET.Element) -> str:
 
     return "\n".join(lines).strip()
 
+
 def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes, force: bool = False) -> dict:
     """
     Parse one Title XML (USLM), store:
@@ -6240,15 +6241,13 @@ class SpideyGov(commands.Cog):
             return await interaction.followup.send("No USC titles imported yet. Use `/usc import`.", ephemeral=True)
 
         lines = []
-        for r in rows[:50]:
+        for r in rows:
             lines.append(f"**Title {r['title_num']}** — {r['heading']}")
 
         emb = discord.Embed(
             title="Imported USC Titles",
             description="\n".join(lines) if lines else "—",
         )
-        if len(rows) > 50:
-            emb.set_footer(text=f"Showing 50 of {len(rows)} titles.")
         await interaction.followup.send(embed=emb)
 
     def _usc_db_get_title_meta(self, db_path: str, title_num: int) -> sqlite3.Row | None:
