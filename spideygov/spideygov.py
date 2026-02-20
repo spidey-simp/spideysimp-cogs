@@ -541,6 +541,68 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes, force: bool = False) -
     finally:
         conn.close()
 
+def _usc_chunk_lines(lines: list[str], limit: int = 1700) -> list[str]:
+    """
+    Chunk lines into pages that will fit inside a normal Discord message
+    once wrapped in a code block + header.
+    """
+    pages: list[str] = []
+    cur: list[str] = []
+    cur_len = 0
+
+    for ln in lines:
+        add = len(ln) + 1
+        if cur and (cur_len + add) > limit:
+            pages.append("\n".join(cur))
+            cur = [ln]
+            cur_len = add
+        else:
+            cur.append(ln)
+            cur_len += add
+
+    if cur:
+        pages.append("\n".join(cur))
+    return pages or ["(none)"]
+
+
+class USCTextPaginator(discord.ui.View):
+    def __init__(self, title: str, pages: list[str], meta: str | None = None):
+        super().__init__(timeout=900)
+        self.title = title
+        self.pages = pages or ["(none)"]
+        self.meta = meta or ""
+        self.i = 0
+        self._sync()
+
+    def _sync(self):
+        self.prev.disabled = (self.i <= 0)
+        self.next.disabled = (self.i >= len(self.pages) - 1)
+
+    def make_content(self) -> str:
+        meta_part = f"\n{self.meta}" if self.meta else ""
+        return (
+            f"**{self.title}**\n"
+            f"```text\n{self.pages[self.i]}\n```\n"
+            f"`Page {self.i+1}/{len(self.pages)}`{meta_part}"
+        )
+
+    @discord.ui.button(label="Prev", style=discord.ButtonStyle.secondary)
+    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.i = max(0, self.i - 1)
+        self._sync()
+        await interaction.response.edit_message(content=self.make_content(), view=self)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.i = min(len(self.pages) - 1, self.i + 1)
+        self._sync()
+        await interaction.response.edit_message(content=self.make_content(), view=self)
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger)
+    async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
+        await interaction.response.edit_message(view=None)
+
 def _usc_db_list_titles(db_path: str) -> list[sqlite3.Row]:
     _usc_db_init(db_path)
     conn = _usc_db_connect(db_path)
@@ -6264,19 +6326,16 @@ class SpideyGov(commands.Cog):
     @usc.command(name="toc", description="Show the table of contents for a title (chapters)")
     @app_commands.describe(title="Title number (e.g., 1)")
     async def usc_toc(self, interaction: discord.Interaction, title: int):
-        await interaction.response.defer(thinking=True)
+        # Ack quickly, and do it ephemerally so the real output can be a clean channel post
+        await interaction.response.defer(ephemeral=True, thinking=True)
 
         meta = await asyncio.to_thread(self._usc_db_get_title_meta, USC_DB_FILE, int(title))
-
         chapters = await asyncio.to_thread(_usc_db_get_chapters, USC_DB_FILE, int(title))
         if not chapters:
             return await interaction.followup.send("That title isn’t imported (or has no chapters).", ephemeral=True)
 
         by_parent: dict[int | None, list[sqlite3.Row]] = {}
-        by_id: dict[int, sqlite3.Row] = {}
-
         for ch in chapters:
-            by_id[int(ch["id"])] = ch
             by_parent.setdefault(ch["parent_id"], []).append(ch)
 
         lines: list[str] = []
@@ -6289,14 +6348,22 @@ class SpideyGov(commands.Cog):
 
         walk(None, 0)
 
-        emb = discord.Embed(
-            title=f"USC Title {title} — Table of Contents",
-            description="```text\n" + "\n".join(lines) + "\n```",
-        )
-        created = _usc_fmt_dt(meta["created_at"]) if meta else "Unknown"
+        created = _usc_fmt_dt(meta["created_at"], date_only=True) if meta else "Unknown"
+        pages = _usc_chunk_lines(lines, limit=1700)
 
-        emb.set_footer(text=f"Created: {created}")
-        await interaction.followup.send(embed=emb)
+        view = USCTextPaginator(
+            title=f"USC Title {title} — Table of Contents",
+            pages=pages,
+            meta=f"• Created: {created}",
+        )
+
+        if interaction.channel is None:
+            # fallback (DM edge case): has to be a followup
+            await interaction.followup.send(content=view.make_content(), view=view, ephemeral=False)
+            return
+
+        msg = await interaction.channel.send(content=view.make_content(), view=view)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
 
     @usc.command(name="chapter", description="List sections in a chapter")
     @app_commands.describe(title="Title number", chapter="Chapter number (as shown in the TOC)")
