@@ -6348,7 +6348,7 @@ class SpideyGov(commands.Cog):
 
         walk(None, 0)
 
-        created = _usc_fmt_dt(meta["created_at"], date_only=True) if meta else "Unknown"
+        created = _usc_fmt_dt(meta["created_at"]) if meta else "Unknown"
         pages = _usc_chunk_lines(lines, limit=1700)
 
         view = USCTextPaginator(
