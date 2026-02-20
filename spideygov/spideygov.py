@@ -96,6 +96,33 @@ def _usc_local(tag: str) -> str:
 def _usc_norm_ws(s: str | None) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
 
+def _usc_fix_heading_brackets(s: str | None) -> str:
+    s = _usc_norm_ws(s)
+    # Heuristic: some converters omit the leading '[' but keep the trailing ']'
+    if s.endswith("]") and not s.startswith("[") and s.count("]") == 1:
+        return "[" + s
+    return s
+
+def _usc_num_text(num_elem: ET.Element) -> str:
+    """
+    Prefer visible text, but fall back to @value when text is empty.
+    If @value looks like a bare token (a, 1, A, i), wrap it as (token).
+    """
+    raw = _usc_norm_ws("".join(num_elem.itertext()))
+    if raw:
+        return raw
+
+    v = _usc_norm_ws(num_elem.get("value"))
+    if not v:
+        return ""
+
+    # If it's already formatted, leave it.
+    if v.startswith("(") or v.startswith("“(") or v.startswith("§"):
+        return v
+
+    # Most USLM @value for paragraph markers is bare (a, b, 1, A, i)
+    return f"({v})"
+
 def _usc_sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -164,27 +191,41 @@ def _usc_db_init(db_path: str) -> None:
 
 def _usc_render_struct(elem: ET.Element, depth: int = 0) -> list[str]:
     """
-    Render subsection/paragraph/etc. recursively:
-      (a) text...
-          (1) text...
-              (A) text...
+    Render subsection/paragraph/etc. recursively with indentation.
     """
     lines: list[str] = []
 
     num_text = ""
+    heading_text = ""
     content_text = ""
 
     for ch in list(elem):
         lt = _usc_local(ch.tag)
+
         if lt == "num" and not num_text:
-            num_text = _usc_norm_ws("".join(ch.itertext()))
-        elif lt == "content" and not content_text:
+            num_text = _usc_num_text(ch)
+
+        elif lt == "heading" and not heading_text:
+            heading_text = _usc_norm_ws("".join(ch.itertext()))
+            heading_text = _usc_fix_heading_brackets(heading_text)
+
+        elif lt in {"content", "chapeau", "text"} and not content_text:
             content_text = _usc_norm_ws("".join(ch.itertext()))
 
-    head = " ".join([t for t in [num_text, content_text] if t])
+    # Build the line for this node
+    parts = []
+    if num_text:
+        parts.append(num_text)
+    if heading_text:
+        parts.append(heading_text)
+    if content_text:
+        parts.append(content_text)
+
+    head = " ".join([p for p in parts if p])
     if head:
         lines.append(("    " * depth) + head)
 
+    # Recurse into children
     for ch in list(elem):
         if _usc_local(ch.tag) in STRUCT_TAGS:
             lines.extend(_usc_render_struct(ch, depth + 1))
@@ -227,7 +268,7 @@ def _usc_render_section_body(section_elem: ET.Element) -> str:
 
     return "\n".join(lines).strip()
 
-def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes) -> dict:
+def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes, force: bool = False) -> dict:
     """
     Parse one Title XML (USLM), store:
       - title number
@@ -252,7 +293,7 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes) -> dict:
     chapter_ord = 0
     section_ord = 0
 
-    current_ch = None  # dict with identifier/num/heading/node_id/ord
+    chapter_stack: list[dict] = []
 
     def prepare_if_ready() -> None:
         nonlocal prepared, updated_existing
@@ -266,8 +307,7 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes) -> dict:
             (title_num,),
         ).fetchone()
 
-        if row and (row["source_sha256"] == sha):
-            # already imported; bail early
+        if row and (row["source_sha256"] == sha) and not force:
             raise StopIteration
 
         if row:
@@ -308,14 +348,16 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes) -> dict:
                 stack.append(t)
                 if t == "chapter":
                     chapter_ord += 1
-                    current_ch = {
+                    parent_ctx = chapter_stack[-1] if chapter_stack else None
+                    chapter_stack.append({
                         "identifier": el.get("identifier"),
                         "num": None,
                         "heading": None,
                         "ord": chapter_ord,
                         "node_id": None,
                         "_inserted": False,
-                    }
+                        "parent_ctx": parent_ctx,
+                    })
 
             else:
                 parent = stack[-2] if len(stack) >= 2 else None
@@ -340,36 +382,39 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes) -> dict:
                     # already imported, stop parsing
                     raise
 
-                # chapter details + insert node as soon as we know num+heading
-                if current_ch is not None:
-                    if t == "num" and parent == "chapter" and current_ch["num"] is None:
+                # chapter details + insert node (supports nested chapters)
+                if chapter_stack:
+                    top = chapter_stack[-1]
+
+                    if t == "num" and parent == "chapter" and top["num"] is None:
+                        # chapters usually want the @value token (e.g., 1) not "CHAPTER 1—"
                         v = el.get("value") or _usc_norm_ws("".join(el.itertext()))
-                        current_ch["num"] = _usc_norm_ws(v)
+                        top["num"] = _usc_norm_ws(v)
 
-                    if t == "heading" and parent == "chapter" and current_ch["heading"] is None:
-                        current_ch["heading"] = _usc_norm_ws("".join(el.itertext()))
+                    if t == "heading" and parent == "chapter" and top["heading"] is None:
+                        top["heading"] = _usc_fix_heading_brackets(_usc_norm_ws("".join(el.itertext())))
 
-                    if (
-                        prepared
-                        and current_ch["num"]
-                        and current_ch["heading"]
-                        and not current_ch["_inserted"]
-                    ):
+                    if prepared and top["num"] and top["heading"] and not top["_inserted"]:
+                        parent_id = None
+                        if top["parent_ctx"] is not None:
+                            parent_id = top["parent_ctx"]["node_id"]
+
                         cur.execute(
                             """
                             INSERT INTO usc_nodes(title_num, node_type, num, heading, identifier, parent_id, ord)
-                            VALUES(?, 'chapter', ?, ?, ?, NULL, ?)
+                            VALUES(?, 'chapter', ?, ?, ?, ?, ?)
                             """,
                             (
                                 title_num,
-                                str(current_ch["num"]),
-                                current_ch["heading"],
-                                current_ch["identifier"],
-                                current_ch["ord"],
+                                str(top["num"]),
+                                top["heading"],
+                                top["identifier"],
+                                parent_id,
+                                top["ord"],
                             ),
                         )
-                        current_ch["node_id"] = cur.lastrowid
-                        current_ch["_inserted"] = True
+                        top["node_id"] = cur.lastrowid
+                        top["_inserted"] = True
 
                 # section end: insert section row + fts row
                 if t == "section":
@@ -391,7 +436,7 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes) -> dict:
                             sec_head = _usc_norm_ws("".join(c.itertext()))
 
                     body = _usc_render_section_body(el)
-                    node_id = current_ch["node_id"] if current_ch else None
+                    node_id = chapter_stack[-1]["node_id"] if (chapter_stack and chapter_stack[-1]["node_id"]) else None
 
                     cur.execute(
                         """
@@ -417,7 +462,8 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes) -> dict:
                     el.clear()
 
                 if t == "chapter":
-                    current_ch = None
+                    if chapter_stack:
+                        chapter_stack.pop()
                     el.clear()
 
                 stack.pop()
@@ -488,7 +534,7 @@ def _usc_db_get_chapters(db_path: str, title_num: int) -> list[sqlite3.Row]:
     try:
         return conn.execute(
             """
-            SELECT id, num, heading, ord
+            SELECT id, num, heading, parent_id, ord
             FROM usc_nodes
             WHERE title_num=? AND node_type='chapter'
             ORDER BY ord
@@ -6094,7 +6140,8 @@ class SpideyGov(commands.Cog):
     @usc.command(name="import", description="Import a USC Title XML (stores title, created date, chapters, sections)")
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(file="Upload a USLM USC Title XML file (e.g., Title 1)")
-    async def usc_import(self, interaction: discord.Interaction, file: discord.Attachment):
+    @app_commands.describe(force="Rebuild this title even if it's already imported with the same file")
+    async def usc_import(self, interaction: discord.Interaction, file: discord.Attachment, force: bool = False):
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         if not file.filename.lower().endswith(".xml"):
@@ -6107,7 +6154,7 @@ class SpideyGov(commands.Cog):
 
         async with self.usc_lock:
             try:
-                summary = await asyncio.to_thread(_usc_import_xml_bytes, USC_DB_FILE, xml_bytes)
+                summary = await asyncio.to_thread(_usc_import_xml_bytes, USC_DB_FILE, xml_bytes, force)
             except Exception as e:
                 return await interaction.followup.send(f"Import failed: `{e}`", ephemeral=True)
 
@@ -6151,9 +6198,22 @@ class SpideyGov(commands.Cog):
         if not chapters:
             return await interaction.followup.send("That title isn’t imported (or has no chapters).", ephemeral=True)
 
-        lines = []
+        by_parent: dict[int | None, list[sqlite3.Row]] = {}
+        by_id: dict[int, sqlite3.Row] = {}
+
         for ch in chapters:
-            lines.append(f"CHAPTER {ch['num']} — {ch['heading']}")
+            by_id[int(ch["id"])] = ch
+            by_parent.setdefault(ch["parent_id"], []).append(ch)
+
+        lines: list[str] = []
+
+        def walk(parent_id: int | None, depth: int) -> None:
+            for ch in by_parent.get(parent_id, []):
+                indent = "    " * depth
+                lines.append(f"{indent}CHAPTER {ch['num']} — {ch['heading']}")
+                walk(int(ch["id"]), depth + 1)
+
+        walk(None, 0)
 
         emb = discord.Embed(
             title=f"USC Title {title} — Table of Contents",
