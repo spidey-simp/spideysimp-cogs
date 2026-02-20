@@ -6242,10 +6242,10 @@ class SpideyGov(commands.Cog):
 
         lines = []
         for r in rows:
-            lines.append(f"**Title {r['title_num']}** — {r['heading']}")
+            lines.append(f"**{r['title_num']}** — {r['heading']}")
 
         emb = discord.Embed(
-            title="Imported USC Titles",
+            title="USC Titles",
             description="\n".join(lines) if lines else "—",
         )
         await interaction.followup.send(embed=emb)
