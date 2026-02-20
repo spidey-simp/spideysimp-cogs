@@ -591,7 +591,7 @@ def _usc_db_get_section(db_path: str, title_num: int, section_num: str) -> sqlit
     finally:
         conn.close()
 
-def _usc_chunk_codeblock(text: str, limit: int = 1900) -> list[str]:
+def _usc_chunk_codeblock(text: str, limit: int = 1700) -> list[str]:
     lines = (text or "").splitlines()
     chunks: list[str] = []
     cur: list[str] = []
@@ -608,6 +608,47 @@ def _usc_chunk_codeblock(text: str, limit: int = 1900) -> list[str]:
     if cur:
         chunks.append("\n".join(cur))
     return chunks
+
+class USCSectionPaginator(discord.ui.View):
+    def __init__(self, header: str, where: str | None, pages: list[str]):
+        super().__init__(timeout=900)  # 15 min
+        self.header = header
+        self.where = where or ""
+        self.pages = pages or ["(No statute text found.)"]
+        self.i = 0
+        self._sync()
+
+    def _sync(self):
+        self.prev.disabled = (self.i <= 0)
+        self.next.disabled = (self.i >= len(self.pages) - 1)
+
+    def make_embed(self) -> discord.Embed:
+        body = self.pages[self.i]
+        desc = ""
+        if self.where:
+            desc += f"{self.where}\n\n"
+        desc += f"```text\n{body}\n```"
+
+        emb = discord.Embed(title=self.header, description=desc)
+        emb.set_footer(text=f"Page {self.i+1}/{len(self.pages)}")
+        return emb
+
+    @discord.ui.button(label="Prev", style=discord.ButtonStyle.secondary)
+    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.i = max(0, self.i - 1)
+        self._sync()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.i = min(len(self.pages) - 1, self.i + 1)
+        self._sync()
+        await interaction.response.edit_message(embed=self.make_embed(), view=self)
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger)
+    async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
+        await interaction.response.edit_message(view=None)
 
 CATEGORIES = {
     "commons": {
@@ -6250,7 +6291,9 @@ class SpideyGov(commands.Cog):
     @usc.command(name="section", description="View a USC section (statute text only)")
     @app_commands.describe(title="Title number", section="Section number (e.g., 7 or 112a)")
     async def usc_section(self, interaction: discord.Interaction, title: int, section: str):
-        await interaction.response.defer(thinking=True)
+        # Acknowledge command ephemerally so the real output can be a normal channel message.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
         row = await asyncio.to_thread(_usc_db_get_section, USC_DB_FILE, int(title), str(section))
         if not row:
             return await interaction.followup.send("Section not found (is the title imported?).", ephemeral=True)
@@ -6261,14 +6304,18 @@ class SpideyGov(commands.Cog):
             where = f"Chapter {row['chapter_num']} — {row['chapter_heading']}"
 
         body = row["body_text"] or "(No statute text found.)"
-        chunks = _usc_chunk_codeblock(body)
+        pages = _usc_chunk_codeblock(body)
 
-        # first message with context
-        emb = discord.Embed(title=header, description=where or None)
-        await interaction.followup.send(embed=emb)
+        view = USCSectionPaginator(header=header, where=where, pages=pages)
+        embed = view.make_embed()
 
-        for chunk in chunks:
-            await interaction.followup.send(f"```text\n{chunk}\n```")
+        if interaction.channel is None:
+            # Fallback (rare): we *must* use followup, so banner may appear.
+            await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+            return
+
+        msg = await interaction.channel.send(embed=embed, view=view)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
 
     @usc.command(name="cite", description="Lookup by citation like '1 USC 7'")
     @app_commands.describe(cite="Example: 1 USC 7 or 1 U.S.C. § 7")
@@ -6291,10 +6338,15 @@ class SpideyGov(commands.Cog):
             where = f"Chapter {row['chapter_num']} — {row['chapter_heading']}"
 
         body = row["body_text"] or "(No statute text found.)"
-        chunks = _usc_chunk_codeblock(body)
+        pages = _usc_chunk_codeblock(body)
 
-        emb = discord.Embed(title=header, description=where or None)
-        await interaction.followup.send(embed=emb)
+        view = USCSectionPaginator(header=header, where=where, pages=pages)
+        embed = view.make_embed()
 
-        for chunk in chunks:
-            await interaction.followup.send(f"```text\n{chunk}\n```")
+        if interaction.channel is None:
+            # Fallback (rare): we *must* use followup, so banner may appear.
+            await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+            return
+
+        msg = await interaction.channel.send(embed=embed, view=view)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
