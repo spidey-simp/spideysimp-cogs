@@ -135,6 +135,28 @@ def _usc_db_connect(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA synchronous = NORMAL;")
     return conn
 
+
+def _usc_fmt_dt(s: str | None) -> str:
+    if not s:
+        return "Unknown"
+    s = s.strip()
+
+    # Handle plain date
+    try:
+        d = date.fromisoformat(s)
+        return d.strftime("%b %-d, %Y") if hasattr(d, "strftime") else str(d)
+    except Exception:
+        pass
+
+    # Handle ISO datetime (including trailing Z)
+    try:
+        iso = s.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(iso)
+    except Exception:
+        return s  # fallback: show raw if parsing fails
+
+    return dt.strftime("%b %-d, %Y")
+
 def _usc_db_init(db_path: str) -> None:
     conn = _usc_db_connect(db_path)
     try:
@@ -6219,8 +6241,7 @@ class SpideyGov(commands.Cog):
 
         lines = []
         for r in rows[:50]:
-            created = r["created_at"] or "Unknown"
-            lines.append(f"**Title {r['title_num']}** — {r['heading']}  *(created {created})*")
+            lines.append(f"**Title {r['title_num']}** — {r['heading']}")
 
         emb = discord.Embed(
             title="Imported USC Titles",
@@ -6230,10 +6251,23 @@ class SpideyGov(commands.Cog):
             emb.set_footer(text=f"Showing 50 of {len(rows)} titles.")
         await interaction.followup.send(embed=emb)
 
+    def _usc_db_get_title_meta(self, db_path: str, title_num: int) -> sqlite3.Row | None:
+        _usc_db_init(db_path)
+        conn = _usc_db_connect(db_path)
+        try:
+            return conn.execute(
+                "SELECT title_num, heading, created_at, imported_at FROM usc_titles WHERE title_num=? LIMIT 1",
+                (int(title_num),),
+            ).fetchone()
+        finally:
+            conn.close()
+
     @usc.command(name="toc", description="Show the table of contents for a title (chapters)")
     @app_commands.describe(title="Title number (e.g., 1)")
     async def usc_toc(self, interaction: discord.Interaction, title: int):
         await interaction.response.defer(thinking=True)
+
+        meta = await asyncio.to_thread(self._usc_db_get_title_meta, USC_DB_FILE, int(title))
 
         chapters = await asyncio.to_thread(_usc_db_get_chapters, USC_DB_FILE, int(title))
         if not chapters:
@@ -6260,6 +6294,9 @@ class SpideyGov(commands.Cog):
             title=f"USC Title {title} — Table of Contents",
             description="```text\n" + "\n".join(lines) + "\n```",
         )
+        created = _usc_fmt_dt(meta["created_at"]) if meta else "Unknown"
+
+        emb.set_footer(text=f"Created: {created}")
         await interaction.followup.send(embed=emb)
 
     @usc.command(name="chapter", description="List sections in a chapter")
