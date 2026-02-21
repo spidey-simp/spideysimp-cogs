@@ -290,6 +290,23 @@ def _usc_render_section_body(section_elem: ET.Element) -> str:
 
     return "\n".join(lines).strip()
 
+_USC_SEC_ID_RE = re.compile(r"^/us/usc/t(?P<title>\d+)/s(?P<section>[^/]+)$")
+
+def _usc_is_real_usc_section(identifier: str | None, title_num: int | None) -> bool:
+    if not identifier or not title_num:
+        return False
+    m = _USC_SEC_ID_RE.match(identifier)
+    return bool(m and int(m.group("title")) == int(title_num))
+
+_HEADING_NOISE_RE = re.compile(r"\s+\d+\s+So in original\..*$", re.IGNORECASE)
+
+def _usc_clean_section_heading(h: str | None) -> str:
+    h = _usc_fix_heading_brackets(_usc_norm_ws(h))
+    # remove “11 So in original...” style junk
+    h = re.sub(_HEADING_NOISE_RE, "", h).strip()
+    # remove trailing lone footnote numbers (e.g., "Judicial Review 1")
+    h = re.sub(r"\s+\d+$", "", h).strip()
+    return h
 
 def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes, force: bool = False) -> dict:
     """
@@ -441,11 +458,22 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes, force: bool = False) -
 
                 # section end: insert section row + fts row
                 if t == "section":
+                    ident = el.get("identifier")
+
+                    # Skip “sections” that live inside notes or aren’t true USC sections
+                    if "notes" in stack or not _usc_is_real_usc_section(ident, title_num):
+                        el.clear()
+                        stack.pop()
+                        continue
+
+
                     if not prepared:
                         # defensive; should not happen in valid files
                         el.clear()
                         stack.pop()
                         continue
+
+                    
 
                     section_ord += 1
 
@@ -457,6 +485,7 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes, force: bool = False) -
                             sec_num = _usc_norm_ws(c.get("value") or "".join(c.itertext()))
                         elif lt == "heading" and sec_head is None:
                             sec_head = _usc_norm_ws("".join(c.itertext()))
+                            sec_head = _usc_clean_section_heading(sec_head)
 
                     body = _usc_render_section_body(el)
                     node_id = chapter_stack[-1]["node_id"] if (chapter_stack and chapter_stack[-1]["node_id"]) else None
@@ -540,6 +569,7 @@ def _usc_import_xml_bytes(db_path: str, xml_bytes: bytes, force: bool = False) -
         }
     finally:
         conn.close()
+
 
 def _usc_chunk_lines(lines: list[str], limit: int = 1700) -> list[str]:
     """
@@ -6453,3 +6483,33 @@ class SpideyGov(commands.Cog):
 
         msg = await interaction.channel.send(embed=embed, view=view)
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+
+    def _usc_db_cleanup_nonusc(self, db_path: str) -> int:
+        conn = _usc_db_connect(db_path)
+        try:
+            bad_ids = [r["id"] for r in conn.execute(
+                "SELECT id FROM usc_sections WHERE identifier IS NULL OR identifier NOT LIKE '/us/usc/%'"
+            ).fetchall()]
+
+            if not bad_ids:
+                return 0
+
+            conn.executemany("DELETE FROM usc_sections_fts WHERE rowid=?", [(i,) for i in bad_ids])
+            conn.executemany("DELETE FROM usc_sections WHERE id=?", [(i,) for i in bad_ids])
+            conn.commit()
+            return len(bad_ids)
+        finally:
+            conn.close()
+        
+    @usc.command(name="cleanup", description="Remove non-USC/notes-only sections accidentally imported")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def usc_cleanup(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        async with self.usc_lock:
+            try:
+                removed = await asyncio.to_thread(self._usc_db_cleanup_nonusc, USC_DB_FILE)
+            except Exception as e:
+                return await interaction.followup.send(f"Cleanup failed: `{e}`", ephemeral=True)
+
+        await interaction.followup.send(f"Cleanup complete. Removed **{removed}** bad sections.", ephemeral=True)
