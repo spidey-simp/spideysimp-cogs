@@ -4206,6 +4206,25 @@ class SpideyGov(commands.Cog):
         embed.set_footer(text=" ".join(footer_bits))
 
         await interaction.response.send_message(embed=embed, ephemeral=False)
+    
+    @registry.command(name="code_dump")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def registry_code_dump(self, interaction: discord.Interaction):
+        code = self.federal_registry.get("spidey_republic_code")
+        if code is None:
+            return await interaction.response.send_message(
+                "No `spidey_republic_code` found in the registry.",
+                ephemeral=True
+            )
+
+        payload = json.dumps(code, indent=4, ensure_ascii=False).encode("utf-8")
+        fp = io.BytesIO(payload)
+
+        await interaction.response.send_message(
+            file=discord.File(fp, filename="src.json"),
+            ephemeral=True  # you can set False if you want it public
+        )
+            
 
     @commands.command(name="citizenship_assign")
     @commands.has_permissions(administrator=True)
