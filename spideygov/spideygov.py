@@ -6415,7 +6415,8 @@ class SpideyGov(commands.Cog):
     @usc.command(name="chapter", description="List sections in a chapter")
     @app_commands.describe(title="Title number", chapter="Chapter number (as shown in the TOC)")
     async def usc_chapter(self, interaction: discord.Interaction, title: int, chapter: str):
-        await interaction.response.defer(thinking=True)
+        # Ack fast so we never time out, and so we can post a clean channel message
+        await interaction.response.defer(ephemeral=True, thinking=True)
 
         chap_id = await asyncio.to_thread(_usc_db_get_chapter_id, USC_DB_FILE, int(title), str(chapter))
         if not chap_id:
@@ -6425,18 +6426,28 @@ class SpideyGov(commands.Cog):
         if not secs:
             return await interaction.followup.send("No sections found for that chapter.", ephemeral=True)
 
+        # Build lines
         lines = []
-        for s in secs[:150]:
+        for s in secs:
             head = s["heading"] or ""
             lines.append(f"§ {s['section_num']} — {head}")
 
-        emb = discord.Embed(
+        # Chunk + paginate (use your existing chunker)
+        pages = _usc_chunk_lines(lines, limit=1700)
+
+        # Call the paginator (THIS is the “how to call it properly”)
+        view = USCTextPaginator(
             title=f"Title {title}, Chapter {chapter} — Sections",
-            description="```text\n" + "\n".join(lines) + "\n```",
+            pages=pages
         )
-        if len(secs) > 150:
-            emb.set_footer(text=f"Showing 150 of {len(secs)} sections.")
-        await interaction.followup.send(embed=emb)
+
+        # Post as a normal channel message (no “click to see command” banner)
+        if interaction.channel is None:
+            await interaction.followup.send(content=view.make_content(), view=view, ephemeral=False)
+            return
+
+        msg = await interaction.channel.send(content=view.make_content(), view=view)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
 
     @usc.command(name="section", description="View a USC section (statute text only)")
     @app_commands.describe(title="Title number", section="Section number (e.g., 7 or 112a)")
