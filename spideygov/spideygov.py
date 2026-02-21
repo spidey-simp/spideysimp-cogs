@@ -6682,7 +6682,7 @@ class SpideyGov(commands.Cog):
         data = await asyncio.to_thread(self._usc_db_search, USC_DB_FILE, query, title)
         grouped = data["titles"]
         if not grouped:
-            return await interaction.followup.send("No matches found.", ephemeral=True)
+            return await interaction.followup.send(f"Unable to find any results in the U.S.C. using `{query}`.{' Consider picking a different Title.' if title else ''}", ephemeral=False)
 
         # Build display lines
         lines: list[str] = []
