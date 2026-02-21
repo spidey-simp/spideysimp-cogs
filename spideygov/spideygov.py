@@ -340,7 +340,7 @@ def _src_import_json_bytes(db_path: str, json_bytes: bytes, force: bool = False)
         conn.close()
 
 _SRC_MARKER_RE = re.compile(r"^\s*\(([^)]+)\)\s*(.*)$")
-_ROMAN_CHARS = set("ivxlcdm")
+_ROMAN_LOWER_RE = re.compile(r"^[ivx]+$")
 
 def _src_marker_level(tok: str) -> int | None:
     """
@@ -374,11 +374,18 @@ def _src_marker_level(tok: str) -> int | None:
 
 def _src_pretty_indent(text: str) -> str:
     """
-    Indent SRC text based on leading (a)/(1)/(A)/(i) markers.
-    Uses 4 spaces per level. Keeps non-marker lines as-is.
+    Indent SRC text based on leading markers:
+      (a) -> level 0
+      (1) -> level 1
+      (A) -> level 2
+      (i)/(ii)/... -> level 3 ONLY if we're currently under an uppercase marker (A/B/C...)
+    This avoids C/D being treated as roman numerals.
     """
     if not text:
         return ""
+
+    # stack[level] = last token seen at that level (we only need presence)
+    stack: list[str] = []
 
     out_lines = []
     for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
@@ -387,17 +394,41 @@ def _src_pretty_indent(text: str) -> str:
             out_lines.append(ln.rstrip())
             continue
 
-        tok, rest = m.group(1), m.group(2)
-        lvl = _src_marker_level(tok)
+        tok_raw, rest = m.group(1).strip(), (m.group(2) or "").strip()
+
+        lvl = None
+
+        if tok_raw.isdigit():
+            lvl = 1
+
+        elif tok_raw.isalpha() and len(tok_raw) == 1 and tok_raw.islower():
+            # (a) style
+            lvl = 0
+
+        elif tok_raw.isalpha() and len(tok_raw) == 1 and tok_raw.isupper():
+            # (A) style — NEVER roman
+            lvl = 2
+
+        elif tok_raw.isalpha() and tok_raw.islower() and _ROMAN_LOWER_RE.match(tok_raw):
+            # roman-like (i), (ii), (iv), etc.
+            # Treat as roman only if we are inside an uppercase-letter block (level 2 exists).
+            inside_upper = len(stack) > 2 and bool(stack[2])
+            lvl = 3 if inside_upper else 0
 
         if lvl is None:
             out_lines.append(ln.rstrip())
             continue
 
-        # normalize spacing after marker
-        rest = (rest or "").strip()
-        prefix = "    " * lvl
-        out_lines.append(f"{prefix}({tok})" + (f" {rest}" if rest else ""))
+        # maintain stack to reflect current nesting
+        while len(stack) <= lvl:
+            stack.append("")
+        stack[lvl] = tok_raw
+        # clear deeper levels
+        for i in range(lvl + 1, len(stack)):
+            stack[i] = ""
+
+        indent = "    " * lvl
+        out_lines.append(f"{indent}({tok_raw})" + (f" {rest}" if rest else ""))
 
     return "\n".join(out_lines).rstrip()
 
@@ -7246,3 +7277,28 @@ class SpideyGov(commands.Cog):
 
         msg = await interaction.channel.send(embed=embed, view=view)
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+    
+    def _src_db_reindent_all(self, db_path: str) -> int:
+        conn = _src_db_connect(db_path)
+        try:
+            rows = conn.execute("SELECT id, body_text FROM src_sections").fetchall()
+            updated = 0
+            conn.execute("BEGIN;")
+            for r in rows:
+                old = r["body_text"] or ""
+                new = _src_pretty_indent(old)
+                if new != old:
+                    conn.execute("UPDATE src_sections SET body_text=? WHERE id=?", (new, r["id"]))
+                    updated += 1
+            conn.commit()
+            return updated
+        finally:
+            conn.close()
+    
+    @src.command(name="reindent", description="Re-indent stored SRC section text (fixes C/D roman indentation issue)")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def src_reindent(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        async with self.src_lock:
+            n = await asyncio.to_thread(self._src_db_reindent_all, SRC_DB_FILE)
+        await interaction.followup.send(f"Re-indented **{n}** SRC sections.", ephemeral=True)
