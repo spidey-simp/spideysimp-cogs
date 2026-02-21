@@ -7236,6 +7236,13 @@ class SpideyGov(commands.Cog):
 
         body = _src_pretty_indent(body)
 
-        pages = _usc_chunk_codeblock(body)  # already returns list[str]
+        pages = _usc_chunk_codeblock(body)  # same chunker you use for USC
         view = USCSectionPaginator(header=header, where=where, pages=pages)
-        msg = await interaction.channel.send(content=view.make_content(), view=view)
+        embed = view.make_embed()
+
+        if interaction.channel is None:
+            await interaction.followup.send(embed=embed, view=view, ephemeral=False)
+            return
+
+        msg = await interaction.channel.send(embed=embed, view=view)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
