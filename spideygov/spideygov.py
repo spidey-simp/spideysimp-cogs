@@ -135,6 +135,20 @@ def _usc_db_connect(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA synchronous = NORMAL;")
     return conn
 
+_FTS_ADVANCED = re.compile(r'["*():]|\\b(NEAR|OR|AND|NOT)\\b', re.IGNORECASE)
+
+def _usc_make_fts_query(q: str) -> str:
+    q = (q or "").strip()
+    if not q:
+        return ""
+    # If user is doing advanced FTS syntax, don’t touch it
+    if _FTS_ADVANCED.search(q):
+        return q
+    # Default: all words must appear (good “Lexis-ish” behavior)
+    toks = [t for t in re.split(r"\s+", q) if t]
+    if len(toks) == 1:
+        return toks[0]
+    return " AND ".join(toks)
 
 def _usc_fmt_dt(s: str | None) -> str:
     if not s:
@@ -205,6 +219,9 @@ def _usc_db_init(db_path: str) -> None:
             -- simple FTS for later (not required for the basic commands, but cheap to add now)
             CREATE VIRTUAL TABLE IF NOT EXISTS usc_sections_fts
             USING fts5(title_num UNINDEXED, section_num UNINDEXED, heading, body_text);
+
+            CREATE VIRTUAL TABLE IF NOT EXISTS usc_nodes_fts
+            USING fts5(title_num UNINDEXED, node_type UNINDEXED, num UNINDEXED, heading);
             """
         )
         conn.commit()
@@ -6513,3 +6530,175 @@ class SpideyGov(commands.Cog):
                 return await interaction.followup.send(f"Cleanup failed: `{e}`", ephemeral=True)
 
         await interaction.followup.send(f"Cleanup complete. Removed **{removed}** bad sections.", ephemeral=True)
+    
+    def _usc_db_reindex_nodes_fts(self, db_path: str) -> int:
+        conn = _usc_db_connect(db_path)
+        try:
+            conn.execute("DELETE FROM usc_nodes_fts;")
+            conn.execute("""
+                INSERT INTO usc_nodes_fts(rowid, title_num, node_type, num, heading)
+                SELECT id, title_num, node_type, num, COALESCE(heading,'')
+                FROM usc_nodes
+            """)
+            conn.commit()
+            return int(conn.execute("SELECT COUNT(*) AS n FROM usc_nodes_fts").fetchone()["n"])
+        finally:
+            conn.close()
+    
+
+    @usc.command(name="reindex", description="Rebuild USC search indexes (chapters/headings)")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def usc_reindex(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        async with self.usc_lock:
+            n = await asyncio.to_thread(self._usc_db_reindex_nodes_fts, USC_DB_FILE)
+        await interaction.followup.send(f"Reindexed chapter headings. Rows: **{n}**.", ephemeral=True)
+    
+    def _usc_db_search(self, db_path: str, query: str, title: int | None, limit_sections: int = 25, limit_chapters: int = 10):
+        _usc_db_init(db_path)
+        conn = _usc_db_connect(db_path)
+        try:
+            q = _usc_make_fts_query(query)
+            if not q:
+                return {"titles": {}, "counts": {"sections": 0, "chapters": 0}}
+
+            # Sections
+            sec_sql = """
+            SELECT
+            s.id,
+            s.title_num,
+            s.section_num,
+            COALESCE(s.heading,'') AS heading,
+            COALESCE(n.num,'') AS chapter_num,
+            COALESCE(n.heading,'') AS chapter_heading,
+            bm25(usc_sections_fts, 0.0, 0.0, 6.0, 1.0) AS rank,
+            snippet(usc_sections_fts, 2, '**','**','…', 12) AS hsnip,
+            snippet(usc_sections_fts, 3, '**','**','…', 24) AS bsnip
+            FROM usc_sections_fts
+            JOIN usc_sections s ON s.id = usc_sections_fts.rowid
+            LEFT JOIN usc_nodes n ON n.id = s.node_id
+            WHERE usc_sections_fts MATCH ?
+            """
+            params = [q]
+            if title is not None:
+                sec_sql += " AND s.title_num = ?"
+                params.append(int(title))
+            sec_sql += " ORDER BY rank LIMIT ?"
+            params.append(int(limit_sections))
+            sec_rows = conn.execute(sec_sql, params).fetchall()
+
+            # Chapter headings (nodes)
+            ch_sql = """
+            SELECT
+            n.id,
+            n.title_num,
+            n.node_type,
+            COALESCE(n.num,'') AS num,
+            COALESCE(n.heading,'') AS heading,
+            bm25(usc_nodes_fts, 0.0, 0.0, 0.0, 1.0) AS rank,
+            snippet(usc_nodes_fts, 3, '**','**','…', 16) AS snip
+            FROM usc_nodes_fts
+            JOIN usc_nodes n ON n.id = usc_nodes_fts.rowid
+            WHERE usc_nodes_fts MATCH ?
+            AND n.node_type='chapter'
+            """
+            params = [q]
+            if title is not None:
+                ch_sql += " AND n.title_num = ?"
+                params.append(int(title))
+            ch_sql += " ORDER BY rank LIMIT ?"
+            params.append(int(limit_chapters))
+            ch_rows = conn.execute(ch_sql, params).fetchall()
+
+            # Title headings for display
+            title_nums = sorted({r["title_num"] for r in sec_rows} | {r["title_num"] for r in ch_rows})
+            title_map = {}
+            if title_nums:
+                qmarks = ",".join("?" for _ in title_nums)
+                for r in conn.execute(f"SELECT title_num, heading FROM usc_titles WHERE title_num IN ({qmarks})", title_nums):
+                    title_map[int(r["title_num"])] = r["heading"]
+
+            # Group results
+            grouped = {}
+            for tnum in title_nums:
+                grouped[tnum] = {"title_heading": title_map.get(tnum, ""), "chapters": [], "sections": []}
+
+            for r in ch_rows:
+                grouped[int(r["title_num"])]["chapters"].append({
+                    "num": r["num"],
+                    "heading": r["heading"],
+                    "snip": r["snip"] or r["heading"],
+                })
+
+            for r in sec_rows:
+                hsnip = r["hsnip"] or r["heading"]
+                bsnip = r["bsnip"] or ""
+                grouped[int(r["title_num"])]["sections"].append({
+                    "chapter_num": r["chapter_num"],
+                    "chapter_heading": r["chapter_heading"],
+                    "section_num": r["section_num"],
+                    "heading": r["heading"],
+                    "hsnip": hsnip,
+                    "bsnip": bsnip,
+                })
+
+            return {
+                "titles": grouped,
+                "counts": {"sections": len(sec_rows), "chapters": len(ch_rows)}
+            }
+        finally:
+            conn.close()
+    
+    @usc.command(name="search", description="Search the USC (headings prioritized)")
+    @app_commands.describe(
+        query="Search terms (use quotes for an exact phrase)",
+        title="Optional: restrict to a title number"
+    )
+    async def usc_search(self, interaction: discord.Interaction, query: str, title: int | None = None):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        data = await asyncio.to_thread(self._usc_db_search, USC_DB_FILE, query, title)
+        grouped = data["titles"]
+        if not grouped:
+            return await interaction.followup.send("No matches found.", ephemeral=True)
+
+        # Build display lines
+        lines: list[str] = []
+        if title is not None:
+            lines.append(f"Results for: {query} (Title {title})")
+        else:
+            lines.append(f"Results for: {query}")
+
+        lines.append(f"Showing {data['counts']['chapters']} chapter hits, {data['counts']['sections']} section hits (top results).")
+        lines.append("")
+
+        for tnum in sorted(grouped.keys()):
+            th = grouped[tnum]["title_heading"]
+            lines.append(f"Title {tnum} — {th}".rstrip())
+            lines.append("-" * 28)
+
+            # chapter hits first (like your example)
+            for ch in grouped[tnum]["chapters"][:10]:
+                lines.append(f"CHAPTER {ch['num']} — {ch['snip']}")
+
+            if grouped[tnum]["chapters"]:
+                lines.append("")
+
+            for s in grouped[tnum]["sections"][:25]:
+                # Show section heading with highlights if present
+                lines.append(f"§ {s['section_num']} — {s['hsnip']}")
+                # If heading didn’t contain highlights, show a body snippet line
+                if "**" not in (s["hsnip"] or "") and s["bsnip"]:
+                    lines.append(f"    … {s['bsnip']}")
+            lines.append("")
+            lines.append("")
+
+        pages = _usc_chunk_lines(lines, limit=1700)
+        view = USCTextPaginator(title="USC Search Results", pages=pages)
+
+        if interaction.channel is None:
+            await interaction.followup.send(content=view.make_content(), view=view, ephemeral=False)
+            return
+
+        msg = await interaction.channel.send(content=view.make_content(), view=view)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
