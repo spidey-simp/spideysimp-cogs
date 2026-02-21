@@ -308,7 +308,7 @@ def _src_import_json_bytes(db_path: str, json_bytes: bytes, force: bool = False)
                     sval = sections.get(sec_key) or {}
                     sec_num = _src_norm_section_num(sval.get("number") or sec_key)
                     sec_head = (sval.get("short") or "").strip()
-                    sec_text = (sval.get("text") or "").rstrip()
+                    sec_text = _src_pretty_indent((sval.get("text") or "").rstrip())
 
                     sec_ord += 1
                     cur.execute(
@@ -338,6 +338,68 @@ def _src_import_json_bytes(db_path: str, json_bytes: bytes, force: bool = False)
         }
     finally:
         conn.close()
+
+_SRC_MARKER_RE = re.compile(r"^\s*\(([^)]+)\)\s*(.*)$")
+_ROMAN_CHARS = set("ivxlcdm")
+
+def _src_marker_level(tok: str) -> int | None:
+    """
+    Map common statutory markers to indentation levels:
+      (a) -> 0
+      (1) -> 1
+      (A) -> 2
+      (i) -> 3
+    """
+    t = tok.strip()
+
+    if not t:
+        return None
+
+    if t.isdigit():
+        return 1
+
+    if t.isalpha():
+        # roman numerals
+        low = t.lower()
+        if all(ch in _ROMAN_CHARS for ch in low):
+            return 3
+
+        # letters
+        if t.islower():
+            return 0
+        if t.isupper():
+            return 2
+
+    return None
+
+def _src_pretty_indent(text: str) -> str:
+    """
+    Indent SRC text based on leading (a)/(1)/(A)/(i) markers.
+    Uses 4 spaces per level. Keeps non-marker lines as-is.
+    """
+    if not text:
+        return ""
+
+    out_lines = []
+    for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        m = _SRC_MARKER_RE.match(ln)
+        if not m:
+            out_lines.append(ln.rstrip())
+            continue
+
+        tok, rest = m.group(1), m.group(2)
+        lvl = _src_marker_level(tok)
+
+        if lvl is None:
+            out_lines.append(ln.rstrip())
+            continue
+
+        # normalize spacing after marker
+        rest = (rest or "").strip()
+        prefix = "    " * lvl
+        out_lines.append(f"{prefix}({tok})" + (f" {rest}" if rest else ""))
+
+    return "\n".join(out_lines).rstrip()
 
 def _src_db_list_titles(db_path: str) -> list[sqlite3.Row]:
     _src_db_init(db_path)
@@ -7172,27 +7234,8 @@ class SpideyGov(commands.Cog):
         if not body:
             body = "(No text stored for this section.)"
 
-        # keep it simple for now: single post, chunk if huge
-        chunks = []
-        cur = []
-        cur_len = 0
-        for ln in body.splitlines():
-            add = len(ln) + 1
-            if cur and cur_len + add > 1700:
-                chunks.append("\n".join(cur))
-                cur, cur_len = [ln], add
-            else:
-                cur.append(ln)
-                cur_len += add
-        if cur:
-            chunks.append("\n".join(cur))
+        body = _src_pretty_indent(body)
 
-        if interaction.channel is None:
-            # fallback
-            return await interaction.followup.send(header, ephemeral=True)
-
-        await interaction.channel.send(f"**{header}**\n{('*' + where + '*') if where else ''}")
-        for ch in chunks:
-            await interaction.channel.send(f"```text\n{ch}\n```")
-
-        await interaction.followup.send("Posted.", ephemeral=True)
+        pages = _usc_chunk_codeblock(body)  # already returns list[str]
+        view = USCSectionPaginator(header=header, where=where, pages=pages)
+        msg = await interaction.channel.send(content=view.make_content(), view=view)
