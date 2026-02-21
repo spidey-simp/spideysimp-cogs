@@ -629,7 +629,7 @@ class USCTextPaginator(discord.ui.View):
         meta_part = f"\n{self.meta}" if self.meta else ""
         return (
             f"**{self.title}**\n"
-            f"```text\n{self.pages[self.i]}\n```\n"
+            f"```ansi\n{self.pages[self.i]}\n```\n"
             f"`Page {self.i+1}/{len(self.pages)}`{meta_part}"
         )
 
