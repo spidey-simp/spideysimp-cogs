@@ -135,6 +135,296 @@ def _usc_db_connect(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA synchronous = NORMAL;")
     return conn
 
+SRC_DB_FILE = os.path.join(BASE_DIR, "src.sqlite3")
+
+_SRC_SEC_RE = re.compile(r"^\s*§\s*([\w\.\-]+)\s*$", re.IGNORECASE)
+
+def _src_norm_section_num(s: str) -> str:
+    s = (s or "").strip()
+    m = _SRC_SEC_RE.match(s)
+    if m:
+        return m.group(1)
+    # allow user to pass "551" directly
+    return s.replace("§", "").strip()
+
+def _src_sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+def _src_db_connect(db_path: str) -> sqlite3.Connection:
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
+    return conn
+
+def _src_db_init(db_path: str) -> None:
+    conn = _src_db_connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS src_titles (
+              title_num      INTEGER PRIMARY KEY,
+              heading        TEXT NOT NULL,
+              imported_at    TEXT,
+              source_sha256  TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS src_nodes (
+              id         INTEGER PRIMARY KEY AUTOINCREMENT,
+              title_num  INTEGER NOT NULL,
+              node_type  TEXT NOT NULL,         -- "chapter" (for now)
+              num        TEXT,
+              heading    TEXT,
+              parent_id  INTEGER,
+              ord        INTEGER,
+              FOREIGN KEY(title_num) REFERENCES src_titles(title_num)
+            );
+
+            CREATE TABLE IF NOT EXISTS src_sections (
+              id          INTEGER PRIMARY KEY AUTOINCREMENT,
+              title_num   INTEGER NOT NULL,
+              node_id     INTEGER,
+              section_num TEXT NOT NULL,        -- "551", "552a", etc
+              heading     TEXT,                 -- short title
+              body_text   TEXT,
+              ord         INTEGER,
+              UNIQUE(title_num, section_num),
+              FOREIGN KEY(title_num) REFERENCES src_titles(title_num),
+              FOREIGN KEY(node_id) REFERENCES src_nodes(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_src_nodes_title_ord
+              ON src_nodes(title_num, ord);
+
+            CREATE INDEX IF NOT EXISTS idx_src_sections_title_node_ord
+              ON src_sections(title_num, node_id, ord);
+
+            -- FTS (matches USC approach; helpful later for search/compare)
+            CREATE VIRTUAL TABLE IF NOT EXISTS src_sections_fts
+            USING fts5(title_num UNINDEXED, section_num UNINDEXED, heading, body_text);
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+def _src_sort_key_chapter(k: str):
+    k = str(k)
+    return (0, int(k)) if k.isdigit() else (1, k)
+
+def _src_sort_key_section(sec_num: str):
+    # order "552", "552a", "552b" sensibly
+    s = _src_norm_section_num(sec_num)
+    m = re.match(r"^(\d+)(.*)$", s)
+    if not m:
+        return (1, s)
+    return (0, int(m.group(1)), m.group(2) or "")
+
+def _src_import_json_bytes(db_path: str, json_bytes: bytes, force: bool = False) -> dict:
+    """
+    Expects your current src.json structure:
+      {
+        "5": { "description": "...", "chapters": { "5": { "description": "...", "sections": {...} } } },
+        ...
+      }
+    Stores titles / chapters / sections (no notes).
+    """
+    _src_db_init(db_path)
+    sha = _src_sha256(json_bytes)
+
+    data = json.loads(json_bytes.decode("utf-8"))
+    if not isinstance(data, dict) or not all(str(k).isdigit() for k in data.keys()):
+        raise ValueError("SRC import expects a JSON object keyed by title number strings (e.g., '5', '28', etc.).")
+
+    conn = _src_db_connect(db_path)
+    cur = conn.cursor()
+
+    imported_titles = 0
+    total_chapters = 0
+    total_sections = 0
+
+    now_iso = discord.utils.utcnow().isoformat()
+
+    try:
+        for title_key in sorted(data.keys(), key=lambda x: int(x)):
+            title_num = int(title_key)
+            tval = data[title_key] or {}
+            title_heading = (tval.get("description") or f"Title {title_num}").strip()
+
+            # dedupe: if same sha and not force, skip
+            row = cur.execute(
+                "SELECT source_sha256 FROM src_titles WHERE title_num=?",
+                (title_num,),
+            ).fetchone()
+            if row and row["source_sha256"] == sha and not force:
+                continue
+
+            # replace title contents
+            cur.execute("DELETE FROM src_sections_fts WHERE title_num=?", (title_num,))
+            cur.execute("DELETE FROM src_sections WHERE title_num=?", (title_num,))
+            cur.execute("DELETE FROM src_nodes WHERE title_num=?", (title_num,))
+
+            cur.execute(
+                """
+                INSERT INTO src_titles(title_num, heading, imported_at, source_sha256)
+                VALUES(?,?,?,?)
+                ON CONFLICT(title_num) DO UPDATE SET
+                  heading=excluded.heading,
+                  imported_at=excluded.imported_at,
+                  source_sha256=excluded.source_sha256
+                """,
+                (title_num, title_heading, now_iso, sha),
+            )
+
+            chapters = tval.get("chapters") or {}
+            if not isinstance(chapters, dict):
+                chapters = {}
+
+            chap_ord = 0
+            sec_ord = 0
+
+            for chap_key in sorted(chapters.keys(), key=_src_sort_key_chapter):
+                chap_ord += 1
+                cval = chapters.get(chap_key) or {}
+                chap_heading = (cval.get("description") or "").strip()
+
+                cur.execute(
+                    """
+                    INSERT INTO src_nodes(title_num, node_type, num, heading, parent_id, ord)
+                    VALUES(?, 'chapter', ?, ?, NULL, ?)
+                    """,
+                    (title_num, str(chap_key), chap_heading, chap_ord),
+                )
+                node_id = cur.lastrowid
+                total_chapters += 1
+
+                sections = cval.get("sections") or {}
+                if not isinstance(sections, dict):
+                    sections = {}
+
+                for sec_key in sorted(sections.keys(), key=_src_sort_key_section):
+                    sval = sections.get(sec_key) or {}
+                    sec_num = _src_norm_section_num(sval.get("number") or sec_key)
+                    sec_head = (sval.get("short") or "").strip()
+                    sec_text = (sval.get("text") or "").rstrip()
+
+                    sec_ord += 1
+                    cur.execute(
+                        """
+                        INSERT OR REPLACE INTO src_sections(title_num, node_id, section_num, heading, body_text, ord)
+                        VALUES(?,?,?,?,?,?)
+                        """,
+                        (title_num, node_id, sec_num, sec_head, sec_text, sec_ord),
+                    )
+                    sid = cur.lastrowid
+                    cur.execute(
+                        "INSERT INTO src_sections_fts(rowid, title_num, section_num, heading, body_text) VALUES(?,?,?,?,?)",
+                        (sid, title_num, sec_num, sec_head, sec_text),
+                    )
+                    total_sections += 1
+
+            imported_titles += 1
+
+        conn.commit()
+
+        return {
+            "titles_processed": len(data),
+            "titles_imported_or_updated": imported_titles,
+            "chapters": total_chapters,
+            "sections": total_sections,
+            "sha256": sha,
+        }
+    finally:
+        conn.close()
+
+def _src_db_list_titles(db_path: str) -> list[sqlite3.Row]:
+    _src_db_init(db_path)
+    conn = _src_db_connect(db_path)
+    try:
+        return conn.execute(
+            "SELECT title_num, heading, imported_at FROM src_titles ORDER BY title_num"
+        ).fetchall()
+    finally:
+        conn.close()
+
+def _src_db_get_chapters(db_path: str, title_num: int) -> list[sqlite3.Row]:
+    conn = _src_db_connect(db_path)
+    try:
+        return conn.execute(
+            """
+            SELECT id, num, heading, ord
+            FROM src_nodes
+            WHERE title_num=? AND node_type='chapter'
+            ORDER BY ord
+            """,
+            (int(title_num),),
+        ).fetchall()
+    finally:
+        conn.close()
+
+def _src_db_get_chapter_id(db_path: str, title_num: int, chapter_num: str) -> int | None:
+    conn = _src_db_connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT id FROM src_nodes
+            WHERE title_num=? AND node_type='chapter' AND num=?
+            LIMIT 1
+            """,
+            (int(title_num), str(chapter_num)),
+        ).fetchone()
+        return int(row["id"]) if row else None
+    finally:
+        conn.close()
+
+def _src_db_get_sections_in_chapter(db_path: str, title_num: int, chapter_id: int) -> list[sqlite3.Row]:
+    conn = _src_db_connect(db_path)
+    try:
+        return conn.execute(
+            """
+            SELECT section_num, heading
+            FROM src_sections
+            WHERE title_num=? AND node_id=?
+            ORDER BY ord
+            """,
+            (int(title_num), int(chapter_id)),
+        ).fetchall()
+    finally:
+        conn.close()
+
+def _src_db_get_section(db_path: str, title_num: int, section_num: str) -> sqlite3.Row | None:
+    conn = _src_db_connect(db_path)
+    try:
+        return conn.execute(
+            """
+            SELECT s.section_num, s.heading, s.body_text,
+                   n.num AS chapter_num, n.heading AS chapter_heading
+            FROM src_sections s
+            LEFT JOIN src_nodes n ON n.id = s.node_id
+            WHERE s.title_num=? AND s.section_num=?
+            LIMIT 1
+            """,
+            (int(title_num), _src_norm_section_num(section_num)),
+        ).fetchone()
+    finally:
+        conn.close()
+
+def _chunk_lines(lines: list[str], limit: int = 1700) -> list[str]:
+    pages, cur, cur_len = [], [], 0
+    for ln in lines:
+        add = len(ln) + 1
+        if cur and cur_len + add > limit:
+            pages.append("\n".join(cur))
+            cur, cur_len = [ln], add
+        else:
+            cur.append(ln)
+            cur_len += add
+    if cur:
+        pages.append("\n".join(cur))
+    return pages or ["(none)"]
+
 _FTS_ADVANCED = re.compile(r'["*():]|\\b(NEAR|OR|AND|NOT)\\b', re.IGNORECASE)
 
 def _usc_make_fts_query(q: str) -> str:
@@ -2481,6 +2771,14 @@ class SpideyGov(commands.Cog):
             print(f"USC DB init error: {e}")
         
         self.usc_lock = asyncio.Lock()
+
+        # --- SRC database init ---
+        try:
+            _src_db_init(SRC_DB_FILE)
+        except Exception as e:
+            print(f"SRC DB init error: {e}")
+
+        self.src_lock = asyncio.Lock()
         
 
     def cog_unload(self):
@@ -2752,6 +3050,7 @@ class SpideyGov(commands.Cog):
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
     usc = app_commands.Group(name="usc", description="United States Code")
+    src = app_commands.Group(name="src", description="Spidey Republic Code (S.R.C.)", parent=government)
 
 
     @elections.command(name="party_create", description="Create a new political party")
@@ -6754,3 +7053,146 @@ class SpideyGov(commands.Cog):
 
         msg = await interaction.channel.send(content=view.make_content(), view=view)
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+    
+    @src.command(name="import", description="Import Spidey Republic Code (SRC) JSON into SQLite")
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(file="Upload src.json")
+    async def src_import(self, interaction: discord.Interaction, file: discord.Attachment, force: bool = False):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        if not file.filename.lower().endswith(".json"):
+            return await interaction.followup.send("Upload must be a **.json** file.", ephemeral=True)
+
+        try:
+            raw = await file.read()
+        except Exception:
+            return await interaction.followup.send("Couldn’t read that attachment.", ephemeral=True)
+
+        async with self.src_lock:
+            try:
+                summary = await asyncio.to_thread(_src_import_json_bytes, SRC_DB_FILE, raw, force)
+            except Exception as e:
+                return await interaction.followup.send(f"SRC import failed: `{e}`", ephemeral=True)
+
+        emb = discord.Embed(
+            title="SRC Import Complete",
+            description=(
+                f"**Titles processed:** {summary['titles_processed']}\n"
+                f"**Titles imported/updated:** {summary['titles_imported_or_updated']}\n"
+                f"**Chapters:** {summary['chapters']}\n"
+                f"**Sections:** {summary['sections']}"
+            ),
+        )
+        emb.set_footer(text=f"sha256: {summary['sha256'][:12]}…")
+        await interaction.followup.send(embed=emb, ephemeral=True)
+
+
+    @src.command(name="titles", description="List imported SRC titles")
+    async def src_titles(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        rows = await asyncio.to_thread(_src_db_list_titles, SRC_DB_FILE)
+        if not rows:
+            return await interaction.followup.send("No SRC titles imported yet. Use `/government src import`.", ephemeral=True)
+
+        lines = [f"Title {r['title_num']} — {r['heading']}" for r in rows]
+        # post as normal channel message to avoid “click to see command” clutter
+        pages = _chunk_lines(lines, limit=1700)
+        content = f"**Imported SRC Titles**\n```text\n{pages[0]}\n```\n`Page 1/{len(pages)}`"
+        if interaction.channel is None:
+            return await interaction.followup.send(content, ephemeral=True)
+        msg = await interaction.channel.send(content=content)
+        if len(pages) > 1:
+            await interaction.followup.send("Titles list is long—consider adding a paginator view like USC later.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+
+
+    @src.command(name="toc", description="Show SRC table of contents (chapters) for a title")
+    @app_commands.describe(title="Title number")
+    async def src_toc(self, interaction: discord.Interaction, title: int):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        chaps = await asyncio.to_thread(_src_db_get_chapters, SRC_DB_FILE, int(title))
+        if not chaps:
+            return await interaction.followup.send("That SRC title isn’t imported (or has no chapters).", ephemeral=True)
+
+        lines = [f"CHAPTER {c['num']} — {c['heading'] or ''}".rstrip() for c in chaps]
+        pages = _chunk_lines(lines, limit=1700)
+
+        content = f"**SRC Title {title} — Table of Contents**\n```text\n{pages[0]}\n```\n`Page 1/{len(pages)}`"
+        if interaction.channel is None:
+            return await interaction.followup.send(content, ephemeral=True)
+
+        msg = await interaction.channel.send(content=content)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+
+
+    @src.command(name="chapter", description="List sections in an SRC chapter")
+    @app_commands.describe(title="Title number", chapter="Chapter number (as shown in the TOC)")
+    async def src_chapter(self, interaction: discord.Interaction, title: int, chapter: str):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        chap_id = await asyncio.to_thread(_src_db_get_chapter_id, SRC_DB_FILE, int(title), str(chapter))
+        if not chap_id:
+            return await interaction.followup.send("Couldn’t find that chapter in SRC.", ephemeral=True)
+
+        secs = await asyncio.to_thread(_src_db_get_sections_in_chapter, SRC_DB_FILE, int(title), int(chap_id))
+        if not secs:
+            return await interaction.followup.send("No sections found for that SRC chapter.", ephemeral=True)
+
+        lines = [f"§ {s['section_num']} — {s['heading'] or ''}".rstrip() for s in secs]
+        pages = _chunk_lines(lines, limit=1700)
+
+        content = f"**SRC Title {title}, Chapter {chapter} — Sections**\n```text\n{pages[0]}\n```\n`Page 1/{len(pages)}`"
+        if interaction.channel is None:
+            return await interaction.followup.send(content, ephemeral=True)
+
+        msg = await interaction.channel.send(content=content)
+        if len(pages) > 1:
+            await interaction.followup.send("Long chapter list—add the same button paginator you used for USC chapter when you’re ready.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+
+
+    @src.command(name="section", description="View an SRC section")
+    @app_commands.describe(title="Title number", section="Section number (e.g., 551 or § 551)")
+    async def src_section(self, interaction: discord.Interaction, title: int, section: str):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        row = await asyncio.to_thread(_src_db_get_section, SRC_DB_FILE, int(title), str(section))
+        if not row:
+            return await interaction.followup.send("SRC section not found (is that title imported?).", ephemeral=True)
+
+        header = f"SRC Title {title} § {row['section_num']} — {row['heading'] or ''}".strip()
+        where = ""
+        if row["chapter_num"]:
+            where = f"Chapter {row['chapter_num']} — {row['chapter_heading'] or ''}".strip()
+
+        body = (row["body_text"] or "").strip()
+        if not body:
+            body = "(No text stored for this section.)"
+
+        # keep it simple for now: single post, chunk if huge
+        chunks = []
+        cur = []
+        cur_len = 0
+        for ln in body.splitlines():
+            add = len(ln) + 1
+            if cur and cur_len + add > 1700:
+                chunks.append("\n".join(cur))
+                cur, cur_len = [ln], add
+            else:
+                cur.append(ln)
+                cur_len += add
+        if cur:
+            chunks.append("\n".join(cur))
+
+        if interaction.channel is None:
+            # fallback
+            return await interaction.followup.send(header, ephemeral=True)
+
+        await interaction.channel.send(f"**{header}**\n{('*' + where + '*') if where else ''}")
+        for ch in chunks:
+            await interaction.channel.send(f"```text\n{ch}\n```")
+
+        await interaction.followup.send("Posted.", ephemeral=True)
