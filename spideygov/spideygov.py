@@ -6572,8 +6572,24 @@ class SpideyGov(commands.Cog):
             COALESCE(n.num,'') AS chapter_num,
             COALESCE(n.heading,'') AS chapter_heading,
             bm25(usc_sections_fts, 0.0, 0.0, 6.0, 1.0) AS rank,
-            snippet(usc_sections_fts, 2, '**','**','…', 12) AS hsnip,
-            snippet(usc_sections_fts, 3, '**','**','…', 24) AS bsnip
+            snippet(
+            usc_sections_fts,
+            2,
+            (char(27) || '[1;33m'),
+            (char(27) || '[0m'),
+            '…',
+            12
+            ) AS hsnip,
+
+            # body snippet (column 3)
+            snippet(
+            usc_sections_fts,
+            3,
+            (char(27) || '[1;33m'),
+            (char(27) || '[0m'),
+            '…',
+            24
+            ) AS bsnip
             FROM usc_sections_fts
             JOIN usc_sections s ON s.id = usc_sections_fts.rowid
             LEFT JOIN usc_nodes n ON n.id = s.node_id
@@ -6596,7 +6612,14 @@ class SpideyGov(commands.Cog):
             COALESCE(n.num,'') AS num,
             COALESCE(n.heading,'') AS heading,
             bm25(usc_nodes_fts, 0.0, 0.0, 0.0, 1.0) AS rank,
-            snippet(usc_nodes_fts, 3, '**','**','…', 16) AS snip
+            snippet(
+            usc_nodes_fts,
+            3,
+            (char(27) || '[1;33m'),
+            (char(27) || '[0m'),
+            '…',
+            16
+            ) AS snip
             FROM usc_nodes_fts
             JOIN usc_nodes n ON n.id = usc_nodes_fts.rowid
             WHERE usc_nodes_fts MATCH ?
