@@ -6581,7 +6581,6 @@ class SpideyGov(commands.Cog):
             12
             ) AS hsnip,
 
-            # body snippet (column 3)
             snippet(
             usc_sections_fts,
             3,
