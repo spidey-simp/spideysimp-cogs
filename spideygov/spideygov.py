@@ -204,6 +204,9 @@ def _src_db_init(db_path: str) -> None:
             -- FTS (matches USC approach; helpful later for search/compare)
             CREATE VIRTUAL TABLE IF NOT EXISTS src_sections_fts
             USING fts5(title_num UNINDEXED, section_num UNINDEXED, heading, body_text);
+
+            CREATE VIRTUAL TABLE IF NOT EXISTS src_nodes_fts
+            USING fts5(title_num UNINDEXED, node_type UNINDEXED, num UNINDEXED, heading);
             """
         )
         conn.commit()
@@ -265,6 +268,7 @@ def _src_import_json_bytes(db_path: str, json_bytes: bytes, force: bool = False)
             cur.execute("DELETE FROM src_sections_fts WHERE title_num=?", (title_num,))
             cur.execute("DELETE FROM src_sections WHERE title_num=?", (title_num,))
             cur.execute("DELETE FROM src_nodes WHERE title_num=?", (title_num,))
+            cur.execute("DELETE FROM src_nodes_fts WHERE title_num=?", (title_num,))
 
             cur.execute(
                 """
@@ -296,6 +300,10 @@ def _src_import_json_bytes(db_path: str, json_bytes: bytes, force: bool = False)
                     VALUES(?, 'chapter', ?, ?, NULL, ?)
                     """,
                     (title_num, str(chap_key), chap_heading, chap_ord),
+                )
+                cur.execute(
+                    "INSERT INTO src_nodes_fts(rowid, title_num, node_type, num, heading) VALUES(?,?,?,?,?)",
+                    (node_id, title_num, "chapter", str(chap_key), chap_heading or "")
                 )
                 node_id = cur.lastrowid
                 total_chapters += 1
@@ -335,6 +343,114 @@ def _src_import_json_bytes(db_path: str, json_bytes: bytes, force: bool = False)
             "chapters": total_chapters,
             "sections": total_sections,
             "sha256": sha,
+        }
+    finally:
+        conn.close()
+
+def _src_db_search(db_path: str, query: str, title: int | None, limit_sections: int = 25, limit_chapters: int = 10):
+    conn = _src_db_connect(db_path)
+    try:
+        q = _usc_make_fts_query(query)  # reuse your existing helper
+        if not q:
+            return {"titles": {}, "counts": {"sections": 0, "chapters": 0}}
+
+        # Sections (heading weighted higher than body)
+        sec_sql = """
+        SELECT
+          s.id,
+          s.title_num,
+          s.section_num,
+          COALESCE(s.heading,'') AS heading,
+          COALESCE(n.num,'') AS chapter_num,
+          COALESCE(n.heading,'') AS chapter_heading,
+          bm25(src_sections_fts, 0.0, 0.0, 6.0, 1.0) AS rank,
+          snippet(src_sections_fts, 2, (char(27) || '[1;33m'), (char(27) || '[0m'), '…', 12) AS hsnip,
+          snippet(src_sections_fts, 3, (char(27) || '[1;33m'), (char(27) || '[0m'), '…', 24) AS bsnip
+        FROM src_sections_fts
+        JOIN src_sections s ON s.id = src_sections_fts.rowid
+        LEFT JOIN src_nodes n ON n.id = s.node_id
+        WHERE src_sections_fts MATCH ?
+        """
+        params = [q]
+        if title is not None:
+            sec_sql += " AND s.title_num = ?"
+            params.append(int(title))
+        sec_sql += " ORDER BY rank LIMIT ?"
+        params.append(int(limit_sections))
+        sec_rows = conn.execute(sec_sql, params).fetchall()
+
+        # Chapter headings
+        ch_sql = """
+        SELECT
+          n.id,
+          n.title_num,
+          COALESCE(n.num,'') AS num,
+          COALESCE(n.heading,'') AS heading,
+          bm25(src_nodes_fts, 0.0, 0.0, 0.0, 1.0) AS rank,
+          snippet(src_nodes_fts, 3, (char(27) || '[1;33m'), (char(27) || '[0m'), '…', 16) AS snip
+        FROM src_nodes_fts
+        JOIN src_nodes n ON n.id = src_nodes_fts.rowid
+        WHERE src_nodes_fts MATCH ?
+          AND n.node_type='chapter'
+        """
+        params = [q]
+        if title is not None:
+            ch_sql += " AND n.title_num = ?"
+            params.append(int(title))
+        ch_sql += " ORDER BY rank LIMIT ?"
+        params.append(int(limit_chapters))
+        ch_rows = conn.execute(ch_sql, params).fetchall()
+
+        title_nums = sorted({r["title_num"] for r in sec_rows} | {r["title_num"] for r in ch_rows})
+        title_map = {}
+        if title_nums:
+            qmarks = ",".join("?" for _ in title_nums)
+            for r in conn.execute(f"SELECT title_num, heading FROM src_titles WHERE title_num IN ({qmarks})", title_nums):
+                title_map[int(r["title_num"])] = r["heading"]
+
+        grouped = {tn: {"title_heading": title_map.get(tn, ""), "chapters": [], "sections": []} for tn in title_nums}
+
+        for r in ch_rows:
+            grouped[int(r["title_num"])]["chapters"].append({
+                "num": r["num"],
+                "snip": r["snip"] or r["heading"],
+            })
+
+        for r in sec_rows:
+            grouped[int(r["title_num"])]["sections"].append({
+                "chapter_num": r["chapter_num"],
+                "chapter_heading": r["chapter_heading"],
+                "section_num": r["section_num"],
+                "hsnip": r["hsnip"] or r["heading"],
+                "bsnip": r["bsnip"] or "",
+            })
+
+        return {"titles": grouped, "counts": {"sections": len(sec_rows), "chapters": len(ch_rows)}}
+    finally:
+        conn.close()
+
+def _src_db_reindex_fts(db_path: str) -> dict:
+    conn = _src_db_connect(db_path)
+    try:
+        conn.execute("DELETE FROM src_nodes_fts;")
+        conn.execute("DELETE FROM src_sections_fts;")
+
+        conn.execute("""
+            INSERT INTO src_nodes_fts(rowid, title_num, node_type, num, heading)
+            SELECT id, title_num, node_type, COALESCE(num,''), COALESCE(heading,'')
+            FROM src_nodes
+        """)
+
+        conn.execute("""
+            INSERT INTO src_sections_fts(rowid, title_num, section_num, heading, body_text)
+            SELECT id, title_num, section_num, COALESCE(heading,''), COALESCE(body_text,'')
+            FROM src_sections
+        """)
+
+        conn.commit()
+        return {
+            "nodes": int(conn.execute("SELECT COUNT(*) AS n FROM src_nodes_fts").fetchone()["n"]),
+            "sections": int(conn.execute("SELECT COUNT(*) AS n FROM src_sections_fts").fetchone()["n"]),
         }
     finally:
         conn.close()
@@ -7302,3 +7418,61 @@ class SpideyGov(commands.Cog):
         async with self.src_lock:
             n = await asyncio.to_thread(self._src_db_reindent_all, SRC_DB_FILE)
         await interaction.followup.send(f"Re-indented **{n}** SRC sections.", ephemeral=True)
+
+    @src.command(name="reindex", description="Rebuild SRC search indexes (chapters + sections)")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def src_reindex(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        async with self.src_lock:
+            res = await asyncio.to_thread(_src_db_reindex_fts, SRC_DB_FILE)
+        await interaction.followup.send(
+            f"Reindexed SRC. Nodes: **{res['nodes']}**, Sections: **{res['sections']}**.",
+            ephemeral=True
+        )
+    
+    @src.command(name="search", description="Search the S.R.C. (headings prioritized)")
+    @app_commands.describe(query="Search terms (quotes for phrases)", title="Optional: restrict to title number")
+    async def src_search(self, interaction: discord.Interaction, query: str, title: int | None = None):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        data = await asyncio.to_thread(_src_db_search, SRC_DB_FILE, query, title)
+        grouped = data["titles"]
+        if not grouped:
+            return await interaction.followup.send("No matches found.", ephemeral=True)
+
+        lines: list[str] = []
+        if title is not None:
+            lines.append(f"Results for: {query}")
+            lines.append(f"(SRC Title {title})")
+        else:
+            lines.append(f"Results for: {query}")
+        lines.append(f"Showing {data['counts']['chapters']} chapter hits, {data['counts']['sections']} section hits (top results).")
+        lines.append("")
+
+        for tnum in sorted(grouped.keys()):
+            th = grouped[tnum]["title_heading"]
+            lines.append(f"Title {tnum} — {th}".rstrip())
+            lines.append("-" * 28)
+
+            for ch in grouped[tnum]["chapters"][:10]:
+                lines.append(f"CHAPTER {ch['num']} — {ch['snip']}")
+
+            if grouped[tnum]["chapters"]:
+                lines.append("")
+
+            for s in grouped[tnum]["sections"][:25]:
+                lines.append(f"§ {s['section_num']} — {s['hsnip']}")
+                if "\x1b[" not in (s["hsnip"] or "") and s["bsnip"]:
+                    lines.append(f"    … {s['bsnip']}")
+            lines.append("")
+            lines.append("")
+
+        pages = _usc_chunk_lines(lines, limit=1600)  # keep headroom; ANSI codes add chars
+        view = USCTextPaginator(title="SRC Search Results", pages=pages)
+
+        if interaction.channel is None:
+            await interaction.followup.send(content=view.make_content(), view=view, ephemeral=False)
+            return
+
+        msg = await interaction.channel.send(content=view.make_content(), view=view)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
