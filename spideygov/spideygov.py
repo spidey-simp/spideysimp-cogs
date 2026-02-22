@@ -225,6 +225,65 @@ def _src_sort_key_section(sec_num: str):
         return (1, s)
     return (0, int(m.group(1)), m.group(2) or "")
 
+# --- ANSI helpers (for compare output) ---
+ANSI_RESET = "\x1b[0m"
+ANSI_DIM   = "\x1b[90m"
+ANSI_RED   = "\x1b[31m"
+ANSI_GREEN = "\x1b[32m"
+ANSI_BOLD  = "\x1b[1m"
+
+def _norm_lines_for_diff(text: str) -> tuple[list[str], list[str]]:
+    """
+    Returns (norm_lines, orig_lines)
+    - norm_lines: lowercased + whitespace-collapsed + stripped (so formatting differences don't create noise)
+    - orig_lines: original lines, right-stripped (what we actually print)
+    """
+    s = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    orig = [ln.rstrip() for ln in s.split("\n")]
+    norm = [re.sub(r"\s+", " ", ln.strip()).lower() for ln in orig]
+    return norm, orig
+
+def _usc_src_unified_diff_lines(usc_text: str, src_text: str) -> tuple[list[str], dict, float]:
+    """
+    Builds a unified diff:
+      - red lines are USC-only (-)
+      - green lines are SRC-only (+)
+      - dim lines are shared ( )
+    Returns: (diff_lines, stats, similarity_ratio)
+    """
+    a_norm, a_orig = _norm_lines_for_diff(usc_text)
+    b_norm, b_orig = _norm_lines_for_diff(src_text)
+
+    sm = difflib.SequenceMatcher(None, a_norm, b_norm, autojunk=False)
+
+    stats = {"deleted": 0, "inserted": 0, "replaced": 0}
+    out: list[str] = []
+
+    # Legend at the top
+    out.append(f"{ANSI_BOLD}Legend:{ANSI_RESET} {ANSI_DIM}  match{ANSI_RESET}  {ANSI_RED}- USC-only{ANSI_RESET}  {ANSI_GREEN}+ SRC-only{ANSI_RESET}")
+    out.append("")
+
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            for k in range(j1, j2):
+                out.append(f"{ANSI_DIM}  {b_orig[k]}{ANSI_RESET}")
+        elif tag == "delete":
+            stats["deleted"] += (i2 - i1)
+            for k in range(i1, i2):
+                out.append(f"{ANSI_RED}- {a_orig[k]}{ANSI_RESET}")
+        elif tag == "insert":
+            stats["inserted"] += (j2 - j1)
+            for k in range(j1, j2):
+                out.append(f"{ANSI_GREEN}+ {b_orig[k]}{ANSI_RESET}")
+        elif tag == "replace":
+            stats["replaced"] += 1
+            for k in range(i1, i2):
+                out.append(f"{ANSI_RED}- {a_orig[k]}{ANSI_RESET}")
+            for k in range(j1, j2):
+                out.append(f"{ANSI_GREEN}+ {b_orig[k]}{ANSI_RESET}")
+
+    return out, stats, sm.ratio()
+
 def _src_import_json_bytes(db_path: str, json_bytes: bytes, force: bool = False) -> dict:
     """
     Expects your current src.json structure:
@@ -3260,6 +3319,11 @@ class SpideyGov(commands.Cog):
     elections = app_commands.Group(name="elections", description="Elections & registration")
     usc = app_commands.Group(name="usc", description="United States Code")
     src = app_commands.Group(name="src", description="Spidey Republic Code (S.R.C.)")
+    compare = app_commands.Group(
+        name="compare",
+        description="Compare S.R.C. to U.S.C.",
+        parent=src
+    )
 
 
     @elections.command(name="party_create", description="Create a new political party")
@@ -7471,6 +7535,71 @@ class SpideyGov(commands.Cog):
         view = USCTextPaginator(title="SRC Search Results", pages=pages)
 
         if interaction.channel is None:
+            await interaction.followup.send(content=view.make_content(), view=view, ephemeral=False)
+            return
+
+        msg = await interaction.channel.send(content=view.make_content(), view=view)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+
+    @compare.command(name="section", description="Compare a USC section against an SRC section (ANSI diff).")
+    @app_commands.describe(
+        usc_title="USC title number",
+        usc_section="USC section number (e.g., 552 or 1101)",
+        src_title="SRC title number (defaults to USC title)",
+        src_section="SRC section number (defaults to USC section)"
+    )
+    async def compare_section(
+        self,
+        interaction: discord.Interaction,
+        usc_title: int,
+        usc_section: str,
+        src_title: int | None = None,
+        src_section: str | None = None
+    ):
+        # Acknowledge ephemerally; post the real diff in-channel (same pattern as usc_section):contentReference[oaicite:3]{index=3}
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        st = int(src_title) if src_title is not None else int(usc_title)
+        ss = str(src_section) if src_section is not None else str(usc_section)
+
+        # Lock order: USC then SRC (consistent; avoids deadlock risk)
+        async with self.usc_lock:
+            usc_row = await asyncio.to_thread(_usc_db_get_section, USC_DB_FILE, int(usc_title), str(usc_section))
+        if not usc_row:
+            return await interaction.followup.send("USC section not found (is that title imported?).", ephemeral=True)
+
+        async with self.src_lock:
+            src_row = await asyncio.to_thread(_src_db_get_section, SRC_DB_FILE, st, ss)
+        if not src_row:
+            return await interaction.followup.send("SRC section not found (is that title imported?).", ephemeral=True)
+
+        usc_body = (usc_row["body_text"] or "").strip()
+        src_body = (src_row["body_text"] or "").strip()
+
+        # If you want SRC formatting normalized the same way you display it elsewhere,
+        # uncomment this (only if you already have _src_pretty_indent in your file):
+        # src_body = _src_pretty_indent(src_body)
+
+        diff_lines, stats, ratio = _usc_src_unified_diff_lines(usc_body, src_body)
+
+        title_line = (
+            f"{usc_title} USC § {usc_row['section_num']} ↔ "
+            f"SRC {st} § {src_row['section_num']}"
+        )
+
+        meta = (
+            f"Similarity: {ratio*100:.1f}% · "
+            f"+SRC: {stats['inserted']} · "
+            f"-SRC: {stats['deleted']} · "
+            f"repl blocks: {stats['replaced']}"
+        )
+
+        # ANSI codes add chars; keep extra headroom
+        pages = _usc_chunk_lines(diff_lines, limit=1400)  # helper exists next to USCTextPaginator:contentReference[oaicite:4]{index=4}
+        view = USCTextPaginator(title=title_line, pages=pages, meta=meta)  # renders ```ansi:contentReference[oaicite:5]{index=5}
+
+        if interaction.channel is None:
+            # fallback (rare): followup will show banner sometimes
             await interaction.followup.send(content=view.make_content(), view=view, ephemeral=False)
             return
 
