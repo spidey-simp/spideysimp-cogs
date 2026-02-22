@@ -231,6 +231,7 @@ ANSI_DIM   = "\x1b[90m"
 ANSI_RED   = "\x1b[31m"
 ANSI_GREEN = "\x1b[32m"
 ANSI_BOLD  = "\x1b[1m"
+ANSI_YEL   = "\x1b[33m"
 
 def _norm_lines_for_diff(text: str) -> tuple[list[str], list[str]]:
     """
@@ -7652,7 +7653,7 @@ class SpideyGov(commands.Cog):
             f"-missing(SRC): {stats['missing_in_src']} · "
             f"changed blocks: {stats['changed_blocks']}"
         )
-        
+
         # ANSI codes add chars; keep extra headroom
         pages = _usc_chunk_lines(diff_lines, limit=1400)  # helper exists next to USCTextPaginator:contentReference[oaicite:4]{index=4}
         view = USCTextPaginator(title=title_line, pages=pages, meta=meta)  # renders ```ansi:contentReference[oaicite:5]{index=5}
