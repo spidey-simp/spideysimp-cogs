@@ -234,14 +234,73 @@ ANSI_BOLD  = "\x1b[1m"
 
 def _norm_lines_for_diff(text: str) -> tuple[list[str], list[str]]:
     """
-    Returns (norm_lines, orig_lines)
-    - norm_lines: lowercased + whitespace-collapsed + stripped (so formatting differences don't create noise)
-    - orig_lines: original lines, right-stripped (what we actually print)
+    (norm_lines, orig_lines)
+    norm_lines: lower + whitespace-collapsed for matching
+    orig_lines: what we actually print
     """
     s = (text or "").replace("\r\n", "\n").replace("\r", "\n")
     orig = [ln.rstrip() for ln in s.split("\n")]
     norm = [re.sub(r"\s+", " ", ln.strip()).lower() for ln in orig]
     return norm, orig
+
+def _usc_src_render_src_annotated(usc_text: str, src_text: str) -> tuple[list[str], dict, float]:
+    """
+    Output is primarily SRC lines, annotated:
+      - '  ' unchanged (dim)
+      - '+ ' line exists in SRC but not USC (yellow)
+      - '! ' line differs (SRC replacement) (yellow)
+      - '- ' line(s) missing from SRC (USC-only) (red) shown as a marker + USC excerpt line(s)
+    """
+    a_norm, a_orig = _norm_lines_for_diff(usc_text)
+    b_norm, b_orig = _norm_lines_for_diff(src_text)
+
+    sm = difflib.SequenceMatcher(None, a_norm, b_norm, autojunk=False)
+
+    stats = {"missing_in_src": 0, "extra_in_src": 0, "changed_blocks": 0}
+    out: list[str] = []
+
+    out.append(f"{ANSI_BOLD}SRC annotated vs USC{ANSI_RESET}")
+    out.append(f"{ANSI_DIM}Legend:{ANSI_RESET} {ANSI_DIM}  same{ANSI_RESET}  {ANSI_YEL}+ extra{ANSI_RESET}  {ANSI_YEL}! changed{ANSI_RESET}  {ANSI_RED}- missing{ANSI_RESET}")
+    out.append("")
+
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            for k in range(j1, j2):
+                out.append(f"{ANSI_DIM}  {b_orig[k]}{ANSI_RESET}")
+
+        elif tag == "insert":
+            # SRC has lines USC doesn't
+            stats["extra_in_src"] += (j2 - j1)
+            for k in range(j1, j2):
+                out.append(f"{ANSI_YEL}+ {b_orig[k]}{ANSI_RESET}")
+
+        elif tag == "replace":
+            # SRC lines differ from USC lines
+            stats["changed_blocks"] += 1
+            for k in range(j1, j2):
+                out.append(f"{ANSI_YEL}! {b_orig[k]}{ANSI_RESET}")
+
+            # Optional: show a short USC context line so you can see what SRC is diverging from
+            # (kept tight so output isn't noisy)
+            usc_block = [ln for ln in a_orig[i1:i2] if ln.strip()]
+            if usc_block:
+                first = usc_block[0]
+                more = " …" if len(usc_block) > 1 else ""
+                out.append(f"{ANSI_RED}- [USC] {first}{more}{ANSI_RESET}")
+
+        elif tag == "delete":
+            # USC has lines SRC lacks
+            missing = [ln for ln in a_orig[i1:i2] if ln.strip()]
+            if missing:
+                stats["missing_in_src"] += len(missing)
+                out.append(f"{ANSI_RED}- [Missing in SRC]{ANSI_RESET}")
+                # show up to 2 missing lines as context
+                for ln in missing[:2]:
+                    out.append(f"{ANSI_RED}- [USC] {ln}{ANSI_RESET}")
+                if len(missing) > 2:
+                    out.append(f"{ANSI_RED}- [USC] …{ANSI_RESET}")
+
+    return out, stats, sm.ratio()
 
 def _usc_src_unified_diff_lines(usc_text: str, src_text: str) -> tuple[list[str], dict, float]:
     """
@@ -7580,7 +7639,7 @@ class SpideyGov(commands.Cog):
         # uncomment this (only if you already have _src_pretty_indent in your file):
         # src_body = _src_pretty_indent(src_body)
 
-        diff_lines, stats, ratio = _usc_src_unified_diff_lines(usc_body, src_body)
+        diff_lines, stats, ratio = _usc_src_render_src_annotated(usc_body, src_body)
 
         title_line = (
             f"{usc_title} USC § {usc_row['section_num']} ↔ "
@@ -7589,11 +7648,11 @@ class SpideyGov(commands.Cog):
 
         meta = (
             f"Similarity: {ratio*100:.1f}% · "
-            f"+SRC: {stats['inserted']} · "
-            f"-SRC: {stats['deleted']} · "
-            f"repl blocks: {stats['replaced']}"
+            f"+extra(SRC): {stats['extra_in_src']} · "
+            f"-missing(SRC): {stats['missing_in_src']} · "
+            f"changed blocks: {stats['changed_blocks']}"
         )
-
+        
         # ANSI codes add chars; keep extra headroom
         pages = _usc_chunk_lines(diff_lines, limit=1400)  # helper exists next to USCTextPaginator:contentReference[oaicite:4]{index=4}
         view = USCTextPaginator(title=title_line, pages=pages, meta=meta)  # renders ```ansi:contentReference[oaicite:5]{index=5}
