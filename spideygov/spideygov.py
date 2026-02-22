@@ -3259,7 +3259,7 @@ class SpideyGov(commands.Cog):
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
     usc = app_commands.Group(name="usc", description="United States Code")
-    src = app_commands.Group(name="src", description="Spidey Republic Code (S.R.C.)", parent=government)
+    src = app_commands.Group(name="src", description="Spidey Republic Code (S.R.C.)")
 
 
     @elections.command(name="party_create", description="Create a new political party")
