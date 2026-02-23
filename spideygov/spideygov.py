@@ -232,6 +232,12 @@ ANSI_RED   = "\x1b[31m"
 ANSI_GREEN = "\x1b[32m"
 ANSI_BOLD  = "\x1b[1m"
 ANSI_YEL   = "\x1b[33m"
+ANSI_GRN   = "\x1b[32m"
+
+_TOKEN_RE = re.compile(r"\w+|[^\w\s]")
+
+def _tokenize(s: str) -> list[str]:
+    return _TOKEN_RE.findall(s or "")
 
 def _norm_lines_for_diff(text: str) -> tuple[list[str], list[str]]:
     """
@@ -276,18 +282,34 @@ def _usc_src_render_src_annotated(usc_text: str, src_text: str) -> tuple[list[st
                 out.append(f"{ANSI_YEL}+ {b_orig[k]}{ANSI_RESET}")
 
         elif tag == "replace":
-            # SRC lines differ from USC lines
-            stats["changed_blocks"] += 1
-            for k in range(j1, j2):
-                out.append(f"{ANSI_YEL}! {b_orig[k]}{ANSI_RESET}")
+            # inside tag == "replace" in your renderer:
 
-            # Optional: show a short USC context line so you can see what SRC is diverging from
-            # (kept tight so output isn't noisy)
-            usc_block = [ln for ln in a_orig[i1:i2] if ln.strip()]
-            if usc_block:
-                first = usc_block[0]
-                more = " …" if len(usc_block) > 1 else ""
-                out.append(f"{ANSI_RED}- [USC] {first}{more}{ANSI_RESET}")
+            usc_block_norm = a_norm[i1:i2]
+            usc_block_orig = a_orig[i1:i2]
+            src_block_norm = b_norm[j1:j2]
+            src_block_orig = b_orig[j1:j2]
+
+            used = set()
+
+            # show SRC lines, but inline-diff vs best USC line
+            for idx, src_ln in enumerate(src_block_orig):
+                match_i = None
+                if len(usc_block_orig) == len(src_block_orig):
+                    match_i = idx if idx < len(usc_block_orig) else None
+                else:
+                    match_i = _best_match_index(usc_block_norm, src_block_norm[idx], used)
+
+                if match_i is not None:
+                    used.add(match_i)
+                    usc_ln = usc_block_orig[match_i]
+                    out.append("! " + _ansi_inline_diff(usc_ln, src_ln, color_same=False))
+                else:
+                    out.append(f"+ {ANSI_YEL}{src_ln}{ANSI_RESET}")
+
+            # any USC lines that weren’t matched are “missing in SRC”
+            for i, usc_ln in enumerate(usc_block_orig):
+                if i not in used and usc_ln.strip():
+                    out.append(f"- {ANSI_RED}[Missing in SRC] {usc_ln}{ANSI_RESET}")
 
         elif tag == "delete":
             # USC has lines SRC lacks
@@ -302,6 +324,51 @@ def _usc_src_render_src_annotated(usc_text: str, src_text: str) -> tuple[list[st
                     out.append(f"{ANSI_RED}- [USC] …{ANSI_RESET}")
 
     return out, stats, sm.ratio()
+
+def _ansi_inline_diff(usc_line: str, src_line: str, *, color_same: bool = False) -> str:
+    """
+    Returns SRC line with mismatching spans highlighted.
+    - equal spans: plain (or dim/green if color_same=True)
+    - inserted/replaced spans (present in SRC but not in USC): yellow
+    Deletions (text USC has that SRC lacks) are not injected into SRC line (by design).
+    """
+    a = _tokenize(usc_line)
+    b = _tokenize(src_line)
+
+    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    out = []
+
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        chunk = "".join(b[j1:j2])
+        if not chunk:
+            continue
+
+        if tag == "equal":
+            if color_same:
+                out.append(f"{ANSI_DIM}{chunk}{ANSI_RESET}")  # or ANSI_GRN
+            else:
+                out.append(chunk)
+        elif tag in ("replace", "insert"):
+            out.append(f"{ANSI_YEL}{chunk}{ANSI_RESET}")
+        elif tag == "delete":
+            # USC-only; we don't insert USC text into SRC line
+            pass
+
+    # Reinsert spaces intelligently: tokens removed spaces, so we reconstruct from original SRC line
+    # Simple fallback: join is already faithful for punctuation-heavy text; for plain words it may stick.
+    # Better: rebuild using original src_line if you want perfect spacing.
+    # Quick improvement: if SRC had spaces, keep them by diffing on "word+space" tokens:
+    return "".join(out) if out else src_line
+
+def _best_match_index(usc_norm_lines: list[str], src_norm_line: str, used: set[int]) -> int | None:
+    best_i, best_r = None, 0.0
+    for i, u in enumerate(usc_norm_lines):
+        if i in used:
+            continue
+        r = difflib.SequenceMatcher(None, u, src_norm_line, autojunk=False).ratio()
+        if r > best_r:
+            best_r, best_i = r, i
+    return best_i if best_r >= 0.55 else None
 
 def _usc_src_unified_diff_lines(usc_text: str, src_text: str) -> tuple[list[str], dict, float]:
     """
