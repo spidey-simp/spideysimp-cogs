@@ -7827,6 +7827,8 @@ class SpideyGov(commands.Cog):
         current_low = (current or "").lower()
 
         cat = getattr(interaction.namespace, "category", None)
+        if isinstance(cat, app_commands.Choice):
+            cat = cat.value
         if not cat or cat == "miscellaneous":
             return []
 
