@@ -7830,6 +7830,8 @@ class SpideyGov(commands.Cog):
         if not cat or cat == "miscellaneous":
             return []
 
+        cat = cat.lower().replace(' ', '_')
+
         cat_dict = NEWS_BANNERS.get(cat)
         if not cat_dict:
             return []
