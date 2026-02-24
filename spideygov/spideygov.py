@@ -126,6 +126,93 @@ def _usc_num_text(num_elem: ET.Element) -> str:
 def _usc_sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
+NEWS_BANNERS = {
+    "politics": {
+        "white_house_1": "https://media.architecturaldigest.com/photos/6559735fb796d428bef00d25/16:9/w_2560%2Cc_limit/GettyImages-1731443210.jpg",
+        "white_house_2": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Aerial_view_of_the_White_House.jpg/2560px-Aerial_view_of_the_White_House.jpg",
+        "white_house_3": "https://www.whitehouse.gov/wp-content/uploads/2025/03/F20200403AH-0179_f30fa3.jpg",
+        "capitol_1": "https://static.vecteezy.com/system/resources/thumbnails/020/044/460/original/4k-time-lapse-of-the-united-states-capitol-building-washington-dc-usa-free-video.jpg",
+        "capitol_2": "https://tile.loc.gov/image-services/iiif/service:pnp:highsm:12500:12576/full/pct:50/0/default.jpg#h=1733&w=2168",
+        "capitol_3": "https://images.law.com/contrib/content/uploads/sites/398/2023/04/US-Capitol-Building-1-767x633.jpg",
+        "concerned_politician": "https://media.istockphoto.com/id/493792256/photo/american-politician.jpg?s=612x612&w=0&k=20&c=_zlouxZoYKZsAOriI5ftvLyzHE-10UdseNVULjVGI1Q=",
+        "congressional_hearing": "https://www.thoughtco.com/thmb/AJEY2RcfjT9EjMQbC2PkFKUigvY=/3000x2043/filters:no_upscale():max_bytes(150000):strip_icc()/Clinton-Senate2009-3000-3x2gty-5936257b3df78c08ab2c5cdd.jpg",
+        "house_chamber": "https://d1lss44hh2trtw.cloudfront.net/assets/article/2021/01/28/gamestop-gme-stock-trading-to-be-discussed-in-us-congressional-hearing_feature.jpg",
+        "senate_floor": "https://i.ytimg.com/vi/DWvbx1TcWww/maxresdefault.jpg",
+        "white_house_press_corps": "https://s3-origin-images.politico.com/2014/04/30/140430_wh_briefing_room_ap.jpg",
+        "doj": "https://assets.rappler.com/4034E3E4D4A143F6AA2816F9C503730E/img/97C63E286CF04E5B8C19E250707C0F92/Department-of-Justice-DOJ-facade-March-14-2017-001.jpg",
+        "political_rally": "https://images.stockcake.com/public/b/d/8/bd869730-134e-45b9-a4bc-a3759080d48f_large/political-rally-speech-stockcake.jpg",
+        "press_in_rotunda": "https://static.politico.com/4b/d5/04813a954871b514c67630afd704/20170707-reporters-scrum-getty.jpg",
+        "ballot_boxes": "https://www.stalbans.gov.uk/sites/default/files/inline-images/Ballot%20Box_cropped.jpg",
+        "debate_stage": "https://www.brookings.edu/wp-content/uploads/2020/10/debate_stage001.jpg?quality=75&w=1500"
+    },
+    "military": {
+        "pentagon": "https://upload.wikimedia.org/wikipedia/commons/b/b8/The_Pentagon%2C_Headquarters_of_the_US_Department_of_Defense_(cropped).jpg",
+        "pentagon_2": "https://fedscoop.com/wp-content/uploads/sites/5/2022/06/Pentagon.jpg",
+        "soldiers": "https://www.khaama.com/wp-content/uploads/2015/10/US.jpg",
+        "soldiers_2": "https://media.defense.gov/2021/Aug/02/2002832988/1920/1080/0/210728-A-SU686-603.JPG",
+        "soldiers_3": "https://media.defense.gov/2019/Aug/26/2002175522/-1/-1/0/190723-A-HL390-0422Q.JPG",
+        "defense_room": "https://media.defense.gov/2024/Jun/25/2003491835/-1/-1/0/230421-Z-GQ603-1523Z.JPG",
+        "situation_room": "https://politicaldictionary.com/wp-content/uploads/2021/12/situation-room-1024x683.jpg",
+        "naval_convoy": "https://gcaptain.com/wp-content/uploads/2017/10/Fleet_5_nations-aricraft-carriers-underway-in-formation.jpg",
+        "b2_bomber": "https://images05.military.com/sites/default/files/media/equipment/military-aircraft/b-2-spirit/2014/02/b-2-spirit_003.jpg",
+        "f22": "https://www.defencetalk.com/wp-content/uploads/2015/08/F-22-raptor-fighter-jet-europe.jpg",
+        "surface_to_air_missile": "https://media.defense.gov/2020/Jul/28/2002466201/1280/1280/0/111229-A-ZZ999-003X.JPG",
+
+    },
+    "economy": {
+        "stocks": "https://cdn.pixabay.com/photo/2021/05/27/10/28/stock-market-6287711_1280.jpg",
+        "stock_exchange": "https://cdn.britannica.com/18/216518-050-7EA8BFA5/traders-professionals-opening-bell-New-York-Stock-Exchange-NYSE-January-2-2019.jpg",
+        "business_office": "https://cdn.stocksnap.io/img-thumbs/960w/business-office_IHBPBLYUFE.jpg",
+        "warehouse": "https://mecaluxcom.cdnwm.com/blog/img/warehouse-storage-techniques.1.4.jpg",
+        "factory": "https://jooinn.com/images/factory-pollution-2.png",
+        "shipping_harbor": "https://www.chesapeakebaymagazine.com/wp-content/uploads/2021/05/port-of-va-largest-container-ship-marco-polo-scaled.jpg",
+        "oil_rig": "https://theogm.com/wp-content/uploads/2015/03/Atlantis-Deepwater-Oil-Rig.jpg"
+    },
+    "justice_system": {
+        "supreme_court_1": "https://www.thoughtco.com/thmb/GEzcJ1tROJ-_ZTvtByrV9Z4jK1c=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/supreme-court-west-entrance-564091971-crop-595477603df78cdc29d6e89e.jpg",
+        "supreme_court_2": "https://cdn.pixabay.com/photo/2017/04/12/20/56/us-supreme-court-building-2225765_1280.jpg",
+        "gavel": "https://media.istockphoto.com/photos/female-judge-holding-gavel-picture-id1291439548?k=20&m=1291439548&s=612x612&w=0&h=SzpKgYkIAklcaWR3Bqa9inPk_cIVBSO52LOQFb_1rG8=",
+        "gavel_2": "https://concepto.de/wp-content/uploads/2013/03/justicia-2-e1552388116263.jpg",
+        "courtroom": "https://www.halt.org/wp-content/uploads/2024/03/The-presentation-of-evidence-is-a-crucial-stage.jpg",
+    },
+    "law_and_order": {
+        "riots_1": "https://a57.foxnews.com/static.foxnews.com/foxnews.com/content/uploads/2020/07/1200/675/fedeeral-officer8.jpg?ve=1&tl=1",
+        "riots_2": "https://static01.nyt.com/images/2021/03/10/us/10virus-briefing-global-roundup-1/merlin_184807155_35368274-f17b-4914-a311-0bca2fff93ed-videoSixteenByNine3000.jpg?video-overlay?video-overlay?video-overlay",
+        "protest_1": "https://images.seattletimes.com/wp-content/uploads/2025/02/urnpublicidap.orgddd341171a54ba9b498cbfe7530e18abUS_Political_Protests_63800.jpg?d=2040x1530",
+        "protest_2": "https://cdn.theatlantic.com/thumbor/WA7arAQGqN2PksgUt4jJkvgfW0g=/900x600/media/img/photo/2020/06/day-7-protests/a08_1242227210/original.jpg",
+        "mugshot_man": "https://media.istockphoto.com/photos/mugshot-young-man-arrested-and-holding-a-blackboard-picture-id450509333?k=20&m=450509333&s=612x612&w=0&h=NtSBRpINcfYdtb6fiFAP3IwdGPl2sFVjTSOa_sBzwEU=",
+        "mugshot_man_2": "https://media.istockphoto.com/id/585080110/photo/mugshot-of-a-man.jpg?s=612x612&w=0&k=20&c=2en-wPP6YEzsinAsvAzicT-10T3Gltr72k6LrCHGXyM=",
+        "mugshot_woman": "https://media.istockphoto.com/id/157559631/photo/mugshot-of-a-woman.jpg?s=612x612&w=0&k=20&c=Wusx_ycleub9gSJ7eO2Z9e8jCq4GmnuRh--thQNngBk=",
+        "arrest": "https://cdn.britannica.com/76/124776-004-11C4BEBD/US-Customs-and-Border-Protection-officers-training.jpg",
+        "arrest_2": "https://stevenkaren.com/wp-content/uploads/2019/06/arrest.jpg",
+        "jail_cell": "https://media.istockphoto.com/id/182511595/photo/inside-a-jail-cell.jpg?s=612x612&w=0&k=20&c=X6sMPsZikpGvcHHNd4NpH31SqT6gxNps64tigF8xbiA=",
+        "fbi_agents": "https://d1n0c1ufntxbvh.cloudfront.net/photo/8804d262/5363/1200x/",
+
+    },
+    "weather": {
+        "tornado": "https://images.tagesschau.de/image/dfbdb853-5f4d-4b4d-ba72-6534757b1faa/AAABj1dxeew/AAABkZLrr6A/original/tornado-176.jpg",
+        "lightning": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Cloud_to_ground_lightning_strikes_south-west_of_Wagga_Wagga.jpg/1200px-Cloud_to_ground_lightning_strikes_south-west_of_Wagga_Wagga.jpg",
+        "blizzard": "https://nypost.com/wp-content/uploads/sites/2/2022/12/buffalo-snowstorm-blizzard-14-1.jpg?resize=93",
+        "city_rubble": "https://cdn.enabbaladi.net/english/wp-content/uploads/2019/05/image-2-1024x682.png"
+    },
+    "science_and_technology": {
+        "lab_1": "https://wallpaperaccess.com/full/758555.png",
+        "lab_2": "https://www.laboratorysciencecareers.com/uploads/2/4/1/4/24149094/istock-949947192_1.jpg",
+        "rocket": "https://media.wired.com/photos/5bac15bb7fefbf3d4e78e264/1:1/w_2500",
+        "it_people": "https://media.licdn.com/dms/image/D5610AQEhsmDxKoHk1A/image-shrink_1280/0/1691055013400?e=2147483647&v=beta&t=4s_PbATSqIIO5zAgmM9gl2UmvciIZXCESAUjfy8SYOw" 
+    },
+    "social_issues": {
+        "border_crossing": "https://csg-erc.org/wp-content/uploads/2021/12/AdobeStock_446797680_Editorial_Use_Only-scaled-e1639586823573.jpeg",
+        "classroom": "https://cdn.pixabay.com/photo/2017/02/24/02/37/classroom-2093744_1280.jpg",
+        "apartment_complex": "https://apxconstructiongroup.com/wp-content/uploads/2022/10/how-to-build-an-apartment-complex-new-1024x681.jpeg",
+        "hospital_waiting_room": "https://www.moaarch.com/wp-content/uploads/2020/03/015106_03_N3_large.jpg",
+        "hospital_bed": "https://iv1.lisimg.com/image/445077/720full-house-m.d.-screenshot.jpg",
+        "bus": "https://cdn1.matadornetwork.com/blogs/1/2008/10/New-York-City-buses-fifth-avenue-Manhattan-public-transport-1200x853.jpg",
+        "security_camera": "https://solink.com/wp-content/uploads/2024/01/dome-security-camera.jpg",
+    }
+}
+
+
 def _usc_db_connect(db_path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
@@ -644,6 +731,7 @@ def _src_db_reindex_fts(db_path: str) -> dict:
 _SRC_MARKER_RE = re.compile(r"^\s*\(([^)]+)\)\s*(.*)$")
 _ROMAN_LOWER_RE = re.compile(r"^[ivx]+$")
 
+
 def _src_marker_level(tok: str) -> int | None:
     """
     Map common statutory markers to indentation levels:
@@ -663,7 +751,7 @@ def _src_marker_level(tok: str) -> int | None:
     if t.isalpha():
         # roman numerals
         low = t.lower()
-        if all(ch in _ROMAN_CHARS for ch in low):
+        if all(ch in _ROMAN_LOWER_RE for ch in low):
             return 3
 
         # letters
@@ -3451,6 +3539,7 @@ class SpideyGov(commands.Cog):
         description="Compare S.R.C. to U.S.C.",
         parent=src
     )
+    news = app_commands.Group(name="news", description="News network tools")
 
 
     @elections.command(name="party_create", description="Create a new political party")
@@ -7731,4 +7820,143 @@ class SpideyGov(commands.Cog):
             return
 
         msg = await interaction.channel.send(content=view.make_content(), view=view)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+
+    async def news_category_autocomplete(self, interaction: discord.Interaction, current: str):
+        current_low = (current or "").lower().replace(" ", "_")
+        choices = []
+        for key in NEWS_BANNERS.keys():
+            display = key.replace("_", " ").title()
+            if current_low in key or current_low in display.lower():
+                choices.append(app_commands.Choice(name=display, value=key))
+        return choices[:25]
+
+    async def news_banner_autocomplete(self, interaction: discord.Interaction, current: str):
+        current_low = (current or "").lower()
+
+        cat = getattr(interaction.namespace, "category", None)
+        if not cat:
+            return []
+
+        cat_key = str(cat).lower().replace(" ", "_")
+        cat_dict = NEWS_BANNERS.get(cat_key)
+        if not cat_dict:
+            return []
+
+        choices = []
+        for key, url in cat_dict.items():
+            display = key.replace("_", " ").title()
+            if current_low in key.lower() or current_low in display.lower():
+                choices.append(app_commands.Choice(name=display, value=url))  # value is URL
+        return choices[:25]
+
+
+    def _news_make_embed(
+        self,
+        headline: str,
+        subhead: str | None,
+        category: str | None,
+        banner_url: str | None,
+        news_org: str | None,
+        excerpt: str | None,
+    ) -> discord.Embed:
+        title = headline.strip()[:256]
+
+        desc_parts = []
+        if subhead:
+            desc_parts.append(subhead.strip()[:2000])
+        if category:
+            desc_parts.append(f"*{category.strip()}*")
+
+        e = discord.Embed(
+            title=title,
+            description="\n\n".join(desc_parts) if desc_parts else None,
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
+        )
+
+        if banner_url:
+            e.set_image(url=banner_url)
+
+        if excerpt:
+            e.add_field(name="Excerpt", value=excerpt[:1024], inline=False)
+
+        if news_org:
+            e.set_footer(text=f"Courtesy of {news_org}")
+
+        return e
+
+    @news.command(name="headline", description="Post a news-style headline embed")
+    @app_commands.describe(
+        headline="Main headline",
+        subhead="Optional subheadline / lede",
+        category="Optional category label",
+        banner="Banner image",
+        image="Optional custom image override (attachment)",
+        channel="Where to post (defaults to current channel)",
+        news_org="The news organization.",
+        excerpt="Excerpt the news story."
+    )
+    @app_commands.autocomplete(category=news_category_autocomplete, banner=news_banner_autocomplete)
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def news_headline(
+        self,
+        interaction: discord.Interaction,
+        headline: str,
+        category: str,
+        subhead: str | None = None,
+        banner: str | None = None,
+        image: discord.Attachment | None = None,
+        channel: discord.TextChannel | None = None,
+        news_org:str = "Spidey News Network",
+        excerpt:str = "Click to find out more!"
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        target = channel or interaction.channel
+        if target is None:
+            return await interaction.followup.send("No valid channel to post in.", ephemeral=True)
+
+        banner_url = image.url if image else banner
+
+        embed = self._news_make_embed(
+            headline=headline,
+            subhead=subhead,
+            category=category,
+            banner_url=banner_url,
+            news_org=news_org,
+            excerpt=excerpt
+        )
+
+        msg = await target.send(embed=embed)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+
+    @news.command(name="blotter", description="Post a short wire/blotter item")
+    @app_commands.describe(
+        item="One-line update",
+        tag="Optional tag (e.g., FLOOR, COMMITTEE, SCANDAL, MARKETS)",
+        channel="Where to post (defaults to current channel)",
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def news_blotter(
+        self,
+        interaction: discord.Interaction,
+        item: str,
+        tag: str | None = None,
+        channel: discord.TextChannel | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        target = channel or interaction.channel
+        if target is None:
+            return await interaction.followup.send("No valid channel to post in.", ephemeral=True)
+
+        prefix = f"**[{tag.strip()[:20]}]** " if tag and tag.strip() else ""
+        e = discord.Embed(
+            description=f"{prefix}{item.strip()[:3500]}",
+            color=discord.Color.dark_grey(),
+            timestamp=discord.utils.utcnow(),
+        )
+        e.set_author(name="Blotter")
+        msg = await target.send(embed=e)
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
