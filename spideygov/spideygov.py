@@ -7832,18 +7832,17 @@ class SpideyGov(commands.Cog):
         if not cat or cat == "miscellaneous":
             return []
 
-        cat = cat.lower().replace(' ', '_')
-
+        cat = str(cat).lower().replace(" ", "_")
         cat_dict = NEWS_BANNERS.get(cat)
         if not cat_dict:
             return []
 
-        choices = []
-        for key, url in cat_dict.items():
+        out = []
+        for key in cat_dict.keys():
             display = key.replace("_", " ").title()
-            if current_low in key.lower() or current_low in display.lower():
-                choices.append(app_commands.Choice(name=display, value=url))  # value is URL
-        return choices[:25]
+            if not current_low or current_low in key.lower() or current_low in display.lower():
+                out.append(app_commands.Choice(name=display, value=key))  # ✅ value is short key
+        return out[:25]
 
 
     def _news_make_embed(
@@ -7925,7 +7924,13 @@ class SpideyGov(commands.Cog):
         if target is None:
             return await interaction.followup.send("No valid channel to post in.", ephemeral=True)
 
-        banner_url = image.url if image else banner
+        cat_key = category.lower().replace(" ", "_")
+
+        banner_url = None
+        if image:
+            banner_url = image.url
+        elif banner:
+            banner_url = (NEWS_BANNERS.get(cat_key, {}) or {}).get(banner)  # banner is now a key
 
         embed = self._news_make_embed(
             headline=headline,
