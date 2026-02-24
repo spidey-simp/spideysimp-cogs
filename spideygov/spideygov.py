@@ -168,7 +168,7 @@ NEWS_BANNERS = {
         "shipping_harbor": "https://www.chesapeakebaymagazine.com/wp-content/uploads/2021/05/port-of-va-largest-container-ship-marco-polo-scaled.jpg",
         "oil_rig": "https://theogm.com/wp-content/uploads/2015/03/Atlantis-Deepwater-Oil-Rig.jpg"
     },
-    "justice_system": {
+    "justice": {
         "supreme_court_1": "https://www.thoughtco.com/thmb/GEzcJ1tROJ-_ZTvtByrV9Z4jK1c=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/supreme-court-west-entrance-564091971-crop-595477603df78cdc29d6e89e.jpg",
         "supreme_court_2": "https://cdn.pixabay.com/photo/2017/04/12/20/56/us-supreme-court-building-2225765_1280.jpg",
         "gavel": "https://media.istockphoto.com/photos/female-judge-holding-gavel-picture-id1291439548?k=20&m=1291439548&s=612x612&w=0&h=SzpKgYkIAklcaWR3Bqa9inPk_cIVBSO52LOQFb_1rG8=",
@@ -7822,24 +7822,15 @@ class SpideyGov(commands.Cog):
         msg = await interaction.channel.send(content=view.make_content(), view=view)
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
 
-    async def news_category_autocomplete(self, interaction: discord.Interaction, current: str):
-        current_low = (current or "").lower().replace(" ", "_")
-        choices = []
-        for key in NEWS_BANNERS.keys():
-            display = key.replace("_", " ").title()
-            if current_low in key or current_low in display.lower():
-                choices.append(app_commands.Choice(name=display, value=key))
-        return choices[:25]
 
     async def news_banner_autocomplete(self, interaction: discord.Interaction, current: str):
         current_low = (current or "").lower()
 
         cat = getattr(interaction.namespace, "category", None)
-        if not cat:
+        if not cat or cat == "miscellaneous":
             return []
 
-        cat_key = str(cat).lower().replace(" ", "_")
-        cat_dict = NEWS_BANNERS.get(cat_key)
+        cat_dict = NEWS_BANNERS.get(cat)
         if not cat_dict:
             return []
 
@@ -7866,7 +7857,7 @@ class SpideyGov(commands.Cog):
         if subhead:
             desc_parts.append(subhead.strip()[:2000])
         if category:
-            desc_parts.append(f"*{category.strip()}*")
+            desc_parts.append(f"*{category.strip().title().replace('_', ' ')}*")
 
         e = discord.Embed(
             title=title,
@@ -7890,14 +7881,27 @@ class SpideyGov(commands.Cog):
     @app_commands.describe(
         headline="Main headline",
         subhead="Optional subheadline / lede",
-        category="Optional category label",
+        category="Category label",
         banner="Banner image",
         image="Optional custom image override (attachment)",
         channel="Where to post (defaults to current channel)",
         news_org="The news organization.",
         excerpt="Excerpt the news story."
     )
-    @app_commands.autocomplete(category=news_category_autocomplete, banner=news_banner_autocomplete)
+    @app_commands.choices(
+        category=[
+            app_commands.Choice(name="Politics", value="politics"),
+            app_commands.Choice(name="Military", value="military"),
+            app_commands.Choice(name="Economy", value="economy"),
+            app_commands.Choice(name="Justice", value="justice"),
+            app_commands.Choice(name="Law and Order", value="law_and_order"),
+            app_commands.Choice(name="Weather", value="weather"),
+            app_commands.Choice(name="Social Issues", value="social_issues"),
+            app_commands.Choice(name="Science and Technology", value="science_and_technology"),
+            app_commands.Choice(name="Miscellaneous", value="miscellaneous")
+        ]
+    )
+    @app_commands.autocomplete(banner=news_banner_autocomplete)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def news_headline(
         self,
