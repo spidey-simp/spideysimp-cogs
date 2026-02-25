@@ -3540,6 +3540,7 @@ class SpideyGov(commands.Cog):
         parent=src
     )
     news = app_commands.Group(name="news", description="News network tools")
+    social = app_commands.Group(name="social", description="Spidder (in-universe social feed)")
 
 
     @elections.command(name="party_create", description="Create a new political party")
@@ -7972,4 +7973,96 @@ class SpideyGov(commands.Cog):
         )
         e.set_author(name="Blotter")
         msg = await target.send(embed=e)
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+    
+    async def _get_or_create_spidder_webhook(self, channel: discord.TextChannel) -> discord.Webhook:
+        # Requires Manage Webhooks only when creating; sending via an existing webhook is fine.
+        hooks = await channel.webhooks()
+        for h in hooks:
+            if h.name == "Spidder" and h.user and self.bot.user and h.user.id == self.bot.user.id:
+                return h
+
+        # Create if not found
+        return await channel.create_webhook(name="Spidder", reason="Spidder social feed")
+
+    def _spidder_embed(self, text: str, post_image_url: str | None = None) -> discord.Embed:
+        e = discord.Embed(description=text[:4000], color=discord.Color.dark_grey(), timestamp=discord.utils.utcnow())
+        if post_image_url:
+            e.set_image(url=post_image_url)
+        return e
+
+    @social.command(name="npc_post", description="Post a Spidder 'web' as an NPC (webhook username + avatar).")
+    @app_commands.describe(
+        author_name="NPC account display name",
+        post_content="The web content",
+        avatar_image="Upload an image to use as the NPC profile picture",
+        avatar_url="URL to use as the NPC profile picture (used if no upload)",
+        post_image="Optional image attached to the post",
+        post_image_url="Optional image URL attached to the post (used if no upload)",
+        channel="Where to post (defaults to current channel)",
+        make_thread="Create a reply thread automatically",
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def spidder_npc_post(
+        self,
+        interaction: discord.Interaction,
+        author_name: str,
+        post_content: str,
+        avatar_image: discord.Attachment | None = None,
+        avatar_url: str | None = None,
+        post_image: discord.Attachment | None = None,
+        post_image_url: str | None = None,
+        channel: discord.TextChannel | None = None,
+        make_thread: bool = True,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        target = channel or interaction.channel
+        if not isinstance(target, discord.TextChannel):
+            return await interaction.followup.send("Pick a text channel to post in.", ephemeral=True)
+
+        # Resolve avatar URL
+        final_avatar = None
+        if avatar_image:
+            if avatar_image.content_type and not avatar_image.content_type.startswith("image/"):
+                return await interaction.followup.send("avatar_image must be an image.", ephemeral=True)
+            final_avatar = avatar_image.url
+        elif avatar_url:
+            final_avatar = avatar_url.strip()
+
+        # Resolve post image URL
+        final_post_image = None
+        if post_image:
+            if post_image.content_type and not post_image.content_type.startswith("image/"):
+                return await interaction.followup.send("post_image must be an image.", ephemeral=True)
+            final_post_image = post_image.url
+        elif post_image_url:
+            final_post_image = post_image_url.strip()
+
+        embed = self._spidder_embed(post_content, post_image_url=final_post_image)
+
+        try:
+            webhook = await self._get_or_create_spidder_webhook(target)
+        except discord.Forbidden:
+            return await interaction.followup.send(
+                "I need **Manage Webhooks** in that channel to create the Spidder webhook (one-time setup).",
+                ephemeral=True,
+            )
+
+        msg = await webhook.send(
+            embed=embed,
+            username=author_name[:80],
+            avatar_url=final_avatar,
+            wait=True,
+            allowed_mentions=discord.AllowedMentions.none(),  # avoid NPC ping abuse
+        )
+
+        if make_thread:
+            try:
+                thread_name = f"Replies — {author_name}"[:100]
+                await msg.create_thread(name=thread_name, auto_archive_duration=1440)
+            except discord.Forbidden:
+                # No thread perms; ignore silently
+                pass
+
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
