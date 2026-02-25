@@ -8078,3 +8078,62 @@ class SpideyGov(commands.Cog):
                 pass
 
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+
+    
+    @social.command(name="post", description="Post a Spidder 'web' as yourself.")
+    @app_commands.describe(
+        post_content="The web content",
+        channel="Where to post (defaults to current channel)",
+        make_thread="Create a reply thread automatically (only when posting in a channel)",
+    )
+    async def spidder_post(
+        self,
+        interaction: discord.Interaction,
+        post_content: str,
+        channel: discord.abc.GuildChannel | None = None,
+        make_thread: bool = True,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        target = channel or interaction.channel
+
+        thread: discord.Thread | None = None
+        parent: discord.TextChannel | None = None
+
+        if isinstance(target, discord.Thread):
+            thread = target
+            parent = target.parent
+        elif isinstance(target, discord.TextChannel):
+            parent = target
+
+        if not isinstance(parent, discord.TextChannel):
+            return await interaction.followup.send(
+                "Pick a text channel (or run this inside a thread).",
+                ephemeral=True,
+            )
+
+        embed = self._spidder_embed(post_content)
+
+        username = interaction.user.display_name[:80]
+        avatar = interaction.user.display_avatar.url
+
+        # Prefer webhook for the full “Spidder account” look.
+        # If webhook perms are missing, fall back to a normal bot embed w/ author attribution.
+
+        msg = await webhook.send(
+                embed=embed,
+                username=username,
+                avatar_url=avatar,
+                wait=True,
+                allowed_mentions=discord.AllowedMentions.none(),
+                thread=thread,  # posts in-thread if invoked from a thread
+            )
+
+        # Only auto-create a thread if we posted in a channel (not already in a thread)
+        if make_thread and thread is None:
+            try:
+                await msg.create_thread(name=f"Replies — {username}"[:100], auto_archive_duration=1440)
+            except discord.Forbidden:
+                pass
+
+        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
