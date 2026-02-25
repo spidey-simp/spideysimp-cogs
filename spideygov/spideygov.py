@@ -8012,14 +8012,32 @@ class SpideyGov(commands.Cog):
         avatar_url: str | None = None,
         post_image: discord.Attachment | None = None,
         post_image_url: str | None = None,
-        channel: discord.TextChannel | None = None,
         make_thread: bool = True,
+        channel: discord.abc.GuildChannel | None = None,
     ):
         await interaction.response.defer(ephemeral=True)
 
         target = channel or interaction.channel
-        if not isinstance(target, discord.TextChannel):
-            return await interaction.followup.send("Pick a text channel to post in.", ephemeral=True)
+
+        thread: discord.Thread | None = None
+        parent: discord.TextChannel | None = None
+
+        if isinstance(target, discord.Thread):
+            thread = target
+            parent = target.parent
+        elif isinstance(target, discord.TextChannel):
+            parent = target
+
+        if not isinstance(parent, discord.TextChannel):
+            return await interaction.followup.send("Pick a text channel (or run this inside a thread).", ephemeral=True)
+
+        try:
+            webhook = await self._get_or_create_spidder_webhook(parent)
+        except discord.Forbidden:
+            return await interaction.followup.send(
+                "I need **Manage Webhooks** in that channel to create the Spidder webhook (one-time setup).",
+                ephemeral=True,
+            )
 
         # Resolve avatar URL
         final_avatar = None
@@ -8054,10 +8072,11 @@ class SpideyGov(commands.Cog):
             username=author_name[:80],
             avatar_url=final_avatar,
             wait=True,
-            allowed_mentions=discord.AllowedMentions.none(),  # avoid NPC ping abuse
+            allowed_mentions=discord.AllowedMentions.none(),
+            thread=thread,  # ✅ if thread is None, it posts to the channel; if set, it posts in-thread
         )
 
-        if make_thread:
+        if make_thread and thread is None:
             try:
                 thread_name = f"Replies — {author_name}"[:100]
                 await msg.create_thread(name=thread_name, auto_archive_duration=1440)
