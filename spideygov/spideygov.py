@@ -8059,13 +8059,6 @@ class SpideyGov(commands.Cog):
 
         embed = self._spidder_embed(post_content, post_image_url=final_post_image)
 
-        try:
-            webhook = await self._get_or_create_spidder_webhook(target)
-        except discord.Forbidden:
-            return await interaction.followup.send(
-                "I need **Manage Webhooks** in that channel to create the Spidder webhook (one-time setup).",
-                ephemeral=True,
-            )
 
         msg = await webhook.send(
             embed=embed,
