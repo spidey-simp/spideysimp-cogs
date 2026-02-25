@@ -186,7 +186,7 @@ NEWS_BANNERS = {
         "arrest": "https://cdn.britannica.com/76/124776-004-11C4BEBD/US-Customs-and-Border-Protection-officers-training.jpg",
         "arrest_2": "https://stevenkaren.com/wp-content/uploads/2019/06/arrest.jpg",
         "jail_cell": "https://media.istockphoto.com/id/182511595/photo/inside-a-jail-cell.jpg?s=612x612&w=0&k=20&c=X6sMPsZikpGvcHHNd4NpH31SqT6gxNps64tigF8xbiA=",
-        "fbi_agents": "https://d1n0c1ufntxbvh.cloudfront.net/photo/8804d262/5363/1200x/",
+        "fbi_agents": "https://wallpapers.com/images/hd/fbi-2tav8onbt9wr5mnx.jpg",
 
     },
     "weather": {
