@@ -21,6 +21,9 @@ import tempfile
 import xml.etree.ElementTree as ET
 import hashlib
 import sqlite3
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 try:
     import docx  # python-docx
@@ -8219,6 +8222,41 @@ class SpideyGov(commands.Cog):
                 pass
 
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+
+    def _collapse_for_pie(self, d: dict[str, int], max_slices: int = 8) -> dict[str, int]:
+        items = sorted(d.items(), key=lambda kv: kv[1], reverse=True)
+        if len(items) <= max_slices:
+            return dict(items)
+
+        keep = items[: max_slices - 1]
+        other_total = sum(v for _, v in items[max_slices - 1 :])
+        out = dict(keep)
+        out["Other"] = other_total
+        return out
+
+    def _pie_png(self, data: dict[str, int], title: str) -> io.BytesIO:
+        data = self._collapse_for_pie(data, max_slices=8)
+        labels = list(data.keys())
+        sizes = list(data.values())
+
+        fig, ax = plt.subplots(figsize=(8, 5), dpi=160)
+        wedges, _ = ax.pie(sizes, startangle=90)  # default colors are fine
+        ax.axis("equal")
+        ax.set_title(title)
+
+        ax.legend(
+            wedges,
+            labels,
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=False,
+        )
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return buf
     
     @budget.command(name="view", description="View a fiscal year's budget.")
     @app_commands.describe(year="Fiscal year (defaults to 2025).")
@@ -8258,4 +8296,9 @@ class SpideyGov(commands.Cog):
             f"• Net {net_label}: {fmt_credits(net)}",
         ]), inline=False)
 
-        await interaction.followup.send(embed=e, ephemeral=False)
+        chart = self._pie_png(outlays, f"FY{year} Spending Breakdown")
+        file = discord.File(chart, filename="spending.png")
+
+        e.set_image(url="attachment://spending.png")
+
+        await interaction.followup.send(embed=e, file=file, ephemeral=False)
