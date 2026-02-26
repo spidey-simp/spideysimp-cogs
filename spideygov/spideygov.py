@@ -8261,7 +8261,7 @@ class SpideyGov(commands.Cog):
     @budget.command(name="view", description="View a fiscal year's budget.")
     @app_commands.describe(year="Fiscal year (defaults to 2025).")
     async def budget_view(self, interaction: discord.Interaction, year: int = 2025):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=False)
 
         b = BUDGETS.get(year)
         if not b:
