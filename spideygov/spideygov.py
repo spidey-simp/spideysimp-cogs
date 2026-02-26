@@ -321,6 +321,57 @@ ANSI_BOLD  = "\x1b[1m"
 ANSI_YEL   = "\x1b[33m"
 ANSI_GRN   = "\x1b[32m"
 
+BUDGETS = {
+    2025: {
+        "status": "ENACTED",
+        "currency": "credits",
+        "revenue": {
+            "Income Tax": 2_400_000_000_000,
+            "Payroll Tax": 1_600_000_000_000,
+            "Corporate Tax": 500_000_000_000,
+            "Tariffs & Excise": 200_000_000_000,
+            "Other Receipts": 300_000_000_000,
+        },
+        "outlays": {
+            "Defense": 900_000_000_000,
+            "Healthcare": 1_600_000_000_000,
+            "Social Security": 1_500_000_000_000,
+            "Education": 200_000_000_000,
+            "Transportation": 250_000_000_000,
+            "Justice & Law": 150_000_000_000,
+            "Science & Technology": 120_000_000_000,
+            "Administration": 180_000_000_000,
+            "Debt Interest": 600_000_000_000,
+        },
+        "notes": "Baseline budget carried forward for continuity.",
+    }
+}
+
+def _sum_dict(d: dict[str, int]) -> int:
+    return sum(d.values())
+
+def fmt_credits(n: int) -> str:
+    # User-facing: “1.3 million credits” style.
+    abs_n = abs(n)
+    sign = "-" if n < 0 else ""
+    if abs_n >= 1_000_000_000_000:
+        return f"{sign}{abs_n/1_000_000_000_000:.2f} trillion credits"
+    if abs_n >= 1_000_000_000:
+        return f"{sign}{abs_n/1_000_000_000:.2f} billion credits"
+    if abs_n >= 1_000_000:
+        return f"{sign}{abs_n/1_000_000:.2f} million credits"
+    if abs_n >= 1_000:
+        return f"{sign}{abs_n:,} credits"
+    return f"{sign}{abs_n} credits"
+
+def _lines(title: str, d: dict[str, int]) -> str:
+    # Keep under 1024 chars for embed field
+    items = sorted(d.items(), key=lambda kv: kv[1], reverse=True)
+    out = [f"**{title}**"]
+    for k, v in items:
+        out.append(f"• {k}: {fmt_credits(v)}")
+    return "\n".join(out)[:1024]
+
 _TOKEN_RE = re.compile(r"\w+|[^\w\s]")
 
 def _tokenize(s: str) -> list[str]:
@@ -3526,21 +3577,29 @@ class SpideyGov(commands.Cog):
     
 
     government = app_commands.Group(name="government", description="Government-related commands")
-    legislature = app_commands.Group(name="legislature", description="Legislative commands", parent=government)
-    executive = app_commands.Group(name="executive", description="Executive commands", parent=government)
     category = app_commands.Group(name="category", description="Category management commands", parent=government)
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
-    usc = app_commands.Group(name="usc", description="United States Code")
-    src = app_commands.Group(name="src", description="Spidey Republic Code (S.R.C.)")
+   
+    news = app_commands.Group(name="news", description="News network tools")
+    social = app_commands.Group(name="social", description="Spidder (in-universe social feed)")
+
+    legislature = app_commands.Group(name="legislature", description="Legislative commands")
+    bill = app_commands.Group(name="bill", description="Congressional bills", parent=legislature)
+    usc = app_commands.Group(name="usc", description="United States Code", parent=legislature)
+    src = app_commands.Group(name="src", description="Spidey Republic Code (S.R.C.)", parent=legislature)
     compare = app_commands.Group(
         name="compare",
         description="Compare S.R.C. to U.S.C.",
-        parent=src
+        parent=legislature
     )
-    news = app_commands.Group(name="news", description="News network tools")
-    social = app_commands.Group(name="social", description="Spidder (in-universe social feed)")
+    budget=app_commands.Group(name="budget", description="Budgetary related commands", parent=legislature)
+
+    executive = app_commands.Group(name="executive", description="Executive commands")
+    treasury = app_commands.Group(name="treasury", description="Commands for controlling the treasury.", parent=executive)
+    agencies = app_commands.Group(name="agencies", description="Ordinary agency commands for RM, adj., etc.", parent=executive)
+
 
 
     @elections.command(name="party_create", description="Create a new political party")
@@ -8160,3 +8219,43 @@ class SpideyGov(commands.Cog):
                 pass
 
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+    
+    @budget.command(name="view", description="View a fiscal year's budget.")
+    @app_commands.describe(year="Fiscal year (defaults to 2025).")
+    async def budget_view(self, interaction: discord.Interaction, year: int = 2025):
+        await interaction.response.defer(ephemeral=True)
+
+        b = BUDGETS.get(year)
+        if not b:
+            known = ", ".join(str(y) for y in sorted(BUDGETS.keys()))
+            return await interaction.followup.send(
+                f"No budget found for FY{year}. Known years: {known}.",
+                ephemeral=True,
+            )
+
+        revenue = b["revenue"]
+        outlays = b["outlays"]
+        total_rev = _sum_dict(revenue)
+        total_out = _sum_dict(outlays)
+        net = total_rev - total_out  # positive = surplus, negative = deficit
+
+        status = b.get("status", "UNKNOWN")
+
+        e = discord.Embed(
+            title=f"FY{year} Federal Budget ({status})",
+            description=b.get("notes") or None,
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
+        )
+
+        e.add_field(name="Revenue", value=_lines("Receipts", revenue), inline=False)
+        e.add_field(name="Spending", value=_lines("Outlays", outlays), inline=False)
+
+        net_label = "Surplus" if net >= 0 else "Deficit"
+        e.add_field(name="Totals", value="\n".join([
+            f"• Total Revenue: {fmt_credits(total_rev)}",
+            f"• Total Spending: {fmt_credits(total_out)}",
+            f"• Net {net_label}: {fmt_credits(net)}",
+        ]), inline=False)
+
+        await interaction.followup.send(embed=e, ephemeral=True)
