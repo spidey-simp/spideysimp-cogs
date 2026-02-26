@@ -8258,4 +8258,4 @@ class SpideyGov(commands.Cog):
             f"• Net {net_label}: {fmt_credits(net)}",
         ]), inline=False)
 
-        await interaction.followup.send(embed=e, ephemeral=True)
+        await interaction.followup.send(embed=e, ephemeral=False)
