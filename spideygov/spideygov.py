@@ -8059,15 +8059,23 @@ class SpideyGov(commands.Cog):
 
         embed = self._spidder_embed(post_content, post_image_url=final_post_image)
 
-
-        msg = await webhook.send(
-            embed=embed,
-            username=author_name[:80],
-            avatar_url=final_avatar,
-            wait=True,
-            allowed_mentions=discord.AllowedMentions.none(),
-            thread=thread,  # ✅ if thread is None, it posts to the channel; if set, it posts in-thread
-        )
+        if thread:
+            msg = await webhook.send(
+                embed=embed,
+                username=author_name[:80],
+                avatar_url=final_avatar,
+                wait=True,
+                allowed_mentions=discord.AllowedMentions.none(),
+                thread=thread,  # ✅ if thread is None, it posts to the channel; if set, it posts in-thread
+            )
+        else:
+             msg = await webhook.send(
+                embed=embed,
+                username=author_name[:80],
+                avatar_url=final_avatar,
+                wait=True,
+                allowed_mentions=discord.AllowedMentions.none()
+            )
 
         if make_thread and thread is None:
             try:
@@ -8127,16 +8135,23 @@ class SpideyGov(commands.Cog):
 
         # Prefer webhook for the full “Spidder account” look.
         # If webhook perms are missing, fall back to a normal bot embed w/ author attribution.
-
-        msg = await webhook.send(
-                embed=embed,
-                username=username,
-                avatar_url=avatar,
-                wait=True,
-                allowed_mentions=discord.AllowedMentions.none(),
-                thread=thread,  # posts in-thread if invoked from a thread
-            )
-
+        if thread:
+            msg = await webhook.send(
+                    embed=embed,
+                    username=username,
+                    avatar_url=avatar,
+                    wait=True,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                    thread=thread
+                )
+        else:
+            msg = await webhook.send(
+                    embed=embed,
+                    username=username,
+                    avatar_url=avatar,
+                    wait=True,
+                    allowed_mentions=discord.AllowedMentions.none()
+                )
         # Only auto-create a thread if we posted in a channel (not already in a thread)
         if make_thread and thread is None:
             try:
