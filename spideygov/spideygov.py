@@ -8111,6 +8111,14 @@ class SpideyGov(commands.Cog):
                 "Pick a text channel (or run this inside a thread).",
                 ephemeral=True,
             )
+    
+        try:
+            webhook = await self._get_or_create_spidder_webhook(parent)
+        except discord.Forbidden:
+            return await interaction.followup.send(
+                "I need **Manage Webhooks** in that channel to create the Spidder webhook (one-time setup).",
+                ephemeral=True,
+            )
 
         embed = self._spidder_embed(post_content)
 
