@@ -24,6 +24,7 @@ import sqlite3
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from typing import Optional
 
 try:
     import docx  # python-docx
@@ -83,6 +84,636 @@ DEFAULT_ELECTION_HOURS = 24
 ELECTIONS_ANNOUNCE_CHANNEL = 1334216429884407808
 
 USC_DB_FILE = os.path.join(BASE_DIR, "usc.sqlite3")
+DRAFTS_DB_FILE = os.path.join(BASE_DIR, "legislative_drafts.sqlite3")
+
+DRAFT_BINS = {
+    "summary": "Summary",
+    "findings_purpose": "Findings & Purpose",
+    "definitions": "Definitions",
+    "provisions": "Provisions",
+    "appropriations": "Appropriations",
+    "codifications": "Codifications",
+    "housekeeping": "Housekeeping",
+}
+
+DRAFT_BIN_ORDER = [
+    "summary",
+    "findings_purpose",
+    "definitions",
+    "provisions",
+    "appropriations",
+    "codifications",
+    "housekeeping",
+]
+
+
+def _blank_draft_bins() -> dict:
+    return {k: "" for k in DRAFT_BINS.keys()}
+
+
+def _utcnow_iso() -> str:
+    return discord.utils.utcnow().isoformat()
+
+
+class DraftsDB:
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.init()
+
+    def _connect(self) -> sqlite3.Connection:
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA journal_mode = WAL;")
+        conn.execute("PRAGMA synchronous = NORMAL;")
+        return conn
+
+    def init(self) -> None:
+        conn = self._connect()
+        try:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS drafts (
+                    draft_id TEXT PRIMARY KEY,
+                    schema_version INTEGER NOT NULL DEFAULT 2,
+                    title TEXT NOT NULL,
+                    short_title TEXT,
+                    committee TEXT,
+                    status TEXT NOT NULL DEFAULT 'DRAFT',
+                    owner_id INTEGER NOT NULL,
+                    parent_draft_id TEXT,
+                    bins_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_drafts_owner_id ON drafts(owner_id);
+                CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status);
+                CREATE INDEX IF NOT EXISTS idx_drafts_parent ON drafts(parent_draft_id);
+                CREATE INDEX IF NOT EXISTS idx_drafts_updated_at ON drafts(updated_at);
+
+                CREATE TABLE IF NOT EXISTS draft_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    draft_id TEXT NOT NULL,
+                    actor_id INTEGER,
+                    event_type TEXT NOT NULL,
+                    payload_json TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(draft_id) REFERENCES drafts(draft_id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_draft_events_draft_id ON draft_events(draft_id);
+                CREATE INDEX IF NOT EXISTS idx_draft_events_created_at ON draft_events(created_at);
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _next_draft_id(self, conn: sqlite3.Connection) -> str:
+        year = discord.utils.utcnow().year
+        row = conn.execute(
+            "SELECT draft_id FROM drafts WHERE draft_id LIKE ? ORDER BY draft_id DESC LIMIT 1",
+            (f"D-{year}-%",),
+        ).fetchone()
+
+        if not row:
+            seq = 1
+        else:
+            try:
+                seq = int(str(row["draft_id"]).split("-")[-1]) + 1
+            except Exception:
+                seq = 1
+
+        return f"D-{year}-{seq:04d}"
+
+    def _log_event(
+        self,
+        conn: sqlite3.Connection,
+        draft_id: str,
+        actor_id: Optional[int],
+        event_type: str,
+        payload: Optional[dict] = None,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO draft_events(draft_id, actor_id, event_type, payload_json, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                draft_id,
+                actor_id,
+                event_type,
+                json.dumps(payload or {}, ensure_ascii=False),
+                _utcnow_iso(),
+            ),
+        )
+
+    def _row_to_dict(self, row: sqlite3.Row) -> dict:
+        return {
+            "draft_id": row["draft_id"],
+            "schema_version": row["schema_version"],
+            "title": row["title"],
+            "short_title": row["short_title"],
+            "committee": row["committee"],
+            "status": row["status"],
+            "owner_id": row["owner_id"],
+            "parent_draft_id": row["parent_draft_id"],
+            "bins": json.loads(row["bins_json"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def create_draft(
+        self,
+        owner_id: int,
+        title: str,
+        short_title: Optional[str] = None,
+        committee: Optional[str] = None,
+    ) -> str:
+        conn = self._connect()
+        try:
+            draft_id = self._next_draft_id(conn)
+            now = _utcnow_iso()
+            conn.execute(
+                """
+                INSERT INTO drafts(
+                    draft_id, title, short_title, committee, status, owner_id,
+                    parent_draft_id, bins_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, 'DRAFT', ?, NULL, ?, ?, ?)
+                """,
+                (
+                    draft_id,
+                    title.strip()[:256],
+                    short_title.strip()[:128] if short_title else None,
+                    committee.strip()[:128] if committee else None,
+                    owner_id,
+                    json.dumps(_blank_draft_bins(), ensure_ascii=False),
+                    now,
+                    now,
+                ),
+            )
+            self._log_event(conn, draft_id, owner_id, "create", {})
+            conn.commit()
+            return draft_id
+        finally:
+            conn.close()
+
+    def get_draft(self, draft_id: str) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM drafts WHERE draft_id = ?",
+                (draft_id,),
+            ).fetchone()
+            return self._row_to_dict(row) if row else None
+        finally:
+            conn.close()
+
+    def search_drafts(self, current: str, limit: int = 25) -> list[dict]:
+        cur = (current or "").strip().lower()
+        conn = self._connect()
+        try:
+            if cur:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM drafts
+                    WHERE lower(draft_id) LIKE ?
+                       OR lower(title) LIKE ?
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (f"%{cur}%", f"%{cur}%", limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM drafts
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+
+            return [self._row_to_dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def edit_bin(self, draft_id: str, actor_id: int, bin_key: str, content: str) -> bool:
+        if bin_key not in DRAFT_BINS:
+            return False
+
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT bins_json FROM drafts WHERE draft_id = ?",
+                (draft_id,),
+            ).fetchone()
+            if not row:
+                return False
+
+            bins = json.loads(row["bins_json"])
+            bins[bin_key] = (content or "").strip()
+
+            conn.execute(
+                """
+                UPDATE drafts
+                SET bins_json = ?, updated_at = ?
+                WHERE draft_id = ?
+                """,
+                (json.dumps(bins, ensure_ascii=False), _utcnow_iso(), draft_id),
+            )
+            self._log_event(conn, draft_id, actor_id, "edit_bin", {"bin": bin_key})
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
+    def rename_draft(
+        self,
+        draft_id: str,
+        actor_id: int,
+        title: str,
+        short_title: Optional[str],
+    ) -> bool:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT draft_id FROM drafts WHERE draft_id = ?",
+                (draft_id,),
+            ).fetchone()
+            if not row:
+                return False
+
+            conn.execute(
+                """
+                UPDATE drafts
+                SET title = ?, short_title = ?, updated_at = ?
+                WHERE draft_id = ?
+                """,
+                (
+                    title.strip()[:256],
+                    short_title.strip()[:128] if short_title else None,
+                    _utcnow_iso(),
+                    draft_id,
+                ),
+            )
+            self._log_event(conn, draft_id, actor_id, "rename", {})
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
+    def fork_draft(self, source_draft_id: str, actor_id: int, new_title: str) -> Optional[str]:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM drafts WHERE draft_id = ?",
+                (source_draft_id,),
+            ).fetchone()
+            if not row:
+                return None
+
+            new_id = self._next_draft_id(conn)
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                INSERT INTO drafts(
+                    draft_id, schema_version, title, short_title, committee, status,
+                    owner_id, parent_draft_id, bins_json, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, ?, ?, ?, ?)
+                """,
+                (
+                    new_id,
+                    row["schema_version"],
+                    new_title.strip()[:256],
+                    row["short_title"],
+                    row["committee"],
+                    actor_id,
+                    source_draft_id,
+                    row["bins_json"],
+                    now,
+                    now,
+                ),
+            )
+            self._log_event(conn, new_id, actor_id, "fork", {"from": source_draft_id})
+            conn.commit()
+            return new_id
+        finally:
+            conn.close()
+
+    def adopt_draft(self, target_draft_id: str, source_draft_id: str, actor_id: int) -> bool:
+        conn = self._connect()
+        try:
+            src = conn.execute(
+                "SELECT bins_json FROM drafts WHERE draft_id = ?",
+                (source_draft_id,),
+            ).fetchone()
+            tgt = conn.execute(
+                "SELECT draft_id FROM drafts WHERE draft_id = ?",
+                (target_draft_id,),
+            ).fetchone()
+
+            if not src or not tgt:
+                return False
+
+            conn.execute(
+                """
+                UPDATE drafts
+                SET bins_json = ?, updated_at = ?
+                WHERE draft_id = ?
+                """,
+                (src["bins_json"], _utcnow_iso(), target_draft_id),
+            )
+            self._log_event(conn, target_draft_id, actor_id, "adopt", {"from": source_draft_id})
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
+    def get_history(self, draft_id: str, limit: int = 20) -> list[dict]:
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                """
+                SELECT * FROM draft_events
+                WHERE draft_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (draft_id, limit),
+            ).fetchall()
+
+            out = []
+            for r in rows:
+                out.append(
+                    {
+                        "id": r["id"],
+                        "draft_id": r["draft_id"],
+                        "actor_id": r["actor_id"],
+                        "event_type": r["event_type"],
+                        "payload": json.loads(r["payload_json"] or "{}"),
+                        "created_at": r["created_at"],
+                    }
+                )
+            return out
+        finally:
+            conn.close()
+
+SOCIAL_DB_FILE = os.path.join(BASE_DIR, "social_accounts.sqlite3")
+
+_SOCIAL_USERNAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,30}[A-Za-z0-9])?$")
+
+
+def _social_clean_username(username: str) -> str:
+    u = (username or "").strip()
+    if u.startswith("@"):  # be forgiving if users type @name
+        u = u[1:].strip()
+    return u
+
+
+def _social_norm_username(username: str) -> str:
+    return _social_clean_username(username).casefold()
+
+
+def _social_validate_username(username: str) -> str:
+    u = _social_clean_username(username)
+    if not (2 <= len(u) <= 32):
+        raise ValueError("Username must be between 2 and 32 characters.")
+    if not _SOCIAL_USERNAME_RE.fullmatch(u):
+        raise ValueError("Username may only use letters, numbers, periods, underscores, and hyphens, and must start and end with a letter or number.")
+    return u
+
+class SocialAccountsDB:
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.init()
+
+    def _connect(self) -> sqlite3.Connection:
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA journal_mode = WAL;")
+        conn.execute("PRAGMA synchronous = NORMAL;")
+        return conn
+
+    def init(self) -> None:
+        conn = self._connect()
+        try:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS social_accounts (
+                    account_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    norm_username TEXT NOT NULL UNIQUE,
+                    owner_id INTEGER NOT NULL,
+                    avatar_url TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_post_at TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_social_accounts_owner_id
+                    ON social_accounts(owner_id);
+
+                CREATE TABLE IF NOT EXISTS social_posts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id INTEGER NOT NULL,
+                    owner_id INTEGER NOT NULL,
+                    actor_id INTEGER NOT NULL,
+                    channel_id INTEGER,
+                    thread_id INTEGER,
+                    message_id INTEGER,
+                    jump_url TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(account_id) REFERENCES social_accounts(account_id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_social_posts_account_id
+                    ON social_posts(account_id);
+                CREATE INDEX IF NOT EXISTS idx_social_posts_owner_id
+                    ON social_posts(owner_id);
+                CREATE INDEX IF NOT EXISTS idx_social_posts_created_at
+                    ON social_posts(created_at);
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _row_to_dict(self, row: sqlite3.Row | None) -> dict | None:
+        if not row:
+            return None
+        return {
+            "account_id": row["account_id"],
+            "username": row["username"],
+            "norm_username": row["norm_username"],
+            "owner_id": row["owner_id"],
+            "avatar_url": row["avatar_url"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "last_post_at": row["last_post_at"],
+        }
+
+    def create_account(self, owner_id: int, username: str, avatar_url: str | None = None) -> dict | None:
+        clean = _social_validate_username(username)
+        norm = _social_norm_username(clean)
+        now = _utcnow_iso()
+        conn = self._connect()
+        try:
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO social_accounts(username, norm_username, owner_id, avatar_url, created_at, updated_at, last_post_at)
+                    VALUES (?, ?, ?, ?, ?, ?, NULL)
+                    """,
+                    (clean, norm, owner_id, (avatar_url or None), now, now),
+                )
+                conn.commit()
+            except sqlite3.IntegrityError:
+                return None
+
+            row = conn.execute(
+                "SELECT * FROM social_accounts WHERE norm_username = ?",
+                (norm,),
+            ).fetchone()
+            return self._row_to_dict(row)
+        finally:
+            conn.close()
+
+    def get_by_username(self, username: str) -> dict | None:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM social_accounts WHERE norm_username = ?",
+                (_social_norm_username(username),),
+            ).fetchone()
+            return self._row_to_dict(row)
+        finally:
+            conn.close()
+
+    def search_accounts(self, current: str, limit: int = 25) -> list[dict]:
+        cur = _social_clean_username(current).casefold()
+        conn = self._connect()
+        try:
+            if cur:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM social_accounts
+                    WHERE norm_username LIKE ?
+                    ORDER BY username COLLATE NOCASE ASC
+                    LIMIT ?
+                    """,
+                    (f"%{cur}%", limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM social_accounts
+                    ORDER BY username COLLATE NOCASE ASC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+            return [self._row_to_dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def list_accounts_for_owner(self, owner_id: int, current: str = "", limit: int = 25) -> list[dict]:
+        cur = _social_clean_username(current).casefold()
+        conn = self._connect()
+        try:
+            if cur:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM social_accounts
+                    WHERE owner_id = ? AND norm_username LIKE ?
+                    ORDER BY username COLLATE NOCASE ASC
+                    LIMIT ?
+                    """,
+                    (owner_id, f"%{cur}%", limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM social_accounts
+                    WHERE owner_id = ?
+                    ORDER BY username COLLATE NOCASE ASC
+                    LIMIT ?
+                    """,
+                    (owner_id, limit),
+                ).fetchall()
+            return [self._row_to_dict(r) for r in rows]
+        finally:
+            conn.close()
+
+    def log_post(
+        self,
+        account_id: int,
+        owner_id: int,
+        actor_id: int,
+        channel_id: int | None,
+        thread_id: int | None,
+        message_id: int | None,
+        jump_url: str | None,
+    ) -> None:
+        now = _utcnow_iso()
+        conn = self._connect()
+        try:
+            conn.execute(
+                """
+                INSERT INTO social_posts(account_id, owner_id, actor_id, channel_id, thread_id, message_id, jump_url, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (account_id, owner_id, actor_id, channel_id, thread_id, message_id, jump_url, now),
+            )
+            conn.execute(
+                """
+                UPDATE social_accounts
+                SET updated_at = ?, last_post_at = ?
+                WHERE account_id = ?
+                """,
+                (now, now, account_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def account_summary(self, username: str) -> dict | None:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    a.account_id,
+                    a.username,
+                    a.norm_username,
+                    a.owner_id,
+                    a.avatar_url,
+                    a.created_at,
+                    a.updated_at,
+                    a.last_post_at,
+                    COUNT(p.id) AS post_count
+                FROM social_accounts a
+                LEFT JOIN social_posts p ON p.account_id = a.account_id
+                WHERE a.norm_username = ?
+                GROUP BY a.account_id
+                LIMIT 1
+                """,
+                (_social_norm_username(username),),
+            ).fetchone()
+            if not row:
+                return None
+            out = self._row_to_dict(row) or {}
+            out["post_count"] = int(row["post_count"] or 0)
+            return out
+        finally:
+            conn.close()
 
 USLM_NS = "http://xml.house.gov/schemas/uslm/1.0"
 STRUCT_TAGS = {"subsection", "paragraph", "subparagraph", "clause", "subclause"}
@@ -2946,6 +3577,43 @@ class LegislativeProposalModal(discord.ui.Modal, title="Legislative Proposal"):
             ephemeral=True
         )
 
+class DraftEditModal(discord.ui.Modal):
+    def __init__(self, cog, draft_id: str, bin_key: str, initial_text: str):
+        super().__init__(title=f"Edit {draft_id}")
+        self.cog = cog
+        self.draft_id = draft_id
+        self.bin_key = bin_key
+
+        self.body = discord.ui.TextInput(
+            label=DRAFT_BINS.get(bin_key, bin_key),
+            style=discord.TextStyle.paragraph,
+            default=(initial_text or "")[:3900],
+            required=False,
+            max_length=4000,
+        )
+        self.add_item(self.body)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        draft = self.cog.drafts_db.get_draft(self.draft_id)
+        if not draft:
+            return await interaction.response.send_message("Draft not found.", ephemeral=True)
+
+        if draft["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message(
+                "You cannot directly edit someone else’s draft. Fork it instead.",
+                ephemeral=True,
+            )
+
+        ok = self.cog.drafts_db.edit_bin(
+            self.draft_id,
+            interaction.user.id,
+            self.bin_key,
+            str(self.body.value or ""),
+        )
+        if not ok:
+            return await interaction.response.send_message("Edit failed.", ephemeral=True)
+
+        await interaction.response.send_message("Draft updated.", ephemeral=True)
 
 class CodeChapterUploadModal(discord.ui.Modal, title="Upload Chapter Body"):
     """
@@ -3316,6 +3984,15 @@ class SpideyGov(commands.Cog):
             print(f"SRC DB init error: {e}")
 
         self.src_lock = asyncio.Lock()
+
+                # --- Bills database init ---
+        self.drafts_db = DraftsDB(DRAFTS_DB_FILE)
+        self.drafts_lock = asyncio.Lock()
+
+        self.bills_lock = asyncio.Lock()
+
+        self.social_db = SocialAccountsDB(SOCIAL_DB_FILE)
+        self.social_lock = asyncio.Lock()
         
 
     def cog_unload(self):
@@ -3598,6 +4275,7 @@ class SpideyGov(commands.Cog):
         parent=legislature
     )
     budget=app_commands.Group(name="budget", description="Budgetary related commands", parent=legislature)
+    committees = app_commands.Group(name="committees", description="Legislative Committee commands", parent=legislature)
 
     executive = app_commands.Group(name="executive", description="Executive commands")
     treasury = app_commands.Group(name="treasury", description="Commands for controlling the treasury.", parent=executive)
@@ -4682,9 +5360,7 @@ class SpideyGov(commands.Cog):
         await interaction.followup.send(content=msg, files=files, ephemeral=True)
 
 
-    
-    # --- replace your propose_legislation command with this version ---
-    @legislature.command(name="propose_legislation", description="Propose new legislation")
+    @bill.command(name="propose_legislation", description="Propose new legislation")
     @app_commands.checks.has_any_role(SENATORS, REPRESENTATIVES)
     @app_commands.describe(
         title="Title",
@@ -5814,7 +6490,7 @@ class SpideyGov(commands.Cog):
         out.reverse() # shows most recent first
         return (out[:25])
 
-    @legislature.command(name="bill_view", description="View a bill/resolution draft")
+    @bill.command(name="view", description="View a bill/resolution draft")
     @app_commands.autocomplete(bill_id=bill_id_autocomplete)
     @app_commands.describe(bill_id="ID like S-0001 or H-0003")
     async def bill_view(self, interaction: discord.Interaction, bill_id: str):
@@ -5983,7 +6659,7 @@ class SpideyGov(commands.Cog):
         save_federal_registry(reg)
         await interaction.response.send_message(f"✅ Rescinded {eo_id}.", ephemeral=True)
 
-    @legislature.command(name="bill_view_sections", description="List amendable sections of a bill")
+    @bill.command(name="view_sections", description="List amendable sections of a bill")
     @app_commands.autocomplete(bill_id=bill_id_autocomplete)
     async def bill_view_sections(self, interaction: discord.Interaction, bill_id: str):
         b = self.federal_registry.get("bills", {}).get("items", {}).get(bill_id)
@@ -6021,7 +6697,7 @@ class SpideyGov(commands.Cog):
 
 
 
-    @legislature.command(name="bill_amend_new", description="Propose a section-level amendment (no mutation; preview only)")
+    @bill.command(name="amend_new", description="Propose a section-level amendment (no mutation; preview only)")
     @app_commands.autocomplete(bill_id=bill_id_autocomplete, target_id=bill_target_autocomplete)
     @app_commands.choices(op=[
         app_commands.Choice(name="Replace section", value="replace"),
@@ -6203,7 +6879,7 @@ class SpideyGov(commands.Cog):
     
     
 
-    @legislature.command(name="bill_amend_apply", description="Apply an adopted amendment (admin)")
+    @bill.command(name="amend_apply", description="Apply an adopted amendment (admin)")
     @app_commands.checks.has_any_role(SENATE_MAJORITY_LEADER, SPEAKER_OF_THE_HOUSE)
     @app_commands.autocomplete(bill_id=bill_id_autocomplete)
     @app_commands.describe(bill_id="Bill ID", amend_id="Amendment ID like A-001")
@@ -6252,7 +6928,7 @@ class SpideyGov(commands.Cog):
 
     
 
-    @legislature.command(name="view_committees", description="View the Congressional Committees")
+    @committees.command(name="view", description="View the Congressional Committees")
     @app_commands.describe(filter="Narrow to specific body")
     @app_commands.choices(filter=[
         app_commands.Choice(name="Joint", value="joint"),
@@ -6334,7 +7010,7 @@ class SpideyGov(commands.Cog):
 
 
 
-    @legislature.command(name="committee_info", description="Details about a (sub)committee")
+    @committees.command(name="info", description="Details about a (sub)committee")
     @app_commands.choices(chamber=[
         app_commands.Choice(name="Senate", value="senate"),
         app_commands.Choice(name="House", value="house"),
@@ -6427,7 +7103,7 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     
-    @legislature.command(name="committee_hearing_schedule", description="Schedule a hearing (committee/subcommittee)")
+    @committees.command(name="hearing_schedule", description="Schedule a hearing (committee/subcommittee)")
     @app_commands.choices(chamber=[
         app_commands.Choice(name="Senate", value="senate"),
         app_commands.Choice(name="House", value="house"),
@@ -6517,7 +7193,7 @@ class SpideyGov(commands.Cog):
         return out[:25]
 
 
-    @legislature.command(name="committee_manage", description="Create/delete committees; add/remove members; set chair; bulk-appoint")
+    @committees.command(name="manage", description="Create/delete committees; add/remove members; set chair; bulk-appoint")
     @app_commands.choices(chamber=[
         app_commands.Choice(name="Senate", value="senate"),
         app_commands.Choice(name="House", value="house"),
@@ -6719,7 +7395,7 @@ class SpideyGov(commands.Cog):
         return await interaction.response.send_message("Unknown action.", ephemeral=True)
 
     
-    @legislature.command(name="report_bill", description="Introduce, vote, transmit, enroll, or present a bill")
+    @bill.command(name="report", description="Introduce, vote, transmit, enroll, or present a bill")
     @app_commands.autocomplete(bill_id=bill_id_autocomplete)
     @app_commands.choices(action=[
         app_commands.Choice(name="Introduce bill", value="introduce"),
@@ -8038,132 +8714,140 @@ class SpideyGov(commands.Cog):
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
     
     async def _get_or_create_spidder_webhook(self, channel: discord.TextChannel) -> discord.Webhook:
-        # Requires Manage Webhooks only when creating; sending via an existing webhook is fine.
         hooks = await channel.webhooks()
         for h in hooks:
             if h.name == "Spidder" and h.user and self.bot.user and h.user.id == self.bot.user.id:
                 return h
-
-        # Create if not found
         return await channel.create_webhook(name="Spidder", reason="Spidder social feed")
 
+
     def _spidder_embed(self, text: str, post_image_url: str | None = None) -> discord.Embed:
-        e = discord.Embed(description=text[:4000], color=discord.Color.dark_grey(), timestamp=discord.utils.utcnow())
+        e = discord.Embed(
+            description=text[:4000],
+            color=discord.Color.dark_grey(),
+            timestamp=discord.utils.utcnow()
+        )
         if post_image_url:
             e.set_image(url=post_image_url)
         return e
 
-    @social.command(name="npc_post", description="Post a Spidder 'web' as an NPC (webhook username + avatar).")
-    @app_commands.describe(
-        author_name="NPC account display name",
-        post_content="The web content",
-        avatar_image="Upload an image to use as the NPC profile picture",
-        avatar_url="URL to use as the NPC profile picture (used if no upload)",
-        post_image="Optional image attached to the post",
-        post_image_url="Optional image URL attached to the post (used if no upload)",
-        channel="Where to post (defaults to current channel)",
-        make_thread="Create a reply thread automatically",
-    )
-    @app_commands.checks.has_permissions(manage_guild=True)
-    async def spidder_npc_post(
+
+    async def social_account_autocomplete(
         self,
         interaction: discord.Interaction,
-        author_name: str,
-        post_content: str,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        accounts = self.social_db.list_accounts_for_owner(interaction.user.id, current=current, limit=25)
+        return [app_commands.Choice(name=a["username"], value=a["username"]) for a in accounts]
+
+
+    async def social_all_accounts_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        accounts = self.social_db.search_accounts(current=current, limit=25)
+        return [app_commands.Choice(name=a["username"], value=a["username"]) for a in accounts]
+
+
+    @social.command(name="register_account", description="Register a Spidder account you can post from later.")
+    @app_commands.describe(
+        username="Unique Spidder username (2-32 chars, letters/numbers/._-)",
+        avatar_image="Upload an image to use as the profile picture",
+        avatar_url="URL to use as the profile picture (used if no upload)",
+    )
+    async def social_register_account(
+        self,
+        interaction: discord.Interaction,
+        username: str,
         avatar_image: discord.Attachment | None = None,
         avatar_url: str | None = None,
-        post_image: discord.Attachment | None = None,
-        post_image_url: str | None = None,
-        make_thread: bool = True,
-        channel: discord.abc.GuildChannel | None = None,
     ):
         await interaction.response.defer(ephemeral=True)
 
-        target = channel or interaction.channel
-
-        thread: discord.Thread | None = None
-        parent: discord.TextChannel | None = None
-
-        if isinstance(target, discord.Thread):
-            thread = target
-            parent = target.parent
-        elif isinstance(target, discord.TextChannel):
-            parent = target
-
-        if not isinstance(parent, discord.TextChannel):
-            return await interaction.followup.send("Pick a text channel (or run this inside a thread).", ephemeral=True)
-
         try:
-            webhook = await self._get_or_create_spidder_webhook(parent)
-        except discord.Forbidden:
-            return await interaction.followup.send(
-                "I need **Manage Webhooks** in that channel to create the Spidder webhook (one-time setup).",
-                ephemeral=True,
-            )
+            clean_username = _social_validate_username(username)
+        except ValueError as e:
+            return await interaction.followup.send(str(e), ephemeral=True)
 
-        # Resolve avatar URL
         final_avatar = None
         if avatar_image:
             if avatar_image.content_type and not avatar_image.content_type.startswith("image/"):
                 return await interaction.followup.send("avatar_image must be an image.", ephemeral=True)
             final_avatar = avatar_image.url
-        elif avatar_url:
+        elif avatar_url and avatar_url.strip():
             final_avatar = avatar_url.strip()
 
-        # Resolve post image URL
-        final_post_image = None
-        if post_image:
-            if post_image.content_type and not post_image.content_type.startswith("image/"):
-                return await interaction.followup.send("post_image must be an image.", ephemeral=True)
-            final_post_image = post_image.url
-        elif post_image_url:
-            final_post_image = post_image_url.strip()
+        async with self.social_lock:
+            created = self.social_db.create_account(interaction.user.id, clean_username, final_avatar)
 
-        embed = self._spidder_embed(post_content, post_image_url=final_post_image)
+        if not created:
+            return await interaction.followup.send("That username is already taken.", ephemeral=True)
 
-        if thread:
-            msg = await webhook.send(
-                embed=embed,
-                username=author_name[:80],
-                avatar_url=final_avatar,
-                wait=True,
-                allowed_mentions=discord.AllowedMentions.none(),
-                thread=thread,  # ✅ if thread is None, it posts to the channel; if set, it posts in-thread
-            )
-        else:
-             msg = await webhook.send(
-                embed=embed,
-                username=author_name[:80],
-                avatar_url=final_avatar,
-                wait=True,
-                allowed_mentions=discord.AllowedMentions.none()
-            )
+        avatar_note = " with a profile picture." if final_avatar else "."
+        await interaction.followup.send(
+            f"✅ Registered **{created['username']}**{avatar_note}",
+            ephemeral=True,
+        )
 
-        if make_thread and thread is None:
-            try:
-                thread_name = f"Replies — {author_name}"[:100]
-                await msg.create_thread(name=thread_name, auto_archive_duration=1440)
-            except discord.Forbidden:
-                # No thread perms; ignore silently
-                pass
 
-        await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
+    @social.command(name="view_owner", description="Moderation lookup for a Spidder account owner.")
+    @app_commands.describe(username="Registered Spidder username")
+    @app_commands.autocomplete(username=social_all_accounts_autocomplete)
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def social_view_owner(self, interaction: discord.Interaction, username: str):
+        await interaction.response.defer(ephemeral=True)
 
-    
-    @social.command(name="post", description="Post a Spidder 'web' as yourself.")
+        account = self.social_db.account_summary(username)
+        if not account:
+            return await interaction.followup.send("That account was not found.", ephemeral=True)
+
+        owner = interaction.guild.get_member(int(account["owner_id"])) if interaction.guild else None
+        owner_text = owner.mention if owner else f"<@{account['owner_id']}>"
+
+        e = discord.Embed(
+            title=f"Spidder account: {account['username']}",
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
+        )
+        e.add_field(name="Owner", value=owner_text, inline=False)
+        e.add_field(name="Created", value=account.get("created_at") or "Unknown", inline=False)
+        e.add_field(name="Last Post", value=account.get("last_post_at") or "Never", inline=False)
+        e.add_field(name="Total Posts", value=str(account.get("post_count", 0)), inline=False)
+        if account.get("avatar_url"):
+            e.set_thumbnail(url=account["avatar_url"])
+
+        await interaction.followup.send(embed=e, ephemeral=True)
+
+
+    @social.command(name="post", description="Post a Spidder 'web' from one of your registered accounts.")
     @app_commands.describe(
+        username="One of your registered Spidder usernames",
         post_content="The web content",
+        post_image="Optional image attached to the post",
+        post_image_url="Optional image URL attached to the post (used if no upload)",
         channel="Where to post (defaults to current channel)",
         make_thread="Create a reply thread automatically (only when posting in a channel)",
     )
+    @app_commands.autocomplete(username=social_account_autocomplete)
     async def spidder_post(
         self,
         interaction: discord.Interaction,
+        username: str,
         post_content: str,
+        post_image: discord.Attachment | None = None,
+        post_image_url: str | None = None,
         channel: discord.abc.GuildChannel | None = None,
         make_thread: bool = True,
     ):
         await interaction.response.defer(ephemeral=True)
+
+        account = self.social_db.get_by_username(username)
+        if not account or int(account["owner_id"]) != interaction.user.id:
+            return await interaction.followup.send(
+                "That account was not found in your registered Spidder accounts.",
+                ephemeral=True,
+            )
 
         target = channel or interaction.channel
 
@@ -8181,7 +8865,7 @@ class SpideyGov(commands.Cog):
                 "Pick a text channel (or run this inside a thread).",
                 ephemeral=True,
             )
-    
+
         try:
             webhook = await self._get_or_create_spidder_webhook(parent)
         except discord.Forbidden:
@@ -8190,36 +8874,50 @@ class SpideyGov(commands.Cog):
                 ephemeral=True,
             )
 
-        embed = self._spidder_embed(post_content)
+        final_post_image = None
+        if post_image:
+            if post_image.content_type and not post_image.content_type.startswith("image/"):
+                return await interaction.followup.send("post_image must be an image.", ephemeral=True)
+            final_post_image = post_image.url
+        elif post_image_url and post_image_url.strip():
+            final_post_image = post_image_url.strip()
 
-        username = interaction.user.display_name[:80]
-        avatar = interaction.user.display_avatar.url
+        embed = self._spidder_embed(post_content, post_image_url=final_post_image)
 
-        # Prefer webhook for the full “Spidder account” look.
-        # If webhook perms are missing, fall back to a normal bot embed w/ author attribution.
         if thread:
             msg = await webhook.send(
-                    embed=embed,
-                    username=username,
-                    avatar_url=avatar,
-                    wait=True,
-                    allowed_mentions=discord.AllowedMentions.none(),
-                    thread=thread
-                )
+                embed=embed,
+                username=account["username"][:80],
+                avatar_url=account.get("avatar_url"),
+                wait=True,
+                allowed_mentions=discord.AllowedMentions.none(),
+                thread=thread,
+            )
         else:
             msg = await webhook.send(
-                    embed=embed,
-                    username=username,
-                    avatar_url=avatar,
-                    wait=True,
-                    allowed_mentions=discord.AllowedMentions.none()
-                )
-        # Only auto-create a thread if we posted in a channel (not already in a thread)
+                embed=embed,
+                username=account["username"][:80],
+                avatar_url=account.get("avatar_url"),
+                wait=True,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+
         if make_thread and thread is None:
             try:
-                await msg.create_thread(name=f"Replies — {username}"[:100], auto_archive_duration=1440)
+                await msg.create_thread(name=f"Replies — {account['username']}"[:100], auto_archive_duration=1440)
             except discord.Forbidden:
                 pass
+
+        async with self.social_lock:
+            self.social_db.log_post(
+                account_id=int(account["account_id"]),
+                owner_id=int(account["owner_id"]),
+                actor_id=interaction.user.id,
+                channel_id=parent.id if parent else None,
+                thread_id=thread.id if thread else None,
+                message_id=msg.id,
+                jump_url=msg.jump_url,
+            )
 
         await interaction.followup.send(f"Posted: {msg.jump_url}", ephemeral=True)
 
@@ -8302,3 +9000,164 @@ class SpideyGov(commands.Cog):
         e.set_image(url="attachment://spending.png")
 
         await interaction.followup.send(embed=e, file=file, ephemeral=False)
+
+    async def draft_id_autocomplete(self, interaction: discord.Interaction, current: str):
+        drafts = self.drafts_db.search_drafts(current, limit=25)
+        out = []
+        for d in drafts:
+            label = f"{d['draft_id']} — {d['title']}"
+            out.append(app_commands.Choice(name=label[:100], value=d["draft_id"]))
+        return out[:25]
+    
+    @bill.command(name="draft_new", description="Create a new legislative draft.")
+    @app_commands.describe(
+        title="Working title for the draft",
+        short_title="Optional short title",
+        committee="Optional committee assignment",
+    )
+    async def draft_new(
+        self,
+        interaction: discord.Interaction,
+        title: str,
+        short_title: str | None = None,
+        committee: str | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        async with self.drafts_lock:
+            draft_id = self.drafts_db.create_draft(
+                owner_id=interaction.user.id,
+                title=title,
+                short_title=short_title,
+                committee=committee,
+            )
+
+        await interaction.followup.send(f"Created draft **{draft_id}**.", ephemeral=True)
+
+
+    @bill.command(name="draft_view", description="View a legislative draft.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete)
+    async def draft_view(self, interaction: discord.Interaction, draft_id: str):
+        await interaction.response.defer(ephemeral=True)
+
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.followup.send("Draft not found.", ephemeral=True)
+
+        owner = f"<@{d['owner_id']}>" if d.get("owner_id") else "Unknown"
+
+        e = discord.Embed(
+            title=f"{d['draft_id']} — {d['title']}",
+            description=f"**Status:** {d['status']}\n**Owner:** {owner}",
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
+        )
+
+        if d.get("short_title"):
+            e.add_field(name="Short Title", value=d["short_title"], inline=True)
+        if d.get("committee"):
+            e.add_field(name="Committee", value=d["committee"], inline=True)
+        if d.get("parent_draft_id"):
+            e.add_field(name="Forked From", value=d["parent_draft_id"], inline=True)
+
+        for key in DRAFT_BIN_ORDER:
+            raw = (d["bins"].get(key) or "").strip()
+            preview = raw if raw else "—"
+            if len(preview) > 700:
+                preview = preview[:700] + "…"
+            e.add_field(name=DRAFT_BINS[key], value=preview, inline=False)
+
+        await interaction.followup.send(embed=e, ephemeral=True)
+
+
+    @bill.command(name="draft_edit", description="Edit one section bin of a draft.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete)
+    @app_commands.describe(draft_id="Draft ID", section="Which part to edit")
+    @app_commands.choices(section=[app_commands.Choice(name=v, value=k) for k, v in DRAFT_BINS.items()])
+    async def draft_edit(self, interaction: discord.Interaction, draft_id: str, section: app_commands.Choice[str]):
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.response.send_message("Draft not found.", ephemeral=True)
+
+        initial = d["bins"].get(section.value, "")
+        await interaction.response.send_modal(DraftEditModal(self, draft_id, section.value, initial))
+
+
+    @bill.command(name="draft_fork", description="Fork another user's draft into your own version.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete)
+    @app_commands.describe(draft_id="Draft to fork", new_title="Title for your fork")
+    async def draft_fork(self, interaction: discord.Interaction, draft_id: str, new_title: str):
+        await interaction.response.defer(ephemeral=True)
+
+        async with self.drafts_lock:
+            new_id = self.drafts_db.fork_draft(
+                source_draft_id=draft_id,
+                actor_id=interaction.user.id,
+                new_title=new_title,
+            )
+
+        if not new_id:
+            return await interaction.followup.send("Source draft not found.", ephemeral=True)
+
+        await interaction.followup.send(f"Created fork **{new_id}**.", ephemeral=True)
+
+
+    @bill.command(name="draft_adopt", description="Adopt another draft's contents into your own draft.")
+    @app_commands.autocomplete(target_draft_id=draft_id_autocomplete, source_draft_id=draft_id_autocomplete)
+    @app_commands.describe(
+        target_draft_id="Your draft that will receive the adopted content",
+        source_draft_id="Source draft to adopt from",
+    )
+    async def draft_adopt(
+        self,
+        interaction: discord.Interaction,
+        target_draft_id: str,
+        source_draft_id: str,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        target = self.drafts_db.get_draft(target_draft_id)
+        if not target:
+            return await interaction.followup.send("Target draft not found.", ephemeral=True)
+
+        if target["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
+            return await interaction.followup.send(
+                "Only the owner of the target draft can adopt edits into it.",
+                ephemeral=True,
+            )
+
+        ok = self.drafts_db.adopt_draft(target_draft_id, source_draft_id, interaction.user.id)
+        if not ok:
+            return await interaction.followup.send("Adopt failed.", ephemeral=True)
+
+        await interaction.followup.send(
+            f"Adopted **{source_draft_id}** into **{target_draft_id}**.",
+            ephemeral=True,
+        )
+
+
+    @bill.command(name="draft_rename", description="Rename a draft.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete)
+    @app_commands.describe(draft_id="Draft ID", title="New title", short_title="Optional new short title")
+    async def draft_rename(
+        self,
+        interaction: discord.Interaction,
+        draft_id: str,
+        title: str,
+        short_title: str | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.followup.send("Draft not found.", ephemeral=True)
+
+        if d["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
+            return await interaction.followup.send("Only the draft owner can rename it.", ephemeral=True)
+
+        ok = self.drafts_db.rename_draft(draft_id, interaction.user.id, title, short_title)
+        if not ok:
+            return await interaction.followup.send("Rename failed.", ephemeral=True)
+
+        await interaction.followup.send("Renamed.", ephemeral=True)
+    
