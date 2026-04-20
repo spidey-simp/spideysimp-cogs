@@ -106,6 +106,14 @@ DRAFT_BIN_ORDER = [
     "housekeeping",
 ]
 
+DRAFT_SUBBIN_KEYS = [
+    "findings_purpose",
+    "definitions",
+    "provisions",
+    "appropriations",
+    "codifications",
+    "housekeeping",
+]
 
 def _blank_draft_bins() -> dict:
     return {k: "" for k in DRAFT_BINS.keys()}
@@ -130,7 +138,7 @@ class DraftsDB:
         return conn
 
     def init(self) -> None:
-        conn = self._connect()
+        `conn = self._connect()
         try:
             conn.executescript(
                 """
@@ -165,6 +173,22 @@ class DraftsDB:
 
                 CREATE INDEX IF NOT EXISTS idx_draft_events_draft_id ON draft_events(draft_id);
                 CREATE INDEX IF NOT EXISTS idx_draft_events_created_at ON draft_events(created_at);
+
+                CREATE TABLE IF NOT EXISTS draft_subbins (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    draft_id TEXT NOT NULL,
+                    bin_key TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    content TEXT NOT NULL DEFAULT '',
+                    position INTEGER NOT NULL DEFAULT 1,
+                    created_by INTEGER,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(draft_id) REFERENCES drafts(draft_id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_draft_subbins_draft_bin
+                    ON draft_subbins(draft_id, bin_key, position);
                 """
             )
             conn.commit()
@@ -400,6 +424,35 @@ class DraftsDB:
                     now,
                 ),
             )
+
+            subrows = conn.execute(
+                """
+                SELECT bin_key, title, content, position, created_by
+                FROM draft_subbins
+                WHERE draft_id = ?
+                ORDER BY bin_key, position, id
+                """,
+                (source_draft_id,),
+            ).fetchall()
+
+            for s in subrows:
+                conn.execute(
+                    """
+                    INSERT INTO draft_subbins(draft_id, bin_key, title, content, position, created_by, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        new_id,
+                        s["bin_key"],
+                        s["title"],
+                        s["content"],
+                        s["position"],
+                        s["created_by"],
+                        now,
+                        now,
+                    ),
+                )
+
             self._log_event(conn, new_id, actor_id, "fork", {"from": source_draft_id})
             conn.commit()
             return new_id
@@ -421,14 +474,47 @@ class DraftsDB:
             if not src or not tgt:
                 return False
 
+            now = _utcnow_iso()
+
             conn.execute(
                 """
                 UPDATE drafts
                 SET bins_json = ?, updated_at = ?
                 WHERE draft_id = ?
                 """,
-                (src["bins_json"], _utcnow_iso(), target_draft_id),
+                (src["bins_json"], now, target_draft_id),
             )
+
+            conn.execute("DELETE FROM draft_subbins WHERE draft_id = ?", (target_draft_id,))
+
+            subrows = conn.execute(
+                """
+                SELECT bin_key, title, content, position, created_by
+                FROM draft_subbins
+                WHERE draft_id = ?
+                ORDER BY bin_key, position, id
+                """,
+                (source_draft_id,),
+            ).fetchall()
+
+            for s in subrows:
+                conn.execute(
+                    """
+                    INSERT INTO draft_subbins(draft_id, bin_key, title, content, position, created_by, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        target_draft_id,
+                        s["bin_key"],
+                        s["title"],
+                        s["content"],
+                        s["position"],
+                        s["created_by"],
+                        now,
+                        now,
+                    ),
+                )
+
             self._log_event(conn, target_draft_id, actor_id, "adopt", {"from": source_draft_id})
             conn.commit()
             return True
@@ -461,6 +547,255 @@ class DraftsDB:
                     }
                 )
             return out
+        finally:
+            conn.close()
+    
+    def _get_subbins_grouped(self, conn: sqlite3.Connection, draft_id: str) -> dict[str, list[dict]]:
+        rows = conn.execute(
+            """
+            SELECT id, draft_id, bin_key, title, content, position, created_by, created_at, updated_at
+            FROM draft_subbins
+            WHERE draft_id = ?
+            ORDER BY bin_key, position, id
+            """,
+            (draft_id,),
+        ).fetchall()
+
+        grouped: dict[str, list[dict]] = {k: [] for k in DRAFT_BINS.keys()}
+        for r in rows:
+            grouped.setdefault(r["bin_key"], []).append({
+                "id": r["id"],
+                "draft_id": r["draft_id"],
+                "bin_key": r["bin_key"],
+                "title": r["title"],
+                "content": r["content"],
+                "position": r["position"],
+                "created_by": r["created_by"],
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+            })
+        return grouped
+
+    def _row_to_dict(self, row: sqlite3.Row, subbins: dict[str, list[dict]] | None = None) -> dict:
+        return {
+            "draft_id": row["draft_id"],
+            "schema_version": row["schema_version"],
+            "title": row["title"],
+            "short_title": row["short_title"],
+            "committee": row["committee"],
+            "status": row["status"],
+            "owner_id": row["owner_id"],
+            "parent_draft_id": row["parent_draft_id"],
+            "bins": json.loads(row["bins_json"]),
+            "subbins": subbins or {k: [] for k in DRAFT_BINS.keys()},
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def get_draft(self, draft_id: str) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM drafts WHERE draft_id = ?",
+                (draft_id,),
+            ).fetchone()
+            if not row:
+                return None
+            subbins = self._get_subbins_grouped(conn, draft_id)
+            return self._row_to_dict(row, subbins)
+        finally:
+            conn.close()
+
+    def add_subbin(self, draft_id: str, actor_id: int, bin_key: str, title: str, content: str) -> Optional[int]:
+        if bin_key not in DRAFT_SUBBIN_KEYS:
+            return None
+
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT draft_id FROM drafts WHERE draft_id = ?",
+                (draft_id,),
+            ).fetchone()
+            if not row:
+                return None
+
+            pos_row = conn.execute(
+                "SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM draft_subbins WHERE draft_id = ? AND bin_key = ?",
+                (draft_id, bin_key),
+            ).fetchone()
+            next_pos = int(pos_row["next_pos"] or 1)
+            now = _utcnow_iso()
+
+            cur = conn.execute(
+                """
+                INSERT INTO draft_subbins(draft_id, bin_key, title, content, position, created_by, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    draft_id,
+                    bin_key,
+                    title.strip()[:200],
+                    (content or "").strip(),
+                    next_pos,
+                    actor_id,
+                    now,
+                    now,
+                ),
+            )
+
+            conn.execute(
+                "UPDATE drafts SET updated_at = ? WHERE draft_id = ?",
+                (now, draft_id),
+            )
+            self._log_event(conn, draft_id, actor_id, "add_subbin", {"bin": bin_key, "title": title.strip()[:200]})
+            conn.commit()
+            return int(cur.lastrowid)
+        finally:
+            conn.close()
+
+    def get_subbin(self, draft_id: str, subbin_id: int) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                """
+                SELECT id, draft_id, bin_key, title, content, position, created_by, created_at, updated_at
+                FROM draft_subbins
+                WHERE draft_id = ? AND id = ?
+                """,
+                (draft_id, subbin_id),
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                "id": row["id"],
+                "draft_id": row["draft_id"],
+                "bin_key": row["bin_key"],
+                "title": row["title"],
+                "content": row["content"],
+                "position": row["position"],
+                "created_by": row["created_by"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+        finally:
+            conn.close()
+
+    def edit_subbin(self, draft_id: str, subbin_id: int, actor_id: int, title: str, content: str) -> bool:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT id, bin_key FROM draft_subbins WHERE draft_id = ? AND id = ?",
+                (draft_id, subbin_id),
+            ).fetchone()
+            if not row:
+                return False
+
+            now = _utcnow_iso()
+            conn.execute(
+                """
+                UPDATE draft_subbins
+                SET title = ?, content = ?, updated_at = ?
+                WHERE draft_id = ? AND id = ?
+                """,
+                (
+                    title.strip()[:200],
+                    (content or "").strip(),
+                    now,
+                    draft_id,
+                    subbin_id,
+                ),
+            )
+            conn.execute("UPDATE drafts SET updated_at = ? WHERE draft_id = ?", (now, draft_id))
+            self._log_event(conn, draft_id, actor_id, "edit_subbin", {"id": subbin_id, "bin": row["bin_key"]})
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
+    def delete_subbin(self, draft_id: str, subbin_id: int, actor_id: int) -> bool:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT id, bin_key, position FROM draft_subbins WHERE draft_id = ? AND id = ?",
+                (draft_id, subbin_id),
+            ).fetchone()
+            if not row:
+                return False
+
+            bin_key = row["bin_key"]
+            old_pos = int(row["position"])
+
+            conn.execute(
+                "DELETE FROM draft_subbins WHERE draft_id = ? AND id = ?",
+                (draft_id, subbin_id),
+            )
+            conn.execute(
+                """
+                UPDATE draft_subbins
+                SET position = position - 1
+                WHERE draft_id = ? AND bin_key = ? AND position > ?
+                """,
+                (draft_id, bin_key, old_pos),
+            )
+
+            now = _utcnow_iso()
+            conn.execute("UPDATE drafts SET updated_at = ? WHERE draft_id = ?", (now, draft_id))
+            self._log_event(conn, draft_id, actor_id, "delete_subbin", {"id": subbin_id, "bin": bin_key})
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+
+    def move_subbin(self, draft_id: str, subbin_id: int, actor_id: int, new_position: int) -> bool:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT id, bin_key, position FROM draft_subbins WHERE draft_id = ? AND id = ?",
+                (draft_id, subbin_id),
+            ).fetchone()
+            if not row:
+                return False
+
+            bin_key = row["bin_key"]
+            old_position = int(row["position"])
+
+            count_row = conn.execute(
+                "SELECT COUNT(*) AS n FROM draft_subbins WHERE draft_id = ? AND bin_key = ?",
+                (draft_id, bin_key),
+            ).fetchone()
+            max_pos = int(count_row["n"] or 1)
+            new_position = max(1, min(int(new_position), max_pos))
+
+            if new_position == old_position:
+                return True
+
+            if new_position < old_position:
+                conn.execute(
+                    """
+                    UPDATE draft_subbins
+                    SET position = position + 1
+                    WHERE draft_id = ? AND bin_key = ? AND position >= ? AND position < ?
+                    """,
+                    (draft_id, bin_key, new_position, old_position),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE draft_subbins
+                    SET position = position - 1
+                    WHERE draft_id = ? AND bin_key = ? AND position > ? AND position <= ?
+                    """,
+                    (draft_id, bin_key, old_position, new_position),
+                )
+
+            conn.execute(
+                "UPDATE draft_subbins SET position = ?, updated_at = ? WHERE draft_id = ? AND id = ?",
+                (new_position, _utcnow_iso(), draft_id, subbin_id),
+            )
+            conn.execute("UPDATE drafts SET updated_at = ? WHERE draft_id = ?", (_utcnow_iso(), draft_id))
+            self._log_event(conn, draft_id, actor_id, "move_subbin", {"id": subbin_id, "bin": bin_key, "to": new_position})
+            conn.commit()
+            return True
         finally:
             conn.close()
 
@@ -2069,6 +2404,54 @@ def _usc_chunk_lines(lines: list[str], limit: int = 1700) -> list[str]:
         pages.append("\n".join(cur))
     return pages or ["(none)"]
 
+class DraftReaderView(discord.ui.View):
+    def __init__(self, title: str, pages: list[str], user_id: int):
+        super().__init__(timeout=900)
+        self.title = title
+        self.pages = pages or ["(empty)"]
+        self.user_id = user_id
+        self.index = 0
+        self.prev_button.disabled = True
+        if len(self.pages) == 1:
+            self.next_button.disabled = True
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("Only the requester can use these controls.", ephemeral=True)
+            return False
+        return True
+
+    def _content(self) -> str:
+        return (
+            f"**{self.title}**\n"
+            f"```text\n{self.pages[self.index]}\n```\n"
+            f"`Page {self.index+1}/{len(self.pages)}`"
+        )
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.index > 0:
+            self.index -= 1
+        self.prev_button.disabled = (self.index == 0)
+        self.next_button.disabled = (self.index >= len(self.pages) - 1)
+        await interaction.response.edit_message(content=self._content(), view=self)
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary)
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.index < len(self.pages) - 1:
+            self.index += 1
+        self.prev_button.disabled = (self.index == 0)
+        self.next_button.disabled = (self.index >= len(self.pages) - 1)
+        await interaction.response.edit_message(content=self._content(), view=self)
+
+    @discord.ui.button(label="Close", style=discord.ButtonStyle.danger)
+    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for child in self.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+        await interaction.response.edit_message(view=self)
+        self.stop()
+
 
 class USCTextPaginator(discord.ui.View):
     def __init__(self, title: str, pages: list[str], meta: str | None = None):
@@ -3614,6 +3997,80 @@ class DraftEditModal(discord.ui.Modal):
             return await interaction.response.send_message("Edit failed.", ephemeral=True)
 
         await interaction.response.send_message("Draft updated.", ephemeral=True)
+
+class DraftSubbinModal(discord.ui.Modal):
+    def __init__(
+        self,
+        cog,
+        draft_id: str,
+        bin_key: str,
+        mode: str = "add",
+        subbin_id: int | None = None,
+        initial_title: str = "",
+        initial_content: str = "",
+    ):
+        super().__init__(title=f"{'Add' if mode == 'add' else 'Edit'} {DRAFT_BINS.get(bin_key, bin_key)} Entry")
+        self.cog = cog
+        self.draft_id = draft_id
+        self.bin_key = bin_key
+        self.mode = mode
+        self.subbin_id = subbin_id
+
+        self.entry_title = discord.ui.TextInput(
+            label="Entry Title",
+            style=discord.TextStyle.short,
+            max_length=200,
+            required=True,
+            default=(initial_title or "")[:200],
+        )
+        self.entry_body = discord.ui.TextInput(
+            label="Entry Text",
+            style=discord.TextStyle.paragraph,
+            max_length=4000,
+            required=False,
+            default=(initial_content or "")[:3900],
+        )
+
+        self.add_item(self.entry_title)
+        self.add_item(self.entry_body)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        draft = self.cog.drafts_db.get_draft(self.draft_id)
+        if not draft:
+            return await interaction.response.send_message("Draft not found.", ephemeral=True)
+
+        if draft["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
+            return await interaction.response.send_message(
+                "You cannot directly edit someone else’s draft. Fork it instead.",
+                ephemeral=True,
+            )
+
+        if self.mode == "add":
+            subbin_id = self.cog.drafts_db.add_subbin(
+                self.draft_id,
+                interaction.user.id,
+                self.bin_key,
+                str(self.entry_title.value or ""),
+                str(self.entry_body.value or ""),
+            )
+            if not subbin_id:
+                return await interaction.response.send_message("Could not add entry.", ephemeral=True)
+            return await interaction.response.send_message(
+                f"Added subbin **#{subbin_id}** to **{DRAFT_BINS.get(self.bin_key, self.bin_key)}**.",
+                ephemeral=True,
+            )
+
+        ok = self.cog.drafts_db.edit_subbin(
+            self.draft_id,
+            int(self.subbin_id),
+            interaction.user.id,
+            str(self.entry_title.value or ""),
+            str(self.entry_body.value or ""),
+        )
+        if not ok:
+            return await interaction.response.send_message("Could not edit entry.", ephemeral=True)
+
+        await interaction.response.send_message(f"Updated subbin **#{self.subbin_id}**.", ephemeral=True)
 
 class CodeChapterUploadModal(discord.ui.Modal, title="Upload Chapter Body"):
     """
@@ -9009,6 +9466,26 @@ class SpideyGov(commands.Cog):
             out.append(app_commands.Choice(name=label[:100], value=d["draft_id"]))
         return out[:25]
     
+    async def draft_subbin_autocomplete(self, interaction: discord.Interaction, current: str):
+        draft_id = getattr(interaction.namespace, "draft_id", None)
+        if not draft_id:
+            return []
+
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return []
+
+        cur = (current or "").lower()
+        out = []
+
+        for bin_key in DRAFT_BIN_ORDER:
+            for s in d.get("subbins", {}).get(bin_key, []):
+                label = f"{s['id']} — {DRAFT_BINS.get(bin_key, bin_key)} — {s['title']}"
+                if not cur or cur in label.lower():
+                    out.append(app_commands.Choice(name=label[:100], value=str(s["id"])))
+
+        return out[:25] 
+    
     @bill.command(name="draft_new", description="Create a new legislative draft.")
     @app_commands.describe(
         title="Working title for the draft",
@@ -9063,8 +9540,17 @@ class SpideyGov(commands.Cog):
         for key in DRAFT_BIN_ORDER:
             raw = (d["bins"].get(key) or "").strip()
             preview = raw if raw else "—"
-            if len(preview) > 700:
-                preview = preview[:700] + "…"
+
+            subbins = d.get("subbins", {}).get(key, [])
+            if subbins:
+                lines = [f"[{s['id']}] {s['title']}" for s in subbins[:6]]
+                if len(subbins) > 6:
+                    lines.append(f"… +{len(subbins) - 6} more")
+                preview = f"{preview}\n\n**Entries:**\n" + "\n".join(lines)
+
+            if len(preview) > 900:
+                preview = preview[:900] + "…"
+
             e.add_field(name=DRAFT_BINS[key], value=preview, inline=False)
 
         await interaction.followup.send(embed=e, ephemeral=True)
@@ -9161,3 +9647,245 @@ class SpideyGov(commands.Cog):
 
         await interaction.followup.send("Renamed.", ephemeral=True)
     
+    @bill.command(name="draft_add_subbin", description="Add an expandable entry under a draft bin.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete)
+    @app_commands.describe(draft_id="Draft ID", section="Which main bin gets the entry")
+    @app_commands.choices(section=[app_commands.Choice(name=DRAFT_BINS[k], value=k) for k in DRAFT_SUBBIN_KEYS])
+    async def draft_add_subbin(self, interaction: discord.Interaction, draft_id: str, section: app_commands.Choice[str]):
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.response.send_message("Draft not found.", ephemeral=True)
+
+        await interaction.response.send_modal(
+            DraftSubbinModal(self, draft_id, section.value, mode="add")
+        )
+
+    @bill.command(name="draft_edit_subbin", description="Edit one subbin entry.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete, subbin_id=draft_subbin_autocomplete)
+    @app_commands.describe(draft_id="Draft ID", subbin_id="Subbin entry ID")
+    async def draft_edit_subbin(self, interaction: discord.Interaction, draft_id: str, subbin_id: str):
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.response.send_message("Draft not found.", ephemeral=True)
+
+        sb = self.drafts_db.get_subbin(draft_id, int(subbin_id))
+        if not sb:
+            return await interaction.response.send_message("Subbin not found.", ephemeral=True)
+
+        await interaction.response.send_modal(
+            DraftSubbinModal(
+                self,
+                draft_id,
+                sb["bin_key"],
+                mode="edit",
+                subbin_id=sb["id"],
+                initial_title=sb["title"],
+                initial_content=sb["content"],
+            )
+        )
+
+    @bill.command(name="draft_delete_subbin", description="Delete one subbin entry.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete, subbin_id=draft_subbin_autocomplete)
+    @app_commands.describe(draft_id="Draft ID", subbin_id="Subbin entry ID")
+    async def draft_delete_subbin(self, interaction: discord.Interaction, draft_id: str, subbin_id: str):
+        await interaction.response.defer(ephemeral=True)
+
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.followup.send("Draft not found.", ephemeral=True)
+
+        if d["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
+            return await interaction.followup.send("Only the draft owner can delete entries.", ephemeral=True)
+
+        ok = self.drafts_db.delete_subbin(draft_id, int(subbin_id), interaction.user.id)
+        if not ok:
+            return await interaction.followup.send("Delete failed.", ephemeral=True)
+
+        await interaction.followup.send("Deleted.", ephemeral=True)
+
+    @bill.command(name="draft_move_subbin", description="Reorder a subbin entry within its main bin.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete, subbin_id=draft_subbin_autocomplete)
+    @app_commands.describe(draft_id="Draft ID", subbin_id="Subbin entry ID", new_position="New position within that bin")
+    async def draft_move_subbin(
+        self,
+        interaction: discord.Interaction,
+        draft_id: str,
+        subbin_id: str,
+        new_position: app_commands.Range[int, 1, 999],
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.followup.send("Draft not found.", ephemeral=True)
+
+        if d["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
+            return await interaction.followup.send("Only the draft owner can reorder entries.", ephemeral=True)
+
+        ok = self.drafts_db.move_subbin(draft_id, int(subbin_id), interaction.user.id, int(new_position))
+        if not ok:
+            return await interaction.followup.send("Move failed.", ephemeral=True)
+
+        await interaction.followup.send(f"Moved subbin **#{subbin_id}** to position **{new_position}**.", ephemeral=True)
+    
+    async def _draft_chunk_text(self, text: str, limit: int = 1700) -> list[str]:
+        lines = (text or "").splitlines() or [""]
+        chunks: list[str] = []
+        cur: list[str] = []
+        cur_len = 0
+
+        for ln in lines:
+            add = len(ln) + 1
+            if cur and (cur_len + add) > limit:
+                chunks.append("\n".join(cur))
+                cur = [ln]
+                cur_len = add
+            else:
+                cur.append(ln)
+                cur_len += add
+
+        if cur:
+            chunks.append("\n".join(cur))
+        return chunks or ["(empty)"]
+
+
+    async def _draft_render_subbin_text(self, d: dict, sb: dict) -> tuple[str, str]:
+        header = f"{d['draft_id']} — {d['title']}"
+        where = f"{DRAFT_BINS.get(sb['bin_key'], sb['bin_key'])} • [{sb['id']}] {sb['title']}"
+        body = (sb.get("content") or "").strip() or "—"
+        return header, f"{where}\n\n{body}"
+
+
+    async def _draft_render_full_pages(self, d: dict) -> list[str]:
+        pages: list[str] = []
+
+        meta = [
+            f"Draft: {d['draft_id']}",
+            f"Title: {d['title']}",
+            f"Status: {d.get('status','DRAFT')}",
+            f"Owner: <@{d['owner_id']}>",
+        ]
+        if d.get("short_title"):
+            meta.append(f"Short Title: {d['short_title']}")
+        if d.get("committee"):
+            meta.append(f"Committee: {d['committee']}")
+        if d.get("parent_draft_id"):
+            meta.append(f"Forked From: {d['parent_draft_id']}")
+
+        intro = "\n".join(meta)
+        pages.extend(self._draft_chunk_text(intro, limit=1700))
+
+        for key in DRAFT_BIN_ORDER:
+            bin_name = DRAFT_BINS[key]
+            main_text = (d.get("bins", {}).get(key) or "").strip()
+            subbins = d.get("subbins", {}).get(key, []) or []
+
+            section_parts = [f"=== {bin_name} ==="]
+            if main_text:
+                section_parts.append(main_text)
+            else:
+                section_parts.append("—")
+
+            if subbins:
+                section_parts.append("")
+                section_parts.append("Entries:")
+                for sb in subbins:
+                    section_parts.append(f"[{sb['id']}] {sb['title']}")
+                    if (sb.get("content") or "").strip():
+                        section_parts.append(sb["content"].strip())
+                    else:
+                        section_parts.append("—")
+                    section_parts.append("")
+
+            section_text = "\n".join(section_parts).strip()
+            pages.extend(self._draft_chunk_text(section_text, limit=1700))
+
+        return pages or ["(empty draft)"]
+    
+    @bill.command(name="draft_view_subbin", description="View one draft subbin in full.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete, subbin_id=draft_subbin_autocomplete)
+    @app_commands.describe(draft_id="Draft ID", subbin_id="Subbin entry ID")
+    async def draft_view_subbin(self, interaction: discord.Interaction, draft_id: str, subbin_id: str):
+        await interaction.response.defer(ephemeral=True)
+
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.followup.send("Draft not found.", ephemeral=True)
+
+        sb = self.drafts_db.get_subbin(draft_id, int(subbin_id))
+        if not sb:
+            return await interaction.followup.send("Subbin not found.", ephemeral=True)
+
+        title, full_text = self._draft_render_subbin_text(d, sb)
+        pages = self._draft_chunk_text(full_text, limit=1700)
+        view = DraftReaderView(title=title, pages=pages, user_id=interaction.user.id)
+
+        await interaction.followup.send(content=view._content(), view=view, ephemeral=True)
+
+
+    @bill.command(name="draft_view_full", description="Read the full draft in a paginator.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete)
+    @app_commands.describe(draft_id="Draft ID")
+    async def draft_view_full(self, interaction: discord.Interaction, draft_id: str):
+        await interaction.response.defer(ephemeral=True)
+
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.followup.send("Draft not found.", ephemeral=True)
+
+        pages = self._draft_render_full_pages(d)
+        view = DraftReaderView(
+            title=f"{d['draft_id']} — {d['title']}",
+            pages=pages,
+            user_id=interaction.user.id,
+        )
+
+        await interaction.followup.send(content=view._content(), view=view, ephemeral=True)
+
+
+    @bill.command(name="draft_publish_thread", description="Post the full draft into a thread for reading/comment.")
+    @app_commands.autocomplete(draft_id=draft_id_autocomplete)
+    @app_commands.describe(
+        draft_id="Draft ID",
+        channel="Where to post the draft header (defaults to current channel)",
+    )
+    async def draft_publish_thread(
+        self,
+        interaction: discord.Interaction,
+        draft_id: str,
+        channel: discord.TextChannel | None = None,
+    ):
+        await interaction.response.defer(ephemeral=True)
+
+        d = self.drafts_db.get_draft(draft_id)
+        if not d:
+            return await interaction.followup.send("Draft not found.", ephemeral=True)
+
+        target = channel or interaction.channel
+        if not isinstance(target, discord.TextChannel):
+            return await interaction.followup.send("Pick a text channel.", ephemeral=True)
+
+        header = await target.send(
+            f"**{d['draft_id']} — {d['title']}**\n"
+            f"Posted for full-text review. Thread below ⤵️",
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+        try:
+            thread = await header.create_thread(
+                name=f"{d['draft_id']} • {d['title']}"[:100],
+                auto_archive_duration=1440,
+            )
+        except discord.Forbidden:
+            return await interaction.followup.send("I couldn't create a thread there.", ephemeral=True)
+
+        pages = self._draft_render_full_pages(d)
+        for page in pages:
+            await thread.send(f"```text\n{page}\n```", allowed_mentions=discord.AllowedMentions.none())
+
+        # optional plain-text attachment for the whole thing
+        full_text = "\n\n".join(self._draft_render_full_pages(d))
+        fp = io.BytesIO(full_text.encode("utf-8"))
+        await thread.send(file=discord.File(fp=fp, filename=f"{d['draft_id']}_draft.txt"))
+
+        await interaction.followup.send(f"Posted: {header.jump_url}", ephemeral=True)
