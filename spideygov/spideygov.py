@@ -138,7 +138,7 @@ class DraftsDB:
         return conn
 
     def init(self) -> None:
-        `conn = self._connect()
+        conn = self._connect()
         try:
             conn.executescript(
                 """
