@@ -195,6 +195,8 @@ class UnoGame:
         self.pending_draw_amount = 0
         self.pending_draw_type: Optional[str] = None
         self.last_action = "Game created. Waiting for players."
+        self.table_message_id: Optional[int] = None
+        self.next_cpu_number = 1
 
     def add_player(self, user_id: int) -> None:
         if self.started:
@@ -213,6 +215,96 @@ class UnoGame:
         self.players.remove(user_id)
         if self.host_id == user_id and self.players:
             self.host_id = self.players[0]
+    
+    def is_cpu(self, player_id: int) -> bool:
+        return player_id < 0
+
+    def player_display(self, player_id: int) -> str:
+        if self.is_cpu(player_id):
+            return f"CPU {abs(player_id)}"
+        return f"<@{player_id}>"
+
+    def add_cpu(self) -> int:
+        if self.started:
+            raise ValueError("You cannot add a CPU after the game has started.")
+        if len(self.players) >= 10:
+            raise ValueError("Uno supports up to 10 players total.")
+
+        cpu_id = -self.next_cpu_number
+        self.next_cpu_number += 1
+        self.players.append(cpu_id)
+        self.last_action = f"{self.player_display(cpu_id)} joined the game."
+        return cpu_id
+
+    def remove_cpu(self) -> int:
+        if self.started:
+            raise ValueError("You cannot remove a CPU after the game has started.")
+
+        cpu_players = [pid for pid in self.players if self.is_cpu(pid)]
+
+        if not cpu_players:
+            raise ValueError("There are no CPU players to remove.")
+
+        cpu_id = cpu_players[-1]
+        self.players.remove(cpu_id)
+        self.last_action = f"{self.player_display(cpu_id)} left the lobby."
+        return cpu_id
+
+    def choose_cpu_card(self, player_id: int) -> Optional[UnoCard]:
+        legal = self.legal_cards(player_id)
+
+        if not legal:
+            return None
+
+        def cpu_priority(card: UnoCard):
+            # Basic idiot-brain CPU:
+            # 1. Prefer non-wilds.
+            # 2. Prefer action cards before numbers.
+            # 3. Use wilds last.
+            is_wild = 1 if card.color == "W" else 0
+            action_priority = {
+                "DRAW2": 0,
+                "SKIP": 1,
+                "REVERSE": 2,
+                "9": 3,
+                "8": 4,
+                "7": 5,
+                "6": 6,
+                "5": 7,
+                "4": 8,
+                "3": 9,
+                "2": 10,
+                "1": 11,
+                "0": 12,
+                "WILD": 13,
+                "WILD4": 14,
+            }
+            return (is_wild, action_priority.get(card.value, 99), card.color)
+
+        legal.sort(key=cpu_priority)
+        return legal[0]
+
+    def play_cpu_turn(self) -> Tuple[bool, str]:
+        player_id = self.current_player_id
+
+        if not self.is_cpu(player_id):
+            raise ValueError("It is not a CPU's turn.")
+
+        cpu_name = self.player_display(player_id)
+        card = self.choose_cpu_card(player_id)
+
+        if card:
+            chosen_color = None
+
+            if card.color == "W":
+                chosen_color = self.choose_default_wild_color(player_id)
+
+            won, message = self.play_card(player_id, card, chosen_color)
+            return won, message
+
+        won, private_msg = self.draw_until_playable(player_id)
+        self.last_action = f"{cpu_name} drew until playable. {self.last_action}"
+        return won, private_msg
 
     def start(self) -> None:
         if self.started:
@@ -345,6 +437,8 @@ class UnoGame:
         if not self.is_legal(card):
             raise ValueError("That card is not legal right now.")
 
+        player_name = self.player_display(player_id)
+
         self.hands[player_id].remove(card)
         self.discard.append(card)
 
@@ -356,7 +450,7 @@ class UnoGame:
             self.current_color = card.color
 
         if not self.hands[player_id]:
-            self.last_action = f"<@{player_id}> played {card.short()} and won the game!"
+            self.last_action = f"{player_name} played {card.short()} and won the game!"
             return True, self.last_action
 
         uno_note = " UNO!" if len(self.hands[player_id]) == 1 else ""
@@ -367,24 +461,28 @@ class UnoGame:
             self.pending_draw_type = "DRAW2"
             self.current_index = self.next_index_from(play_index, 1)
             self.last_action = (
-                f"<@{player_id}> played {card.short()}.{uno_note} "
+                f"{player_name} played {card.short()}.{uno_note} "
                 f"Draw stack is now +{self.pending_draw_amount}."
             )
 
         elif card.value == "WILD4":
             victim_index = self.next_index_from(play_index, 1)
             victim_id = self.players[victim_index]
+            victim_name = self.player_display(victim_id)
+
             self.draw_cards(victim_id, 4)
             self.current_index = self.next_index_from(play_index, 2)
             self.last_action = (
-                f"<@{player_id}> played {card.short()} and chose {COLOR_NAMES[self.current_color]}.{uno_note} "
-                f"<@{victim_id}> drew 4 and was skipped."
+                f"{player_name} played {card.short()} and chose {COLOR_NAMES[self.current_color]}.{uno_note} "
+                f"{victim_name} drew 4 and was skipped."
             )
 
         elif card.value == "SKIP":
             skipped_id = self.players[self.next_index_from(play_index, 1)]
+            skipped_name = self.player_display(skipped_id)
+
             self.current_index = self.next_index_from(play_index, 2)
-            self.last_action = f"<@{player_id}> played {card.short()}.{uno_note} <@{skipped_id}> was skipped."
+            self.last_action = f"{player_name} played {card.short()}.{uno_note} {skipped_name} was skipped."
 
         elif card.value == "REVERSE":
             self.direction *= -1
@@ -392,27 +490,47 @@ class UnoGame:
             if len(self.players) == 2:
                 self.current_index = play_index
                 self.last_action = (
-                    f"<@{player_id}> played {card.short()}.{uno_note} "
+                    f"{player_name} played {card.short()}.{uno_note} "
                     f"Reverse acts like a skip with 2 players."
                 )
             else:
                 self.current_index = self.next_index_from(play_index, 1)
-                self.last_action = f"<@{player_id}> played {card.short()}.{uno_note} Turn order reversed."
+                self.last_action = f"{player_name} played {card.short()}.{uno_note} Turn order reversed."
 
         else:
             self.current_index = self.next_index_from(play_index, 1)
 
             if card.color == "W":
                 self.last_action = (
-                    f"<@{player_id}> played {card.short()} and chose "
+                    f"{player_name} played {card.short()} and chose "
                     f"{COLOR_NAMES[self.current_color]}.{uno_note}"
                 )
             else:
-                self.last_action = f"<@{player_id}> played {card.short()}.{uno_note}"
+                self.last_action = f"{player_name} played {card.short()}.{uno_note}"
 
         return False, self.last_action
 
     def take_draw_action(self, player_id: int) -> str:
+        if player_id != self.current_player_id:
+            raise ValueError("It is not your turn.")
+
+        player_name = self.player_display(player_id)
+
+        if self.pending_draw_amount > 0:
+            amount = self.pending_draw_amount
+            self.draw_cards(player_id, amount)
+            self.pending_draw_amount = 0
+            self.pending_draw_type = None
+            self.current_index = self.next_index_from(self.current_index, 1)
+            self.last_action = f"{player_name} drew {amount} cards from the +2 stack and was skipped."
+            return self.last_action
+
+        drawn = self.draw_cards(player_id, 1)[0]
+        self.current_index = self.next_index_from(self.current_index, 1)
+        self.last_action = f"{player_name} drew 1 card and passed."
+        return f"You drew {drawn.short()}. Turn passed."
+
+    def draw_until_playable(self, player_id: int) -> Tuple[bool, str]:
         if player_id != self.current_player_id:
             raise ValueError("It is not your turn.")
 
@@ -422,14 +540,37 @@ class UnoGame:
             self.pending_draw_amount = 0
             self.pending_draw_type = None
             self.current_index = self.next_index_from(self.current_index, 1)
-            self.last_action = f"<@{player_id}> drew {amount} cards from the +2 stack and was skipped."
-            return self.last_action
+            player_name = self.player_display(player_id)
+            self.last_action = f"{player_name} drew {amount} cards from the +2 stack and was skipped."
+            return False, f"You drew {amount} cards from the +2 stack. Your turn was skipped."
 
-        drawn = self.draw_cards(player_id, 1)[0]
-        self.current_index = self.next_index_from(self.current_index, 1)
-        self.last_action = f"<@{player_id}> drew 1 card and passed."
-        return f"You drew {drawn.short()}. Turn passed."
+        drawn_cards: List[UnoCard] = []
+        playable_card: Optional[UnoCard] = None
 
+        while playable_card is None:
+            drawn = self.draw_cards(player_id, 1)[0]
+            drawn_cards.append(drawn)
+
+            if self.is_legal(drawn):
+                playable_card = drawn
+
+        chosen_color = None
+        if playable_card.color == "W":
+            chosen_color = self.choose_default_wild_color(player_id)
+
+        won, _message = self.play_card(player_id, playable_card, chosen_color)
+
+        if len(drawn_cards) == 1:
+            private_msg = f"You drew {playable_card.short()} and automatically played it."
+        else:
+            drawn_text = ", ".join(card.short() for card in drawn_cards)
+            private_msg = (
+                f"You drew {len(drawn_cards)} cards until you found a playable card: {drawn_text}\n"
+                f"Automatically played {playable_card.short()}."
+            )
+
+        return won, private_msg
+    
     def hand_text(self, player_id: int) -> str:
         hand = self.hands.get(player_id, [])
 
@@ -457,9 +598,9 @@ class UnoGame:
         embed = discord.Embed(title="Uno", color=discord.Color.blurple())
 
         if not self.started:
-            mentions = "\n".join(f"<@{pid}>" for pid in self.players)
+            names = "\n".join(self.player_display(pid) for pid in self.players)
             embed.description = self.last_action
-            embed.add_field(name="Players", value=mentions or "None", inline=False)
+            embed.add_field(name="Players", value=names or "None", inline=False)
             return embed
 
         direction = "clockwise" if self.direction == 1 else "counter-clockwise"
@@ -471,7 +612,7 @@ class UnoGame:
             value=f"{self.top_card.short()} | Current color: **{current_color}**",
             inline=False,
         )
-        embed.add_field(name="Turn", value=f"<@{self.current_player_id}>", inline=True)
+        embed.add_field(name="Turn", value=self.player_display(self.current_player_id), inline=True)
         embed.add_field(name="Direction", value=direction, inline=True)
 
         if self.pending_draw_amount > 0:
@@ -487,7 +628,7 @@ class UnoGame:
             marker = "➡️ " if idx == self.current_index else ""
             count = len(self.hands.get(pid, []))
             plural = "card" if count == 1 else "cards"
-            player_lines.append(f"{marker}<@{pid}> — {count} {plural}")
+            player_lines.append(f"{marker}{self.player_display(pid)} — {count} {plural}")
 
         embed.add_field(name="Players", value="\n".join(player_lines), inline=False)
         return embed
@@ -573,6 +714,294 @@ def parse_move(raw: str) -> ParsedMove:
             return ParsedMove(exact_color=color_letter, exact_value=value)
 
     return ParsedMove()
+
+class UnoPlayModal(discord.ui.Modal):
+    def __init__(self, cog, channel_id: int):
+        super().__init__(title="Play Uno Card")
+        self.cog = cog
+        self.channel_id = channel_id
+        self.notation_input = discord.ui.TextInput(
+            label="Card notation",
+            placeholder="G1, B+2, YS, GREV, W:G, W4:B, G, 1, +2",
+            max_length=20,
+            required=True,
+        )
+        self.add_item(self.notation_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        game = self.cog.uno_games.get(self.channel_id)
+
+        if not game:
+            await interaction.response.send_message("That Uno game no longer exists.", ephemeral=True)
+            return
+
+        if not game.started:
+            await interaction.response.send_message("The game has not started yet.", ephemeral=True)
+            return
+
+        if interaction.user.id not in game.players:
+            await interaction.response.send_message("You are not in this Uno game.", ephemeral=True)
+            return
+
+        if interaction.user.id != game.current_player_id:
+            await interaction.response.send_message("It is not your turn.", ephemeral=True)
+            return
+
+        notation = str(self.notation_input.value)
+        parsed = parse_move(notation)
+        card, error = game.find_card(interaction.user.id, parsed)
+
+        if error:
+            await interaction.response.send_message(error, ephemeral=True)
+            return
+
+        chosen_color = parsed.chosen_color
+
+        if card.color == "W" and chosen_color is None:
+            chosen_color = game.choose_default_wild_color(interaction.user.id)
+
+        won, _message = game.play_card(interaction.user.id, card, chosen_color)
+
+        if won:
+            await interaction.response.send_message(f"You played {card.short()} and won!", ephemeral=True)
+            await self.cog._close_uno_table(game)
+            self.cog.uno_games.pop(self.channel_id, None)
+            return
+
+        await interaction.response.send_message(
+            f"Played {card.short()}.\n\nUpdated hand:\n{game.hand_text(interaction.user.id)}",
+            ephemeral=True,
+        )
+        await self.cog._refresh_uno_table(game)
+        await self.cog._process_cpu_turns(game)
+
+
+class UnoLobbyView(discord.ui.View):
+    def __init__(self, cog):
+        super().__init__(timeout=None)
+        self.cog = cog
+
+    def _game(self, interaction: discord.Interaction) -> Optional[UnoGame]:
+        channel_id = interaction.channel.id if interaction.channel else None
+        if channel_id is None:
+            return None
+        return self.cog.uno_games.get(channel_id)
+
+    @discord.ui.button(label="Join", style=discord.ButtonStyle.success)
+    async def join_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno lobby no longer exists.", ephemeral=True)
+            return
+
+        try:
+            game.add_player(interaction.user.id)
+            game.last_action = f"{interaction.user.mention} joined the game."
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+
+        await interaction.response.defer()
+        await self.cog._refresh_uno_table(game)
+
+    @discord.ui.button(label="Leave", style=discord.ButtonStyle.secondary)
+    async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno lobby no longer exists.", ephemeral=True)
+            return
+
+        try:
+            game.remove_player(interaction.user.id)
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+
+        if not game.players:
+            self.cog.uno_games.pop(game.channel_id, None)
+            await interaction.response.edit_message(content="Uno lobby closed.", embed=None, view=None)
+            return
+
+        game.last_action = f"{interaction.user.mention} left the lobby."
+        await interaction.response.defer()
+        await self.cog._refresh_uno_table(game)
+
+    @discord.ui.button(label="Start", style=discord.ButtonStyle.primary)
+    async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno lobby no longer exists.", ephemeral=True)
+            return
+
+        if not self.cog._is_uno_host_or_mod_user(interaction.user, game):
+            await interaction.response.send_message("Only the host or a server manager can start this game.", ephemeral=True)
+            return
+
+        try:
+            game.start()
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+
+        await interaction.response.defer()
+        await self.cog._refresh_uno_table(game)
+        await self.cog._process_cpu_turns(game)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.danger)
+    async def cancel_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno lobby no longer exists.", ephemeral=True)
+            return
+
+        if not self.cog._is_uno_host_or_mod_user(interaction.user, game):
+            await interaction.response.send_message("Only the host or a server manager can cancel this game.", ephemeral=True)
+            return
+
+        self.cog.uno_games.pop(game.channel_id, None)
+        await interaction.response.edit_message(content="Uno lobby cancelled.", embed=None, view=None)
+
+    @discord.ui.button(label="Add CPU", style=discord.ButtonStyle.secondary, row=1)
+    async def add_cpu_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno lobby no longer exists.", ephemeral=True)
+            return
+
+        if not self.cog._is_uno_host_or_mod_user(interaction.user, game):
+            await interaction.response.send_message("Only the host or a server manager can add CPUs.", ephemeral=True)
+            return
+
+        try:
+            game.add_cpu()
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+
+        await interaction.response.defer()
+        await self.cog._refresh_uno_table(game)
+
+    @discord.ui.button(label="Remove CPU", style=discord.ButtonStyle.secondary, row=1)
+    async def remove_cpu_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno lobby no longer exists.", ephemeral=True)
+            return
+
+        if not self.cog._is_uno_host_or_mod_user(interaction.user, game):
+            await interaction.response.send_message("Only the host or a server manager can remove CPUs.", ephemeral=True)
+            return
+
+        try:
+            game.remove_cpu()
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+
+        await interaction.response.defer()
+        await self.cog._refresh_uno_table(game)
+
+class UnoGameView(discord.ui.View):
+    def __init__(self, cog):
+        super().__init__(timeout=None)
+        self.cog = cog
+
+    def _game(self, interaction: discord.Interaction) -> Optional[UnoGame]:
+        channel_id = interaction.channel.id if interaction.channel else None
+        if channel_id is None:
+            return None
+        return self.cog.uno_games.get(channel_id)
+
+    @discord.ui.button(label="View Hand", style=discord.ButtonStyle.secondary)
+    async def view_hand_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno game no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id not in game.players:
+            await interaction.response.send_message("You are not in this Uno game.", ephemeral=True)
+            return
+
+        await interaction.response.send_message(
+            "Your Uno hand:\n" + game.hand_text(interaction.user.id),
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="Play Card", style=discord.ButtonStyle.primary)
+    async def play_card_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno game no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id not in game.players:
+            await interaction.response.send_message("You are not in this Uno game.", ephemeral=True)
+            return
+
+        if interaction.user.id != game.current_player_id:
+            await interaction.response.send_message("It is not your turn.", ephemeral=True)
+            return
+
+        await interaction.response.send_modal(UnoPlayModal(self.cog, game.channel_id))
+
+    @discord.ui.button(label="Draw", style=discord.ButtonStyle.success)
+    async def draw_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno game no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id not in game.players:
+            await interaction.response.send_message("You are not in this Uno game.", ephemeral=True)
+            return
+
+        if interaction.user.id != game.current_player_id:
+            await interaction.response.send_message("It is not your turn.", ephemeral=True)
+            return
+
+        try:
+            won, private_msg = game.draw_until_playable(interaction.user.id)
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+
+        if won:
+            await interaction.response.send_message(private_msg, ephemeral=True)
+            await self.cog._close_uno_table(game)
+            self.cog.uno_games.pop(game.channel_id, None)
+            return
+
+        await interaction.response.send_message(
+            private_msg + "\n\nUpdated hand:\n" + game.hand_text(interaction.user.id),
+            ephemeral=True,
+        )
+        await self.cog._refresh_uno_table(game)
+        await self.cog._process_cpu_turns(game)
+
+    @discord.ui.button(label="End", style=discord.ButtonStyle.danger)
+    async def end_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno game no longer exists.", ephemeral=True)
+            return
+
+        if not self.cog._is_uno_host_or_mod_user(interaction.user, game):
+            await interaction.response.send_message("Only the host or a server manager can end this game.", ephemeral=True)
+            return
+
+        self.cog.uno_games.pop(game.channel_id, None)
+        await interaction.response.edit_message(content="Uno game ended.", embed=None, view=None)
 
 class SpideyGames(commands.Cog):
     def __init__(self, bot):
@@ -801,14 +1230,13 @@ class SpideyGames(commands.Cog):
         await ctx.send(f"You have successfully toggled phrases `{'on' if toggle_setting else 'off'}`.")
 
     async def _send_uno_hand(self, ctx: commands.Context, content: str):
-        """Sends a player's hand privately."""
+        """Fallback for prefix commands. Button users get ephemeral hand messages instead."""
         try:
             await ctx.author.send(content)
             await ctx.tick()
         except discord.Forbidden:
             await ctx.send(
-                f"{ctx.author.mention}, I couldn't DM your hand. "
-                f"Enable DMs from this server and run `[p]uno hand`."
+                f"{ctx.author.mention}, I couldn't DM your hand. Use the **View Hand** button on the Uno table instead."
             )
 
     def _get_uno_game(self, channel_id: int) -> UnoGame:
@@ -819,9 +1247,74 @@ class SpideyGames(commands.Cog):
 
         return game
 
+    def _is_uno_host_or_mod_user(self, user: discord.Member, game: UnoGame) -> bool:
+        perms = getattr(user, "guild_permissions", None)
+        return user.id == game.host_id or bool(perms and perms.manage_guild)
+
     def _is_uno_host_or_mod(self, ctx: commands.Context, game: UnoGame) -> bool:
-        perms = getattr(ctx.author, "guild_permissions", None)
-        return ctx.author.id == game.host_id or bool(perms and perms.manage_guild)
+        return self._is_uno_host_or_mod_user(ctx.author, game)
+
+    def _uno_view_for(self, game: UnoGame) -> discord.ui.View:
+        return UnoGameView(self) if game.started else UnoLobbyView(self)
+
+    async def _refresh_uno_table(self, game: UnoGame):
+        """Edits the original Uno table message instead of spamming a new embed."""
+        channel = self.bot.get_channel(game.channel_id)
+
+        if channel is None or game.table_message_id is None:
+            return False
+
+        try:
+            message = await channel.fetch_message(game.table_message_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            return False
+
+        await message.edit(embed=game.status_embed(), view=self._uno_view_for(game))
+        return True
+    
+    async def _process_cpu_turns(self, game: UnoGame):
+        """Runs CPU turns until a human player is up, someone wins, or a safety cap is hit."""
+        turns_processed = 0
+
+        while game.channel_id in self.uno_games and game.started and game.is_cpu(game.current_player_id):
+            if turns_processed >= 30:
+                game.last_action = "CPU safety stop triggered. Something got weird, so I stopped auto-playing."
+                await self._refresh_uno_table(game)
+                return False
+
+            try:
+                won, _message = game.play_cpu_turn()
+            except ValueError as e:
+                game.last_action = f"CPU error: {e}"
+                await self._refresh_uno_table(game)
+                return False
+
+            turns_processed += 1
+
+            if won:
+                await self._close_uno_table(game)
+                self.uno_games.pop(game.channel_id, None)
+                return True
+
+            await self._refresh_uno_table(game)
+            await asyncio.sleep(0.8)
+
+        return False
+
+    async def _close_uno_table(self, game: UnoGame):
+        """Leaves the final game state visible but removes the buttons."""
+        channel = self.bot.get_channel(game.channel_id)
+
+        if channel is None or game.table_message_id is None:
+            return False
+
+        try:
+            message = await channel.fetch_message(game.table_message_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            return False
+
+        await message.edit(embed=game.status_embed(), view=None)
+        return True
 
     @commands.group(name="uno", invoke_without_command=True)
     async def uno(self, ctx: commands.Context):
@@ -832,7 +1325,13 @@ class SpideyGames(commands.Cog):
             await ctx.send("No Uno game is running here. Use `[p]uno create` to start a lobby.")
             return
 
-        await ctx.send(embed=game.status_embed())
+        refreshed = await self._refresh_uno_table(game)
+
+        if refreshed:
+            await ctx.send("Uno table refreshed.", delete_after=5)
+        else:
+            message = await ctx.send(embed=game.status_embed(), view=self._uno_view_for(game))
+            game.table_message_id = message.id
 
     @uno.command(name="create", aliases=["c"])
     async def uno_create(self, ctx: commands.Context):
@@ -843,40 +1342,47 @@ class SpideyGames(commands.Cog):
 
         game = UnoGame(ctx.channel.id, ctx.author.id)
         self.uno_games[ctx.channel.id] = game
-        await ctx.send(embed=game.status_embed())
+        message = await ctx.send(embed=game.status_embed(), view=UnoLobbyView(self))
+        game.table_message_id = message.id
 
     @uno.command(name="join", aliases=["j"])
     async def uno_join(self, ctx: commands.Context):
-        """Join the Uno lobby."""
+        """Join the Uno lobby. The Join button is preferred."""
         try:
             game = self._get_uno_game(ctx.channel.id)
             game.add_player(ctx.author.id)
             game.last_action = f"{ctx.author.mention} joined the game."
-            await ctx.send(embed=game.status_embed())
+
+            if not await self._refresh_uno_table(game):
+                await ctx.send(embed=game.status_embed(), view=self._uno_view_for(game))
+
         except ValueError as e:
             await ctx.send(str(e))
 
     @uno.command(name="leave", aliases=["l"])
     async def uno_leave(self, ctx: commands.Context):
-        """Leave an unstarted Uno lobby."""
+        """Leave an unstarted Uno lobby. The Leave button is preferred."""
         try:
             game = self._get_uno_game(ctx.channel.id)
             game.remove_player(ctx.author.id)
 
             if not game.players:
+                await self._close_uno_table(game)
                 del self.uno_games[ctx.channel.id]
                 await ctx.send("Uno lobby closed.")
                 return
 
             game.last_action = f"{ctx.author.mention} left the lobby."
-            await ctx.send(embed=game.status_embed())
+
+            if not await self._refresh_uno_table(game):
+                await ctx.send(embed=game.status_embed(), view=self._uno_view_for(game))
 
         except ValueError as e:
             await ctx.send(str(e))
 
     @uno.command(name="start", aliases=["s"])
     async def uno_start(self, ctx: commands.Context):
-        """Start the Uno game."""
+        """Start the Uno game. The Start button is preferred."""
         try:
             game = self._get_uno_game(ctx.channel.id)
 
@@ -886,23 +1392,18 @@ class SpideyGames(commands.Cog):
 
             game.start()
 
-            for pid in game.players:
-                member = ctx.guild.get_member(pid) if ctx.guild else None
+            if not await self._refresh_uno_table(game):
+                message = await ctx.send(embed=game.status_embed(), view=UnoGameView(self))
+                game.table_message_id = message.id
 
-                if member:
-                    try:
-                        await member.send("Your Uno hand:\n" + game.hand_text(pid))
-                    except discord.Forbidden:
-                        pass
-
-            await ctx.send(embed=game.status_embed())
+            await self._process_cpu_turns(game)
 
         except ValueError as e:
             await ctx.send(str(e))
 
     @uno.command(name="hand", aliases=["h"])
     async def uno_hand(self, ctx: commands.Context):
-        """Privately show your hand."""
+        """Privately show your hand. The View Hand button is preferred."""
         try:
             game = self._get_uno_game(ctx.channel.id)
 
@@ -943,12 +1444,20 @@ class SpideyGames(commands.Cog):
                 return
 
             if normalize_notation(notation) in {"DRAW", "D", "PASS"}:
-                private_msg = game.take_draw_action(ctx.author.id)
+                won, private_msg = game.draw_until_playable(ctx.author.id)
                 await self._send_uno_hand(
                     ctx,
                     private_msg + "\n\n" + game.hand_text(ctx.author.id),
                 )
-                await ctx.send(embed=game.status_embed())
+
+                if won:
+                    await self._close_uno_table(game)
+                    del self.uno_games[ctx.channel.id]
+                    return
+
+                if not await self._refresh_uno_table(game):
+                    await ctx.send(embed=game.status_embed(), view=self._uno_view_for(game))
+                await self._process_cpu_turns(game)
                 return
 
             parsed = parse_move(notation)
@@ -966,7 +1475,7 @@ class SpideyGames(commands.Cog):
             won, _message = game.play_card(ctx.author.id, card, chosen_color)
 
             if won:
-                await ctx.send(embed=game.status_embed())
+                await self._close_uno_table(game)
                 del self.uno_games[ctx.channel.id]
                 return
 
@@ -974,14 +1483,17 @@ class SpideyGames(commands.Cog):
                 ctx,
                 "Updated Uno hand:\n" + game.hand_text(ctx.author.id),
             )
-            await ctx.send(embed=game.status_embed())
 
+            if not await self._refresh_uno_table(game):
+                await ctx.send(embed=game.status_embed(), view=self._uno_view_for(game))
+            await self._process_cpu_turns(game)
         except ValueError as e:
             await ctx.send(str(e))
 
+
     @uno.command(name="draw", aliases=["d", "pass"])
     async def uno_draw(self, ctx: commands.Context):
-        """Draw/pass. If a +2 stack is pending, draw the full stack and lose your turn."""
+        """Draw until playable. If a +2 stack is pending, draw the full stack and lose your turn."""
         try:
             game = self._get_uno_game(ctx.channel.id)
 
@@ -997,23 +1509,40 @@ class SpideyGames(commands.Cog):
                 await ctx.send("It is not your turn.")
                 return
 
-            private_msg = game.take_draw_action(ctx.author.id)
+            won, private_msg = game.draw_until_playable(ctx.author.id)
 
             await self._send_uno_hand(
                 ctx,
                 private_msg + "\n\n" + game.hand_text(ctx.author.id),
             )
-            await ctx.send(embed=game.status_embed())
+
+            if won:
+                await self._close_uno_table(game)
+                del self.uno_games[ctx.channel.id]
+                return
+
+            if not await self._refresh_uno_table(game):
+                await ctx.send(embed=game.status_embed(), view=self._uno_view_for(game))
+
+            await self._process_cpu_turns(game)
 
         except ValueError as e:
             await ctx.send(str(e))
+        
 
+    
     @uno.command(name="status", aliases=["table"])
     async def uno_status(self, ctx: commands.Context):
-        """Show the current Uno table."""
+        """Show or refresh the current Uno table."""
         try:
             game = self._get_uno_game(ctx.channel.id)
-            await ctx.send(embed=game.status_embed())
+
+            if await self._refresh_uno_table(game):
+                await ctx.send("Uno table refreshed.", delete_after=5)
+            else:
+                message = await ctx.send(embed=game.status_embed(), view=self._uno_view_for(game))
+                game.table_message_id = message.id
+
         except ValueError as e:
             await ctx.send(str(e))
 
@@ -1025,7 +1554,7 @@ class SpideyGames(commands.Cog):
             "Exact cards: `G1`, `R7`, `B+2`, `YS`, `GREV`\n"
             "Broad picks: `G` plays any legal Green, `1` plays any legal 1, `+2` plays any legal +2.\n"
             "Wilds: `W:G` plays Wild and chooses Green. `W4:B` plays Wild +4 and chooses Blue.\n"
-            "Utility: `DRAW`, `D`, or `[p]uno draw` draws/passes.\n"
+            "Utility: use the **Draw Until Playable** button, `[p]uno draw`, or `[p]uno play DRAW`.\n"
             "Important: `R` means Red. Use `REV` for Reverse.\n"
             "House rules: +2s stack. +4s do not stack. +2 and +4 do not mix."
         )
@@ -1042,6 +1571,7 @@ class SpideyGames(commands.Cog):
                 await ctx.send("Only the host or a server manager can end this game.")
                 return
 
+            await self._close_uno_table(game)
             del self.uno_games[ctx.channel.id]
             await ctx.send("Uno game ended.")
 
