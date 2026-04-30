@@ -124,6 +124,12 @@ VALUE_SORT = {
     "WILD4": 14,
 }
 
+UNO_PENALTY_CARDS = 2
+CPU_SELF_UNO_CHANCE = 0.90
+CPU_CATCH_UNO_CHANCE = 0.60
+CPU_SELF_UNO_DELAY_RANGE = (0.8, 1.3)
+CPU_CATCH_UNO_DELAY_RANGE = (1.2, 2.0)
+
 @dataclass(frozen=True)
 class UnoCard:
     color: str
@@ -197,6 +203,7 @@ class UnoGame:
         self.last_action = "Game created. Waiting for players."
         self.table_message_id: Optional[int] = None
         self.next_cpu_number = 1
+        self.pending_uno_player: Optional[int] = None
 
     def add_player(self, user_id: int) -> None:
         if self.started:
@@ -223,6 +230,51 @@ class UnoGame:
         if self.is_cpu(player_id):
             return f"CPU {abs(player_id)}"
         return f"<@{player_id}>"
+    
+    def pending_uno_is_valid(self) -> bool:
+        return (
+            self.pending_uno_player in self.players
+            and len(self.hands.get(self.pending_uno_player, [])) == 1
+        )
+
+    def clear_pending_uno(self) -> None:
+        self.pending_uno_player = None
+
+    def begin_player_action(self, actor_id: int) -> None:
+        """
+        Once the next player begins acting, the chance to catch the previous UNO failure expires.
+        """
+        if self.pending_uno_player is not None and self.pending_uno_player != actor_id:
+            self.clear_pending_uno()
+
+    def call_uno(self, caller_id: int) -> Tuple[bool, str]:
+        """
+        If the pending player says UNO, they are safe.
+        If someone else in the game says UNO first, the pending player draws 2.
+        """
+        if caller_id not in self.players:
+            return False, "You are not in this Uno game."
+
+        if not self.pending_uno_is_valid():
+            self.clear_pending_uno()
+            return False, "No one currently needs to say UNO."
+
+        target_id = self.pending_uno_player
+        caller_name = self.player_display(caller_id)
+        target_name = self.player_display(target_id)
+
+        if caller_id == target_id:
+            self.clear_pending_uno()
+            self.last_action = f"{target_name} said UNO!"
+            return True, f"{target_name} said UNO!"
+
+        self.draw_cards(target_id, UNO_PENALTY_CARDS)
+        self.clear_pending_uno()
+        self.last_action = (
+            f"{caller_name} caught {target_name} failing to say UNO! "
+            f"{target_name} drew {UNO_PENALTY_CARDS} cards."
+        )
+        return True, self.last_action
 
     def add_cpu(self) -> int:
         if self.started:
@@ -437,6 +489,8 @@ class UnoGame:
         if not self.is_legal(card):
             raise ValueError("That card is not legal right now.")
 
+        self.begin_player_action(player_id)
+
         player_name = self.player_display(player_id)
 
         self.hands[player_id].remove(card)
@@ -450,10 +504,15 @@ class UnoGame:
             self.current_color = card.color
 
         if not self.hands[player_id]:
+            self.clear_pending_uno()
             self.last_action = f"{player_name} played {card.short()} and won the game!"
             return True, self.last_action
 
-        uno_note = " UNO!" if len(self.hands[player_id]) == 1 else ""
+        uno_note = ""
+        if len(self.hands[player_id]) == 1:
+            self.pending_uno_player = player_id
+            uno_note = f" {player_name} has 1 card left! Say UNO!"
+
         play_index = self.current_index
 
         if card.value == "DRAW2":
@@ -461,8 +520,8 @@ class UnoGame:
             self.pending_draw_type = "DRAW2"
             self.current_index = self.next_index_from(play_index, 1)
             self.last_action = (
-                f"{player_name} played {card.short()}.{uno_note} "
-                f"Draw stack is now +{self.pending_draw_amount}."
+                f"{player_name} played {card.short()}."
+                f"{uno_note} Draw stack is now +{self.pending_draw_amount}."
             )
 
         elif card.value == "WILD4":
@@ -473,8 +532,8 @@ class UnoGame:
             self.draw_cards(victim_id, 4)
             self.current_index = self.next_index_from(play_index, 2)
             self.last_action = (
-                f"{player_name} played {card.short()} and chose {COLOR_NAMES[self.current_color]}.{uno_note} "
-                f"{victim_name} drew 4 and was skipped."
+                f"{player_name} played {card.short()} and chose {COLOR_NAMES[self.current_color]}."
+                f"{uno_note} {victim_name} drew 4 and was skipped."
             )
 
         elif card.value == "SKIP":
@@ -490,8 +549,8 @@ class UnoGame:
             if len(self.players) == 2:
                 self.current_index = play_index
                 self.last_action = (
-                    f"{player_name} played {card.short()}.{uno_note} "
-                    f"Reverse acts like a skip with 2 players."
+                    f"{player_name} played {card.short()}."
+                    f"{uno_note} Reverse acts like a skip with 2 players."
                 )
             else:
                 self.current_index = self.next_index_from(play_index, 1)
@@ -533,7 +592,8 @@ class UnoGame:
     def draw_until_playable(self, player_id: int) -> Tuple[bool, str]:
         if player_id != self.current_player_id:
             raise ValueError("It is not your turn.")
-
+        self.begin_player_action(player_id)
+        
         if self.pending_draw_amount > 0:
             amount = self.pending_draw_amount
             self.draw_cards(player_id, amount)
@@ -591,6 +651,7 @@ class UnoGame:
         lines.append("")
         lines.append("Examples: `G1`, `R7`, `B+2`, `YS`, `GREV`, `W:G`, `W4:B`, `G`, `1`, `+2`, `S`, `REV`, `DRAW`.")
         lines.append("Note: `R` means Red. Use `REV` for Reverse.")
+        lines.append("If you have 1 card left, click **Say UNO** or type `uno` in chat.")
 
         return "\n".join(lines)
 
@@ -934,6 +995,27 @@ class UnoGameView(discord.ui.View):
             "Your Uno hand:\n" + game.hand_text(interaction.user.id),
             ephemeral=True,
         )
+    
+    @discord.ui.button(label="Say UNO", style=discord.ButtonStyle.secondary)
+    async def say_uno_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        game = self._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Uno game no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id not in game.players:
+            await interaction.response.send_message("You are not in this Uno game.", ephemeral=True)
+            return
+
+        handled, message = game.call_uno(interaction.user.id)
+
+        if not handled:
+            await interaction.response.send_message(message, ephemeral=True)
+            return
+
+        await interaction.response.send_message(message)
+        await self.cog._refresh_uno_table(game)
 
     @discord.ui.button(label="Play Card", style=discord.ButtonStyle.primary)
     async def play_card_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1272,15 +1354,63 @@ class SpideyGames(commands.Cog):
         await message.edit(embed=game.status_embed(), view=self._uno_view_for(game))
         return True
     
+    async def _handle_cpu_uno_window(self, game: UnoGame):
+        """
+        Gives CPUs a chance to say UNO for themselves or catch another player.
+        Humans can still beat them by typing UNO or clicking Say UNO during the delay.
+        """
+        if not game.pending_uno_is_valid():
+            game.clear_pending_uno()
+            return False
+
+        target_id = game.pending_uno_player
+
+        if game.is_cpu(target_id):
+            await asyncio.sleep(random.uniform(*CPU_SELF_UNO_DELAY_RANGE))
+
+            if game.pending_uno_player == target_id and random.random() < CPU_SELF_UNO_CHANCE:
+                game.call_uno(target_id)
+                await self._refresh_uno_table(game)
+                return True
+
+        cpu_watchers = [
+            pid for pid in game.players
+            if game.is_cpu(pid) and pid != target_id
+        ]
+
+        if not cpu_watchers:
+            return False
+
+        await asyncio.sleep(random.uniform(*CPU_CATCH_UNO_DELAY_RANGE))
+
+        if game.pending_uno_player != target_id:
+            return False
+
+        if random.random() < CPU_CATCH_UNO_CHANCE:
+            caller_id = random.choice(cpu_watchers)
+            game.call_uno(caller_id)
+            await self._refresh_uno_table(game)
+            return True
+
+        return False
+
     async def _process_cpu_turns(self, game: UnoGame):
         """Runs CPU turns until a human player is up, someone wins, or a safety cap is hit."""
         turns_processed = 0
+
+        # If a human just reached 1 card, CPUs get a chance to notice before play continues.
+        await self._handle_cpu_uno_window(game)
 
         while game.channel_id in self.uno_games and game.started and game.is_cpu(game.current_player_id):
             if turns_processed >= 30:
                 game.last_action = "CPU safety stop triggered. Something got weird, so I stopped auto-playing."
                 await self._refresh_uno_table(game)
                 return False
+
+            await self._handle_cpu_uno_window(game)
+
+            # If no one caught the previous player, the CPU beginning its turn closes that window.
+            game.begin_player_action(game.current_player_id)
 
             try:
                 won, _message = game.play_cpu_turn()
@@ -1297,6 +1427,10 @@ class SpideyGames(commands.Cog):
                 return True
 
             await self._refresh_uno_table(game)
+
+            # If the CPU just reached 1 card, it may remember to say UNO.
+            await self._handle_cpu_uno_window(game)
+
             await asyncio.sleep(0.8)
 
         return False
@@ -1315,6 +1449,35 @@ class SpideyGames(commands.Cog):
 
         await message.edit(embed=game.status_embed(), view=None)
         return True
+    
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+
+        if not message.guild:
+            return
+
+        cleaned = re.sub(r"[^a-z]", "", message.content.lower())
+
+        if cleaned != "uno":
+            return
+
+        game = self.uno_games.get(message.channel.id)
+
+        if not game or not game.started:
+            return
+
+        if message.author.id not in game.players:
+            return
+
+        handled, response = game.call_uno(message.author.id)
+
+        if not handled:
+            return
+
+        await message.channel.send(response)
+        await self._refresh_uno_table(game)
 
     @commands.group(name="uno", invoke_without_command=True)
     async def uno(self, ctx: commands.Context):
