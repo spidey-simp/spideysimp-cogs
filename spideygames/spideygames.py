@@ -14,6 +14,8 @@ import re
 from dataclasses import dataclass
 from typing import Optional, Dict, List, Tuple
 
+from collections import Counter
+
 nltk.download("words")
 
 all_words = words.words()
@@ -511,7 +513,6 @@ class UnoGame:
         uno_note = ""
         if len(self.hands[player_id]) == 1:
             self.pending_uno_player = player_id
-            uno_note = f" {player_name} has 1 card left! Say UNO!"
 
         play_index = self.current_index
 
@@ -1085,11 +1086,340 @@ class UnoGameView(discord.ui.View):
         self.cog.uno_games.pop(game.channel_id, None)
         await interaction.response.edit_message(content="Uno game ended.", embed=None, view=None)
 
+
+MASTERMIND_COLORS = [
+    ("🔴", "Red"),
+    ("🟠", "Orange"),
+    ("🟡", "Yellow"),
+    ("🟢", "Green"),
+    ("🔵", "Blue"),
+    ("🟣", "Purple"),
+]
+
+MASTERMIND_DIFFICULTIES = {
+    "easy": {
+        "code_length": 4,
+        "color_count": 6,
+        "max_attempts": 12,
+        "allow_duplicates": False,
+    },
+    "normal": {
+        "code_length": 4,
+        "color_count": 6,
+        "max_attempts": 10,
+        "allow_duplicates": True,
+    },
+    "hard": {
+        "code_length": 5,
+        "color_count": 6,
+        "max_attempts": 10,
+        "allow_duplicates": True,
+    },
+}
+
+
+class MastermindGame:
+    def __init__(self, channel_id: int, player_id: int, difficulty: str = "normal"):
+        settings = MASTERMIND_DIFFICULTIES.get(difficulty.lower(), MASTERMIND_DIFFICULTIES["normal"])
+
+        self.channel_id = channel_id
+        self.player_id = player_id
+        self.difficulty = difficulty.lower() if difficulty.lower() in MASTERMIND_DIFFICULTIES else "normal"
+
+        self.code_length: int = settings["code_length"]
+        self.max_attempts: int = settings["max_attempts"]
+        self.allow_duplicates: bool = settings["allow_duplicates"]
+        self.available_colors = [emoji for emoji, _name in MASTERMIND_COLORS[: settings["color_count"]]]
+
+        if self.allow_duplicates:
+            self.secret_code = [random.choice(self.available_colors) for _ in range(self.code_length)]
+        else:
+            self.secret_code = random.sample(self.available_colors, self.code_length)
+
+        self.current_guess: List[str] = []
+        self.guesses: List[Tuple[List[str], int, int]] = []
+        self.message_id: Optional[int] = None
+        self.finished = False
+        self.result_text = "Choose colors to build your guess."
+
+    def player_display(self) -> str:
+        return f"<@{self.player_id}>"
+
+    def add_color(self, color: str) -> Optional[str]:
+        if self.finished:
+            return "This Mastermind game is already over."
+
+        if color not in self.available_colors:
+            return "That color is not available in this game."
+
+        if len(self.current_guess) >= self.code_length:
+            return "Your guess is already full. Submit it, clear it, or backspace."
+
+        if not self.allow_duplicates and color in self.current_guess:
+            return "This difficulty does not allow duplicate colors in a guess."
+
+        self.current_guess.append(color)
+        return None
+
+    def backspace(self) -> Optional[str]:
+        if self.finished:
+            return "This Mastermind game is already over."
+
+        if not self.current_guess:
+            return "There is nothing to remove."
+
+        self.current_guess.pop()
+        return None
+
+    def clear_guess(self) -> Optional[str]:
+        if self.finished:
+            return "This Mastermind game is already over."
+
+        self.current_guess = []
+        return None
+
+    def score_guess(self, guess: List[str]) -> Tuple[int, int]:
+        exact = sum(
+            1 for secret_color, guess_color in zip(self.secret_code, guess)
+            if secret_color == guess_color
+        )
+
+        secret_counts = Counter(self.secret_code)
+        guess_counts = Counter(guess)
+        total_matches = sum(
+            min(secret_counts[color], guess_counts[color])
+            for color in guess_counts
+        )
+
+        misplaced = total_matches - exact
+        return exact, misplaced
+
+    def submit_guess(self) -> Optional[str]:
+        if self.finished:
+            return "This Mastermind game is already over."
+
+        if len(self.current_guess) != self.code_length:
+            return f"Finish your guess first. You need {self.code_length} colors."
+
+        guess = self.current_guess[:]
+        exact, misplaced = self.score_guess(guess)
+        self.guesses.append((guess, exact, misplaced))
+        self.current_guess = []
+
+        if exact == self.code_length:
+            self.finished = True
+            self.result_text = f"{self.player_display()} cracked the code in {len(self.guesses)} guesses!"
+            return None
+
+        if len(self.guesses) >= self.max_attempts:
+            self.finished = True
+            self.result_text = f"{self.player_display()} ran out of guesses. The code was revealed."
+            return None
+
+        self.result_text = f"Guess submitted: ✅ {exact} exact, 🔁 {misplaced} misplaced."
+        return None
+
+    def current_guess_text(self) -> str:
+        blanks_needed = self.code_length - len(self.current_guess)
+        return " ".join(self.current_guess + ["⬜"] * blanks_needed)
+
+    def available_colors_text(self) -> str:
+        return " ".join(self.available_colors)
+
+    def history_text(self) -> str:
+        if not self.guesses:
+            return "No guesses yet."
+
+        lines = []
+
+        for index, (guess, exact, misplaced) in enumerate(self.guesses[-10:], start=max(1, len(self.guesses) - 9)):
+            guess_text = " ".join(guess)
+            lines.append(f"`{index:02}.` {guess_text} → ✅ {exact} | 🔁 {misplaced}")
+
+        return "\n".join(lines)
+
+    def status_embed(self) -> discord.Embed:
+        embed = discord.Embed(title="Mastermind", color=discord.Color.blurple())
+
+        if self.finished:
+            secret_text = " ".join(self.secret_code)
+        else:
+            secret_text = " ".join(["❔"] * self.code_length)
+
+        duplicate_text = "Yes" if self.allow_duplicates else "No"
+
+        embed.description = self.result_text
+        embed.add_field(name="Player", value=self.player_display(), inline=True)
+        embed.add_field(name="Difficulty", value=self.difficulty.title(), inline=True)
+        embed.add_field(name="Duplicates", value=duplicate_text, inline=True)
+        embed.add_field(name="Available Colors", value=self.available_colors_text(), inline=False)
+        embed.add_field(name="Secret Code", value=secret_text, inline=False)
+        embed.add_field(name="Current Guess", value=self.current_guess_text(), inline=False)
+        embed.add_field(
+            name=f"Guesses ({len(self.guesses)}/{self.max_attempts})",
+            value=self.history_text(),
+            inline=False,
+        )
+        embed.set_footer(text="✅ = correct color in the correct spot | 🔁 = correct color in the wrong spot")
+
+        return embed
+
+
+class MastermindColorButton(discord.ui.Button):
+    def __init__(self, color: str):
+        super().__init__(label=color, style=discord.ButtonStyle.secondary)
+        self.color = color
+
+    async def callback(self, interaction: discord.Interaction):
+        view: MastermindView = self.view
+        game = view._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Mastermind game no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id != game.player_id:
+            await interaction.response.send_message("This is not your Mastermind game.", ephemeral=True)
+            return
+
+        error = game.add_color(self.color)
+
+        if error:
+            await interaction.response.send_message(error, ephemeral=True)
+            return
+
+        await interaction.response.edit_message(embed=game.status_embed(), view=MastermindView(view.cog, game.channel_id))
+
+
+class MastermindView(discord.ui.View):
+    def __init__(self, cog, channel_id: int):
+        super().__init__(timeout=None)
+        self.cog = cog
+        self.channel_id = channel_id
+
+        game = self.cog.mastermind_games.get(channel_id)
+
+        if game:
+            for color in game.available_colors:
+                self.add_item(MastermindColorButton(color))
+
+        self.add_item(MastermindBackspaceButton())
+        self.add_item(MastermindClearButton())
+        self.add_item(MastermindSubmitButton())
+        self.add_item(MastermindEndButton())
+
+    def _game(self, interaction: discord.Interaction) -> Optional[MastermindGame]:
+        return self.cog.mastermind_games.get(self.channel_id)
+
+
+class MastermindBackspaceButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Backspace", style=discord.ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: MastermindView = self.view
+        game = view._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Mastermind game no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id != game.player_id:
+            await interaction.response.send_message("This is not your Mastermind game.", ephemeral=True)
+            return
+
+        error = game.backspace()
+
+        if error:
+            await interaction.response.send_message(error, ephemeral=True)
+            return
+
+        await interaction.response.edit_message(embed=game.status_embed(), view=MastermindView(view.cog, game.channel_id))
+
+
+class MastermindClearButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Clear", style=discord.ButtonStyle.secondary, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: MastermindView = self.view
+        game = view._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Mastermind game no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id != game.player_id:
+            await interaction.response.send_message("This is not your Mastermind game.", ephemeral=True)
+            return
+
+        error = game.clear_guess()
+
+        if error:
+            await interaction.response.send_message(error, ephemeral=True)
+            return
+
+        await interaction.response.edit_message(embed=game.status_embed(), view=MastermindView(view.cog, game.channel_id))
+
+
+class MastermindSubmitButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="Submit", style=discord.ButtonStyle.success, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: MastermindView = self.view
+        game = view._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Mastermind game no longer exists.", ephemeral=True)
+            return
+
+        if interaction.user.id != game.player_id:
+            await interaction.response.send_message("This is not your Mastermind game.", ephemeral=True)
+            return
+
+        error = game.submit_guess()
+
+        if error:
+            await interaction.response.send_message(error, ephemeral=True)
+            return
+
+        if game.finished:
+            view.cog.mastermind_games.pop(game.channel_id, None)
+            await interaction.response.edit_message(embed=game.status_embed(), view=None)
+            return
+
+        await interaction.response.edit_message(embed=game.status_embed(), view=MastermindView(view.cog, game.channel_id))
+
+
+class MastermindEndButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(label="End", style=discord.ButtonStyle.danger, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        view: MastermindView = self.view
+        game = view._game(interaction)
+
+        if not game:
+            await interaction.response.send_message("That Mastermind game no longer exists.", ephemeral=True)
+            return
+
+        perms = getattr(interaction.user, "guild_permissions", None)
+        is_mod = bool(perms and perms.manage_guild)
+
+        if interaction.user.id != game.player_id and not is_mod:
+            await interaction.response.send_message("Only the player or a server manager can end this game.", ephemeral=True)
+            return
+
+        view.cog.mastermind_games.pop(game.channel_id, None)
+        await interaction.response.edit_message(content="Mastermind game ended.", embed=None, view=None)
+
 class SpideyGames(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.active_games = {}
         self.uno_games = {}
+        self.mastermind_games = {}
         self.config = Config.get_conf(self, identifier=13904817238971)
         self.config.register_member(
             difficulty="medium",
@@ -1740,3 +2070,52 @@ class SpideyGames(commands.Cog):
 
         except ValueError as e:
             await ctx.send(str(e))
+    
+    @commands.group(name="mastermind", aliases=["mm"], invoke_without_command=True)
+    async def mastermind(self, ctx: commands.Context):
+        """Play Mastermind."""
+        game = self.mastermind_games.get(ctx.channel.id)
+
+        if not game:
+            await ctx.send(
+                "No Mastermind game is running here. Use `[p]mastermind start` to begin.\n"
+                "Difficulties: `easy`, `normal`, `hard`."
+            )
+            return
+
+        await ctx.send(embed=game.status_embed(), view=MastermindView(self, ctx.channel.id))
+
+    @mastermind.command(name="start", aliases=["s"])
+    async def mastermind_start(self, ctx: commands.Context, difficulty: str = "normal"):
+        """Start a button-based Mastermind game."""
+        difficulty = difficulty.lower()
+
+        if difficulty not in MASTERMIND_DIFFICULTIES:
+            await ctx.send("Invalid difficulty. Choose `easy`, `normal`, or `hard`.")
+            return
+
+        if ctx.channel.id in self.mastermind_games:
+            await ctx.send("There is already a Mastermind game in this channel.")
+            return
+
+        game = MastermindGame(ctx.channel.id, ctx.author.id, difficulty)
+        self.mastermind_games[ctx.channel.id] = game
+
+        message = await ctx.send(embed=game.status_embed(), view=MastermindView(self, ctx.channel.id))
+        game.message_id = message.id
+
+    @mastermind.command(name="end", aliases=["stop"])
+    async def mastermind_end(self, ctx: commands.Context):
+        """End the current Mastermind game."""
+        game = self.mastermind_games.get(ctx.channel.id)
+
+        if not game:
+            await ctx.send("There is no Mastermind game in this channel.")
+            return
+
+        if ctx.author.id != game.player_id and not ctx.author.guild_permissions.manage_guild:
+            await ctx.send("Only the player or a server manager can end this game.")
+            return
+
+        del self.mastermind_games[ctx.channel.id]
+        await ctx.send("Mastermind game ended.")
