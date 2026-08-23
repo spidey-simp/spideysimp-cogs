@@ -1,0 +1,17 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "A custom court and judicial administration system developed for the Spidey Republic server, including case filing, dockets, court proceedings, judicial administration, reporters, and related court functions.",
+    "hidden": true,
+    "install_msg": "SpideyCourts is designed specifically for the Spidey Republic server and is not intended for general installation.",
+    "short": "Custom Spidey Republic court system",
+    "end_user_data_statement": "This cog stores Discord user IDs and court-related data, including parties, attorneys, filings, case records, and other judicial-system information.",
+    "tags": [
+        "courts",
+        "roleplay",
+        "judiciary",
+        "spidey republic"
+    ]
+}
