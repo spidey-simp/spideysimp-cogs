@@ -9,6 +9,8 @@ from discord import app_commands
 from redbot.core import commands
 import os
 
+from aiohttp import ClientSession, ClientTimeout
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FANDOMS_FILE = os.path.join(BASE_DIR, "fandoms.json")
 
@@ -68,7 +70,47 @@ class FandomSearch(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.fandoms = load_file()
+        self.session = None
 
+    async def cog_load(self):
+        self.session = ClientSession(timeout=ClientTimeout(total=10))
+
+    async def cog_unload(self):
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+
+    async def _find_best_match(self, base: str, query: str) -> Optional[str]:
+        """Return the best matching MediaWiki page title, if one can be found."""
+        if self.session is None:
+            return None
+
+        parsed = urlparse(base)
+        api_url = f"{parsed.scheme}://{parsed.netloc}/api.php"
+
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "srlimit": 1,
+            "format": "json",
+        }
+
+        try:
+            async with self.session.get(api_url, params=params) as response:
+                if response.status != 200:
+                    return None
+
+                data = await response.json()
+                results = data.get("query", {}).get("search", [])
+
+                if not results:
+                    return None
+
+                return results[0].get("title")
+        except Exception:
+            return None
+        
     def _get_entry(self, key: str) -> dict | None:
         """Return a normalized entry dict {'base': str, 'style': 'fandom'|'root'} or None."""
         raw = self.fandoms.get(key)
@@ -180,5 +222,13 @@ class FandomSearch(commands.Cog):
         preface = ""
         if section:
             preface = "ℹ️ Sections only apply to exact links. Using fuzzy search without #section.\n"
-        url = _build_go_search_url(base, style, query)
+
+        best_match = await self._find_best_match(base, query)
+
+        if best_match:
+            url = _build_exact_url(base, style, best_match)
+        else:
+            # Fall back to the ordinary wiki search if no result can be resolved.
+            url = _build_go_search_url(base, style, query)
+
         await interaction.response.send_message(f"{preface}{url}")
