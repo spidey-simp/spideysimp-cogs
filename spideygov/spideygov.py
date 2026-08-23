@@ -5262,14 +5262,29 @@ class SpideyGov(commands.Cog):
 
     legislature = app_commands.Group(name="legislature", description="Legislative commands")
     bill = app_commands.Group(name="bill", description="Congressional bills", parent=legislature)
-    usc = app_commands.Group(name="usc", description="United States Code", parent=legislature)
-    src = app_commands.Group(name="src", description="Spidey Republic Code (S.R.C.)", parent=legislature)
+    code = app_commands.Group(
+        name="code",
+        description="Statutory code and legal research"
+    )
+
+    usc = app_commands.Group(
+        name="usc",
+        description="United States Code",
+        parent=code
+    )
+
+    src = app_commands.Group(
+        name="src",
+        description="Spidey Republic Code",
+        parent=code
+    )
+
     compare = app_commands.Group(
         name="compare",
-        description="Compare S.R.C. to U.S.C.",
-        parent=legislature
+        description="Compare the S.R.C. and U.S.C.",
+        parent=code
     )
-    budget=app_commands.Group(name="budget", description="Budgetary related commands", parent=legislature)
+    budget=app_commands.Group(name="budget", description="Budgetary related commands")
     committees = app_commands.Group(name="committees", description="Legislative Committee commands", parent=legislature)
 
     executive = app_commands.Group(name="executive", description="Executive commands")
