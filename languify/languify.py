@@ -78,7 +78,7 @@ class Languify(commands.Cog):
         key = self.api_keys.get("rapidapi_key")
 
         if not key:
-            return "Ye Olde English API key is missing. Hast thou forgotteth to upload it?"
+            return "Alack! The key unto the ancient tongue hath not been bestowed upon me."
 
         headers = {
             "x-rapidapi-key": key,
@@ -88,15 +88,27 @@ class Languify(commands.Cog):
         params = {"text": text}
 
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://shakespeare.p.rapidapi.com/shakespeare.json", headers=headers, params=params) as resp:
+            async with session.get(
+                "https://shakespeare.p.rapidapi.com/shakespeare.json",
+                headers=headers,
+                params=params
+            ) as resp:
+                if resp.status == 429:
+                    return "Alas! The scribes have labored beyond their allotted measure. Pray, return anon when their strength is renewed."
+
                 if resp.status != 200:
-                    return "Alack! Yon translation hath failed. Perhaps tryeth again later."
-                
+                    return "Alack! The oracle answereth not. Pray, try thy translation again anon."
+
                 try:
                     data = await resp.json()
-                    return data.get("contents", {}).get("translated", "Nay, the response bore no fruit.")
+                    return data.get(
+                        "contents", {}
+                    ).get(
+                        "translated",
+                        "Nay, the ancient tongue hath yielded no words this day."
+                    )
                 except Exception:
-                    return "Forsooth! The scroll of knowledge returned no legible markings."
+                    return "Forsooth! The scroll returned unto me is naught but gibberish, and I cannot divine its meaning."
 
 
 
@@ -139,7 +151,11 @@ class Languify(commands.Cog):
         try:
             await self.config.user(interaction.user).language.set(language)
 
-            await interaction.response.send_message(f"`{language.title()}` has officially been set as your new language! Use command `[p]funtranslate` or `[p]ft` to get started using it!", ephemeral=True)
+            await interaction.response.send_message(
+                f"`{language.title()}` has officially been set as your new language! "
+                "Use `funtranslate` or `ft` to get started using it!",
+                ephemeral=True
+            )
         except Exception as e:
             await interaction.response.send_message(f"An error occured: {e}. Please report it.", ephemeral=True)
     
@@ -159,7 +175,7 @@ class Languify(commands.Cog):
 
         language = await self.config.user(ctx.author).language()
         
-        if language == None or language == "random":
+        if not language or language == "random":
             language = random.choice(ACCEPTED_LANGUAGES)
 
         if language == "pirate":

@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "Translate messages into fun styles including Pirate and Old English, or generate pirate insults. Old English translation uses an optional RapidAPI key and may be subject to the API provider's usage limits.",
+    "hidden": false,
+    "install_msg": "Thank you for installing Languify! Use `[p]load languify` to get started. Pirate translation works without additional setup. Old English translation requires a RapidAPI key, which an administrator can configure with `/languify apis`.",
+    "short": "Fun Pirate and Old English translations",
+    "end_user_data_statement": "This cog stores each user's selected translation language.",
+    "tags": [
+        "translation",
+        "pirate",
+        "old english",
+        "fun",
+        "utility"
+    ]
+}
