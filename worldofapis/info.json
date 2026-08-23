@@ -1,0 +1,19 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "A collection of API-powered Discord utilities and games, including cat and dog profiles, jokes, advice, trivia, free-to-play game discovery, DiceBear avatars, and random insults.",
+    "hidden": false,
+    "install_msg": "Thank you for installing WorldOfApis! Use `[p]load worldofapis`, then `/woa` commands to explore the available API-powered tools. Some features may require additional API configuration.",
+    "short": "API-powered games and utilities",
+    "end_user_data_statement": "This cog stores no end user data persistently. Trivia preferences are temporarily associated with Discord user IDs in memory and are cleared when the cog reloads.",
+    "tags": [
+        "api",
+        "utility",
+        "trivia",
+        "animals",
+        "games",
+        "fun"
+    ]
+}

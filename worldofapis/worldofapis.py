@@ -76,10 +76,12 @@ class CatView(discord.ui.View):
 class WorldOfApis(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-
         self.api_keys = self.load_json()
         self.breed_dict = {}
         self.user_trivia_settings = {}
+        self.autocomplete_list = []
+
+        self.bot.loop.create_task(self.load_dog_breeds())
 
     
     def load_json(self) -> dict:
@@ -109,26 +111,42 @@ class WorldOfApis(commands.Cog):
                     self.breed_dict = {}
                     self.autocomplete_list = []
     
+    def is_bot_owner():
+        async def predicate(interaction: discord.Interaction) -> bool:
+            return await interaction.client.is_owner(interaction.user)
+
+        return app_commands.check(predicate)
 
     woa = app_commands.Group(name="woa", description="World of Apis commands")
 
-    @woa.command(name="add_api_key", description="Add an api key for WOA.")
-    @app_commands.describe(api="The program for the api key.", key="The api key itself.")
+    @woa.command(name="add_api_key", description="Add an API key for WOA.")
+    @app_commands.describe(
+        api="The program for the API key.",
+        key="The API key itself."
+    )
     @app_commands.choices(api=[
         app_commands.Choice(name="TheCatAPI", value="cat_api")
     ])
-    async def add_api_key(self, interaction:discord.Interaction, api:str, key:str):
-
-        if not interaction.user.guild_permissions.administrator:
-            return await interaction.response.send_message("You do not have permission to edit api keys.", ephemeral=True)
-        
+    @is_bot_owner()
+    async def add_api_key(
+        self,
+        interaction: discord.Interaction,
+        api: str,
+        key: str
+    ):
         if api not in CURRENT_API_LIST:
-            return await interaction.response.send_message("That API is not currently supported.")
-        
-        self.api_keys.setdefault(api, "")
+            return await interaction.response.send_message(
+                "That API is not currently supported.",
+                ephemeral=True
+            )
+
         self.api_keys[api] = key
         self.save_json()
-        await interaction.response.send_message(f"The api key for {api} has successfully been uploaded.", ephemeral=True)
+
+        await interaction.response.send_message(
+            f"The API key for {api} has successfully been uploaded.",
+            ephemeral=True
+        )
     
     async def cat_breed_autocomplete(self, interaction:discord.Interaction, current: str):
         return [
@@ -138,6 +156,7 @@ class WorldOfApis(commands.Cog):
 
     @woa.command(name="cat", description="See a cat with its facts.")
     @app_commands.describe(breed="The breed of cat you want to see.")
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     @app_commands.autocomplete(breed=cat_breed_autocomplete)
     async def cat(self, interaction:discord.Interaction, breed: str=None):
         await interaction.response.defer(thinking=True)
@@ -157,6 +176,7 @@ class WorldOfApis(commands.Cog):
                 embed.set_image(url=cat_dict.get("url"))
                 embed.set_footer(text="Courtesy of TheCatAPI")
 
+                wiki_url = None
                 breeds_list = cat_dict.get("breeds")
                 if breeds_list:
                     breed_info = breeds_list[0]
@@ -219,6 +239,7 @@ class WorldOfApis(commands.Cog):
 
     @woa.command(name="dog", description="See a dog with its facts.")
     @app_commands.describe(breed="The breed of dog you want to see.")
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     @app_commands.autocomplete(breed=dog_breed_autocomplete)
     async def dog(self, interaction: discord.Interaction, breed: str = None):
         await interaction.response.defer(thinking=True, ephemeral=False)
@@ -291,11 +312,12 @@ class WorldOfApis(commands.Cog):
         await interaction.followup.send("Dog breeds have been initialized and are ready to go! 🐶", ephemeral=True)
 
     @woa.command(name="joke", description="Get a random joke!")
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     async def joke(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True)
         
         joke_data = None
-        blocked_flags = ["racist", "sexist"]
+        blocked_flags = ["explicit", "nsfw", "racist", "sexist"]
         
         for _ in range(5):  # Try up to 5 times
             try:
@@ -315,9 +337,9 @@ class WorldOfApis(commands.Cog):
             return await interaction.followup.send("Couldn't fetch a clean joke right now. Try again later!")
 
         embed = discord.Embed(title="Here's a joke for you", color=discord.Color.green())
-        
-        if joke_data.get("flags", {}).get("nsfw") or joke_data.get("flags", {}).get("explicit"):
-            embed.title += " 🔞"
+        # Following line does nothing now, but if nsfw channel handling is allowed, then it will be re-entered.
+        # if joke_data.get("flags", {}).get("nsfw") or joke_data.get("flags", {}).get("explicit"):
+        #    embed.title += " 🔞"
 
         if joke_data["type"] == "single":
             embed.description = joke_data["joke"]
@@ -329,6 +351,7 @@ class WorldOfApis(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @woa.command(name="advice", description="Receive a random piece of advice or search for one.")
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     @app_commands.describe(query="Optional keyword to search for related advice.")
     async def advice(self, interaction: discord.Interaction, query: str = None):
         await interaction.response.defer(thinking=True)
@@ -398,6 +421,7 @@ class WorldOfApis(commands.Cog):
             app_commands.Choice(name="Competitive", value="competitive")
         ]
     )
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     async def trivia_settings(
         self,
         interaction: discord.Interaction,
@@ -442,7 +466,7 @@ class WorldOfApis(commands.Cog):
             response_lines.append(f"🎮 Mode set to **{mode.title()}**.")
         
         if question_number:
-            if question_number > 50 or question_number < 0:
+            if question_number > 50 or question_number <= 0:
                 response_lines.append("❔Unable to edit number of questions. Must be a number 1-50.")
             else:
                 self.user_trivia_settings[user_id]["question_number"] = question_number
@@ -583,6 +607,7 @@ class WorldOfApis(commands.Cog):
 
 
     @woa.command(name="freetogame", description="Get a free to play game.")
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     @app_commands.describe(platform="The platform to see games for.", category="The type of category for the games to display.")
     @app_commands.choices(platform=[
         app_commands.Choice(name="PC", value="pc"),
@@ -637,6 +662,7 @@ class WorldOfApis(commands.Cog):
         image="Use the name of this uploaded image as the seed.",
         link="Use a direct image link (.jpg/.png/.gif) as the seed."
     )
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     @app_commands.autocomplete(sprite=sprite_autocomplete)
     async def dicebear(self, interaction: discord.Interaction, sprite: str = None, member: discord.Member = None, image: discord.Attachment = None, link: str = None):
         await interaction.response.defer()
@@ -665,6 +691,7 @@ class WorldOfApis(commands.Cog):
         await interaction.followup.send(embed=embed)
     
     @woa.command(name="insult", description="Generate a random insult. Use wisely.")
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     @app_commands.describe(user="The person you wish to insult.")
     async def insult(self, interaction: discord.Interaction, user: discord.Member = None):
         await interaction.response.defer()
