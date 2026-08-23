@@ -1,0 +1,17 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "An in-development Smash or Pass game featuring multiple character categories, voting, leaderboards, custom uploads, and user preferences.",
+    "hidden": true,
+    "install_msg": "SmashOrPass is currently under development and is not ready for general use.",
+    "short": "Smash or Pass game under development",
+    "end_user_data_statement": "This cog stores Discord user IDs, voting data, category preferences, custom uploads, blacklists, and related game data.",
+    "tags": [
+        "games",
+        "smash or pass",
+        "voting",
+        "characters"
+    ]
+}
