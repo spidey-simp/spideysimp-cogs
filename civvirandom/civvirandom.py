@@ -8,7 +8,6 @@ from redbot.core.commands import Cog
 
 from .civleaderlist import LEADERLIST, CHALLENGELIST
 
-log = logging.getLogger("red.spideysimp-cogs.CivVIRandom")
 
 
 class CivVIrandom(Cog):
