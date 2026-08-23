@@ -1,18 +1,23 @@
 {
     "author": [
-        "spideysimp"
+        "spidey simp"
     ],
-    "min_bot_version": "3.4.0",
-    "description": "A cog that has some very basic games.",
+    "min_bot_version": "3.5.0",
+    "description": "A collection of interactive Discord games, including Anagram, Uno, and Mastermind. Features multiple difficulty settings, leaderboards, multiplayer Uno with CPU opponents, and button-based gameplay.",
     "hidden": false,
-    "install_msg": "Thank you for installing Spidey Games! Get started with '[p]load spideygames', then '[p]help SpideyGames'",
-    "short": "Spidey Games",
-    "end_user_data_statement": "This cog stores no data!",
+    "install_msg": "Thank you for installing Spidey Games! Use `[p]load spideygames`, then `[p]help SpideyGames` to get started.",
+    "short": "Interactive games for Discord",
+    "end_user_data_statement": "This cog stores member game preferences and Anagram win statistics.",
+    "requirements": [
+        "wordfreq",
+        "nltk"
+    ],
     "tags": [
-        "spideysimp",
+        "spidey simp",
         "games",
+        "anagram",
+        "uno",
+        "mastermind",
         "fun"
     ]
-
-
 }

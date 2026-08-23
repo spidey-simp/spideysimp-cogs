@@ -1432,19 +1432,18 @@ class SpideyGames(commands.Cog):
             phrase_toggle = False
         )
         self.config.register_guild(difficulty="medium")
-    
-    @commands.group(name="spideygameset", aliases=["sgs"])
-    async def spideygameset(self, ctx: commands.Context):
-        """Command to change the game settings."""
-        await ctx.send("Currently this command has no settings.")
+
+    async def red_delete_data_for_user(self, *, requester, user_id: int):
+        all_members = await self.config.all_members()
+
+        for guild_id, members in all_members.items():
+            if user_id in members:
+                await self.config.member_from_ids(guild_id, user_id).clear()
     
     @commands.group(name="anagram", invoke_without_command=True)
     async def anagram(self, ctx: commands.Context):
         """Anagram game command group."""
-        subcommands = ["start", "hint", "leaderboard", "settings", "stop"]
-        command_list = "\n".join([f"- **[p]anagram {cmd}**" for cmd in subcommands])
-
-        await ctx.send(f"**Anagram Commands:**\n{command_list}\n\nUse `[p]anagram start` to begin a game!")
+        await ctx.send_help()
 
     @anagram.command(name="start", aliases=["s"])
     async def anagram_start(self, ctx: commands.Context):
@@ -1471,7 +1470,7 @@ class SpideyGames(commands.Cog):
         await ctx.send("The game is about to begin . . .")
         await asyncio.sleep(1)
         timeout_duration = get_timeout(base)
-        game_message = await ctx.send(f"🔠 **Unscramble this {'phrase' if phrase_setting else 'word'}:** `{scrambled}`\n⏳ **Time remaining: {timeout_duration} seconds**\n{'💡 Type `[p]anagram hint` for a clue!' if not phrase_setting else ''}")
+        game_message = await ctx.send(f"🔠 **Unscramble this {'phrase' if phrase_setting else 'word'}:** `{scrambled}`\n⏳ **Time remaining: {timeout_duration} seconds**\n{f'💡 Type `{ctx.prefix}anagram hint` for a clue!' if not phrase_setting else ''}")
 
         async def countdown_timer(time_amount: int):
             """Updates the message every 10 seconds."""
@@ -1480,7 +1479,7 @@ class SpideyGames(commands.Cog):
                 await asyncio.sleep(10)
                 if ctx.channel.id not in self.active_games:
                     return
-                await game_message.edit(content=f"🔠 **Unscramble this {'phrase' if phrase_setting else 'word'}:** `{scrambled}`\n⏳ **Time remaining: {remaining} seconds**\n{'💡 Type `[p]anagram hint` for a clue!' if not phrase_setting else ''}")
+                await game_message.edit(content=f"🔠 **Unscramble this {'phrase' if phrase_setting else 'word'}:** `{scrambled}`\n⏳ **Time remaining: {remaining} seconds**\n{f'💡 Type `{ctx.prefix}anagram hint` for a clue!' if not phrase_setting else ''}")
 
         self.bot.loop.create_task(countdown_timer(timeout_duration))
         def check(message): 
@@ -1613,7 +1612,7 @@ class SpideyGames(commands.Cog):
     @anagram.group(name="settings", invoke_without_command=True)
     async def anagram_setting(self, ctx:commands.Context):
         """Manage your personal anagram game settings."""
-        await ctx.send("Use `[p]anagram setting difficulty <novice/easy/medium/hard/expert/impossible>` to change your difficulty.")
+        await ctx.send(f"Use `{ctx.prefix}anagram setting difficulty <novice/easy/medium/hard/expert/impossible>` to change your difficulty.")
     
     @anagram_setting.command(name="difficulty")
     async def anagram_setting_difficulty(self, ctx:commands.Context, difficulty: str):
@@ -1655,7 +1654,7 @@ class SpideyGames(commands.Cog):
         game = self.uno_games.get(channel_id)
 
         if not game:
-            raise ValueError("There is no Uno game in this channel. Start one with `[p]uno create`.")
+            raise ValueError("There is no Uno game in this channel. Use the `uno create` command to start one.")
 
         return game
 
@@ -1810,12 +1809,13 @@ class SpideyGames(commands.Cog):
         await self._refresh_uno_table(game)
 
     @commands.group(name="uno", invoke_without_command=True)
+    @commands.bot_has_permissions(embed_links=True)
     async def uno(self, ctx: commands.Context):
         """Play Uno."""
         game = self.uno_games.get(ctx.channel.id)
 
         if not game:
-            await ctx.send("No Uno game is running here. Use `[p]uno create` to start a lobby.")
+            await ctx.send(f"No Uno game is running here. Use `{ctx.prefix}uno create` to start a lobby.")
             return
 
         refreshed = await self._refresh_uno_table(game)
@@ -1827,6 +1827,7 @@ class SpideyGames(commands.Cog):
             game.table_message_id = message.id
 
     @uno.command(name="create", aliases=["c"])
+    @commands.bot_has_permissions(embed_links=True)
     async def uno_create(self, ctx: commands.Context):
         """Create an Uno lobby in this channel."""
         if ctx.channel.id in self.uno_games:
@@ -1839,6 +1840,7 @@ class SpideyGames(commands.Cog):
         game.table_message_id = message.id
 
     @uno.command(name="join", aliases=["j"])
+    @commands.bot_has_permissions(embed_links=True)
     async def uno_join(self, ctx: commands.Context):
         """Join the Uno lobby. The Join button is preferred."""
         try:
@@ -1853,6 +1855,7 @@ class SpideyGames(commands.Cog):
             await ctx.send(str(e))
 
     @uno.command(name="leave", aliases=["l"])
+    @commands.bot_has_permissions(embed_links=True)
     async def uno_leave(self, ctx: commands.Context):
         """Leave an unstarted Uno lobby. The Leave button is preferred."""
         try:
@@ -1874,6 +1877,7 @@ class SpideyGames(commands.Cog):
             await ctx.send(str(e))
 
     @uno.command(name="start", aliases=["s"])
+    @commands.bot_has_permissions(embed_links=True)
     async def uno_start(self, ctx: commands.Context):
         """Start the Uno game. The Start button is preferred."""
         try:
@@ -1914,6 +1918,7 @@ class SpideyGames(commands.Cog):
             await ctx.send(str(e))
 
     @uno.command(name="play", aliases=["p"])
+    @commands.bot_has_permissions(embed_links=True)
     async def uno_play(self, ctx: commands.Context, *, notation: str):
         """
         Play a card by notation.
@@ -1985,6 +1990,7 @@ class SpideyGames(commands.Cog):
 
 
     @uno.command(name="draw", aliases=["d", "pass"])
+    @commands.bot_has_permissions(embed_links=True)
     async def uno_draw(self, ctx: commands.Context):
         """Draw until playable. If a +2 stack is pending, draw the full stack and lose your turn."""
         try:
@@ -2025,6 +2031,7 @@ class SpideyGames(commands.Cog):
 
     
     @uno.command(name="status", aliases=["table"])
+    @commands.bot_has_permissions(embed_links=True)
     async def uno_status(self, ctx: commands.Context):
         """Show or refresh the current Uno table."""
         try:
@@ -2047,7 +2054,7 @@ class SpideyGames(commands.Cog):
             "Exact cards: `G1`, `R7`, `B+2`, `YS`, `GREV`\n"
             "Broad picks: `G` plays any legal Green, `1` plays any legal 1, `+2` plays any legal +2.\n"
             "Wilds: `W:G` plays Wild and chooses Green. `W4:B` plays Wild +4 and chooses Blue.\n"
-            "Utility: use the **Draw Until Playable** button, `[p]uno draw`, or `[p]uno play DRAW`.\n"
+            "Utility: use the **Draw Until Playable** button, `uno draw`, or `uno play DRAW`.\n"
             "Important: `R` means Red. Use `REV` for Reverse.\n"
             "House rules: +2s stack. +4s do not stack. +2 and +4 do not mix."
         )
@@ -2072,13 +2079,14 @@ class SpideyGames(commands.Cog):
             await ctx.send(str(e))
     
     @commands.group(name="mastermind", aliases=["mm"], invoke_without_command=True)
+    @commands.bot_has_permissions(embed_links=True)
     async def mastermind(self, ctx: commands.Context):
         """Play Mastermind."""
         game = self.mastermind_games.get(ctx.channel.id)
 
         if not game:
             await ctx.send(
-                "No Mastermind game is running here. Use `[p]mastermind start` to begin.\n"
+                f"No Mastermind game is running here. Use `{ctx.prefix}mastermind start` to begin.\n"
                 "Difficulties: `easy`, `normal`, `hard`."
             )
             return
@@ -2086,6 +2094,7 @@ class SpideyGames(commands.Cog):
         await ctx.send(embed=game.status_embed(), view=MastermindView(self, ctx.channel.id))
 
     @mastermind.command(name="start", aliases=["s"])
+    @commands.bot_has_permissions(embed_links=True)
     async def mastermind_start(self, ctx: commands.Context, difficulty: str = "normal"):
         """Start a button-based Mastermind game."""
         difficulty = difficulty.lower()
