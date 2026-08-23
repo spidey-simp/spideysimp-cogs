@@ -115,6 +115,42 @@ DRAFT_SUBBIN_KEYS = [
     "housekeeping",
 ]
 
+
+MOTION_TYPES = {
+    "adjourn": {
+        "name": "Motion to Adjourn",
+        "text": "That the Senate do now adjourn.",
+        "debatable": False,
+        "amendable": False,
+        "default_method": "unanimous_consent",
+        "threshold": "simple",
+        "effect": "adjourn",
+        "privileged": True,
+    },
+
+    "recess": {
+        "name": "Motion to Recess",
+        "text": "That the Senate stand in recess.",
+        "debatable": False,
+        "amendable": True,
+        "default_method": "unanimous_consent",
+        "threshold": "simple",
+        "effect": "recess",
+        "privileged": True,
+    },
+
+    "custom": {
+        "name": "Custom Motion",
+        "text": None,
+        "debatable": True,
+        "amendable": True,
+        "default_method": "roll_call",
+        "threshold": "simple",
+        "effect": None,
+        "privileged": False,
+    },
+}
+
 def _blank_draft_bins() -> dict:
     return {k: "" for k in DRAFT_BINS.keys()}
 
@@ -3168,6 +3204,116 @@ def ensure_bills_schema(reg: dict) -> dict:
     b.setdefault("items", {})
     return b
 
+def ensure_motions_schema(reg: dict) -> dict:
+    m = reg.setdefault("motions", {})
+
+    m.setdefault("sequence", {
+        "Senate": 0,
+        "House": 0,
+    })
+
+    m.setdefault("items", {})
+
+    # Live parliamentary state.
+    m.setdefault("proceedings", {
+        "Senate": {
+            "status": "UNKNOWN",
+            "pending_question": None,
+            "last_changed_at": None,
+        },
+        "House": {
+            "status": "UNKNOWN",
+            "pending_question": None,
+            "last_changed_at": None,
+        },
+    })
+
+    return m
+
+
+def next_motion_id(reg: dict, chamber: str) -> str:
+    m = ensure_motions_schema(reg)
+    seq = m["sequence"].get(chamber, 0) + 1
+    m["sequence"][chamber] = seq
+
+    prefix = "SM" if chamber == "Senate" else "HM"
+    return f"{prefix}-{seq:04d}"
+
+def ensure_legislative_sessions_schema(reg: dict) -> dict:
+    root = reg.setdefault("legislative_sessions", {})
+
+    root.setdefault("sequence", {
+        "Senate": 0,
+        "House": 0,
+    })
+
+    root.setdefault("current", {
+        "Senate": None,
+        "House": None,
+    })
+
+    root.setdefault("archive", {})
+
+    return root
+
+
+def next_session_id(reg: dict, chamber: str) -> str:
+    root = ensure_legislative_sessions_schema(reg)
+
+    seq = int(root["sequence"].get(chamber, 0)) + 1
+    root["sequence"][chamber] = seq
+
+    prefix = "SEN" if chamber == "Senate" else "HOUSE"
+    year = discord.utils.utcnow().year
+
+    return f"{prefix}-{year}-{seq:04d}"
+
+
+def _session_member_title(chamber: str) -> str:
+    return "Senator" if chamber == "Senate" else "Representative"
+
+
+def _blank_session_state() -> dict:
+    return {
+        "status": "ADJOURNED",
+        "session_id": None,
+        "proceeding": None,       # "floor" | "hearing"
+        "topic": None,
+
+        "started_at": None,
+        "presiding_officer_id": None,
+
+        # Only one ordinary speaker at a time.
+        "recognized_member_id": None,
+
+        # And only one witness at a time.
+        "recognized_witness_id": None,
+
+        # Members awaiting recognition.
+        "floor_queue": [],
+
+        # user_id -> metadata
+        "witnesses": {},
+
+        "history": [],
+    }
+
+
+def _get_session(reg: dict, chamber: str) -> dict | None:
+    root = ensure_legislative_sessions_schema(reg)
+    return root["current"].get(chamber)
+
+
+def _session_is_live(session: dict | None) -> bool:
+    return bool(session and session.get("status") == "IN_SESSION")
+
+
+def _session_is_open(session: dict | None) -> bool:
+    return bool(
+        session
+        and session.get("status") in {"IN_SESSION", "IN_RECESS"}
+    )
+
 def next_bill_id(reg: dict, chamber: str) -> str:
     """
     Returns a simple ID like 'S-0001' or 'H-0007'.
@@ -4398,6 +4544,125 @@ class ExamChoiceButton(discord.ui.Button):
             return await interaction.response.send_message("Cog missing.", ephemeral=True)
         await cog._exam_record_and_advance(interaction, self.choice_idx)
 
+class MotionConsentView(discord.ui.View):
+    def __init__(self, cog, motion_id: str):
+        super().__init__(timeout=30)
+        self.cog = cog
+        self.motion_id = motion_id
+
+    @discord.ui.button(
+        label="Object",
+        style=discord.ButtonStyle.danger
+    )
+    async def object(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        reg = self.cog.federal_registry
+        motions = ensure_motions_schema(reg)
+        m = motions["items"].get(self.motion_id)
+
+        if not m:
+            return await interaction.response.send_message(
+                "Motion no longer exists.",
+                ephemeral=True,
+            )
+
+        if m.get("status") != "AWAITING_OBJECTION":
+            return await interaction.response.send_message(
+                "The objection period has ended.",
+                ephemeral=True,
+            )
+
+        if not is_in_chamber(interaction.user, m["chamber"]):
+            return await interaction.response.send_message(
+                "Only a member of the chamber may object.",
+                ephemeral=True,
+            )
+
+        m["procedure"]["objection_by"] = interaction.user.id
+        m["status"] = "OBJECTED"
+
+        m.setdefault("history", []).append({
+            "at": discord.utils.utcnow().isoformat(),
+            "action": "Objection heard",
+            "by": interaction.user.id,
+        })
+
+        save_federal_registry(reg)
+
+        poll_msg = await self.cog._open_motion_roll_call(
+            interaction.guild,
+            m,
+            opened_by=interaction.user.id,
+        )
+
+        await interaction.response.edit_message(
+            content=(
+                f"### {m['id']} — Objection Heard\n"
+                f"{m['text']}\n\n"
+                f"**PRESIDING OFFICER:** Objection is heard. "
+                f"The question is on the motion.\n\n"
+                f"[Proceed to roll call]({poll_msg.jump_url})"
+            ),
+            view=None,
+        )
+
+        self.stop()
+
+    async def on_timeout(self):
+        reg = self.cog.federal_registry
+        motions = ensure_motions_schema(reg)
+        m = motions["items"].get(self.motion_id)
+
+        if not m or m.get("status") != "AWAITING_OBJECTION":
+            return
+
+        m["status"] = "AGREED_TO"
+        m.setdefault("history", []).append({
+            "at": discord.utils.utcnow().isoformat(),
+            "action": "Agreed to by unanimous consent",
+            "by": None,
+        })
+
+        await self.cog._execute_motion_effect(m)
+        save_federal_registry(reg)
+
+        channel_id = m["procedure"].get("channel_id")
+        message_id = m["procedure"].get("message_id")
+
+        channel = self.cog.bot.get_channel(channel_id)
+        if channel and message_id:
+            try:
+                msg = await channel.fetch_message(message_id)
+
+                if m["motion_type"] == "adjourn":
+                    ending = (
+                        "**PRESIDING OFFICER:** Hearing no objection, "
+                        "the motion is agreed to. The Senate stands adjourned."
+                    )
+                elif m["motion_type"] == "recess":
+                    ending = (
+                        "**PRESIDING OFFICER:** Hearing no objection, "
+                        "the motion is agreed to. The Senate stands in recess."
+                    )
+                else:
+                    ending = (
+                        "**PRESIDING OFFICER:** Hearing no objection, "
+                        "the motion is agreed to."
+                    )
+
+                await msg.edit(
+                    content=(
+                        f"### {m['id']} — AGREED TO\n"
+                        f"{m['text']}\n\n{ending}"
+                    ),
+                    view=None,
+                )
+            except Exception:
+                pass
+
 class SpideyGov(commands.Cog):
     def __init__(self, bot):
         global REGISTRY_SUSPENDED
@@ -4450,6 +4715,12 @@ class SpideyGov(commands.Cog):
 
         self.social_db = SocialAccountsDB(SOCIAL_DB_FILE)
         self.social_lock = asyncio.Lock()
+        ensure_constitution_schema(self.federal_registry)
+        ensure_legislative_sessions_schema(self.federal_registry)
+
+        self._session_warning_cooldowns = {}
+        ensure_motions_schema(self.federal_registry)
+        normalize_registry_order(self.federal_registry)
         
 
     def cog_unload(self):
@@ -4466,6 +4737,124 @@ class SpideyGov(commands.Cog):
             save_federal_registry(self.federal_registry)
         except Exception:
             pass
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        # Never police bots/webhooks.
+        if not message.guild:
+            return
+
+        if message.author.bot:
+            return
+
+        if message.webhook_id:
+            return
+
+        # Determine whether this is one of the chambers.
+        if message.channel.id == SENATE:
+            chamber = "Senate"
+        elif message.channel.id == HOUSE:
+            chamber = "House"
+        else:
+            return
+
+        state = _get_session(self.federal_registry, chamber)
+
+        # Outside an active sitting, Discord chat behaves normally.
+        if not _session_is_live(state):
+            return
+
+        member = message.author
+
+        # The presiding officer necessarily may speak.
+        if member.id == state.get("presiding_officer_id"):
+            return
+
+        # A member holding the floor may speak.
+        if member.id == state.get("recognized_member_id"):
+            return
+
+        # A recognized witness may testify/respond.
+        if member.id == state.get("recognized_witness_id"):
+            return
+
+        is_member = self._session_user_is_member(member, chamber)
+
+        witness_rec = (
+            state.get("witnesses", {})
+            .get(str(member.id))
+        )
+
+        # Record EVERY instance even if we suppress repetitive warnings.
+        self._session_history(
+            state,
+            "OUT_OF_ORDER_SPEECH",
+            member.id,
+            message_id=message.id,
+            channel_id=message.channel.id,
+            category=(
+                "member"
+                if is_member
+                else "witness"
+                if witness_rec
+                else "gallery"
+            ),
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        # Warning cooldown: record everything, but don't have the Chair
+        # shout after every line of a multi-message thought.
+        key = (chamber, member.id)
+
+        now = asyncio.get_running_loop().time()
+        last = self._session_warning_cooldowns.get(key, 0)
+
+        if now - last < 15:
+            return
+
+        self._session_warning_cooldowns[key] = now
+
+        title = _session_member_title(chamber)
+
+        if is_member:
+            warning = (
+                f"**PRESIDING OFFICER:** The Chair has not recognized "
+                f"{title} {member.mention}."
+            )
+
+        elif witness_rec and witness_rec.get("status") != "RELEASED":
+            warning = (
+                f"**PRESIDING OFFICER:** The witness will suspend. "
+                f"The Chair has not recognized {member.mention}."
+            )
+
+        elif self._session_user_is_mod(member):
+            warning = (
+                f"**PRESIDING OFFICER:** {member.mention}, please remain "
+                f"quiet in the gallery while the {chamber} is in session."
+            )
+
+        else:
+            warning = (
+                f"**PRESIDING OFFICER:** {member.mention}, the gallery "
+                f"may not address the {chamber} while it is in session."
+            )
+
+        try:
+            await message.reply(
+                warning,
+                mention_author=False,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+        except Exception:
+            try:
+                await message.channel.send(
+                    warning,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except Exception:
+                pass
     
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -4545,6 +4934,94 @@ class SpideyGov(commands.Cog):
             if not cur or cur in label.lower():
                 out.append(app_commands.Choice(name=label, value=key))
         return out[:25]
+
+    async def _execute_motion_effect(self, motion: dict):
+        effect = (motion.get("effect") or {}).get("type")
+        if not effect:
+            return
+
+        motions = ensure_motions_schema(self.federal_registry)
+        chamber = motion["chamber"]
+        state = motions["proceedings"][chamber]
+
+        now = discord.utils.utcnow().isoformat()
+
+        if effect == "adjourn":
+            state["status"] = "ADJOURNED"
+            state["last_changed_at"] = now
+            state["changed_by_motion"] = motion["id"]
+
+        elif effect == "recess":
+            state["status"] = "IN_RECESS"
+            state["last_changed_at"] = now
+            state["changed_by_motion"] = motion["id"]
+
+        motion["effect"]["executed"] = True
+
+
+
+    async def _open_motion_roll_call(
+        self,
+        guild: discord.Guild,
+        motion: dict,
+        opened_by: int,
+    ):
+        chamber = motion["chamber"]
+
+        if chamber == "Senate":
+            chan = self.bot.get_channel(SENATE_VOTING_CHANNEL)
+        else:
+            chan = self.bot.get_channel(HOUSE)
+
+        if not chan:
+            raise RuntimeError("Voting channel not found.")
+
+        poll = discord.Poll(
+            question=f"Shall {motion['id']} be agreed to?",
+            duration=timedelta(hours=24),
+            multiple=False,
+        )
+
+        poll.add_answer(text="Yea", emoji="✅")
+        poll.add_answer(text="Nay", emoji="❌")
+        poll.add_answer(text="Present", emoji="➖")
+
+        role_id = chamber_role_id(chamber)
+
+        msg = await chan.send(
+            (
+                f"<@&{role_id}>, roll call is open.\n\n"
+                f"### {motion['id']}\n"
+                f"{motion['text']}"
+            ),
+            poll=poll,
+            allowed_mentions=discord.AllowedMentions(
+                roles=True,
+                users=False,
+                everyone=False,
+            ),
+        )
+
+        eligible = await resolve_eligible_members(
+            guild,
+            chan,
+            chamber,
+        )
+
+        motion["status"] = "VOTE_OPEN"
+        motion["vote"] = {
+            "message_id": msg.id,
+            "channel_id": chan.id,
+            "opened_at": discord.utils.utcnow().isoformat(),
+            "opened_by": opened_by,
+            "hours": 24,
+            "threshold": motion["rules"]["threshold"],
+            "eligible_count": len(eligible),
+            "quorum_required": quorum_required(len(eligible)),
+        }
+
+        save_federal_registry(self.federal_registry)
+        return msg
 
     def to_roman(self, n: int) -> str:
         vals = [
@@ -4711,6 +5188,67 @@ class SpideyGov(commands.Cog):
     async def _wait_ready_status(self):
         await self.bot.wait_until_ready()
 
+    def _session_channel(self, chamber: str):
+        channel_id = SENATE if chamber == "Senate" else HOUSE
+        return self.bot.get_channel(channel_id)
+
+
+    def _session_user_is_member(
+        self,
+        member: discord.Member,
+        chamber: str
+    ) -> bool:
+        role_id = SENATORS if chamber == "Senate" else REPRESENTATIVES
+        return role_id in {r.id for r in member.roles}
+
+
+    def _session_user_is_mod(self, member: discord.Member) -> bool:
+        perms = member.guild_permissions
+        return bool(
+            perms.administrator
+            or perms.manage_messages
+            or perms.moderate_members
+            or perms.manage_guild
+        )
+
+
+    def _session_can_control(
+        self,
+        member: discord.Member,
+        chamber: str,
+        session: dict | None = None,
+    ) -> bool:
+        # Admin override
+        if member.guild_permissions.administrator:
+            return True
+
+        # Current presiding officer
+        if session and session.get("presiding_officer_id") == member.id:
+            return True
+
+        role_ids = {r.id for r in member.roles}
+
+        if chamber == "Senate":
+            return SENATE_MAJORITY_LEADER in role_ids
+
+        return SPEAKER_OF_THE_HOUSE in role_ids
+
+
+    def _session_history(
+        self,
+        session: dict,
+        action: str,
+        actor_id: int | None = None,
+        **extra,
+    ):
+        rec = {
+            "at": discord.utils.utcnow().isoformat(),
+            "action": action,
+            "actor_id": actor_id,
+        }
+        rec.update(extra)
+        session.setdefault("history", []).append(rec)
+
     
 
     government = app_commands.Group(name="government", description="Government-related commands")
@@ -4737,6 +5275,17 @@ class SpideyGov(commands.Cog):
     executive = app_commands.Group(name="executive", description="Executive commands")
     treasury = app_commands.Group(name="treasury", description="Commands for controlling the treasury.", parent=executive)
     agencies = app_commands.Group(name="agencies", description="Ordinary agency commands for RM, adj., etc.", parent=executive)
+
+    motion = app_commands.Group(
+    name="motion",
+    description="Parliamentary floor motions",
+    parent=legislature
+)
+    session = app_commands.Group(
+        name="session",
+        description="Manage House and Senate proceedings",
+        parent=legislature
+    )
 
 
 
@@ -4920,6 +5469,881 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_message(embed=e, ephemeral=False)
 
     # ---------------- CANDIDATE FILING ----------------
+
+    @session.command(
+        name="begin",
+        description="Call the House or Senate to order."
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="Senate"),
+            app_commands.Choice(name="House", value="House"),
+        ],
+        proceeding=[
+            app_commands.Choice(name="Floor Session", value="floor"),
+            app_commands.Choice(name="Hearing", value="hearing"),
+        ],
+    )
+    @app_commands.describe(
+        chamber="The chamber being called to order",
+        proceeding="Floor session or hearing",
+        presiding_officer="The member/officer presiding",
+        topic="Pending business or hearing subject",
+    )
+    async def session_begin(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        proceeding: str,
+        presiding_officer: discord.Member,
+        topic: str | None = None,
+    ):
+        root = ensure_legislative_sessions_schema(self.federal_registry)
+        existing = root["current"].get(chamber)
+
+        if _session_is_open(existing):
+            return await interaction.response.send_message(
+                f"❌ The {chamber} already has an open proceeding.",
+                ephemeral=True,
+            )
+
+        # The officer may call their own proceeding to order;
+        # leadership/admin may also designate the officer.
+        allowed = (
+            interaction.user.id == presiding_officer.id
+            or interaction.user.guild_permissions.administrator
+            or (
+                chamber == "Senate"
+                and SENATE_MAJORITY_LEADER
+                in {r.id for r in interaction.user.roles}
+            )
+            or (
+                chamber == "House"
+                and SPEAKER_OF_THE_HOUSE
+                in {r.id for r in interaction.user.roles}
+            )
+        )
+
+        if not allowed:
+            return await interaction.response.send_message(
+                "❌ Only the presiding officer, chamber leadership, or an administrator "
+                "may call the chamber to order.",
+                ephemeral=True,
+            )
+
+        sid = next_session_id(self.federal_registry, chamber)
+
+        state = _blank_session_state()
+        state.update({
+            "status": "IN_SESSION",
+            "session_id": sid,
+            "proceeding": proceeding,
+            "topic": (topic or "").strip() or None,
+            "started_at": discord.utils.utcnow().isoformat(),
+            "presiding_officer_id": presiding_officer.id,
+        })
+
+        self._session_history(
+            state,
+            "CALLED_TO_ORDER",
+            interaction.user.id,
+        )
+
+        root["current"][chamber] = state
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+        if channel:
+            noun = "hearing" if proceeding == "hearing" else "session"
+
+            text = (
+                f"# 🔨 {chamber.upper()} — CALLED TO ORDER\n"
+                f"**PRESIDING OFFICER:** The {chamber} will come to order.\n\n"
+                f"**Presiding:** {presiding_officer.mention}\n"
+                f"**Proceeding:** {noun.title()}"
+            )
+
+            if state["topic"]:
+                text += f"\n**Pending business:** {state['topic']}"
+
+            text += (
+                "\n\nMembers must be recognized by the Chair before "
+                "addressing the chamber."
+            )
+
+            if proceeding == "hearing":
+                text += (
+                    "\nDesignated witnesses may testify or answer questions "
+                    "when recognized by the Chair."
+                )
+
+            await channel.send(text)
+
+        await interaction.response.send_message(
+            f"✅ {chamber} proceeding **{sid}** called to order.",
+            ephemeral=True,
+        )
+
+    @session.command(
+        name="request_floor",
+        description="Seek recognition from the Chair."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    async def session_request_floor(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not _session_is_live(state):
+            return await interaction.response.send_message(
+                f"❌ The {chamber} is not currently in session.",
+                ephemeral=True,
+            )
+
+        if not self._session_user_is_member(interaction.user, chamber):
+            return await interaction.response.send_message(
+                "❌ Only members of the chamber may seek recognition.",
+                ephemeral=True,
+            )
+
+        if state.get("recognized_member_id") == interaction.user.id:
+            return await interaction.response.send_message(
+                "You already have the floor.",
+                ephemeral=True,
+            )
+
+        queue = state.setdefault("floor_queue", [])
+
+        if interaction.user.id not in queue:
+            queue.append(interaction.user.id)
+
+        self._session_history(
+            state,
+            "REQUESTED_RECOGNITION",
+            interaction.user.id,
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+        if channel:
+            title = _session_member_title(chamber)
+            await channel.send(
+                f"**{title} {interaction.user.display_name} seeks recognition.**"
+            )
+
+        await interaction.response.send_message(
+            "✅ Recognition requested.",
+            ephemeral=True,
+        )
+
+    @session.command(
+        name="recognize",
+        description="Recognize a member to speak."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    async def session_recognize(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        member: discord.Member,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not _session_is_live(state):
+            return await interaction.response.send_message(
+                f"❌ The {chamber} is not currently in session.",
+                ephemeral=True,
+            )
+
+        if not self._session_can_control(interaction.user, chamber, state):
+            return await interaction.response.send_message(
+                "❌ Only the Chair may recognize speakers.",
+                ephemeral=True,
+            )
+
+        if not self._session_user_is_member(member, chamber):
+            return await interaction.response.send_message(
+                f"❌ {member.mention} is not a member of the {chamber}. "
+                "Use the witness command for a witness.",
+                ephemeral=True,
+            )
+
+        # One speaker at a time.
+        state["recognized_member_id"] = member.id
+        state["recognized_witness_id"] = None
+
+        queue = state.setdefault("floor_queue", [])
+        if member.id in queue:
+            queue.remove(member.id)
+
+        self._session_history(
+            state,
+            "MEMBER_RECOGNIZED",
+            interaction.user.id,
+            member_id=member.id,
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+        if channel:
+            title = _session_member_title(chamber)
+
+            await channel.send(
+                f"**PRESIDING OFFICER:** The Chair recognizes "
+                f"{title} {member.mention}."
+            )
+
+        await interaction.response.send_message(
+            f"✅ {member.display_name} has the floor.",
+            ephemeral=True,
+        )
+
+    @session.command(
+        name="yield",
+        description="Yield the floor."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    async def session_yield(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not _session_is_live(state):
+            return await interaction.response.send_message(
+                "❌ There is no live session.",
+                ephemeral=True,
+            )
+
+        member_id = state.get("recognized_member_id")
+        witness_id = state.get("recognized_witness_id")
+
+        is_chair = self._session_can_control(
+            interaction.user,
+            chamber,
+            state,
+        )
+
+        if interaction.user.id == member_id:
+            state["recognized_member_id"] = None
+
+        elif interaction.user.id == witness_id:
+            state["recognized_witness_id"] = None
+
+        elif is_chair:
+            state["recognized_member_id"] = None
+            state["recognized_witness_id"] = None
+
+        else:
+            return await interaction.response.send_message(
+                "❌ You do not currently have the floor.",
+                ephemeral=True,
+            )
+
+        self._session_history(
+            state,
+            "FLOOR_YIELDED",
+            interaction.user.id,
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+        if channel:
+            await channel.send(
+                "**PRESIDING OFFICER:** The floor is yielded."
+            )
+
+        await interaction.response.send_message(
+            "✅ Floor yielded.",
+            ephemeral=True,
+        )
+
+    @session.command(
+        name="witness_designate",
+        description="Designate a witness for the current proceeding."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    @app_commands.describe(
+        witness="Person appearing as a witness",
+        description="Optional title or reason for appearance",
+    )
+    async def session_witness_designate(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        witness: discord.Member,
+        description: str | None = None,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not _session_is_open(state):
+            return await interaction.response.send_message(
+                "❌ There is no open proceeding.",
+                ephemeral=True,
+            )
+
+        if not self._session_can_control(interaction.user, chamber, state):
+            return await interaction.response.send_message(
+                "❌ Only the Chair may designate witnesses.",
+                ephemeral=True,
+            )
+
+        witnesses = state.setdefault("witnesses", {})
+
+        witnesses[str(witness.id)] = {
+            "user_id": witness.id,
+            "description": (description or "").strip() or None,
+            "designated_at": discord.utils.utcnow().isoformat(),
+            "designated_by": interaction.user.id,
+            "status": "AVAILABLE",
+        }
+
+        self._session_history(
+            state,
+            "WITNESS_DESIGNATED",
+            interaction.user.id,
+            witness_id=witness.id,
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+        if channel:
+            line = f"**WITNESS DESIGNATED:** {witness.mention}"
+            if description:
+                line += f" — {description}"
+            await channel.send(line)
+
+        await interaction.response.send_message(
+            f"✅ {witness.display_name} designated as a witness.",
+            ephemeral=True,
+        )
+
+    @session.command(
+        name="witness_recognize",
+        description="Recognize a designated witness to testify or answer."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    async def session_witness_recognize(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        witness: discord.Member,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not _session_is_live(state):
+            return await interaction.response.send_message(
+                "❌ The chamber is not currently in session.",
+                ephemeral=True,
+            )
+
+        if not self._session_can_control(interaction.user, chamber, state):
+            return await interaction.response.send_message(
+                "❌ Only the Chair may recognize a witness.",
+                ephemeral=True,
+            )
+
+        witness_record = (
+            state.get("witnesses", {})
+            .get(str(witness.id))
+        )
+
+        if not witness_record:
+            return await interaction.response.send_message(
+                "❌ That person has not been designated as a witness.",
+                ephemeral=True,
+            )
+
+        # Witness now has the floor.
+        state["recognized_member_id"] = None
+        state["recognized_witness_id"] = witness.id
+
+        witness_record["status"] = "RECOGNIZED"
+
+        self._session_history(
+            state,
+            "WITNESS_RECOGNIZED",
+            interaction.user.id,
+            witness_id=witness.id,
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+        if channel:
+            await channel.send(
+                f"**PRESIDING OFFICER:** The Chair recognizes "
+                f"the witness, {witness.mention}."
+            )
+
+        await interaction.response.send_message(
+            f"✅ {witness.display_name} may speak.",
+            ephemeral=True,
+        )
+
+    @session.command(
+        name="witness_release",
+        description="Release a witness from the current proceeding."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    async def session_witness_release(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        witness: discord.Member,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not state:
+            return await interaction.response.send_message(
+                "❌ No proceeding found.",
+                ephemeral=True,
+            )
+
+        if not self._session_can_control(interaction.user, chamber, state):
+            return await interaction.response.send_message(
+                "❌ Only the Chair may release a witness.",
+                ephemeral=True,
+            )
+
+        rec = state.get("witnesses", {}).get(str(witness.id))
+
+        if not rec:
+            return await interaction.response.send_message(
+                "❌ That person is not a designated witness.",
+                ephemeral=True,
+            )
+
+        rec["status"] = "RELEASED"
+        rec["released_at"] = discord.utils.utcnow().isoformat()
+
+        if state.get("recognized_witness_id") == witness.id:
+            state["recognized_witness_id"] = None
+
+        self._session_history(
+            state,
+            "WITNESS_RELEASED",
+            interaction.user.id,
+            witness_id=witness.id,
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+        if channel:
+            await channel.send(
+                f"**PRESIDING OFFICER:** The witness {witness.mention} "
+                "is excused."
+            )
+
+        await interaction.response.send_message(
+            "✅ Witness released.",
+            ephemeral=True,
+        )
+
+    @session.command(
+        name="point",
+        description="Raise a privileged parliamentary point."
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="Senate"),
+            app_commands.Choice(name="House", value="House"),
+        ],
+        point_type=[
+            app_commands.Choice(
+                name="Point of Order",
+                value="point_of_order"
+            ),
+            app_commands.Choice(
+                name="Parliamentary Inquiry",
+                value="parliamentary_inquiry"
+            ),
+            app_commands.Choice(
+                name="Point of Personal Privilege",
+                value="personal_privilege"
+            ),
+            app_commands.Choice(
+                name="Request for Information",
+                value="request_information"
+            ),
+        ],
+    )
+    async def session_point(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        point_type: str,
+        text: str,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not _session_is_live(state):
+            return await interaction.response.send_message(
+                "❌ The chamber is not currently in session.",
+                ephemeral=True,
+            )
+
+        if not self._session_user_is_member(interaction.user, chamber):
+            return await interaction.response.send_message(
+                "❌ Parliamentary points may be raised only by members.",
+                ephemeral=True,
+            )
+
+        labels = {
+            "point_of_order": "POINT OF ORDER",
+            "parliamentary_inquiry": "PARLIAMENTARY INQUIRY",
+            "personal_privilege": "POINT OF PERSONAL PRIVILEGE",
+            "request_information": "REQUEST FOR INFORMATION",
+        }
+
+        self._session_history(
+            state,
+            "PARLIAMENTARY_POINT",
+            interaction.user.id,
+            point_type=point_type,
+            text=text,
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+        title = _session_member_title(chamber)
+
+        if channel:
+            await channel.send(
+                f"### {labels[point_type]}\n"
+                f"**{title} {interaction.user.display_name}:** {text}\n\n"
+                f"*The point is before the Chair.*"
+            )
+
+        await interaction.response.send_message(
+            "✅ Point raised.",
+            ephemeral=True,
+        )
+
+    @session.command(
+        name="recess",
+        description="Place the chamber in recess after recess has been ordered."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    async def session_recess(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        minutes: int | None = None,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not _session_is_live(state):
+            return await interaction.response.send_message(
+                "❌ The chamber is not currently in session.",
+                ephemeral=True,
+            )
+
+        if not self._session_can_control(interaction.user, chamber, state):
+            return await interaction.response.send_message(
+                "❌ Only the Chair may place the chamber in recess.",
+                ephemeral=True,
+            )
+
+        state["status"] = "IN_RECESS"
+        state["recognized_member_id"] = None
+        state["recognized_witness_id"] = None
+        state["recess_started_at"] = discord.utils.utcnow().isoformat()
+
+        if minutes and minutes > 0:
+            end = discord.utils.utcnow() + timedelta(minutes=minutes)
+            state["recess_until"] = end.isoformat()
+        else:
+            end = None
+            state["recess_until"] = None
+
+        self._session_history(
+            state,
+            "RECESSED",
+            interaction.user.id,
+            minutes=minutes,
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+
+        if channel:
+            if end:
+                await channel.send(
+                    f"**PRESIDING OFFICER:** The {chamber} will stand "
+                    f"in recess until {discord.utils.format_dt(end, style='t')}."
+                )
+            else:
+                await channel.send(
+                    f"**PRESIDING OFFICER:** The {chamber} will stand in recess."
+                )
+
+        await interaction.response.send_message(
+            "✅ Chamber placed in recess.",
+            ephemeral=True,
+        )
+
+
+    @session.command(
+        name="resume",
+        description="Call a recessed proceeding back to order."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    async def session_resume(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not state or state.get("status") != "IN_RECESS":
+            return await interaction.response.send_message(
+                "❌ The chamber is not currently in recess.",
+                ephemeral=True,
+            )
+
+        if not self._session_can_control(interaction.user, chamber, state):
+            return await interaction.response.send_message(
+                "❌ Only the Chair may resume proceedings.",
+                ephemeral=True,
+            )
+
+        state["status"] = "IN_SESSION"
+        state["recess_until"] = None
+
+        self._session_history(
+            state,
+            "RESUMED",
+            interaction.user.id,
+        )
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+        if channel:
+            await channel.send(
+                f"🔨 **PRESIDING OFFICER:** The {chamber} will come to order."
+            )
+
+        await interaction.response.send_message(
+            "✅ Proceedings resumed.",
+            ephemeral=True,
+        )
+
+    @session.command(
+        name="adjourn",
+        description="Close the proceeding after adjournment has been ordered."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    async def session_adjourn(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        basis: str | None = None,
+    ):
+        root = ensure_legislative_sessions_schema(self.federal_registry)
+        state = root["current"].get(chamber)
+
+        if not _session_is_open(state):
+            return await interaction.response.send_message(
+                "❌ There is no open proceeding to adjourn.",
+                ephemeral=True,
+            )
+
+        if not self._session_can_control(interaction.user, chamber, state):
+            return await interaction.response.send_message(
+                "❌ Only the Chair may close the proceeding.",
+                ephemeral=True,
+            )
+
+        state["status"] = "ADJOURNED"
+        state["adjourned_at"] = discord.utils.utcnow().isoformat()
+        state["adjourned_by"] = interaction.user.id
+        state["adjournment_basis"] = (basis or "").strip() or None
+
+        state["recognized_member_id"] = None
+        state["recognized_witness_id"] = None
+
+        self._session_history(
+            state,
+            "ADJOURNED",
+            interaction.user.id,
+            basis=basis,
+        )
+
+        sid = state["session_id"]
+
+        root["archive"][sid] = state
+        root["current"][chamber] = None
+
+        save_federal_registry(self.federal_registry)
+
+        channel = self._session_channel(chamber)
+
+        if channel:
+            if basis:
+                await channel.send(
+                    f"# {chamber.upper()} — ADJOURNED\n"
+                    f"**PRESIDING OFFICER:** {basis}. "
+                    f"The {chamber} stands adjourned."
+                )
+            else:
+                await channel.send(
+                    f"# {chamber.upper()} — ADJOURNED\n"
+                    f"**PRESIDING OFFICER:** The {chamber} stands adjourned."
+                )
+
+        await interaction.response.send_message(
+            f"✅ **{sid}** adjourned and archived.",
+            ephemeral=True,
+        )
+
+
+    @session.command(
+        name="status",
+        description="View the current parliamentary status."
+    )
+    @app_commands.choices(chamber=[
+        app_commands.Choice(name="Senate", value="Senate"),
+        app_commands.Choice(name="House", value="House"),
+    ])
+    async def session_status(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+    ):
+        state = _get_session(self.federal_registry, chamber)
+
+        if not state:
+            return await interaction.response.send_message(
+                f"The {chamber} has no open proceeding.",
+                ephemeral=True,
+            )
+
+        chair = state.get("presiding_officer_id")
+        speaker = state.get("recognized_member_id")
+        witness = state.get("recognized_witness_id")
+        queue = state.get("floor_queue", [])
+
+        embed = discord.Embed(
+            title=f"{chamber} — Parliamentary Status",
+            color=discord.Color.dark_blue(),
+        )
+
+        embed.add_field(
+            name="Session",
+            value=state.get("session_id") or "—",
+            inline=True,
+        )
+
+        embed.add_field(
+            name="Status",
+            value=state.get("status") or "—",
+            inline=True,
+        )
+
+        embed.add_field(
+            name="Proceeding",
+            value=(state.get("proceeding") or "—").title(),
+            inline=True,
+        )
+
+        embed.add_field(
+            name="Chair",
+            value=f"<@{chair}>" if chair else "—",
+            inline=True,
+        )
+
+        embed.add_field(
+            name="Member with floor",
+            value=f"<@{speaker}>" if speaker else "—",
+            inline=True,
+        )
+
+        embed.add_field(
+            name="Witness recognized",
+            value=f"<@{witness}>" if witness else "—",
+            inline=True,
+        )
+
+        if state.get("topic"):
+            embed.add_field(
+                name="Pending business",
+                value=state["topic"][:1024],
+                inline=False,
+            )
+
+        if queue:
+            qtext = "\n".join(
+                f"{i}. <@{uid}>"
+                for i, uid in enumerate(queue, start=1)
+            )
+        else:
+            qtext = "None"
+
+        embed.add_field(
+            name="Recognition Queue",
+            value=qtext[:1024],
+            inline=False,
+        )
+
+        witnesses = state.get("witnesses", {})
+
+        if witnesses:
+            lines = []
+            for rec in witnesses.values():
+                line = f"• <@{rec['user_id']}> — {rec.get('status', 'AVAILABLE')}"
+                if rec.get("description"):
+                    line += f" — {rec['description']}"
+                lines.append(line)
+
+            embed.add_field(
+                name="Witnesses",
+                value="\n".join(lines)[:1024],
+                inline=False,
+            )
+
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True,
+        )
 
     @elections.command(name="file_candidate", description="File as a candidate in a scheduled contest (House/Senate).")
     @app_commands.describe(
@@ -7850,6 +9274,141 @@ class SpideyGov(commands.Cog):
             return await interaction.response.send_message(f"✅ Appointed **{added}** members from {role.mention} to **{node.get('name','(unnamed)')}**.", ephemeral=True)
 
         return await interaction.response.send_message("Unknown action.", ephemeral=True)
+
+
+    @motion.command(
+        name="make",
+        description="Make a parliamentary motion."
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="Senate"),
+            app_commands.Choice(name="House", value="House"),
+        ],
+        motion_type=[
+            app_commands.Choice(name="Adjourn", value="adjourn"),
+            app_commands.Choice(name="Recess", value="recess"),
+            app_commands.Choice(name="Custom Motion", value="custom"),
+        ],
+    )
+    @app_commands.describe(
+        chamber="Chamber in which the motion is made",
+        motion_type="Type of motion",
+        text="Required for a custom motion",
+    )
+    async def make_motion(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        motion_type: str,
+        text: str | None = None,
+    ):
+        if not is_in_chamber(interaction.user, chamber):
+            return await interaction.response.send_message(
+                f"❌ You are not a member of the {chamber}.",
+                ephemeral=True,
+            )
+
+        spec = MOTION_TYPES.get(motion_type)
+        if not spec:
+            return await interaction.response.send_message(
+                "❌ Unknown motion type.",
+                ephemeral=True,
+            )
+
+        if motion_type == "custom":
+            text = (text or "").strip()
+            if not text:
+                return await interaction.response.send_message(
+                    "❌ Custom motions require motion text.",
+                    ephemeral=True,
+                )
+        else:
+            text = spec["text"]
+
+        reg = self.federal_registry
+        motions = ensure_motions_schema(reg)
+
+        motion_id = next_motion_id(reg, chamber)
+
+        m = {
+            "id": motion_id,
+            "motion_type": motion_type,
+            "chamber": chamber,
+            "text": text,
+            "moved_by": interaction.user.id,
+            "moved_at": discord.utils.utcnow().isoformat(),
+
+            "rules": {
+                "debatable": spec["debatable"],
+                "amendable": spec["amendable"],
+                "privileged": spec["privileged"],
+                "threshold": spec["threshold"],
+            },
+
+            "procedure": {
+                "method": spec["default_method"],
+                "objection_by": None,
+            },
+
+            "effect": {
+                "type": spec["effect"],
+                "executed": False,
+            },
+
+            "status": "PENDING",
+            "history": [],
+        }
+
+        motions["items"][motion_id] = m
+        save_federal_registry(reg)
+
+        chamber_channel = interaction.client.get_channel(
+            chamber_channel_id(chamber)
+        )
+
+        if not chamber_channel:
+            return await interaction.response.send_message(
+                f"✅ {motion_id} recorded, but I could not find the chamber channel.",
+                ephemeral=True,
+            )
+
+        # Unanimous-consent path.
+        if spec["default_method"] == "unanimous_consent":
+            m["status"] = "AWAITING_OBJECTION"
+
+            view = MotionConsentView(
+                cog=self,
+                motion_id=motion_id,
+            )
+
+            msg = await chamber_channel.send(
+                f"### {motion_id} — {spec['name']}\n"
+                f"{interaction.user.mention}: *I move {text}*\n\n"
+                f"**PRESIDING OFFICER:** Without objection, the motion will be agreed to.",
+                view=view,
+            )
+
+            m["procedure"]["message_id"] = msg.id
+            m["procedure"]["channel_id"] = msg.channel.id
+            save_federal_registry(reg)
+
+            return await interaction.response.send_message(
+                f"✅ Motion made: **{motion_id}**",
+                ephemeral=True,
+            )
+
+        # Custom/substantive path.
+        poll_msg = await self._open_motion_roll_call(
+            interaction.guild,
+            m,
+            opened_by=interaction.user.id,
+        )
+
+        await interaction.response.send_message(
+            f"✅ **{motion_id}** is before the {chamber}.\n{poll_msg.jump_url}",
+            ephemeral=False,
+        )
 
     
     @bill.command(name="report", description="Introduce, vote, transmit, enroll, or present a bill")
