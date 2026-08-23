@@ -1,0 +1,17 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "Play interactive Blackjack directly in Discord with Hit and Stand buttons. Games can be played for free or with optional wagers using Red's built-in bank.",
+    "hidden": false,
+    "install_msg": "Thank you for installing SpideyCasino! Use `[p]load spideycasino` to get started, then play Blackjack with `/casino blackjack`.",
+    "short": "Interactive Blackjack with optional wagers",
+    "end_user_data_statement": "This cog stores no end user data.",
+    "tags": [
+        "casino",
+        "blackjack",
+        "games",
+        "economy"
+    ]
+}

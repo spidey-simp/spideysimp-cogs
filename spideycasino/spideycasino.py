@@ -162,9 +162,15 @@ class SpideyCasino(commands.Cog):
     casino = app_commands.Group(name="casino", description="Various casino games.")
 
     @casino.command(name="blackjack", description="Play a quick hand of Blackjack")
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     @app_commands.describe(bet="Optional wager (ties to your own economy system)")
     async def blackjack(self, interaction: discord.Interaction, bet: int = None):
-        
+        if bet is not None and bet <= 0:
+            await interaction.response.send_message(
+                "Your bet must be greater than zero.",
+                ephemeral=True
+            )
+            return
         if bet: 
             if not await bank.can_spend(interaction.user, bet):
                 currency = await bank.get_currency_name(interaction.guild)
@@ -198,7 +204,6 @@ class SpideyCasino(commands.Cog):
                     payout_done = True
             elif dealer.is_blackjack() and not player.is_blackjack():
                 view.result = "lose"
-                # TODO: house keeps bet
                 if bet:
                     payout_done = True
             else:
@@ -223,13 +228,13 @@ class SpideyCasino(commands.Cog):
             # Payout table
             if view.result == "win":
                 await bank.deposit_credits(interaction.user, (bet * 2))
-                pass  # TODO: await self.deposit(interaction.user.id, bet * 2)
+                pass 
             elif view.result == "push":
                 await bank.deposit_credits(interaction.user, bet)
-                pass  # TODO: await self.deposit(interaction.user.id, bet)
+                pass  
             elif view.result == "blackjack":
                 await bank.deposit_credits(interaction.user, int(bet * 2.5))
-                pass  # TODO: await self.deposit(interaction.user.id, int(bet * 2.5))
+                pass  
             else:
                 # loss: do nothing (house keeps wager already withdrawn)
                 pass
