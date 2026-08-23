@@ -1,0 +1,17 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "Automatically removes Discord nicknames containing links and provides moderators with a command to scan the entire server for linked names.",
+    "hidden": false,
+    "install_msg": "Thank you for installing NoLinksInNames! Use `[p]load nolinksinnames` to get started. The bot requires permission to manage nicknames for automatic enforcement and guild-wide checks.",
+    "short": "Prevent links in member nicknames",
+    "end_user_data_statement": "This cog stores no end user data.",
+    "tags": [
+        "moderation",
+        "nicknames",
+        "links",
+        "security"
+    ]
+}

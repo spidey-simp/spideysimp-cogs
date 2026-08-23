@@ -62,7 +62,7 @@ class NoLinksInNames(commands.Cog):
                         await member.send(
                             "Your nickname was reset because it included a link. Please use a name without ads or links."
                         )
-                    except discord.Forbidden or discord.HTTPException:
+                    except (discord.Forbidden, discord.HTTPException):
                         pass
                 except discord.Forbidden:
                     continue  # Skip if the bot can't edit them
