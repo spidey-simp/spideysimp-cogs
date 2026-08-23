@@ -1,0 +1,8 @@
+{
+    "author": ["spidey simp"],
+    "description": "A corporation management and simulation cog currently under development.",
+    "hidden": true,
+    "install_msg": "This cog is currently under development.",
+    "short": "Corporations",
+    "end_user_data_statement": "This cog stores corporation-related data."
+}
