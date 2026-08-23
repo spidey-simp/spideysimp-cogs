@@ -225,9 +225,1360 @@ class DraftsDB:
 
                 CREATE INDEX IF NOT EXISTS idx_draft_subbins_draft_bin
                     ON draft_subbins(draft_id, bin_key, position);
+                
+                CREATE TABLE IF NOT EXISTS draft_submissions (
+                    draft_id TEXT PRIMARY KEY,
+                    chamber TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'SUBMITTED',
+                    submitted_by INTEGER NOT NULL,
+                    submitted_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(draft_id) REFERENCES drafts(draft_id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_draft_submissions_status
+                    ON draft_submissions(status);
+
+                CREATE TABLE IF NOT EXISTS committee_referrals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                    -- Public committee-legislation identifier.
+                    committee_item_id TEXT,
+
+                    -- Provenance only. The committee item no longer reads its
+                    -- operative text from the draft after referral.
+                    draft_id TEXT NOT NULL,
+
+                    origin_chamber TEXT NOT NULL,
+                    committee_body TEXT NOT NULL,
+                    committee_key TEXT NOT NULL,
+                    subcommittee_key TEXT,
+
+                    title TEXT,
+                    short_title TEXT,
+                    sponsor_id INTEGER,
+                    content_json TEXT,
+
+                    status TEXT NOT NULL DEFAULT 'REFERRED',
+                    recommendation TEXT,
+
+                    referred_by INTEGER NOT NULL,
+                    referred_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+
+                    reported_by INTEGER,
+                    reported_at TEXT,
+
+                    FOREIGN KEY(draft_id)
+                        REFERENCES drafts(draft_id)
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_committee_referrals_item_id
+                    ON committee_referrals(committee_item_id);
+
+                CREATE INDEX IF NOT EXISTS idx_committee_referrals_draft
+                    ON committee_referrals(draft_id);
+
+                CREATE INDEX IF NOT EXISTS idx_committee_referrals_committee
+                    ON committee_referrals(
+                        committee_body,
+                        committee_key,
+                        subcommittee_key,
+                        status
+                    );
+
+                CREATE TABLE IF NOT EXISTS committee_votes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    referral_id INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'OPEN',
+                    recommendation TEXT NOT NULL,
+                    channel_id INTEGER NOT NULL,
+                    message_id INTEGER NOT NULL,
+                    opened_by INTEGER NOT NULL,
+                    opened_at TEXT NOT NULL,
+                    hours INTEGER NOT NULL DEFAULT 24,
+                    eligible_count INTEGER NOT NULL DEFAULT 0,
+                    quorum_required INTEGER NOT NULL DEFAULT 0,
+                    threshold TEXT NOT NULL DEFAULT 'simple',
+                    closed_by INTEGER,
+                    closed_at TEXT,
+                    yea INTEGER,
+                    nay INTEGER,
+                    present INTEGER,
+                    total INTEGER,
+                    outcome TEXT,
+                    FOREIGN KEY(referral_id)
+                        REFERENCES committee_referrals(id)
+                        ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_committee_votes_referral
+                    ON committee_votes(referral_id, status);
+
+                CREATE TABLE IF NOT EXISTS bill_sequences (
+                    chamber TEXT PRIMARY KEY,
+                    seq INTEGER NOT NULL DEFAULT 0
+                );
+
+                CREATE TABLE IF NOT EXISTS bills_v2 (
+                    bill_id TEXT PRIMARY KEY,
+                    source_draft_id TEXT NOT NULL,
+                    source_referral_id INTEGER NOT NULL UNIQUE,
+                    title TEXT NOT NULL,
+                    short_title TEXT,
+                    chamber_origin TEXT NOT NULL,
+                    current_chamber TEXT NOT NULL,
+                    sponsor_id INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'REPORTED',
+                    recommendation TEXT,
+                    content_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY(source_draft_id)
+                        REFERENCES drafts(draft_id),
+                    FOREIGN KEY(source_referral_id)
+                        REFERENCES committee_referrals(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_bills_v2_status
+                    ON bills_v2(status);
+
+                CREATE INDEX IF NOT EXISTS idx_bills_v2_draft
+                    ON bills_v2(source_draft_id);
+
+                CREATE TABLE IF NOT EXISTS bill_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bill_id TEXT NOT NULL,
+                    actor_id INTEGER,
+                    event_type TEXT NOT NULL,
+                    payload_json TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(bill_id)
+                        REFERENCES bills_v2(bill_id)
+                        ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_bill_events_bill
+                    ON bill_events(bill_id, created_at);
+                """
+            )
+
+            # Lightweight migration for committee-legislation snapshots.
+            referral_cols = {
+                row["name"]
+                for row in conn.execute(
+                    "PRAGMA table_info(committee_referrals)"
+                ).fetchall()
+            }
+
+            missing_referral_cols = {
+                "committee_item_id": "TEXT",
+                "title": "TEXT",
+                "short_title": "TEXT",
+                "sponsor_id": "INTEGER",
+                "content_json": "TEXT",
+            }
+
+            for col_name, col_type in missing_referral_cols.items():
+                if col_name not in referral_cols:
+                    conn.execute(
+                        f"ALTER TABLE committee_referrals "
+                        f"ADD COLUMN {col_name} {col_type}"
+                    )
+
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_committee_referrals_item_id
+                ON committee_referrals(committee_item_id)
                 """
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    def submit_draft(
+        self,
+        draft_id: str,
+        actor_id: int,
+        chamber: str,
+    ) -> bool:
+        if chamber not in {"House", "Senate"}:
+            return False
+
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                "SELECT status FROM drafts WHERE draft_id = ?",
+                (draft_id,),
+            ).fetchone()
+
+            if not row or row["status"] not in {"DRAFT", "SUBMITTED"}:
+                return False
+
+            existing = conn.execute(
+                """
+                SELECT status
+                FROM draft_submissions
+                WHERE draft_id = ?
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            if existing and existing["status"] in {"SUBMITTED", "REFERRED"}:
+                return False
+
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                INSERT INTO draft_submissions(
+                    draft_id,
+                    chamber,
+                    status,
+                    submitted_by,
+                    submitted_at,
+                    updated_at
+                )
+                VALUES (?, ?, 'SUBMITTED', ?, ?, ?)
+
+                ON CONFLICT(draft_id) DO UPDATE SET
+                    chamber = excluded.chamber,
+                    status = 'SUBMITTED',
+                    submitted_by = excluded.submitted_by,
+                    submitted_at = excluded.submitted_at,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    draft_id,
+                    chamber,
+                    actor_id,
+                    now,
+                    now,
+                ),
+            )
+
+            conn.execute(
+                """
+                UPDATE drafts
+                SET status = 'SUBMITTED',
+                    updated_at = ?
+                WHERE draft_id = ?
+                """,
+                (now, draft_id),
+            )
+
+            self._log_event(
+                conn,
+                draft_id,
+                actor_id,
+                "submit",
+                {"chamber": chamber},
+            )
+
+            conn.commit()
+            return True
+
+        finally:
+            conn.close()
+
+
+    def get_submission(
+        self,
+        draft_id: str,
+    ) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM draft_submissions
+                WHERE draft_id = ?
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            return dict(row) if row else None
+
+        finally:
+            conn.close()
+
+
+    def withdraw_submission(
+        self,
+        draft_id: str,
+        actor_id: int,
+    ) -> bool:
+        conn = self._connect()
+        try:
+            sub = conn.execute(
+                """
+                SELECT status
+                FROM draft_submissions
+                WHERE draft_id = ?
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            if not sub or sub["status"] != "SUBMITTED":
+                return False
+
+            active = conn.execute(
+                """
+                SELECT 1
+                FROM committee_referrals
+                WHERE draft_id = ?
+                  AND status IN (
+                      'REFERRED',
+                      'VOTE_OPEN',
+                      'APPROVED',
+                      'VOTE_FAILED'
+                  )
+                LIMIT 1
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            if active:
+                return False
+
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                UPDATE draft_submissions
+                SET status = 'WITHDRAWN',
+                    updated_at = ?
+                WHERE draft_id = ?
+                """,
+                (now, draft_id),
+            )
+
+            conn.execute(
+                """
+                UPDATE drafts
+                SET status = 'DRAFT',
+                    updated_at = ?
+                WHERE draft_id = ?
+                """,
+                (now, draft_id),
+            )
+
+            self._log_event(
+                conn,
+                draft_id,
+                actor_id,
+                "withdraw_submission",
+                {},
+            )
+
+            conn.commit()
+            return True
+
+        finally:
+            conn.close()
+
+    def _next_committee_item_id(
+        self,
+        conn: sqlite3.Connection,
+    ) -> str:
+        year = discord.utils.utcnow().year
+
+        row = conn.execute(
+            """
+            SELECT committee_item_id
+            FROM committee_referrals
+            WHERE committee_item_id LIKE ?
+            ORDER BY committee_item_id DESC
+            LIMIT 1
+            """,
+            (f"CL-{year}-%",),
+        ).fetchone()
+
+        if not row or not row["committee_item_id"]:
+            seq = 1
+        else:
+            try:
+                seq = int(
+                    str(row["committee_item_id"]).split("-")[-1]
+                ) + 1
+            except Exception:
+                seq = 1
+
+        return f"CL-{year}-{seq:04d}"
+
+    def refer_draft(
+        self,
+        draft_id: str,
+        actor_id: int,
+        committee_body: str,
+        committee_key: str,
+        subcommittee_key: str | None = None,
+    ) -> Optional[dict]:
+        committee_body = (committee_body or "").lower()
+
+        if committee_body not in {"house", "senate", "joint"}:
+            return None
+
+        conn = self._connect()
+
+        try:
+            submission = conn.execute(
+                """
+                SELECT *
+                FROM draft_submissions
+                WHERE draft_id = ?
+                  AND status = 'SUBMITTED'
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            if not submission:
+                return None
+
+            draft = conn.execute(
+                """
+                SELECT *
+                FROM drafts
+                WHERE draft_id = ?
+                  AND status = 'SUBMITTED'
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            if not draft:
+                return None
+
+            origin_chamber = submission["chamber"]
+
+            if (
+                committee_body != "joint"
+                and committee_body != origin_chamber.lower()
+            ):
+                return None
+
+            # A submitted draft gets promoted only once.
+            existing = conn.execute(
+                """
+                SELECT 1
+                FROM committee_referrals
+                WHERE draft_id = ?
+                  AND status NOT IN ('DISCHARGED')
+                LIMIT 1
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            if existing:
+                return None
+
+            now = _utcnow_iso()
+            committee_item_id = self._next_committee_item_id(conn)
+
+            # This is the crucial architectural boundary:
+            # committee legislation gets its own complete snapshot.
+            snapshot = {
+                "bins": json.loads(draft["bins_json"]),
+                "subbins": self._get_subbins_grouped(
+                    conn,
+                    draft_id,
+                ),
+            }
+
+            cur = conn.execute(
+                """
+                INSERT INTO committee_referrals(
+                    committee_item_id,
+                    draft_id,
+                    origin_chamber,
+                    committee_body,
+                    committee_key,
+                    subcommittee_key,
+                    title,
+                    short_title,
+                    sponsor_id,
+                    content_json,
+                    status,
+                    recommendation,
+                    referred_by,
+                    referred_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    'REFERRED',
+                    NULL,
+                    ?, ?, ?
+                )
+                """,
+                (
+                    committee_item_id,
+                    draft_id,
+                    origin_chamber,
+                    committee_body,
+                    committee_key,
+                    subcommittee_key,
+                    draft["title"],
+                    draft["short_title"],
+                    submission["submitted_by"],
+                    json.dumps(
+                        snapshot,
+                        ensure_ascii=False,
+                    ),
+                    actor_id,
+                    now,
+                    now,
+                ),
+            )
+
+            referral_id = int(cur.lastrowid)
+
+            conn.execute(
+                """
+                UPDATE draft_submissions
+                SET status = 'REFERRED',
+                    updated_at = ?
+                WHERE draft_id = ?
+                """,
+                (now, draft_id),
+            )
+
+            # The draft leaves the drafting workspace here.
+            conn.execute(
+                """
+                UPDATE drafts
+                SET status = 'ARCHIVED',
+                    updated_at = ?
+                WHERE draft_id = ?
+                """,
+                (now, draft_id),
+            )
+
+            self._log_event(
+                conn,
+                draft_id,
+                actor_id,
+                "promoted_to_committee",
+                {
+                    "committee_item_id": committee_item_id,
+                    "referral_id": referral_id,
+                    "committee_body": committee_body,
+                    "committee_key": committee_key,
+                    "subcommittee_key": subcommittee_key,
+                },
+            )
+
+            conn.commit()
+
+            return {
+                "id": referral_id,
+                "committee_item_id": committee_item_id,
+                "draft_id": draft_id,
+                "title": draft["title"],
+                "short_title": draft["short_title"],
+                "sponsor_id": submission["submitted_by"],
+                "origin_chamber": origin_chamber,
+                "committee_body": committee_body,
+                "committee_key": committee_key,
+                "subcommittee_key": subcommittee_key,
+                "status": "REFERRED",
+            }
+
+        finally:
+            conn.close()
+    
+    def get_referral(
+        self,
+        referral_id: int,
+    ) -> Optional[dict]:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM committee_referrals
+                WHERE id = ?
+                """,
+                (referral_id,),
+            ).fetchone()
+
+            if not row:
+                return None
+
+            out = dict(row)
+
+            if out.get("content_json"):
+                out["content"] = json.loads(
+                    out.pop("content_json")
+                )
+            else:
+                out["content"] = {
+                    "bins": {},
+                    "subbins": {},
+                }
+
+            return out
+
+        finally:
+            conn.close()
+
+    def get_committee_item(
+        self,
+        committee_item_id: str,
+    ) -> Optional[dict]:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM committee_referrals
+                WHERE committee_item_id = ?
+                """,
+                (committee_item_id,),
+            ).fetchone()
+
+            if not row:
+                return None
+
+            out = dict(row)
+
+            if out.get("content_json"):
+                out["content"] = json.loads(
+                    out.pop("content_json")
+                )
+            else:
+                out["content"] = {
+                    "bins": {},
+                    "subbins": {},
+                }
+
+            return out
+
+        finally:
+            conn.close()
+
+
+    def search_committee_items(
+        self,
+        current: str,
+        limit: int = 25,
+    ) -> list[dict]:
+        cur = (current or "").strip().lower()
+        conn = self._connect()
+
+        try:
+            if cur:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM committee_referrals
+                    WHERE committee_item_id IS NOT NULL
+                      AND (
+                            lower(committee_item_id) LIKE ?
+                            OR lower(COALESCE(title, '')) LIKE ?
+                          )
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (
+                        f"%{cur}%",
+                        f"%{cur}%",
+                        int(limit),
+                    ),
+                ).fetchall()
+
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM committee_referrals
+                    WHERE committee_item_id IS NOT NULL
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (int(limit),),
+                ).fetchall()
+
+            return [dict(row) for row in rows]
+
+        finally:
+            conn.close()
+
+
+
+    def list_committee_docket(
+        self,
+        committee_body: str,
+        committee_key: str,
+        subcommittee_key: str | None,
+        include_closed: bool = False,
+        limit: int = 50,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            sql = """
+                SELECT *
+                FROM committee_referrals
+
+                WHERE committee_body = ?
+                  AND committee_key = ?
+                  AND (
+                        subcommittee_key = ?
+                        OR (
+                            subcommittee_key IS NULL
+                            AND ? IS NULL
+                        )
+                      )
+            """
+
+            params: list = [
+                committee_body,
+                committee_key,
+                subcommittee_key,
+                subcommittee_key,
+            ]
+
+            if not include_closed:
+                sql += """
+                    AND status NOT IN (
+                        'REPORTED',
+                        'DISCHARGED'
+                    )
+                """
+
+            sql += """
+                ORDER BY referred_at DESC
+                LIMIT ?
+            """
+
+            params.append(int(limit))
+
+            rows = conn.execute(
+                sql,
+                params,
+            ).fetchall()
+
+            return [dict(row) for row in rows]
+
+        finally:
+            conn.close()
+
+
+    def has_active_referrals_for_committee(
+        self,
+        committee_body: str,
+        committee_key: str,
+        subcommittee_key: str | None = None,
+    ) -> bool:
+        conn = self._connect()
+        try:
+            if subcommittee_key is None:
+                row = conn.execute(
+                    """
+                    SELECT 1
+                    FROM committee_referrals
+                    WHERE committee_body = ?
+                      AND committee_key = ?
+                      AND status IN (
+                          'REFERRED',
+                          'VOTE_OPEN',
+                          'APPROVED',
+                          'VOTE_FAILED'
+                      )
+                    LIMIT 1
+                    """,
+                    (
+                        committee_body,
+                        committee_key,
+                    ),
+                ).fetchone()
+
+            else:
+                row = conn.execute(
+                    """
+                    SELECT 1
+                    FROM committee_referrals
+                    WHERE committee_body = ?
+                      AND committee_key = ?
+                      AND subcommittee_key = ?
+                      AND status IN (
+                          'REFERRED',
+                          'VOTE_OPEN',
+                          'APPROVED',
+                          'VOTE_FAILED'
+                      )
+                    LIMIT 1
+                    """,
+                    (
+                        committee_body,
+                        committee_key,
+                        subcommittee_key,
+                    ),
+                ).fetchone()
+
+            return bool(row)
+
+        finally:
+            conn.close()
+
+
+    def open_committee_vote(
+        self,
+        referral_id: int,
+        actor_id: int,
+        recommendation: str,
+        channel_id: int,
+        message_id: int,
+        hours: int,
+        eligible_count: int,
+        quorum_required_count: int,
+    ) -> Optional[int]:
+        if recommendation not in {
+            "favorable",
+            "unfavorable",
+            "without_recommendation",
+        }:
+            return None
+
+        conn = self._connect()
+        try:
+            ref = conn.execute(
+                """
+                SELECT draft_id, status
+                FROM committee_referrals
+                WHERE id = ?
+                """,
+                (referral_id,),
+            ).fetchone()
+
+            if not ref:
+                return None
+
+            if ref["status"] not in {
+                "REFERRED",
+                "VOTE_FAILED",
+            }:
+                return None
+
+            existing = conn.execute(
+                """
+                SELECT 1
+                FROM committee_votes
+                WHERE referral_id = ?
+                  AND status = 'OPEN'
+                LIMIT 1
+                """,
+                (referral_id,),
+            ).fetchone()
+
+            if existing:
+                return None
+
+            now = _utcnow_iso()
+
+            cur = conn.execute(
+                """
+                INSERT INTO committee_votes(
+                    referral_id,
+                    status,
+                    recommendation,
+                    channel_id,
+                    message_id,
+                    opened_by,
+                    opened_at,
+                    hours,
+                    eligible_count,
+                    quorum_required,
+                    threshold
+                )
+                VALUES (
+                    ?,
+                    'OPEN',
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    'simple'
+                )
+                """,
+                (
+                    referral_id,
+                    recommendation,
+                    channel_id,
+                    message_id,
+                    actor_id,
+                    now,
+                    int(hours),
+                    int(eligible_count),
+                    int(quorum_required_count),
+                ),
+            )
+
+            vote_id = int(cur.lastrowid)
+
+            conn.execute(
+                """
+                UPDATE committee_referrals
+                SET status = 'VOTE_OPEN',
+                    recommendation = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    recommendation,
+                    now,
+                    referral_id,
+                ),
+            )
+
+            self._log_event(
+                conn,
+                ref["draft_id"],
+                actor_id,
+                "committee_vote_open",
+                {
+                    "referral_id": referral_id,
+                    "vote_id": vote_id,
+                    "recommendation": recommendation,
+                },
+            )
+
+            conn.commit()
+            return vote_id
+
+        finally:
+            conn.close()
+
+
+    def get_open_committee_vote(
+        self,
+        referral_id: int,
+    ) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM committee_votes
+                WHERE referral_id = ?
+                  AND status = 'OPEN'
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (referral_id,),
+            ).fetchone()
+
+            return dict(row) if row else None
+
+        finally:
+            conn.close()
+
+
+    def close_committee_vote(
+        self,
+        vote_id: int,
+        actor_id: int,
+        yea: int,
+        nay: int,
+        present: int,
+        outcome: str,
+    ) -> bool:
+        conn = self._connect()
+        try:
+            vote = conn.execute(
+                """
+                SELECT
+                    v.*,
+                    r.draft_id
+                FROM committee_votes v
+                JOIN committee_referrals r
+                  ON r.id = v.referral_id
+                WHERE v.id = ?
+                  AND v.status = 'OPEN'
+                """,
+                (vote_id,),
+            ).fetchone()
+
+            if not vote:
+                return False
+
+            total = (
+                int(yea)
+                + int(nay)
+                + int(present)
+            )
+
+            if outcome == "PASSED":
+                referral_status = "APPROVED"
+
+            elif outcome == "FAILED":
+                referral_status = "VOTE_FAILED"
+
+            else:
+                referral_status = "REFERRED"
+
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                UPDATE committee_votes
+                SET status = 'CLOSED',
+                    closed_by = ?,
+                    closed_at = ?,
+                    yea = ?,
+                    nay = ?,
+                    present = ?,
+                    total = ?,
+                    outcome = ?
+                WHERE id = ?
+                """,
+                (
+                    actor_id,
+                    now,
+                    int(yea),
+                    int(nay),
+                    int(present),
+                    total,
+                    outcome,
+                    vote_id,
+                ),
+            )
+
+            conn.execute(
+                """
+                UPDATE committee_referrals
+                SET status = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    referral_status,
+                    now,
+                    vote["referral_id"],
+                ),
+            )
+
+
+            self._log_event(
+                conn,
+                vote["draft_id"],
+                actor_id,
+                "committee_vote_close",
+                {
+                    "referral_id": vote["referral_id"],
+                    "vote_id": vote_id,
+                    "outcome": outcome,
+                    "yea": int(yea),
+                    "nay": int(nay),
+                    "present": int(present),
+                },
+            )
+
+            conn.commit()
+            return True
+
+        finally:
+            conn.close()
+
+
+    def _next_v2_bill_id(
+        self,
+        conn: sqlite3.Connection,
+        chamber: str,
+        reserved_ids: set[str] | None = None,
+    ) -> str:
+        prefix = "H" if chamber == "House" else "S"
+        reserved = reserved_ids or set()
+
+        row = conn.execute(
+            """
+            SELECT seq
+            FROM bill_sequences
+            WHERE chamber = ?
+            """,
+            (chamber,),
+        ).fetchone()
+
+        seq = int(
+            row["seq"]
+            if row
+            else 0
+        )
+
+        while True:
+            seq += 1
+            candidate = f"{prefix}-{seq:04d}"
+
+            exists = conn.execute(
+                """
+                SELECT 1
+                FROM bills_v2
+                WHERE bill_id = ?
+                """,
+                (candidate,),
+            ).fetchone()
+
+            if (
+                not exists
+                and candidate not in reserved
+            ):
+                break
+
+        conn.execute(
+            """
+            INSERT INTO bill_sequences(
+                chamber,
+                seq
+            )
+            VALUES (?, ?)
+
+            ON CONFLICT(chamber) DO UPDATE SET
+                seq = excluded.seq
+            """,
+            (
+                chamber,
+                seq,
+            ),
+        )
+
+        return candidate
+
+    def report_referral_to_bill(
+        self,
+        referral_id: int,
+        actor_id: int,
+        reserved_bill_ids: set[str] | None = None,
+    ) -> Optional[dict]:
+        conn = self._connect()
+
+        try:
+            ref = conn.execute(
+                """
+                SELECT *
+                FROM committee_referrals
+                WHERE id = ?
+                """,
+                (referral_id,),
+            ).fetchone()
+
+            if not ref or ref["status"] != "APPROVED":
+                return None
+
+            if not ref["committee_item_id"]:
+                return None
+
+            if not ref["content_json"]:
+                return None
+
+            passed_vote = conn.execute(
+                """
+                SELECT *
+                FROM committee_votes
+                WHERE referral_id = ?
+                  AND status = 'CLOSED'
+                  AND outcome = 'PASSED'
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (referral_id,),
+            ).fetchone()
+
+            if not passed_vote:
+                return None
+
+            existing_bill = conn.execute(
+                """
+                SELECT *
+                FROM bills_v2
+                WHERE source_referral_id = ?
+                """,
+                (referral_id,),
+            ).fetchone()
+
+            if existing_bill:
+                return dict(existing_bill)
+
+            bill_id = self._next_v2_bill_id(
+                conn,
+                ref["origin_chamber"],
+                reserved_ids=reserved_bill_ids,
+            )
+
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                INSERT INTO bills_v2(
+                    bill_id,
+                    source_draft_id,
+                    source_referral_id,
+                    title,
+                    short_title,
+                    chamber_origin,
+                    current_chamber,
+                    sponsor_id,
+                    status,
+                    recommendation,
+                    content_json,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?,
+                    'REPORTED',
+                    ?, ?, ?, ?
+                )
+                """,
+                (
+                    bill_id,
+                    ref["draft_id"],
+                    referral_id,
+                    ref["title"],
+                    ref["short_title"],
+                    ref["origin_chamber"],
+                    ref["origin_chamber"],
+                    ref["sponsor_id"],
+                    ref["recommendation"],
+                    ref["content_json"],
+                    now,
+                    now,
+                ),
+            )
+
+            conn.execute(
+                """
+                INSERT INTO bill_events(
+                    bill_id,
+                    actor_id,
+                    event_type,
+                    payload_json,
+                    created_at
+                )
+                VALUES (?, ?, 'committee_report', ?, ?)
+                """,
+                (
+                    bill_id,
+                    actor_id,
+                    json.dumps(
+                        {
+                            "committee_item_id":
+                                ref["committee_item_id"],
+                            "referral_id":
+                                referral_id,
+                            "source_draft_id":
+                                ref["draft_id"],
+                            "recommendation":
+                                ref["recommendation"],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    now,
+                ),
+            )
+
+            conn.execute(
+                """
+                UPDATE committee_referrals
+                SET status = 'REPORTED',
+                    reported_by = ?,
+                    reported_at = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    actor_id,
+                    now,
+                    now,
+                    referral_id,
+                ),
+            )
+
+            conn.execute(
+                """
+                UPDATE draft_submissions
+                SET status = 'REPORTED',
+                    updated_at = ?
+                WHERE draft_id = ?
+                """,
+                (
+                    now,
+                    ref["draft_id"],
+                ),
+            )
+
+            # Do NOT mutate the archived draft's status.
+            self._log_event(
+                conn,
+                ref["draft_id"],
+                actor_id,
+                "committee_report",
+                {
+                    "committee_item_id":
+                        ref["committee_item_id"],
+                    "bill_id":
+                        bill_id,
+                },
+            )
+
+            conn.commit()
+
+            return {
+                "bill_id": bill_id,
+                "committee_item_id":
+                    ref["committee_item_id"],
+                "source_draft_id":
+                    ref["draft_id"],
+                "title":
+                    ref["title"],
+                "short_title":
+                    ref["short_title"],
+                "chamber_origin":
+                    ref["origin_chamber"],
+                "sponsor_id":
+                    ref["sponsor_id"],
+                "status":
+                    "REPORTED",
+                "recommendation":
+                    ref["recommendation"],
+            }
+
+        finally:
+            conn.close()
+
+    
+    def get_bill_v2(
+        self,
+        bill_id: str,
+    ) -> Optional[dict]:
+        conn = self._connect()
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM bills_v2
+                WHERE bill_id = ?
+                """,
+                (bill_id,),
+            ).fetchone()
+
+            if not row:
+                return None
+
+            out = dict(row)
+
+            out["content"] = json.loads(
+                out.pop("content_json") or "{}"
+            )
+
+            return out
+
         finally:
             conn.close()
 
@@ -3657,6 +5008,75 @@ def _resolve_committee_node(reg: dict, chamber: str, encoded: str) -> tuple[dict
 def _user_is_committee_chair(guild: discord.Guild | None, user: discord.Member, node: dict) -> bool:
     return bool(node and user and node.get("chair_id") == user.id)
 
+def _committee_key(name: str) -> str:
+    return re.sub(
+        r"[^a-z0-9]+",
+        "_",
+        (name or "").strip().lower(),
+    ).strip("_")
+
+
+def _split_committee_value(
+    encoded: str,
+) -> tuple[str, str | None]:
+    if "::" in encoded:
+        parent_key, sub_key = encoded.split("::", 1)
+        return parent_key, sub_key
+
+    return encoded, None
+
+
+def _committee_can_control(
+    user: discord.Member,
+    node: dict,
+    committee_body: str,
+) -> bool:
+    if user.guild_permissions.administrator:
+        return True
+
+    if node and node.get("chair_id") == user.id:
+        return True
+
+    return _is_chamber_leader(
+        user,
+        committee_body,
+    )
+
+
+def _committee_eligible_ids(
+    guild: discord.Guild,
+    node: dict,
+) -> list[int]:
+    out = []
+
+    for uid in set(node.get("members") or []):
+        member = (
+            guild.get_member(int(uid))
+            if guild
+            else None
+        )
+
+        if member and not member.bot:
+            out.append(member.id)
+
+    return sorted(out)
+
+
+DRAFT_EDITABLE_STATUSES = {
+    "DRAFT",
+    "SUBMITTED",
+    "REFERRED",
+}
+
+
+def _draft_is_editable(
+    draft: dict | None,
+) -> bool:
+    return bool(
+        draft
+        and draft.get("status") in DRAFT_EDITABLE_STATUSES
+    )
+
 def _user_has_leadership_override(user: discord.Member) -> bool:
     # Optional override: ML/Speaker/Admin can schedule too.
     user_role_ids = {r.id for r in getattr(user, "roles", [])}
@@ -4127,6 +5547,12 @@ class DraftEditModal(discord.ui.Modal):
         if not draft:
             return await interaction.response.send_message("Draft not found.", ephemeral=True)
 
+        if not _draft_is_editable(draft):
+            return await interaction.response.send_message(
+                "This draft is procedurally locked and cannot currently be edited.",
+                ephemeral=True,
+            )
+
         if draft["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
                 "You cannot directly edit someone else’s draft. Fork it instead.",
@@ -4184,6 +5610,11 @@ class DraftSubbinModal(discord.ui.Modal):
         draft = self.cog.drafts_db.get_draft(self.draft_id)
         if not draft:
             return await interaction.response.send_message("Draft not found.", ephemeral=True)
+        if not _draft_is_editable(draft):
+            return await interaction.response.send_message(
+                "This draft is procedurally locked and cannot currently be edited.",
+                ephemeral=True,
+            )
 
         if draft["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
@@ -5025,6 +6456,8 @@ class SpideyGov(commands.Cog):
 
         
         await state_dep.send(f"New member {member.mention} joined. Residency intake thread opened: {thread.mention}")
+
+    
 
     async def elections_contest_autocomplete(self, interaction: discord.Interaction, current: str):
         reg = self.federal_registry
@@ -9288,207 +10721,565 @@ class SpideyGov(commands.Cog):
         return out[:25]
 
 
-    @committees.command(name="manage", description="Create/delete committees; add/remove members; set chair; bulk-appoint")
-    @app_commands.choices(chamber=[
-        app_commands.Choice(name="Senate", value="senate"),
-        app_commands.Choice(name="House", value="house"),
-        app_commands.Choice(name="Joint", value="joint"),
-    ])
-    @app_commands.choices(action=[
-        app_commands.Choice(name="Create committee", value="create"),
-        app_commands.Choice(name="Delete committee", value="delete"),
-        app_commands.Choice(name="Add member", value="add_member"),
-        app_commands.Choice(name="Remove member", value="remove_member"),
-        app_commands.Choice(name="Set chair", value="set_chair"),
-        app_commands.Choice(name="Bulk add by role", value="bulk_add_role"),
-    ])
-    @app_commands.choices(committee_type=[
-        app_commands.Choice(name="Standing", value="standing"),
-        app_commands.Choice(name="Select", value="select"),
-        app_commands.Choice(name="Joint", value="joint"),
-        app_commands.Choice(name="Special", value="special"),
-        app_commands.Choice(name="Ad hoc", value="ad_hoc"),
-    ])
+    @committees.command(
+        name="create",
+        description="Create a committee or subcommittee.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.choices(
+        committee_type=[
+            app_commands.Choice(
+                name="Standing",
+                value="standing",
+            ),
+            app_commands.Choice(
+                name="Select",
+                value="select",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+            app_commands.Choice(
+                name="Special",
+                value="special",
+            ),
+            app_commands.Choice(
+                name="Ad hoc",
+                value="ad_hoc",
+            ),
+        ]
+    )
     @app_commands.autocomplete(
-        # For operations targeting an existing committee/subcommittee
-        name=committee_name_autocomplete,
-        # For CREATE subcommittee parent selection (top-level only)
         parent_committee=parent_committee_by_chamber_autocomplete
     )
-    @app_commands.describe(
-        chamber="Body",
-        action="What to do",
-        # For CREATE/DELETE and for member operations targeting a specific (sub)committee
-        name="Committee or subcommittee (autocomplete; for delete/member ops)",
-        # CREATE fields:
-        new_name="For CREATE: new committee name (ignored for other actions)",
-        committee_type="For CREATE: type of committee (default standing)",
-        chair="For CREATE/SET CHAIR: the chair",
-        sub_committee="For CREATE: mark as a subcommittee",
-        parent_committee="For CREATE(subcommittee): pick the parent (top-level only)",
-        # Membership management:
-        member="For add/remove/set chair: target user",
-        role="For bulk add by role",
-        as_chair="When adding: also make this member the chair",
-        force="When removing: allow removing the current chair"
-    )
-    async def committee_manage(
+    async def committee_create(
         self,
         interaction: discord.Interaction,
-        chamber: str,                      # keep as str in signature
-        action: str,                       # keep as str in signature
-        name: str | None = None,
-        *,
-        new_name: str | None = None,
-        committee_type: str | None = None, # keep as str in signature
-        chair: discord.Member | None = None,
-        sub_committee: bool = False,
+        chamber: str,
+        name: str,
+        chair: discord.Member,
+        committee_type: str = "standing",
         parent_committee: str | None = None,
-        member: discord.Member | None = None,
-        role: discord.Role | None = None,
-        as_chair: bool = False,
-        force: bool = False,
     ):
-        act = (_choice_val(action) or "").lower()
-        ch  = (_choice_val(chamber) or "").lower()
-        ctype = (_choice_val(committee_type) or "standing").lower()
+        if not _is_chamber_leader(
+            interaction.user,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only chamber leadership may create committees.",
+                ephemeral=True,
+            )
 
+        key = _committee_key(name)
 
-        # perms: chamber leader or admin
-        if not _is_chamber_leader(interaction.user, ch):
-            return await interaction.response.send_message("Only the chamber leader may manage committees.", ephemeral=True)
+        if not key:
+            return await interaction.response.send_message(
+                "Invalid committee name.",
+                ephemeral=True,
+            )
 
         reg = self.federal_registry
-        committees = _get_committees_root(reg)
-        bucket = committees.setdefault(ch, {})
 
-        # ---------- CREATE ----------
-        if act == "create":
-            ctype = (committee_type.value if isinstance(committee_type, app_commands.Choice) else (committee_type or "standing")).strip().lower()
-            # If user selected 'Joint' type, normalize bucket to 'joint'
-            target_bucket_key = "joint" if ctype == "joint" else ch
-            bucket = committees.setdefault(target_bucket_key, {})
+        bucket = _get_committees_root(
+            reg
+        ).setdefault(
+            chamber,
+            {},
+        )
 
-            if not new_name:
-                return await interaction.response.send_message("Please provide `new_name` for the committee.", ephemeral=True)
-            if not chair:
-                return await interaction.response.send_message("Please specify a `chair` for the new committee.", ephemeral=True)
+        if parent_committee:
+            parent = bucket.get(
+                parent_committee
+            )
 
-            key = new_name.strip().lower().replace(" ", "_")
-            if sub_committee:
-                if not parent_committee:
-                    return await interaction.response.send_message("Select a `parent_committee` for a subcommittee.", ephemeral=True)
-                parent_key = parent_committee.strip().lower()
-                parent = bucket.get(parent_key)
-                if not parent:
-                    return await interaction.response.send_message("The specified parent committee does not exist in this chamber.", ephemeral=True)
-                parent.setdefault("sub_committees", {})
-                if key in parent["sub_committees"]:
-                    return await interaction.response.send_message("A subcommittee with that name already exists under the parent.", ephemeral=True)
-                parent["sub_committees"][key] = {
-                    "name": new_name,
-                    "type": ctype,
-                    "chair_id": chair.id,
-                    "members": [chair.id],
-                    "created_at": discord.utils.utcnow().isoformat(),
-                    "created_by": interaction.user.id,
-                }
-                save_federal_registry(reg)
-                where = "Joint" if target_bucket_key == "joint" else target_bucket_key.title()
-                return await interaction.response.send_message(f"✅ Created subcommittee **{new_name}** under **{parent.get('name','(parent)')}** ({where}).", ephemeral=True)
-            else:
-                if key in bucket:
-                    return await interaction.response.send_message("A committee with that name already exists.", ephemeral=True)
-                bucket[key] = {
-                    "name": new_name,
-                    "type": ctype,
-                    "chair_id": chair.id,
-                    "members": [chair.id],
-                    "sub_committees": {},
-                    "created_at": discord.utils.utcnow().isoformat(),
-                    "created_by": interaction.user.id,
-                }
-                save_federal_registry(reg)
-                where = "Joint" if target_bucket_key == "joint" else target_bucket_key.title()
-                return await interaction.response.send_message(f"✅ Created committee **{new_name}** ({where}).", ephemeral=True)
+            if not parent:
+                return await interaction.response.send_message(
+                    "Parent committee not found.",
+                    ephemeral=True,
+                )
 
-        # For the rest, we need an existing target (except bulk_add_role which still needs name)
-        if not name and act != "bulk_add_role":
-            return await interaction.response.send_message("Please specify `name` (committee or subcommittee).", ephemeral=True)
+            subs = parent.setdefault(
+                "sub_committees",
+                {},
+            )
 
-        # Resolve committee or subcommittee for actions that target an existing node
-        parent, node = _resolve_committee_node(reg, ch, name) if name else (None, None)
+            if key in subs:
+                return await interaction.response.send_message(
+                    "That subcommittee already exists.",
+                    ephemeral=True,
+                )
 
-        # ---------- DELETE ----------
-        if act == "delete":
-            if not node:
-                return await interaction.response.send_message("Committee not found.", ephemeral=True)
-            if parent:
-                # deleting a subcommittee
-                parent_key, sub_key = name.split("::", 1)
-                subs = parent.get("sub_committees") or {}
-                subs.pop(sub_key, None)
-                save_federal_registry(reg)
-                return await interaction.response.send_message(f"🗑️ Deleted subcommittee **{node.get('name','(unnamed)')}**.", ephemeral=True)
-            else:
-                # deleting a top-level committee
-                bucket.pop(name, None)
-                save_federal_registry(reg)
-                return await interaction.response.send_message(f"🗑️ Deleted committee **{(node or {}).get('name','(unnamed)')}**.", ephemeral=True)
+            subs[key] = {
+                "name": name.strip(),
+                "type": committee_type,
+                "chair_id": chair.id,
+                "members": [chair.id],
+                "sub_committees": {},
+                "created_at": (
+                    discord.utils.utcnow().isoformat()
+                ),
+                "created_by": interaction.user.id,
+            }
 
-        # ---------- ADD MEMBER ----------
-        if act == "add_member":
-            if not node or not member:
-                return await interaction.response.send_message("Pick a committee and a member to add.", ephemeral=True)
-            _add_member(node, member.id)
-            if as_chair:
-                node["chair_id"] = member.id
-            save_federal_registry(reg)
-            role_note = " (Chair)" if as_chair else ""
-            return await interaction.response.send_message(f"✅ Appointed {member.mention}{role_note} to **{node.get('name','(unnamed)')}**.", ephemeral=True)
+            save_federal_registry(
+                reg
+            )
 
-        # ---------- REMOVE MEMBER ----------
-        if act == "remove_member":
-            if not node or not member:
-                return await interaction.response.send_message("Pick a committee and a member to remove.", ephemeral=True)
-            chair_id = node.get("chair_id")
-            if chair_id == member.id and not force:
-                return await interaction.response.send_message("That member is the chair. Use `force=True` or set a new chair first.", ephemeral=True)
-            members = set(node.get("members") or [])
-            if member.id in members:
-                members.remove(member.id)
-                node["members"] = sorted(members)
-            if chair_id == member.id:
-                node["chair_id"] = None
-            save_federal_registry(reg)
-            return await interaction.response.send_message(f"✅ Removed {member.mention} from **{node.get('name','(unnamed)')}**.", ephemeral=True)
+            return await interaction.response.send_message(
+                f"✅ Created **{name.strip()}** under "
+                f"**{parent.get('name', parent_committee)}**.",
+                ephemeral=True,
+            )
 
-        # ---------- SET CHAIR ----------
-        if act == "set_chair":
-            if not node or not chair:
-                return await interaction.response.send_message("Pick a committee and specify a `chair`.", ephemeral=True)
-            node["chair_id"] = chair.id
-            _add_member(node, chair.id)
-            save_federal_registry(reg)
-            return await interaction.response.send_message(f"✅ {chair.mention} set as Chair of **{node.get('name','(unnamed)')}**.", ephemeral=True)
+        if key in bucket:
+            return await interaction.response.send_message(
+                "That committee already exists.",
+                ephemeral=True,
+            )
 
-        # ---------- BULK ADD BY ROLE ----------
-        if act == "bulk_add_role":
-            if not name or not role:
-                return await interaction.response.send_message("Specify `name` (committee) and a `role` to bulk add.", ephemeral=True)
-            if not node:
-                return await interaction.response.send_message("Committee not found.", ephemeral=True)
-            added = 0
-            for m in role.members:
-                if m.bot:
-                    continue
-                if _add_member(node, m.id):
-                    added += 1
-            save_federal_registry(reg)
-            return await interaction.response.send_message(f"✅ Appointed **{added}** members from {role.mention} to **{node.get('name','(unnamed)')}**.", ephemeral=True)
+        bucket[key] = {
+            "name": name.strip(),
+            "type": committee_type,
+            "chair_id": chair.id,
+            "members": [chair.id],
+            "sub_committees": {},
+            "created_at": (
+                discord.utils.utcnow().isoformat()
+            ),
+            "created_by": interaction.user.id,
+        }
 
-        return await interaction.response.send_message("Unknown action.", ephemeral=True)
+        save_federal_registry(
+            reg
+        )
 
+        await interaction.response.send_message(
+            f"✅ Created **{name.strip()}**.",
+            ephemeral=True,
+        )
+
+
+    @committees.command(
+        name="delete",
+        description="Delete an empty committee or subcommittee.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete
+    )
+    async def committee_delete(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+    ):
+        if not _is_chamber_leader(
+            interaction.user,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only chamber leadership may delete committees.",
+                ephemeral=True,
+            )
+
+        parent, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        committee_key, subcommittee_key = (
+            _split_committee_value(name)
+        )
+
+        if self.drafts_db.has_active_referrals_for_committee(
+            chamber,
+            committee_key,
+            subcommittee_key,
+        ):
+            return await interaction.response.send_message(
+                "That committee still has active legislative "
+                "referrals and cannot be deleted.",
+                ephemeral=True,
+            )
+
+        bucket = _get_committees_root(
+            self.federal_registry
+        ).setdefault(
+            chamber,
+            {},
+        )
+
+        if parent:
+            parent.setdefault(
+                "sub_committees",
+                {},
+            ).pop(
+                subcommittee_key,
+                None,
+            )
+
+        else:
+            bucket.pop(
+                committee_key,
+                None,
+            )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await interaction.response.send_message(
+            f"🗑️ Deleted **{node.get('name', name)}**.",
+            ephemeral=True,
+        )
+
+
+    @committees.command(
+        name="member_add",
+        description="Appoint a member to a committee or subcommittee.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete
+    )
+    async def committee_member_add(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        member: discord.Member,
+        as_chair: bool = False,
+    ):
+        if not _is_chamber_leader(
+            interaction.user,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only chamber leadership may appoint committee members.",
+                ephemeral=True,
+            )
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        added = _add_member(
+            node,
+            member.id,
+        )
+
+        if as_chair:
+            node["chair_id"] = member.id
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        note = (
+            " and made Chair"
+            if as_chair
+            else ""
+        )
+
+        await interaction.response.send_message(
+            f"✅ {member.mention} "
+            f"{'appointed to' if added else 'is already on'} "
+            f"**{node.get('name', name)}**{note}.",
+            ephemeral=True,
+        )
+
+
+    @committees.command(
+        name="member_remove",
+        description="Remove a member from a committee or subcommittee.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete
+    )
+    async def committee_member_remove(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        member: discord.Member,
+        force: bool = False,
+    ):
+        if not _is_chamber_leader(
+            interaction.user,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only chamber leadership may remove committee members.",
+                ephemeral=True,
+            )
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        if (
+            node.get("chair_id") == member.id
+            and not force
+        ):
+            return await interaction.response.send_message(
+                "That member is the Chair. "
+                "Set another Chair first, or use `force=True`.",
+                ephemeral=True,
+            )
+
+        members = set(
+            node.get("members")
+            or []
+        )
+
+        members.discard(
+            member.id
+        )
+
+        node["members"] = sorted(
+            members
+        )
+
+        if node.get("chair_id") == member.id:
+            node["chair_id"] = None
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await interaction.response.send_message(
+            f"✅ Removed {member.mention} from "
+            f"**{node.get('name', name)}**.",
+            ephemeral=True,
+        )
+
+
+    @committees.command(
+        name="chair_set",
+        description="Set the Chair of a committee or subcommittee.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete
+    )
+    async def committee_chair_set(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        chair: discord.Member,
+    ):
+        if not _is_chamber_leader(
+            interaction.user,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only chamber leadership may set committee Chairs.",
+                ephemeral=True,
+            )
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        node["chair_id"] = chair.id
+
+        _add_member(
+            node,
+            chair.id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await interaction.response.send_message(
+            f"✅ {chair.mention} is now Chair of "
+            f"**{node.get('name', name)}**.",
+            ephemeral=True,
+        )
+
+
+    @committees.command(
+        name="member_bulk_add",
+        description="Appoint all members of a Discord role to a committee.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete
+    )
+    async def committee_member_bulk_add(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        role: discord.Role,
+    ):
+        if not _is_chamber_leader(
+            interaction.user,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only chamber leadership may appoint committee members.",
+                ephemeral=True,
+            )
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        added = 0
+
+        for member in role.members:
+            if (
+                not member.bot
+                and _add_member(
+                    node,
+                    member.id,
+                )
+            ):
+                added += 1
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await interaction.response.send_message(
+            f"✅ Appointed **{added}** new members to "
+            f"**{node.get('name', name)}** from {role.mention}.",
+            ephemeral=True,
+        )
 
     @motion.command(
         name="make",
@@ -11360,6 +13151,44 @@ class SpideyGov(commands.Cog):
             label = f"{d['draft_id']} — {d['title']}"
             out.append(app_commands.Choice(name=label[:100], value=d["draft_id"]))
         return out[:25]
+
+    async def _draft_submission_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ):
+        cur = (current or "").lower()
+        out = []
+
+        for d in self.drafts_db.search_drafts(
+            current,
+            limit=25,
+        ):
+            sub = self.drafts_db.get_submission(
+                d["draft_id"]
+            )
+
+            if (
+                not sub
+                or sub.get("status") != "SUBMITTED"
+            ):
+                continue
+
+            label = (
+                f"{d['draft_id']} — "
+                f"{d['title']} "
+                f"({sub['chamber']})"
+            )
+
+            if not cur or cur in label.lower():
+                out.append(
+                    app_commands.Choice(
+                        name=label[:100],
+                        value=d["draft_id"],
+                    )
+                )
+
+        return out[:25]
     
     async def draft_subbin_autocomplete(self, interaction: discord.Interaction, current: str):
         draft_id = getattr(interaction.namespace, "draft_id", None)
@@ -11459,6 +13288,11 @@ class SpideyGov(commands.Cog):
         d = self.drafts_db.get_draft(draft_id)
         if not d:
             return await interaction.response.send_message("Draft not found.", ephemeral=True)
+        if not _draft_is_editable(d):
+            return await interaction.response.send_message(
+                "This draft is procedurally locked and cannot currently be edited.",
+                ephemeral=True,
+            )
 
         initial = d["bins"].get(section.value, "")
         await interaction.response.send_modal(DraftEditModal(self, draft_id, section.value, initial))
@@ -11784,3 +13618,848 @@ class SpideyGov(commands.Cog):
         await thread.send(file=discord.File(fp=fp, filename=f"{d['draft_id']}_draft.txt"))
 
         await interaction.followup.send(f"Posted: {header.jump_url}", ephemeral=True)
+
+        @draft.command(
+        name="submit",
+        description="Submit a draft to enter the legislative process.",
+    )
+    @app_commands.autocomplete(
+        draft_id=draft_id_autocomplete
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="House",
+                value="House",
+            ),
+            app_commands.Choice(
+                name="Senate",
+                value="Senate",
+            ),
+        ]
+    )
+    async def draft_submit(
+        self,
+        interaction: discord.Interaction,
+        draft_id: str,
+        chamber: str,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        d = self.drafts_db.get_draft(
+            draft_id
+        )
+
+        if not d:
+            return await interaction.followup.send(
+                "Draft not found.",
+                ephemeral=True,
+            )
+
+        if (
+            d["owner_id"] != interaction.user.id
+            and not interaction.user.guild_permissions.administrator
+        ):
+            return await interaction.followup.send(
+                "Only the draft owner can submit it.",
+                ephemeral=True,
+            )
+
+        if not is_in_chamber(
+            interaction.user,
+            chamber,
+        ):
+            return await interaction.followup.send(
+                f"Only a member of the {chamber} "
+                f"may submit a draft to that chamber.",
+                ephemeral=True,
+            )
+
+        async with self.drafts_lock:
+            ok = self.drafts_db.submit_draft(
+                draft_id,
+                interaction.user.id,
+                chamber,
+            )
+
+        if not ok:
+            return await interaction.followup.send(
+                "That draft is not eligible for submission, "
+                "or it is already in the legislative process.",
+                ephemeral=True,
+            )
+
+        await interaction.followup.send(
+            f"✅ **{draft_id}** submitted to the "
+            f"**{chamber}**. It is awaiting committee referral.",
+            ephemeral=True,
+        )
+
+
+    @draft.command(
+        name="withdraw",
+        description="Withdraw a submitted draft before committee referral.",
+    )
+    @app_commands.autocomplete(
+        draft_id=draft_id_autocomplete
+    )
+    async def draft_withdraw(
+        self,
+        interaction: discord.Interaction,
+        draft_id: str,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        d = self.drafts_db.get_draft(
+            draft_id
+        )
+
+        sub = self.drafts_db.get_submission(
+            draft_id
+        )
+
+        if not d or not sub:
+            return await interaction.followup.send(
+                "No active submission found for that draft.",
+                ephemeral=True,
+            )
+
+        if (
+            sub["submitted_by"] != interaction.user.id
+            and not interaction.user.guild_permissions.administrator
+        ):
+            return await interaction.followup.send(
+                "Only the submitter can withdraw this submission.",
+                ephemeral=True,
+            )
+
+        async with self.drafts_lock:
+            ok = self.drafts_db.withdraw_submission(
+                draft_id,
+                interaction.user.id,
+            )
+
+        if not ok:
+            return await interaction.followup.send(
+                "That submission can no longer be withdrawn here; "
+                "it may already be before a committee.",
+                ephemeral=True,
+            )
+
+        await interaction.followup.send(
+            f"↩️ **{draft_id}** returned to draft status.",
+            ephemeral=True,
+        )
+
+    @committees.command(
+        name="refer",
+        description="Refer a submitted draft to a committee or subcommittee.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        draft_id=_draft_submission_autocomplete,
+    )
+    async def committee_refer(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        draft_id: str,
+    ):
+        if not _is_chamber_leader(
+            interaction.user,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only chamber leadership may refer legislation.",
+                ephemeral=True,
+            )
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        committee_key, subcommittee_key = (
+            _split_committee_value(name)
+        )
+
+        async with self.drafts_lock:
+            referral_id = self.drafts_db.refer_draft(
+                draft_id=draft_id,
+                actor_id=interaction.user.id,
+                committee_body=chamber,
+                committee_key=committee_key,
+                subcommittee_key=subcommittee_key,
+            )
+
+        if not referral_id:
+            return await interaction.response.send_message(
+                "Referral failed. The draft may not be submitted, "
+                "may be submitted to the other chamber, "
+                "or may already have an active referral.",
+                ephemeral=True,
+            )
+
+        d = self.drafts_db.get_draft(
+            draft_id
+        )
+
+        await interaction.response.send_message(
+            f"📥 **{draft_id} — {d['title']}** referred to "
+            f"**{node.get('name', name)}**.\n"
+            f"Referral `#{referral_id}` is now on the committee docket."
+        )
+
+
+    @committees.command(
+        name="docket",
+        description="View legislation currently before a committee.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete
+    )
+    async def committee_docket(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        include_closed: bool = False,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        committee_key, subcommittee_key = (
+            _split_committee_value(name)
+        )
+
+        rows = self.drafts_db.list_committee_docket(
+            chamber,
+            committee_key,
+            subcommittee_key,
+            include_closed=include_closed,
+            limit=50,
+        )
+
+        e = discord.Embed(
+            title=(
+                f"{node.get('name', name)} "
+                f"— Legislative Docket"
+            ),
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
+        )
+
+        if not rows:
+            e.description = (
+                "No legislative referrals found."
+            )
+
+        else:
+            lines = []
+
+            for r in rows:
+                rec = (
+                    r.get("recommendation")
+                    or ""
+                ).replace(
+                    "_",
+                    " ",
+                ).title()
+
+                extra = (
+                    f" · {rec}"
+                    if rec
+                    else ""
+                )
+
+                lines.append(
+                    f"**{r['draft_id']}** — {r['title']}\n"
+                    f"`{r['status'].replace('_', ' ').title()}`"
+                    f"{extra} · Referral #{r['id']}"
+                )
+
+            e.description = (
+                "\n\n".join(lines)
+            )[:4000]
+
+        await interaction.response.send_message(
+            embed=e
+        )
+
+
+    @committees.command(
+        name="vote_open",
+        description="Open a committee vote on whether to report a referred draft.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.choices(
+        recommendation=[
+            app_commands.Choice(
+                name="Favorable",
+                value="favorable",
+            ),
+            app_commands.Choice(
+                name="Unfavorable",
+                value="unfavorable",
+            ),
+            app_commands.Choice(
+                name="Without recommendation",
+                value="without_recommendation",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        draft_id=draft_id_autocomplete,
+    )
+    async def committee_vote_open(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        draft_id: str,
+        recommendation: str,
+        hours: app_commands.Range[int, 1, 168] = 24,
+        channel: discord.TextChannel | None = None,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        if not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership "
+                "may open the committee vote.",
+                ephemeral=True,
+            )
+
+        committee_key, subcommittee_key = (
+            _split_committee_value(name)
+        )
+
+        ref = self.drafts_db.get_referral_for_draft(
+            draft_id,
+            chamber,
+            committee_key,
+            subcommittee_key,
+        )
+
+        if (
+            not ref
+            or ref["status"] not in {
+                "REFERRED",
+                "VOTE_FAILED",
+            }
+        ):
+            return await interaction.response.send_message(
+                "That draft is not currently eligible "
+                "for a committee vote here.",
+                ephemeral=True,
+            )
+
+        target = (
+            channel
+            or interaction.channel
+        )
+
+        if not isinstance(
+            target,
+            (
+                discord.TextChannel,
+                discord.Thread,
+            ),
+        ):
+            return await interaction.response.send_message(
+                "Choose a text channel for the committee vote.",
+                ephemeral=True,
+            )
+
+        eligible_ids = _committee_eligible_ids(
+            interaction.guild,
+            node,
+        )
+
+        quorum = quorum_required(
+            len(eligible_ids)
+        )
+
+        recommendation_label = (
+            recommendation
+            .replace("_", " ")
+            .title()
+        )
+
+        poll = discord.Poll(
+            question=(
+                f"Shall {draft_id} be reported "
+                f"{recommendation_label.lower()}?"
+            ),
+            duration=timedelta(
+                hours=int(hours)
+            ),
+            multiple=False,
+        )
+
+        poll.add_answer(
+            text="Yea",
+            emoji="✅",
+        )
+
+        poll.add_answer(
+            text="Nay",
+            emoji="❌",
+        )
+
+        poll.add_answer(
+            text="Present",
+            emoji="➖",
+        )
+
+        msg = await target.send(
+            f"### {node.get('name', name)} — Committee Vote\n"
+            f"**{draft_id} — {ref['title']}**\n"
+            f"Recommendation: **{recommendation_label}**\n"
+            f"Eligible members: **{len(eligible_ids)}** "
+            f"· Quorum: **{quorum}**",
+            poll=poll,
+            allowed_mentions=(
+                discord.AllowedMentions.none()
+            ),
+        )
+
+        async with self.drafts_lock:
+            vote_id = (
+                self.drafts_db.open_committee_vote(
+                    referral_id=ref["id"],
+                    actor_id=interaction.user.id,
+                    recommendation=recommendation,
+                    channel_id=target.id,
+                    message_id=msg.id,
+                    hours=int(hours),
+                    eligible_count=len(eligible_ids),
+                    quorum_required_count=quorum,
+                )
+            )
+
+        if not vote_id:
+            return await interaction.response.send_message(
+                "The poll was posted, but I could not attach "
+                "it to the referral. Please end/delete the poll "
+                f"and try again.\n{msg.jump_url}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            f"✅ Committee vote `#{vote_id}` opened.\n"
+            f"{msg.jump_url}",
+            ephemeral=True,
+        )
+
+
+    @committees.command(
+        name="vote_close",
+        description="Close the open committee vote on a referred draft.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        draft_id=draft_id_autocomplete,
+    )
+    async def committee_vote_close(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        draft_id: str,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.followup.send(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        if not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.followup.send(
+                "Only the Chair or chamber leadership "
+                "may close the committee vote.",
+                ephemeral=True,
+            )
+
+        committee_key, subcommittee_key = (
+            _split_committee_value(name)
+        )
+
+        ref = self.drafts_db.get_referral_for_draft(
+            draft_id,
+            chamber,
+            committee_key,
+            subcommittee_key,
+        )
+
+        if (
+            not ref
+            or ref["status"] != "VOTE_OPEN"
+        ):
+            return await interaction.followup.send(
+                "There is no open committee vote "
+                "for that draft here.",
+                ephemeral=True,
+            )
+
+        vote = self.drafts_db.get_open_committee_vote(
+            ref["id"]
+        )
+
+        if not vote:
+            return await interaction.followup.send(
+                "The referral says a vote is open, "
+                "but no vote record was found.",
+                ephemeral=True,
+            )
+
+        target = self.bot.get_channel(
+            int(vote["channel_id"])
+        )
+
+        if not target:
+            return await interaction.followup.send(
+                "I could not find the vote channel.",
+                ephemeral=True,
+            )
+
+        try:
+            msg = await target.fetch_message(
+                int(vote["message_id"])
+            )
+
+        except Exception:
+            return await interaction.followup.send(
+                "I could not fetch the committee poll.",
+                ephemeral=True,
+            )
+
+        try:
+            await msg.end_poll()
+
+            msg = await target.fetch_message(
+                msg.id
+            )
+
+        except Exception:
+            pass
+
+        yea, nay, present, total = (
+            _tally_from_message(msg)
+        )
+
+        quorum = int(
+            vote.get("quorum_required")
+            or 0
+        )
+
+        if total < quorum:
+            outcome = "NO_QUORUM"
+
+        else:
+            outcome = _decide(
+                yea,
+                nay,
+                present,
+                "simple",
+            )
+
+        async with self.drafts_lock:
+            ok = (
+                self.drafts_db.close_committee_vote(
+                    vote_id=vote["id"],
+                    actor_id=interaction.user.id,
+                    yea=yea,
+                    nay=nay,
+                    present=present,
+                    outcome=outcome,
+                )
+            )
+
+        if not ok:
+            return await interaction.followup.send(
+                "Could not close the committee vote record.",
+                ephemeral=True,
+            )
+
+        color = (
+            discord.Color.green()
+            if outcome == "PASSED"
+            else discord.Color.red()
+        )
+
+        result = discord.Embed(
+            title=(
+                f"{draft_id} — Committee Vote "
+                f"{outcome.replace('_', ' ').title()}"
+            ),
+            description=ref["title"],
+            color=color,
+        )
+
+        result.add_field(
+            name="Yea",
+            value=str(yea),
+        )
+
+        result.add_field(
+            name="Nay",
+            value=str(nay),
+        )
+
+        result.add_field(
+            name="Present",
+            value=str(present),
+        )
+
+        result.set_footer(
+            text=(
+                f"Ballots: {total} "
+                f"· Quorum: {quorum}"
+            )
+        )
+
+        await target.send(
+            embed=result
+        )
+
+        await interaction.followup.send(
+            f"✅ Vote closed: "
+            f"**{outcome.replace('_', ' ')}** "
+            f"({yea}-{nay}-{present}).",
+            ephemeral=True,
+        )
+
+
+    @committees.command(
+        name="report",
+        description="Report a committee-approved draft and create the formal bill.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="House",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Joint",
+                value="joint",
+            ),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        draft_id=draft_id_autocomplete,
+    )
+    async def committee_report(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        draft_id: str,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.followup.send(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        if not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.followup.send(
+                "Only the Chair or chamber leadership "
+                "may report legislation.",
+                ephemeral=True,
+            )
+
+        committee_key, subcommittee_key = (
+            _split_committee_value(name)
+        )
+
+        ref = self.drafts_db.get_referral_for_draft(
+            draft_id,
+            chamber,
+            committee_key,
+            subcommittee_key,
+        )
+
+        if (
+            not ref
+            or ref["status"] != "APPROVED"
+        ):
+            return await interaction.followup.send(
+                "That draft has not received a successful "
+                "committee vote to report.",
+                ephemeral=True,
+            )
+
+        # Prevent collision with surviving legacy JSON bill IDs.
+        legacy_ids = set(
+            ensure_bills_schema(
+                self.federal_registry
+            )["items"].keys()
+        )
+
+        async with self.drafts_lock:
+            new_bill = (
+                self.drafts_db.report_referral_to_bill(
+                    referral_id=ref["id"],
+                    actor_id=interaction.user.id,
+                    reserved_bill_ids=legacy_ids,
+                )
+            )
+
+        if not new_bill:
+            return await interaction.followup.send(
+                "Could not report the draft as a formal bill.",
+                ephemeral=True,
+            )
+
+        recommendation = (
+            new_bill.get("recommendation")
+            or ""
+        ).replace(
+            "_",
+            " ",
+        ).title()
+
+        await interaction.followup.send(
+            f"✅ **{new_bill['bill_id']} — "
+            f"{new_bill['title']}** has been reported by "
+            f"**{node.get('name', name)}**.\n"
+            f"Recommendation: "
+            f"**{recommendation or 'None'}**\n"
+            f"Source draft: "
+            f"**{new_bill['source_draft_id']}**",
+            ephemeral=False,
+        )

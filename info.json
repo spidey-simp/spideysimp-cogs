@@ -1,6 +1,7 @@
 {
-    "author": ["spideysimp"],
-    "install_msg": "Thank you for installing spideysimp-cogs by spideysimp! Please join spidey simp's server https://discord.gg/MS2y4z77Uq for any questions or help!",
+    "author": ["spidey simp"],
+    "install_msg": "Thank you for installing spideysimp-cogs by spidey simp! Please join spidey simp's server https://discord.gg/MS2y4z77Uq for any questions or help!",
     "name": "spideysimp-cogs",
-    "short": "Cogs by spideysimp"
+    "short": "Cogs by spideysimp",
+    "description": "A collection of cogs for Red-DiscordBot created and maintained by spidey simp."
 }

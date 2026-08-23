@@ -1,19 +1,17 @@
 {
     "author": [
-        "spideysimp"
+        "spidey simp"
     ],
     "min_bot_version": "3.4.0",
-    "description": "Returns a random Civ VI leader. Eventually, filters will be added, but for now, it's just all of them.",
+    "description": "Randomly selects Civilization VI leaders and provides challenges for players to try.",
     "hidden": false,
-    "install_msg": "Thank you for installing Civ VI Random! Get started with '[p]load civvirandom', then '[p]help CivVIrandom'",
+    "install_msg": "Thank you for installing Civ VI Random! Get started with `[p]load civvirandom`, then `[p]help civvirandom`.",
     "short": "Civ VI Random",
-    "end_user_data_statement": "This cog stores no data",
+    "end_user_data_statement": "This cog stores no data.",
     "tags": [
-        "spideysimp",
-        "tools",
+        "spidey simp",
+        "games",
         "civ6",
         "random"
     ]
-
-
 }
