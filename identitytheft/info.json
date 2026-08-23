@@ -1,18 +1,17 @@
 {
     "author": [
-        "spideysimp"
+        "spidey simp"
     ],
-    "min_bot_version": "3.4.0",
-    "description": "Responds to people saying 'I'm [bot name]' with an admonishment for identity theft",
+    "min_bot_version": "3.5.0",
+    "description": "A joke cog that reacts to users claiming another member's identity and can impersonate the triggering user through a webhook. Includes server controls, cooldowns, and an opt-out system.",
     "hidden": false,
-    "install_msg": "Thank you for installing IdentityTheft! Get started with '[p]load identitytheft', then '[p]help IdentityTheft'",
-    "short": "Identity Theft bot",
-    "end_user_data_statement": "This cog does not store any End User Data",
+    "install_msg": "Thank you for installing IdentityTheft! Use `[p]load identitytheft`, then `[p]help IdentityTheft` to get started. Webhook impersonation requires the bot to have permission to manage webhooks.",
+    "short": "A playful identity theft response cog",
+    "end_user_data_statement": "This cog stores Discord user IDs for users who opt out of webhook impersonation.",
     "tags": [
-        "spideysimp",
         "joke",
-        "comedy"
+        "comedy",
+        "responses",
+        "webhooks"
     ]
-
-
 }

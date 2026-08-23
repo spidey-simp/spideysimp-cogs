@@ -4,15 +4,11 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 import discord
-import discord.http
 from redbot.core import Config, checks, commands
 from redbot.core.bot import Red
 from redbot.core.commands import Cog
 
-async def fetch_url(session, url):
-    async with session.get(url) as response:
-        assert response.status == 200
-        return await response.json()
+
 
 class IdentityTheft(Cog):
     """
@@ -85,7 +81,7 @@ class IdentityTheft(Cog):
     @checks.admin()
     async def identitytheft(self, ctx: commands.Context):
         """Toggle the identity theft auto-response."""
-        pass
+        await ctx.send_help()
     
     @identitytheft.command(name="enable")
     async def identitytheft_enable(self, ctx: commands.Context):
@@ -97,6 +93,9 @@ class IdentityTheft(Cog):
     @identitytheft.command(name="cooldown")
     async def identitytheft_cooldown(self, ctx: commands.Context, cooldown: int):
         """Set the cooldown (in seconds) of auto responses."""
+        if cooldown < 0:
+            await ctx.send("Cooldown cannot be negative.")
+            return
 
         await self.config.guild(ctx.guild).cooldown.set(cooldown)
         self.cooldown[ctx.guild.id] = datetime.now()
@@ -105,7 +104,7 @@ class IdentityTheft(Cog):
     @identitytheft.group(name="blacklist", aliases=["bl"])
     async def blacklist(self, ctx: commands.Context):
         """Manage your webhook impersonation blacklist."""
-        pass
+        await ctx.send_help()
 
     @blacklist.command(name="optout", aliases=["off", "oo"])
     async def blacklist_optout(self, ctx:commands.Context):
