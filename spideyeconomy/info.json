@@ -1,0 +1,17 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "A custom banking and economic simulation system developed for the Spidey Republic server, including credit scores, bank accounts, bank chartering, capital requirements, reserves, and other financial-system mechanics.",
+    "hidden": true,
+    "install_msg": "SpideyEconomy is designed specifically for the Spidey Republic server and is not intended for general installation.",
+    "short": "Custom Spidey Republic banking system",
+    "end_user_data_statement": "This cog stores Discord user IDs and economy-related data, including credit scores, bank accounts, balances, ownership interests, and other banking information.",
+    "tags": [
+        "economy",
+        "banking",
+        "simulation",
+        "spidey republic"
+    ]
+}
