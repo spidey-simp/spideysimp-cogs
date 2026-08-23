@@ -1,0 +1,20 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "Look up English word definitions, pronunciations, examples, synonyms, antonyms, and parts of speech using DictionaryAPI. Includes both slash and prefix commands, autocomplete, and pagination for longer results.",
+    "hidden": false,
+    "install_msg": "Thank you for installing Dictionary! Use `[p]load dictionary`, then `[p]help Dictionary` to get started.",
+    "short": "English dictionary lookups",
+    "end_user_data_statement": "This cog stores no end user data.",
+    "requirements": [
+        "wordfreq"
+    ],
+    "tags": [
+        "dictionary",
+        "words",
+        "utility",
+        "definitions"
+    ]
+}

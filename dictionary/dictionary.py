@@ -40,9 +40,9 @@ class Dictionary(commands.Cog):
         self.bot = bot
         self.session = None
         try:
-            self._wordlist = wordfreq.top_n_list('en', 60000)
+            self._wordlist = wordfreq.top_n_list("en", 60000)
         except Exception:
-            self.common_words = set()
+            self._wordlist = []
     
     async def cog_load(self):
         self.session = ClientSession(timeout=ClientTimeout(total=12))
@@ -464,19 +464,20 @@ class Dictionary(commands.Cog):
             await interaction.followup.send(embed=em)
         if len(pages) > len(to_send):
             await interaction.followup.send(
-            f"There are **{len(pages) - len(to_send)}** more page(s). Rerun with `mode: full` (default) to use the paginator.")
+            f"There are **{len(pages) - len(to_send)}** more page(s). Rerun with `mode: full` to use the paginator.")
 
     # --- Prefix command (quick summary) ---
     @commands.command(name="define", aliases=["def"])
+    @commands.bot_has_permissions(embed_links=True)
     @commands.cooldown(3, 10, BucketType.user)
     async def define_prefix(self, ctx: commands.Context, *, query: str):
         """
-        Quick prefix lookup: `!define <word>` or `!define <word> <pos>`
+        Quick prefix lookup for a word, with an optional part-of-speech filter.
         Returns a concise embed. For full results, use /define.
         """
         q = (query or "").strip()
         if not q:
-            await ctx.send("Usage: !define <word> [part-of-speech]")
+            await ctx.send(f"Usage: `{ctx.prefix}define <word> [part-of-speech]`")
             return
         parts = q.split()
         word = parts[0]
