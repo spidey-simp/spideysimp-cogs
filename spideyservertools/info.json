@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "A collection of custom server administration and bot maintenance utilities, including Question of the Day scheduling, project tracking, feature suggestions, command-tree maintenance, and server activity audits.",
+    "hidden": true,
+    "install_msg": "SpideyServerTools contains utilities developed for spidey simp's own bot and server environment and is not intended for general installation.",
+    "short": "Custom server and bot administration tools",
+    "end_user_data_statement": "This cog stores Discord user IDs and usernames associated with submitted questions and project activity, as well as server configuration, channel IDs, message IDs, project tracking data, and feature suggestions.",
+    "tags": [
+        "administration",
+        "server tools",
+        "qotd",
+        "utilities",
+        "development"
+    ]
+}

@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "A comprehensive government administration and simulation system developed specifically for the Spidey Republic server, including legislation, elections, citizenship, government records, congressional procedure, and related civic functions.",
+    "hidden": true,
+    "install_msg": "SpideyGov is designed specifically for the Spidey Republic server and is not intended for general installation.",
+    "short": "Custom Spidey Republic government system",
+    "end_user_data_statement": "This cog stores Discord user IDs and government-related data, including legislative drafts, sponsorship and voting records, citizenship information, election data, and other civic or administrative records.",
+    "tags": [
+        "government",
+        "legislation",
+        "elections",
+        "roleplay",
+        "spidey republic"
+    ]
+}

@@ -1,0 +1,17 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "An in-development random selection utility for creating reusable groups of names, numbers, members, and other items and selecting random entries from them.",
+    "hidden": true,
+    "install_msg": "SpideyRandom is currently under development and is not ready for general use.",
+    "short": "Random group picker under development",
+    "end_user_data_statement": "This cog stores Discord user IDs and user-created random groups, including group names, descriptions, settings, and list contents.",
+    "tags": [
+        "random",
+        "utility",
+        "lists",
+        "picker"
+    ]
+}

@@ -31,11 +31,12 @@ class StatusSet(commands.Cog):
             "Avengers: Endgame (2019)",
             "Spider-Man: Far From Home (2019)",
             "Spider-Man: No Way Home (2021)",
+            "Spider-Man: Brand New Day (2026)"
 
             # Spider-Verse Animated
             "Spider-Man: Into the Spider-Verse (2018)",
             "Spider-Man: Across the Spider-Verse (2023)",
-            "Spider-Man: Beyond the Spider-Verse (TBA)"
+            "Spider-Man: Beyond the Spider-Verse (2027)"
         ]
 
         spiderman_shows = [
@@ -43,8 +44,8 @@ class StatusSet(commands.Cog):
             "Spectacular Spider-Man (2008–2009)",
             "Ultimate Spider-Man (2012–2017)",
             "Spider-Man (2017–2020)",
-            "Spidey and His Amazing Friends (2021– )",  # Kids-focused, but popular
-            "Your Friendly Neighborhood Spider-Man (2025– )"  # Upcoming
+            "Spidey and His Amazing Friends (2021– )", 
+            "Your Friendly Neighborhood Spider-Man (2025– )"  
         ]
         statuses = [
                 discord.Activity(type=discord.ActivityType.watching, name="the streets of New York City"),

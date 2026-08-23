@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "An in-development nation-building simulation game inspired by NationStates, featuring customizable nations, difficulty settings, political ideology, national statistics, policy choices, and evolving social and economic indicators.",
+    "hidden": true,
+    "install_msg": "SpideyNations is currently under development and is not ready for general use.",
+    "short": "Nation-building simulation under development",
+    "end_user_data_statement": "This cog stores Discord user IDs and nation simulation data, including nation names, leaders, policies, statistics, ideology, and nation history.",
+    "tags": [
+        "nations",
+        "simulation",
+        "government",
+        "politics",
+        "games"
+    ]
+}

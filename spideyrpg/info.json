@@ -1,0 +1,17 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "An in-development role-playing game system featuring character creation, classes, statistics, abilities, weapons, equipment, and persistent character profiles.",
+    "hidden": true,
+    "install_msg": "SpideyRPG is currently under development and is not ready for general use.",
+    "short": "Role-playing game system under development",
+    "end_user_data_statement": "This cog stores Discord user IDs and RPG character data, including character names, gender, class, descriptions, levels, statistics, abilities, weapons, inventory, and profile images.",
+    "tags": [
+        "rpg",
+        "games",
+        "characters",
+        "roleplay"
+    ]
+}

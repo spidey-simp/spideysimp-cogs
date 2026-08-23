@@ -1,20 +1,18 @@
 {
     "author": [
-        "spideysimp"
+        "spidey simp"
     ],
-    "min_bot_version": "3.4.0",
-    "description": "A life sim that at the time of writing this includes a shop that rotates through items, user profiles, skills, and brand new careers! It will be updated! Please make sure your bank is set to global or it may cause issues!",
-    "hidden": false,
-    "install_msg": "Thank you for installing Spidey Life Sim! Get started with '[p]load spideylifesim', then '[p]help SpideyLifeSim'",
-    "short": "Spidey Life Sim",
-    "requirements": ["humanize"],
-    "end_user_data_statement": "This cog stores data all of which are user-inputted!",
+    "min_bot_version": "3.5.0",
+    "description": "A life simulation game featuring customizable profiles, careers, skills, traits, alignment, inventories, shopping, and character progression.",
+    "hidden": true,
+    "install_msg": "SpideyLifeSim is currently under development and is not recommended for general installation.",
+    "short": "Life simulation game under development",
+    "end_user_data_statement": "This cog stores Discord user IDs and life simulation data, including profile information, inventories, careers, skills, traits, alignment, and progression.",
     "tags": [
-        "spideysimp",
-        "life",
-        "simulator",
-        "game"
+        "games",
+        "simulation",
+        "life sim",
+        "careers",
+        "roleplay"
     ]
-
-
 }

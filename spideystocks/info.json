@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "An experimental stock market simulation featuring tradable companies, player portfolios, market indices, dividends, news events, NPC trading, stock splits, and historical price graphs.",
+    "hidden": true,
+    "install_msg": "SpideyStocks is an experimental stock market simulation and is not currently recommended for general installation.",
+    "short": "Experimental stock market simulation",
+    "end_user_data_statement": "This cog stores Discord user IDs and stock-market simulation data, including user portfolios, share holdings, market configuration, company data, stock prices, and price histories.",
+    "tags": [
+        "stocks",
+        "economy",
+        "simulation",
+        "markets",
+        "games"
+    ]
+}

@@ -1,0 +1,17 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "An experimental romance and social interaction cog featuring randomized cuddling responses, playful restraining-order mechanics, and compatibility checks between users or named characters.",
+    "hidden": true,
+    "install_msg": "SpideyRomance is currently under development and is not ready for general use.",
+    "short": "Romance and compatibility commands under development",
+    "end_user_data_statement": "This cog temporarily stores Discord user IDs in memory for its restraining-order mechanic. This data is not persisted to disk.",
+    "tags": [
+        "romance",
+        "lovecheck",
+        "cuddle",
+        "fun"
+    ]
+}

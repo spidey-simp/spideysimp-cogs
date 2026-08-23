@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "Automatically rotates the bot's activity status between Spider-Man movies, shows, and themed status messages.",
+    "hidden": false,
+    "install_msg": "Thank you for installing StatusSet! Use `[p]load statusset` to start automatically rotating the bot's Spider-Man-themed status.",
+    "short": "Rotating Spider-Man-themed bot statuses",
+    "end_user_data_statement": "This cog stores no end user data.",
+    "tags": [
+        "status",
+        "presence",
+        "spider-man",
+        "utility",
+        "fun"
+    ]
+}

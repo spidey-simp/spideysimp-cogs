@@ -1,0 +1,17 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "An in-development automatic response cog featuring configurable Spider-Man-themed greetings, farewells, quotes, news-style responses, and random dialogue.",
+    "hidden": true,
+    "install_msg": "SpideyResponds is currently under development and is not ready for general use.",
+    "short": "Spider-Man response system under development",
+    "end_user_data_statement": "This cog stores Discord user IDs and each user's selected response preferences.",
+    "tags": [
+        "spider-man",
+        "responses",
+        "fun",
+        "automation"
+    ]
+}

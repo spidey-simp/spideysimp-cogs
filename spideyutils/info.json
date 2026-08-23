@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "A custom Cold War roleplay and grand-strategy system featuring country management, research, industry, national projects, diplomacy, alliances, espionage, historical records, and game-master utilities.",
+    "hidden": true,
+    "install_msg": "SpideyUtils is designed for a custom Cold War roleplay campaign and is not intended for general installation.",
+    "short": "Custom Cold War roleplay system",
+    "end_user_data_statement": "This cog stores Discord user IDs, usernames, country assignments, roll requests, and roleplay campaign data including research, industry, projects, diplomacy, alliances, espionage, historical records, and other game state.",
+    "tags": [
+        "roleplay",
+        "cold war",
+        "strategy",
+        "simulation",
+        "grand strategy"
+    ]
+}
