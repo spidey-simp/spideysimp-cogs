@@ -4663,6 +4663,117 @@ class MotionConsentView(discord.ui.View):
             except Exception:
                 pass
 
+class MotionWithdrawalConsentView(discord.ui.View):
+    def __init__(
+        self,
+        cog,
+        motion_id: str,
+        requested_by: int,
+        timeout: float = 30,
+    ):
+        super().__init__(timeout=timeout)
+        self.cog = cog
+        self.motion_id = motion_id
+        self.requested_by = requested_by
+        self.message = None
+
+    @discord.ui.button(
+        label="Object",
+        style=discord.ButtonStyle.danger,
+    )
+    async def object(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ):
+        reg = self.cog.federal_registry
+        motions = ensure_motions_schema(reg)
+        m = motions["items"].get(self.motion_id)
+
+        if not m:
+            return await interaction.response.send_message(
+                "Motion not found.",
+                ephemeral=True,
+            )
+
+        req = m.get("withdrawal_request") or {}
+
+        if req.get("status") != "PENDING":
+            return await interaction.response.send_message(
+                "The objection period has ended.",
+                ephemeral=True,
+            )
+
+        if not is_in_chamber(interaction.user, m["chamber"]):
+            return await interaction.response.send_message(
+                "Only a member of the chamber may object.",
+                ephemeral=True,
+            )
+
+        req["status"] = "OBJECTED"
+        req["objected_by"] = interaction.user.id
+        req["objected_at"] = discord.utils.utcnow().isoformat()
+
+        m.setdefault("history", []).append({
+            "at": discord.utils.utcnow().isoformat(),
+            "by": interaction.user.id,
+            "action": "Objected to unanimous-consent request to withdraw",
+        })
+
+        save_federal_registry(reg)
+
+        await interaction.response.edit_message(
+            content=(
+                f"### {m['id']} — OBJECTION HEARD\n"
+                f"**PRESIDING OFFICER:** Objection is heard. "
+                f"The request to withdraw {m['id']} is not agreed to.\n\n"
+                f"The motion remains before the {m['chamber']} and "
+                f"the roll call will continue."
+            ),
+            view=None,
+        )
+
+        self.stop()
+
+    async def on_timeout(self):
+        reg = self.cog.federal_registry
+        motions = ensure_motions_schema(reg)
+        m = motions["items"].get(self.motion_id)
+
+        if not m:
+            return
+
+        req = m.get("withdrawal_request") or {}
+
+        if req.get("status") != "PENDING":
+            return
+
+        await self.cog._finalize_motion_withdrawal(
+            m,
+            self.requested_by,
+        )
+
+        if self.message:
+            try:
+                vote = m.get("vote") or {}
+
+                yea = vote.get("yea", 0)
+                nay = vote.get("nay", 0)
+                present = vote.get("present", 0)
+
+                await self.message.edit(
+                    content=(
+                        f"### {m['id']} — WITHDRAWN\n"
+                        f"**PRESIDING OFFICER:** Hearing no objection, "
+                        f"{m['id']} is withdrawn.\n\n"
+                        f"*Roll call terminated: "
+                        f"{yea} Yea, {nay} Nay, {present} Present.*"
+                    ),
+                    view=None,
+                )
+            except Exception:
+                pass
+
 class SpideyGov(commands.Cog):
     def __init__(self, bot):
         global REGISTRY_SUSPENDED
@@ -5034,6 +5145,93 @@ class SpideyGov(commands.Cog):
             while x >= v:
                 out.append(s); x -= v
         return "".join(out) if out else "I"
+
+    async def _finalize_motion_withdrawal(
+        self,
+        motion: dict,
+        withdrawn_by: int,
+    ):
+        """
+        Withdraw a pending motion while preserving any roll-call
+        tally already cast.
+        """
+        vote = motion.get("vote") or {}
+
+        # If a roll call exists, terminate it and preserve its tally.
+        if vote.get("channel_id") and vote.get("message_id"):
+            channel = self.bot.get_channel(
+                int(vote["channel_id"])
+            )
+
+            if channel:
+                try:
+                    msg = await channel.fetch_message(
+                        int(vote["message_id"])
+                    )
+
+                    try:
+                        await msg.end_poll()
+                    except Exception:
+                        pass
+
+                    try:
+                        msg = await channel.fetch_message(msg.id)
+                    except Exception:
+                        pass
+
+                    yea, nay, present, total = _tally_from_message(msg)
+
+                    vote.update({
+                        "closed_at": discord.utils.utcnow().isoformat(),
+                        "yea": yea,
+                        "nay": nay,
+                        "present": present,
+                        "total": total,
+                        "outcome": "WITHDRAWN",
+                    })
+
+                except Exception:
+                    pass
+
+        motion["status"] = "WITHDRAWN"
+        motion["withdrawn_at"] = discord.utils.utcnow().isoformat()
+        motion["withdrawn_by"] = withdrawn_by
+
+        if motion.get("withdrawal_request"):
+            motion["withdrawal_request"]["status"] = "AGREED_TO"
+
+        motion.setdefault("history", []).append({
+            "at": discord.utils.utcnow().isoformat(),
+            "by": withdrawn_by,
+            "action": "Motion withdrawn",
+        })
+
+        save_federal_registry(self.federal_registry)
+
+        # Put the disposition in the chamber record.
+        channel = self.bot.get_channel(
+            chamber_channel_id(motion["chamber"])
+        )
+
+        if channel:
+            vote = motion.get("vote") or {}
+
+            result = (
+                f"### {motion['id']} — WITHDRAWN\n"
+                f"{motion['text']}\n\n"
+                f"The motion is no longer before the "
+                f"{motion['chamber']}."
+            )
+
+            if vote.get("closed_at"):
+                result += (
+                    f"\n\n**Roll call at withdrawal:** "
+                    f"{vote.get('yea', 0)} Yea · "
+                    f"{vote.get('nay', 0)} Nay · "
+                    f"{vote.get('present', 0)} Present"
+                )
+
+            await channel.send(result)
     
     async def _fetch_message(self, channel_id: int, message_id: int):
         ch = self.bot.get_channel(int(channel_id))
@@ -9423,6 +9621,128 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_message(
             f"✅ **{motion_id}** is before the {chamber}.\n{poll_msg.jump_url}",
             ephemeral=False,
+        )
+
+    @motion.command(
+        name="withdraw",
+        description="Withdraw a motion you made."
+    )
+    @app_commands.describe(
+        motion_id="Motion number, e.g. SM-0001"
+    )
+    async def motion_withdraw(
+        self,
+        interaction: discord.Interaction,
+        motion_id: str,
+    ):
+        reg = self.federal_registry
+        motions = ensure_motions_schema(reg)
+
+        motion_id = (motion_id or "").strip().upper()
+        m = motions["items"].get(motion_id)
+
+        if not m:
+            return await interaction.response.send_message(
+                "❌ Motion not found.",
+                ephemeral=True,
+            )
+
+        # Only the mover owns the right to withdraw.
+        if m.get("moved_by") != interaction.user.id:
+            return await interaction.response.send_message(
+                "❌ Only the member who made the motion may withdraw it.",
+                ephemeral=True,
+            )
+
+        if m.get("status") in {
+            "WITHDRAWN",
+            "AGREED_TO",
+            "ADOPTED",
+            "FAILED",
+            "REJECTED",
+        }:
+            return await interaction.response.send_message(
+                f"❌ {motion_id} has already been finally disposed of "
+                f"({m.get('status')}).",
+                ephemeral=True,
+            )
+
+        # ─────────────────────────────────────
+        # BEFORE ROLL CALL:
+        # mover may withdraw as of right
+        # ─────────────────────────────────────
+
+        if m.get("status") != "VOTE_OPEN":
+            await self._finalize_motion_withdrawal(
+                m,
+                interaction.user.id,
+            )
+
+            return await interaction.response.send_message(
+                f"✅ **{motion_id} withdrawn.**",
+                ephemeral=False,
+            )
+
+        # ─────────────────────────────────────
+        # ROLL CALL ALREADY ORDERED:
+        # require unanimous consent
+        # ─────────────────────────────────────
+
+        existing = m.get("withdrawal_request") or {}
+
+        if existing.get("status") == "PENDING":
+            return await interaction.response.send_message(
+                "❌ A request to withdraw this motion is already pending.",
+                ephemeral=True,
+            )
+
+        m["withdrawal_request"] = {
+            "requested_by": interaction.user.id,
+            "requested_at": discord.utils.utcnow().isoformat(),
+            "status": "PENDING",
+            "method": "unanimous_consent",
+        }
+
+        m.setdefault("history", []).append({
+            "at": discord.utils.utcnow().isoformat(),
+            "by": interaction.user.id,
+            "action": "Requested unanimous consent to withdraw motion",
+        })
+
+        save_federal_registry(reg)
+
+        chamber_channel = self.bot.get_channel(
+            chamber_channel_id(m["chamber"])
+        )
+
+        if not chamber_channel:
+            return await interaction.response.send_message(
+                "❌ Chamber channel not found.",
+                ephemeral=True,
+            )
+
+        view = MotionWithdrawalConsentView(
+            cog=self,
+            motion_id=motion_id,
+            requested_by=interaction.user.id,
+        )
+
+        msg = await chamber_channel.send(
+            (
+                f"### {motion_id} — REQUEST TO WITHDRAW\n"
+                f"**{interaction.user.mention}:** "
+                f"I ask unanimous consent to withdraw {motion_id}.\n\n"
+                f"**PRESIDING OFFICER:** Without objection, "
+                f"{motion_id} will be withdrawn."
+            ),
+            view=view,
+        )
+
+        view.message = msg
+
+        await interaction.response.send_message(
+            f"✅ Unanimous consent requested to withdraw **{motion_id}**.",
+            ephemeral=True,
         )
 
     
