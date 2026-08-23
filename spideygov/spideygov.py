@@ -5459,7 +5459,8 @@ class SpideyGov(commands.Cog):
     social = app_commands.Group(name="social", description="Spidder (in-universe social feed)")
 
     legislature = app_commands.Group(name="legislature", description="Legislative commands")
-    bill = app_commands.Group(name="bill", description="Congressional bills", parent=legislature)
+    bill = app_commands.Group(name="bill", description="Bills and legislative instruments")
+    draft = app_commands.Group(name="draft", description="The drafting stage of bills", parent=bill)
     code = app_commands.Group(
         name="code",
         description="Statutory code and legal research"
@@ -11380,7 +11381,7 @@ class SpideyGov(commands.Cog):
 
         return out[:25] 
     
-    @bill.command(name="draft_new", description="Create a new legislative draft.")
+    @draft.command(name="new", description="Create a new legislative draft.")
     @app_commands.describe(
         title="Working title for the draft",
         short_title="Optional short title",
@@ -11406,7 +11407,7 @@ class SpideyGov(commands.Cog):
         await interaction.followup.send(f"Created draft **{draft_id}**.", ephemeral=True)
 
 
-    @bill.command(name="draft_view", description="View a legislative draft.")
+    @draft.command(name="view", description="View a legislative draft.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete)
     async def draft_view(self, interaction: discord.Interaction, draft_id: str):
         await interaction.response.defer(ephemeral=True)
@@ -11450,7 +11451,7 @@ class SpideyGov(commands.Cog):
         await interaction.followup.send(embed=e, ephemeral=True)
 
 
-    @bill.command(name="draft_edit", description="Edit one section bin of a draft.")
+    @draft.command(name="edit", description="Edit one section bin of a draft.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete)
     @app_commands.describe(draft_id="Draft ID", section="Which part to edit")
     @app_commands.choices(section=[app_commands.Choice(name=v, value=k) for k, v in DRAFT_BINS.items()])
@@ -11463,7 +11464,7 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_modal(DraftEditModal(self, draft_id, section.value, initial))
 
 
-    @bill.command(name="draft_fork", description="Fork another user's draft into your own version.")
+    @draft.command(name="fork", description="Fork another user's draft into your own version.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete)
     @app_commands.describe(draft_id="Draft to fork", new_title="Title for your fork")
     async def draft_fork(self, interaction: discord.Interaction, draft_id: str, new_title: str):
@@ -11482,7 +11483,7 @@ class SpideyGov(commands.Cog):
         await interaction.followup.send(f"Created fork **{new_id}**.", ephemeral=True)
 
 
-    @bill.command(name="draft_adopt", description="Adopt another draft's contents into your own draft.")
+    @draft.command(name="adopt", description="Adopt another draft's contents into your own draft.")
     @app_commands.autocomplete(target_draft_id=draft_id_autocomplete, source_draft_id=draft_id_autocomplete)
     @app_commands.describe(
         target_draft_id="Your draft that will receive the adopted content",
@@ -11516,7 +11517,7 @@ class SpideyGov(commands.Cog):
         )
 
 
-    @bill.command(name="draft_rename", description="Rename a draft.")
+    @draft.command(name="rename", description="Rename a draft.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete)
     @app_commands.describe(draft_id="Draft ID", title="New title", short_title="Optional new short title")
     async def draft_rename(
@@ -11541,7 +11542,7 @@ class SpideyGov(commands.Cog):
 
         await interaction.followup.send("Renamed.", ephemeral=True)
     
-    @bill.command(name="draft_add_subbin", description="Add an expandable entry under a draft bin.")
+    @draft.command(name="add_subbin", description="Add an expandable entry under a draft bin.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete)
     @app_commands.describe(draft_id="Draft ID", section="Which main bin gets the entry")
     @app_commands.choices(section=[app_commands.Choice(name=DRAFT_BINS[k], value=k) for k in DRAFT_SUBBIN_KEYS])
@@ -11554,7 +11555,7 @@ class SpideyGov(commands.Cog):
             DraftSubbinModal(self, draft_id, section.value, mode="add")
         )
 
-    @bill.command(name="draft_edit_subbin", description="Edit one subbin entry.")
+    @draft.command(name="edit_subbin", description="Edit one subbin entry.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete, subbin_id=draft_subbin_autocomplete)
     @app_commands.describe(draft_id="Draft ID", subbin_id="Subbin entry ID")
     async def draft_edit_subbin(self, interaction: discord.Interaction, draft_id: str, subbin_id: str):
@@ -11578,7 +11579,7 @@ class SpideyGov(commands.Cog):
             )
         )
 
-    @bill.command(name="draft_delete_subbin", description="Delete one subbin entry.")
+    @draft.command(name="delete_subbin", description="Delete one subbin entry.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete, subbin_id=draft_subbin_autocomplete)
     @app_commands.describe(draft_id="Draft ID", subbin_id="Subbin entry ID")
     async def draft_delete_subbin(self, interaction: discord.Interaction, draft_id: str, subbin_id: str):
@@ -11597,7 +11598,7 @@ class SpideyGov(commands.Cog):
 
         await interaction.followup.send("Deleted.", ephemeral=True)
 
-    @bill.command(name="draft_move_subbin", description="Reorder a subbin entry within its main bin.")
+    @draft.command(name="move_subbin", description="Reorder a subbin entry within its main bin.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete, subbin_id=draft_subbin_autocomplete)
     @app_commands.describe(draft_id="Draft ID", subbin_id="Subbin entry ID", new_position="New position within that bin")
     async def draft_move_subbin(
@@ -11696,7 +11697,7 @@ class SpideyGov(commands.Cog):
 
         return pages or ["(empty draft)"]
     
-    @bill.command(name="draft_view_subbin", description="View one draft subbin in full.")
+    @draft.command(name="view_subbin", description="View one draft subbin in full.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete, subbin_id=draft_subbin_autocomplete)
     @app_commands.describe(draft_id="Draft ID", subbin_id="Subbin entry ID")
     async def draft_view_subbin(self, interaction: discord.Interaction, draft_id: str, subbin_id: str):
@@ -11717,7 +11718,7 @@ class SpideyGov(commands.Cog):
         await interaction.followup.send(content=view._content(), view=view, ephemeral=True)
 
 
-    @bill.command(name="draft_view_full", description="Read the full draft in a paginator.")
+    @draft.command(name="view_full", description="Read the full draft in a paginator.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete)
     @app_commands.describe(draft_id="Draft ID")
     async def draft_view_full(self, interaction: discord.Interaction, draft_id: str):
@@ -11737,7 +11738,7 @@ class SpideyGov(commands.Cog):
         await interaction.followup.send(content=view._content(), view=view, ephemeral=True)
 
 
-    @bill.command(name="draft_publish_thread", description="Post the full draft into a thread for reading/comment.")
+    @draft.command(name="publish_thread", description="Post the full draft into a thread for reading/comment.")
     @app_commands.autocomplete(draft_id=draft_id_autocomplete)
     @app_commands.describe(
         draft_id="Draft ID",
