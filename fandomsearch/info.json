@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "Search configured Fandom and MediaWiki sites directly from Discord. Server managers can add or remove wiki mappings, while users can search for pages with autocomplete and exact or best-match results.",
+    "hidden": false,
+    "install_msg": "Thank you for installing Fandom Search! Use `[p]load fandomsearch`, then use `/fandom upload_link` to configure a wiki and `/fandom search` to begin searching.",
+    "short": "Search Fandom and MediaWiki sites",
+    "end_user_data_statement": "This cog stores no end user data.",
+    "tags": [
+        "fandom",
+        "wiki",
+        "mediawiki",
+        "search",
+        "utility"
+    ]
+}
