@@ -5572,7 +5572,7 @@ class SpideyGov(commands.Cog):
             noun = "hearing" if proceeding == "hearing" else "session"
 
             text = (
-                f"# 🔨 {chamber.upper()} — CALLED TO ORDER\n"
+                f"# <:Gavel:1540965437687472199> {chamber.upper()} — CALLED TO ORDER\n"
                 f"**PRESIDING OFFICER:** The {chamber} will come to order.\n\n"
                 f"**Presiding:** {presiding_officer.mention}\n"
                 f"**Proceeding:** {noun.title()}"
@@ -6171,7 +6171,7 @@ class SpideyGov(commands.Cog):
         channel = self._session_channel(chamber)
         if channel:
             await channel.send(
-                f"🔨 **PRESIDING OFFICER:** The {chamber} will come to order."
+                f"<:Gavel:1540965437687472199> **PRESIDING OFFICER:** The {chamber} will come to order."
             )
 
         await interaction.response.send_message(
