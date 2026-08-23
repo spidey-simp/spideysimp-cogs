@@ -11,17 +11,11 @@ class WhoAmI(commands.Cog):
         self.config = Config.get_conf(self, identifier=120983423)
         self.config.register_user(stats={})
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        if not self.bot.user:
-            return
-        try:
-            await self.bot.tree.sync()
-            print("Slash commands synced successfully!")
-        except Exception as e:
-            print(f"Failed to sync commands: {e}")
+    async def red_delete_data_for_user(self, *, requester, user_id: int):
+        await self.config.user_from_id(user_id).clear()
     
     @app_commands.command(name="stats", description="Get your random RPG stats!")
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     async def stats(self, interaction: discord.Interaction):
         user_id = interaction.user.id
         user_stats = await self.config.user(interaction.user).stats()
@@ -46,8 +40,19 @@ class WhoAmI(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="duel", description="Challenge another user to a duel based on your RPG stats.")
+    @app_commands.checks.bot_has_permissions(embed_links=True)
     @app_commands.describe(opponent="The user you want to duel", nsfw="Enable NSFW battle messages?")
     async def duel(self, interaction: discord.Interaction, opponent: discord.User, nsfw: bool = False):
+        if nsfw and not (
+            interaction.channel
+            and getattr(interaction.channel, "is_nsfw", lambda: False)()
+        ):
+            await interaction.response.send_message(
+                "NSFW duel messages can only be enabled in an age-restricted channel.",
+                ephemeral=True
+            )
+            return
+
         if opponent == interaction.user:
             await interaction.response.send_message("You can't duel yourself!", ephemeral=True)
             return
@@ -180,7 +185,7 @@ class WhoAmI(commands.Cog):
             "{attacker} stops to rub themselves down... somehow, they feel better. **Heals {heal} HP!**",
             "{attacker} licks their wounds in the most sensual way possible. **+{heal} HP!**",
             "{attacker} takes a break to ‘hydrate’—and by hydrate, I mean tequila. **Heals {heal} HP!**",
-            "{attacker} moans loudly while applying ointment. **Regains {heal} HP!**"
+            "{attacker} moans loudly while applying ointment. **Regains {heal} HP!**",
             "{attacker} takes a break to edge themselves, which surprisingly heals them. **Heals {heal} HP!**"
         ]
 
@@ -198,8 +203,10 @@ class WhoAmI(commands.Cog):
                 message_list = nsfw_heal_messages if nsfw_mess else heal_messages
                 message = random.choice(message_list).format(attacker=attacker.display_name, heal=heal_amount)
             else:
+                damage_tier = None
+
                 apoc_chance = random.randint(1, 100)
-                if apoc_chance > (99 - (attacker_stats["Luck"] * 2)):
+                if apoc_chance > (99 - (attacker_stats["Luck"] * 1.5)):
                     damage = random.randint(100, 10000000)
                     damage_tier = "super"
                 else:
@@ -212,10 +219,20 @@ class WhoAmI(commands.Cog):
                         damage_tier = "medium"
                     elif damage > 0:
                         damage_tier = "low"
-                
+
                 dodge = False
-                dodge_chance = min(50, defender_stats["Dexterity"] * 3 + defender_stats["Intelligence"] * 2 + random.randint(-10, 10))
-                if random.randint(1, 100) <= dodge_chance and damage_tier != "super":
+                dodge_chance = min(
+                    50,
+                    defender_stats["Dexterity"] * 3
+                    + defender_stats["Intelligence"] * 2
+                    + random.randint(-10, 10)
+                )
+
+                if (
+                    damage > 0
+                    and damage_tier != "super"
+                    and random.randint(1, 100) <= dodge_chance
+                ):
                     dodge = True
         
                 

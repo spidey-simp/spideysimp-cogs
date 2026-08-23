@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "A custom treasury and economic administration system featuring taxation, government spending, corporation registration and renewal, monetary transfers, and other fiscal mechanics.",
+    "hidden": true,
+    "install_msg": "Treasury was developed for a custom server economy and is not intended for general installation.",
+    "short": "Custom treasury and fiscal system",
+    "end_user_data_statement": "This cog stores Discord user IDs and economic data, including corporation ownership and registration information, renewal settings, tax configuration, and treasury balances.",
+    "tags": [
+        "economy",
+        "treasury",
+        "taxation",
+        "corporations",
+        "simulation"
+    ]
+}

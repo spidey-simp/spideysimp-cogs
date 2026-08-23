@@ -1,0 +1,18 @@
+{
+    "author": [
+        "spidey simp"
+    ],
+    "min_bot_version": "3.5.0",
+    "description": "A custom Thirty Years' War grand-strategy roleplay system featuring country management, economics, military forces, religion, diplomacy-related statistics, national spirits, historical records, policies, and game-master administration.",
+    "hidden": true,
+    "install_msg": "ThirtyYearsWarRP is designed for a custom Thirty Years' War roleplay campaign and is not intended for general installation.",
+    "short": "Custom Thirty Years' War roleplay system",
+    "end_user_data_statement": "This cog stores Discord user IDs and roleplay campaign data, including country ownership, economic and military statistics, religion, political status, national spirits, historical records, policy settings, and other game state.",
+    "tags": [
+        "roleplay",
+        "thirty years war",
+        "strategy",
+        "simulation",
+        "grand strategy"
+    ]
+}

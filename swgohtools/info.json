@@ -1,18 +1,18 @@
 {
     "author": [
-        "spideysimp"
+        "spidey simp"
     ],
-    "min_bot_version": "3.4.0",
-    "description": "Has various features for swgoh farming. Will be updated so join spideysimp's discord if you want notifs to when that will be.",
-    "hidden": false,
-    "install_msg": "Thank you for installing SwgohTools! Get started with '[p]load swgohtools', then '[p]help SwgohTools'",
-    "short": "Swgoh Tools bot",
-    "end_user_data_statement": "This cog stores only data parameters",
+    "min_bot_version": "3.5.0",
+    "description": "A collection of tools for Star Wars: Galaxy of Heroes, including Kyrotech farming estimates and relic material calculations.",
+    "hidden": true,
+    "install_msg": "SWGOHTools contains specialized Star Wars: Galaxy of Heroes farming and progression utilities and is not currently intended for general installation.",
+    "short": "Star Wars: Galaxy of Heroes tools",
+    "end_user_data_statement": "This cog stores Discord user IDs and user-selected game settings used for farming calculations, including Territory Battle progress, Territory War GP, energy spending, and other progression settings.",
     "tags": [
-        "spideysimp",
-        "tools",
-        "swgoh"
+        "star wars",
+        "galaxy of heroes",
+        "swgoh",
+        "games",
+        "calculator"
     ]
-
-
 }
