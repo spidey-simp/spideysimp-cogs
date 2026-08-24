@@ -1551,8 +1551,7 @@ class DraftsDB:
 
         finally:
             conn.close()
-
-    
+   
     def get_bill_v2(
         self,
         bill_id: str,
@@ -1683,32 +1682,56 @@ class DraftsDB:
         finally:
             conn.close()
 
-    def search_drafts(self, current: str, limit: int = 25) -> list[dict]:
+    def search_drafts(
+        self,
+        current: str,
+        limit: int = 25,
+    ) -> list[dict]:
         cur = (current or "").strip().lower()
         conn = self._connect()
+
         try:
             if cur:
                 rows = conn.execute(
                     """
-                    SELECT * FROM drafts
-                    WHERE lower(draft_id) LIKE ?
-                       OR lower(title) LIKE ?
+                    SELECT *
+                    FROM drafts
+
+                    WHERE status IN ('DRAFT', 'SUBMITTED')
+                      AND (
+                            lower(draft_id) LIKE ?
+                            OR lower(title) LIKE ?
+                          )
+
                     ORDER BY updated_at DESC
                     LIMIT ?
                     """,
-                    (f"%{cur}%", f"%{cur}%", limit),
+                    (
+                        f"%{cur}%",
+                        f"%{cur}%",
+                        int(limit),
+                    ),
                 ).fetchall()
+
             else:
                 rows = conn.execute(
                     """
-                    SELECT * FROM drafts
+                    SELECT *
+                    FROM drafts
+
+                    WHERE status IN ('DRAFT', 'SUBMITTED')
+
                     ORDER BY updated_at DESC
                     LIMIT ?
                     """,
-                    (limit,),
+                    (int(limit),),
                 ).fetchall()
 
-            return [self._row_to_dict(r) for r in rows]
+            return [
+                self._row_to_dict(row)
+                for row in rows
+            ]
+
         finally:
             conn.close()
 
@@ -1979,17 +2002,36 @@ class DraftsDB:
             "updated_at": row["updated_at"],
         }
 
-    def get_draft(self, draft_id: str) -> Optional[dict]:
+    def get_draft(
+        self,
+        draft_id: str,
+    ) -> Optional[dict]:
         conn = self._connect()
+
         try:
             row = conn.execute(
-                "SELECT * FROM drafts WHERE draft_id = ?",
+                """
+                SELECT *
+                FROM drafts
+                WHERE draft_id = ?
+                  AND status IN ('DRAFT', 'SUBMITTED')
+                """,
                 (draft_id,),
             ).fetchone()
+
             if not row:
                 return None
-            subbins = self._get_subbins_grouped(conn, draft_id)
-            return self._row_to_dict(row, subbins)
+
+            subbins = self._get_subbins_grouped(
+                conn,
+                draft_id,
+            )
+
+            return self._row_to_dict(
+                row,
+                subbins,
+            )
+
         finally:
             conn.close()
 
@@ -5062,20 +5104,7 @@ def _committee_eligible_ids(
     return sorted(out)
 
 
-DRAFT_EDITABLE_STATUSES = {
-    "DRAFT",
-    "SUBMITTED",
-    "REFERRED",
-}
 
-
-def _draft_is_editable(
-    draft: dict | None,
-) -> bool:
-    return bool(
-        draft
-        and draft.get("status") in DRAFT_EDITABLE_STATUSES
-    )
 
 def _user_has_leadership_override(user: discord.Member) -> bool:
     # Optional override: ML/Speaker/Admin can schedule too.
@@ -5547,11 +5576,6 @@ class DraftEditModal(discord.ui.Modal):
         if not draft:
             return await interaction.response.send_message("Draft not found.", ephemeral=True)
 
-        if not _draft_is_editable(draft):
-            return await interaction.response.send_message(
-                "This draft is procedurally locked and cannot currently be edited.",
-                ephemeral=True,
-            )
 
         if draft["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
@@ -5610,11 +5634,6 @@ class DraftSubbinModal(discord.ui.Modal):
         draft = self.cog.drafts_db.get_draft(self.draft_id)
         if not draft:
             return await interaction.response.send_message("Draft not found.", ephemeral=True)
-        if not _draft_is_editable(draft):
-            return await interaction.response.send_message(
-                "This draft is procedurally locked and cannot currently be edited.",
-                ephemeral=True,
-            )
 
         if draft["owner_id"] != interaction.user.id and not interaction.user.guild_permissions.manage_guild:
             return await interaction.response.send_message(
@@ -9054,6 +9073,77 @@ class SpideyGov(commands.Cog):
                 out.append(app_commands.Choice(name=lab, value=t))
         return out[:25]
 
+    async def committee_item_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ):
+        rows = self.drafts_db.search_committee_items(
+            current,
+            limit=25,
+        )
+
+        chamber = getattr(
+            interaction.namespace,
+            "chamber",
+            None,
+        )
+
+        if isinstance(
+            chamber,
+            app_commands.Choice,
+        ):
+            chamber = chamber.value
+
+        name = getattr(
+            interaction.namespace,
+            "name",
+            None,
+        )
+
+        committee_key = None
+        subcommittee_key = None
+
+        if name:
+            committee_key, subcommittee_key = (
+                _split_committee_value(name)
+            )
+
+        out = []
+
+        for row in rows:
+            if (
+                chamber
+                and row["committee_body"] != chamber
+            ):
+                continue
+
+            if (
+                committee_key
+                and row["committee_key"] != committee_key
+            ):
+                continue
+
+            if (
+                name
+                and row["subcommittee_key"] != subcommittee_key
+            ):
+                continue
+
+            label = (
+                f"{row['committee_item_id']} — "
+                f"{row.get('title') or 'Untitled'} "
+                f"[{row['status']}]"
+            )
+
+            out.append(
+                app_commands.Choice(
+                    name=label[:100],
+                    value=row["committee_item_id"],
+                )
+            )
+
+        return out[:25]
 
 
     @registry.command(name="chapter_editor", description="Name a chapter for federal regulations")
@@ -13288,11 +13378,7 @@ class SpideyGov(commands.Cog):
         d = self.drafts_db.get_draft(draft_id)
         if not d:
             return await interaction.response.send_message("Draft not found.", ephemeral=True)
-        if not _draft_is_editable(d):
-            return await interaction.response.send_message(
-                "This draft is procedurally locked and cannot currently be edited.",
-                ephemeral=True,
-            )
+
 
         initial = d["bins"].get(section.value, "")
         await interaction.response.send_modal(DraftEditModal(self, draft_id, section.value, initial))
@@ -13812,7 +13898,7 @@ class SpideyGov(commands.Cog):
         )
 
         async with self.drafts_lock:
-            referral_id = self.drafts_db.refer_draft(
+            item = self.drafts_db.refer_draft(
                 draft_id=draft_id,
                 actor_id=interaction.user.id,
                 committee_body=chamber,
@@ -13820,25 +13906,21 @@ class SpideyGov(commands.Cog):
                 subcommittee_key=subcommittee_key,
             )
 
-        if not referral_id:
+        if not item:
             return await interaction.response.send_message(
                 "Referral failed. The draft may not be submitted, "
-                "may be submitted to the other chamber, "
-                "or may already have an active referral.",
+                "may belong to the other chamber, or may already "
+                "have entered committee jurisdiction.",
                 ephemeral=True,
             )
 
-        d = self.drafts_db.get_draft(
-            draft_id
-        )
-
         await interaction.response.send_message(
-            f"📥 **{draft_id} — {d['title']}** referred to "
+            f"📥 **{item['committee_item_id']} — "
+            f"{item['title']}** has been referred to "
             f"**{node.get('name', name)}**.\n"
-            f"Referral `#{referral_id}` is now on the committee docket."
+            f"Source draft **{draft_id}** has been archived."
         )
-
-
+   
     @committees.command(
         name="docket",
         description="View legislation currently before a committee.",
@@ -13926,9 +14008,11 @@ class SpideyGov(commands.Cog):
                 )
 
                 lines.append(
-                    f"**{r['draft_id']}** — {r['title']}\n"
+                    f"**{r['committee_item_id']}** — "
+                    f"{r['title']}\n"
                     f"`{r['status'].replace('_', ' ').title()}`"
-                    f"{extra} · Referral #{r['id']}"
+                    f"{extra}\n"
+                    f"Source draft: `{r['draft_id']}`"
                 )
 
             e.description = (
@@ -13978,14 +14062,14 @@ class SpideyGov(commands.Cog):
     )
     @app_commands.autocomplete(
         name=committee_name_autocomplete,
-        draft_id=draft_id_autocomplete,
+        item_id=committee_item_autocomplete,
     )
     async def committee_vote_open(
         self,
         interaction: discord.Interaction,
         chamber: str,
         name: str,
-        draft_id: str,
+        item_id: str,
         recommendation: str,
         hours: app_commands.Range[int, 1, 168] = 24,
         channel: discord.TextChannel | None = None,
@@ -14017,23 +14101,33 @@ class SpideyGov(commands.Cog):
             _split_committee_value(name)
         )
 
-        ref = self.drafts_db.get_referral_for_draft(
-            draft_id,
-            chamber,
-            committee_key,
-            subcommittee_key,
+        ref = self.drafts_db.get_committee_item(
+            item_id
         )
 
+        if not ref:
+            return await interaction.response.send_message(
+                "Committee legislation not found.",
+                ephemeral=True,
+            )
+
         if (
-            not ref
-            or ref["status"] not in {
-                "REFERRED",
-                "VOTE_FAILED",
-            }
+            ref["committee_body"] != chamber
+            or ref["committee_key"] != committee_key
+            or ref["subcommittee_key"] != subcommittee_key
         ):
             return await interaction.response.send_message(
-                "That draft is not currently eligible "
-                "for a committee vote here.",
+                "That item is not before this committee.",
+                ephemeral=True,
+            )
+
+        if ref["status"] not in {
+            "REFERRED",
+            "VOTE_FAILED",
+        }:
+            return await interaction.response.send_message(
+                "That item is not currently eligible "
+                "for a committee vote.",
                 ephemeral=True,
             )
 
@@ -14071,7 +14165,7 @@ class SpideyGov(commands.Cog):
 
         poll = discord.Poll(
             question=(
-                f"Shall {draft_id} be reported "
+                f"Shall {item_id} be reported "
                 f"{recommendation_label.lower()}?"
             ),
             duration=timedelta(
@@ -14097,14 +14191,12 @@ class SpideyGov(commands.Cog):
 
         msg = await target.send(
             f"### {node.get('name', name)} — Committee Vote\n"
-            f"**{draft_id} — {ref['title']}**\n"
+            f"**{item_id} — {ref['title']}**\n"
             f"Recommendation: **{recommendation_label}**\n"
             f"Eligible members: **{len(eligible_ids)}** "
             f"· Quorum: **{quorum}**",
             poll=poll,
-            allowed_mentions=(
-                discord.AllowedMentions.none()
-            ),
+            allowed_mentions=discord.AllowedMentions.none(),
         )
 
         async with self.drafts_lock:
@@ -14158,14 +14250,14 @@ class SpideyGov(commands.Cog):
     )
     @app_commands.autocomplete(
         name=committee_name_autocomplete,
-        draft_id=draft_id_autocomplete,
+        item_id=committee_item_autocomplete,
     )
     async def committee_vote_close(
         self,
         interaction: discord.Interaction,
         chamber: str,
         name: str,
-        draft_id: str,
+        item_id: str,
     ):
         await interaction.response.defer(
             ephemeral=True
@@ -14198,8 +14290,8 @@ class SpideyGov(commands.Cog):
             _split_committee_value(name)
         )
 
-        ref = self.drafts_db.get_referral_for_draft(
-            draft_id,
+        ref = self.drafts_db.get_committee_item(
+            item_id,
             chamber,
             committee_key,
             subcommittee_key,
@@ -14303,7 +14395,7 @@ class SpideyGov(commands.Cog):
 
         result = discord.Embed(
             title=(
-                f"{draft_id} — Committee Vote "
+                f"{item_id} — Committee Vote "
                 f"{outcome.replace('_', ' ').title()}"
             ),
             description=ref["title"],
@@ -14366,14 +14458,14 @@ class SpideyGov(commands.Cog):
     )
     @app_commands.autocomplete(
         name=committee_name_autocomplete,
-        draft_id=draft_id_autocomplete,
+        item_id=committee_item_autocomplete,
     )
     async def committee_report(
         self,
         interaction: discord.Interaction,
         chamber: str,
         name: str,
-        draft_id: str,
+        item_id: str,
     ):
         await interaction.response.defer(
             ephemeral=True
@@ -14406,8 +14498,8 @@ class SpideyGov(commands.Cog):
             _split_committee_value(name)
         )
 
-        ref = self.drafts_db.get_referral_for_draft(
-            draft_id,
+        ref = self.drafts_db.get_committee_item(
+            item_id,
             chamber,
             committee_key,
             subcommittee_key,
@@ -14431,12 +14523,10 @@ class SpideyGov(commands.Cog):
         )
 
         async with self.drafts_lock:
-            new_bill = (
-                self.drafts_db.report_referral_to_bill(
-                    referral_id=ref["id"],
-                    actor_id=interaction.user.id,
-                    reserved_bill_ids=legacy_ids,
-                )
+            new_bill = self.drafts_db.report_referral_to_bill(
+                referral_id=ref["id"],
+                actor_id=interaction.user.id,
+                reserved_bill_ids=legacy_ids,
             )
 
         if not new_bill:
@@ -14459,7 +14549,9 @@ class SpideyGov(commands.Cog):
             f"**{node.get('name', name)}**.\n"
             f"Recommendation: "
             f"**{recommendation or 'None'}**\n"
-            f"Source draft: "
+            f"Committee legislation: "
+            f"**{new_bill['committee_item_id']}**\n"
+            f"Original draft: "
             f"**{new_bill['source_draft_id']}**",
             ephemeral=False,
         )
