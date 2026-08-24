@@ -13705,7 +13705,7 @@ class SpideyGov(commands.Cog):
 
         await interaction.followup.send(f"Posted: {header.jump_url}", ephemeral=True)
 
-        @draft.command(
+    @draft.command(
         name="submit",
         description="Submit a draft to enter the legislative process.",
     )
