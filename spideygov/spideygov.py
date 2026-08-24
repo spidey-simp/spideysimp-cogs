@@ -116,6 +116,42 @@ DRAFT_SUBBIN_KEYS = [
     "housekeeping",
 ]
 
+MEASURE_TYPES = {
+    "bill": "Bill",
+    "simple_resolution": "Simple Resolution",
+    "joint_resolution": "Joint Resolution",
+    "concurrent_resolution": "Concurrent Resolution",
+}
+
+
+def _format_measure_id(measure_id: str) -> str:
+    if not measure_id:
+        return "(unassigned)"
+
+    prefixes = {
+        "HCONRES-": "H.Con.Res. ",
+        "SCONRES-": "S.Con.Res. ",
+        "HJRES-": "H.J.Res. ",
+        "SJRES-": "S.J.Res. ",
+        "HRES-": "H.Res. ",
+        "SRES-": "S.Res. ",
+        "H-": "H.R. ",
+        "S-": "S. ",
+    }
+
+    for prefix, display in prefixes.items():
+        if measure_id.startswith(prefix):
+            raw_num = measure_id[len(prefix):]
+
+            try:
+                raw_num = str(int(raw_num))
+            except ValueError:
+                pass
+
+            return f"{display}{raw_num}"
+
+    return measure_id
+
 
 MOTION_TYPES = {
     "adjourn": {
@@ -230,11 +266,24 @@ class DraftsDB:
                 CREATE TABLE IF NOT EXISTS draft_submissions (
                     draft_id TEXT PRIMARY KEY,
                     chamber TEXT NOT NULL,
+                    measure_type TEXT,
+                    measure_id TEXT,
                     status TEXT NOT NULL DEFAULT 'SUBMITTED',
                     submitted_by INTEGER NOT NULL,
                     submitted_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     FOREIGN KEY(draft_id) REFERENCES drafts(draft_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS draft_cosponsors (
+                    draft_id TEXT NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    added_by INTEGER NOT NULL,
+                    added_at TEXT NOT NULL,
+                    PRIMARY KEY(draft_id, user_id),
+                    FOREIGN KEY(draft_id)
+                        REFERENCES drafts(draft_id)
+                        ON DELETE CASCADE
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_draft_submissions_status
@@ -251,6 +300,8 @@ class DraftsDB:
                     draft_id TEXT NOT NULL,
 
                     origin_chamber TEXT NOT NULL,
+                    measure_type TEXT,
+                    measure_id TEXT,
                     committee_body TEXT NOT NULL,
                     committee_key TEXT NOT NULL,
                     subcommittee_key TEXT,
@@ -321,16 +372,22 @@ class DraftsDB:
                     seq INTEGER NOT NULL DEFAULT 0
                 );
 
+                CREATE TABLE IF NOT EXISTS measure_sequences (
+                    sequence_key TEXT PRIMARY KEY,
+                    seq INTEGER NOT NULL DEFAULT 0
+                );
+
                 CREATE TABLE IF NOT EXISTS bills_v2 (
                     bill_id TEXT PRIMARY KEY,
                     source_draft_id TEXT NOT NULL,
-                    source_referral_id INTEGER NOT NULL UNIQUE,
+                    source_referral_id INTEGER UNIQUE,
                     title TEXT NOT NULL,
                     short_title TEXT,
+                    measure_type TEXT NOT NULL,
                     chamber_origin TEXT NOT NULL,
                     current_chamber TEXT NOT NULL,
                     sponsor_id INTEGER NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'REPORTED',
+                    status TEXT NOT NULL DEFAULT 'INTRODUCED',
                     recommendation TEXT,
                     content_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
@@ -378,6 +435,8 @@ class DraftsDB:
                 "short_title": "TEXT",
                 "sponsor_id": "INTEGER",
                 "content_json": "TEXT",
+                "measure_type": "TEXT",
+                "measure_id": "TEXT",
             }
 
             for col_name, col_type in missing_referral_cols.items():
@@ -386,6 +445,216 @@ class DraftsDB:
                         f"ALTER TABLE committee_referrals "
                         f"ADD COLUMN {col_name} {col_type}"
                     )
+
+            submission_cols = {
+                row["name"]
+                for row in conn.execute(
+                    "PRAGMA table_info(draft_submissions)"
+                ).fetchall()
+            }
+
+            for col_name, col_type in {
+                "measure_type": "TEXT",
+                "measure_id": "TEXT",
+            }.items():
+                if col_name not in submission_cols:
+                    conn.execute(
+                        f"ALTER TABLE draft_submissions "
+                        f"ADD COLUMN {col_name} {col_type}"
+                    )
+
+            bill_info = {
+                row["name"]: row
+                for row in conn.execute(
+                    "PRAGMA table_info(bills_v2)"
+                ).fetchall()
+            }
+
+            if "measure_type" not in bill_info:
+                conn.execute(
+                    "ALTER TABLE bills_v2 "
+                    "ADD COLUMN measure_type TEXT"
+                )
+
+                bill_info = {
+                    row["name"]: row
+                    for row in conn.execute(
+                        "PRAGMA table_info(bills_v2)"
+                    ).fetchall()
+                }
+
+            # Older builds required a committee referral before a bills_v2
+            # row could exist. Rebuild the table so introduced measures may
+            # exist before referral.
+            referral_col = bill_info.get(
+                "source_referral_id"
+            )
+
+            if (
+                referral_col
+                and int(referral_col["notnull"])
+            ):
+                conn.commit()
+
+                conn.execute(
+                    "PRAGMA foreign_keys = OFF;"
+                )
+
+                try:
+                    conn.executescript(
+                        """
+                        ALTER TABLE bill_events
+                            RENAME TO bill_events_pre_introduction;
+
+                        ALTER TABLE bills_v2
+                            RENAME TO bills_v2_pre_introduction;
+
+                        CREATE TABLE bills_v2 (
+                            bill_id TEXT PRIMARY KEY,
+                            source_draft_id TEXT NOT NULL,
+                            source_referral_id INTEGER UNIQUE,
+                            title TEXT NOT NULL,
+                            short_title TEXT,
+                            measure_type TEXT NOT NULL,
+                            chamber_origin TEXT NOT NULL,
+                            current_chamber TEXT NOT NULL,
+                            sponsor_id INTEGER NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'INTRODUCED',
+                            recommendation TEXT,
+                            content_json TEXT NOT NULL,
+                            created_at TEXT NOT NULL,
+                            updated_at TEXT NOT NULL,
+                            FOREIGN KEY(source_draft_id)
+                                REFERENCES drafts(draft_id),
+                            FOREIGN KEY(source_referral_id)
+                                REFERENCES committee_referrals(id)
+                        );
+
+                        INSERT INTO bills_v2(
+                            bill_id,
+                            source_draft_id,
+                            source_referral_id,
+                            title,
+                            short_title,
+                            measure_type,
+                            chamber_origin,
+                            current_chamber,
+                            sponsor_id,
+                            status,
+                            recommendation,
+                            content_json,
+                            created_at,
+                            updated_at
+                        )
+                        SELECT
+                            bill_id,
+                            source_draft_id,
+                            source_referral_id,
+                            title,
+                            short_title,
+                            COALESCE(
+                                measure_type,
+                                'bill'
+                            ),
+                            chamber_origin,
+                            current_chamber,
+                            sponsor_id,
+                            status,
+                            recommendation,
+                            content_json,
+                            created_at,
+                            updated_at
+                        FROM bills_v2_pre_introduction;
+
+                        CREATE TABLE bill_events (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            bill_id TEXT NOT NULL,
+                            actor_id INTEGER,
+                            event_type TEXT NOT NULL,
+                            payload_json TEXT,
+                            created_at TEXT NOT NULL,
+                            FOREIGN KEY(bill_id)
+                                REFERENCES bills_v2(bill_id)
+                                ON DELETE CASCADE
+                        );
+
+                        INSERT INTO bill_events(
+                            id,
+                            bill_id,
+                            actor_id,
+                            event_type,
+                            payload_json,
+                            created_at
+                        )
+                        SELECT
+                            id,
+                            bill_id,
+                            actor_id,
+                            event_type,
+                            payload_json,
+                            created_at
+                        FROM bill_events_pre_introduction;
+
+                        DROP TABLE bill_events_pre_introduction;
+                        DROP TABLE bills_v2_pre_introduction;
+
+                        CREATE INDEX idx_bills_v2_status
+                            ON bills_v2(status);
+
+                        CREATE INDEX idx_bills_v2_draft
+                            ON bills_v2(source_draft_id);
+
+                        CREATE INDEX idx_bill_events_bill
+                            ON bill_events(
+                                bill_id,
+                                created_at
+                            );
+                        """
+                    )
+
+                    conn.commit()
+
+                finally:
+                    conn.execute(
+                        "PRAGMA foreign_keys = ON;"
+                    )
+
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS bill_cosponsors (
+                    bill_id TEXT NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    original INTEGER NOT NULL DEFAULT 0,
+                    added_by INTEGER NOT NULL,
+                    added_at TEXT NOT NULL,
+                    PRIMARY KEY(bill_id, user_id),
+                    FOREIGN KEY(bill_id)
+                        REFERENCES bills_v2(bill_id)
+                        ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_bill_cosponsors_bill
+                    ON bill_cosponsors(
+                        bill_id,
+                        original,
+                        added_at
+                    );
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_draft_submissions_measure_id
+                ON draft_submissions(measure_id)
+                """
+            )
+
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_committee_referrals_measure_id
+                ON committee_referrals(measure_id)
+                """
+            )
 
             conn.execute(
                 """
@@ -545,54 +814,244 @@ class DraftsDB:
         finally:
             conn.close()
 
+    def _next_measure_id(
+        self,
+        conn: sqlite3.Connection,
+        chamber: str,
+        measure_type: str,
+        reserved_ids: set[str] | None = None,
+    ) -> str:
+        prefixes = {
+            ("House", "bill"): "H",
+            ("Senate", "bill"): "S",
+
+            ("House", "simple_resolution"): "HRES",
+            ("Senate", "simple_resolution"): "SRES",
+
+            ("House", "joint_resolution"): "HJRES",
+            ("Senate", "joint_resolution"): "SJRES",
+
+            ("House", "concurrent_resolution"): "HCONRES",
+            ("Senate", "concurrent_resolution"): "SCONRES",
+        }
+
+        prefix = prefixes.get(
+            (
+                chamber,
+                measure_type,
+            )
+        )
+
+        if not prefix:
+            raise ValueError(
+                "Invalid chamber or measure type"
+            )
+
+        sequence_key = (
+            f"{chamber}:{measure_type}"
+        )
+
+        reserved = reserved_ids or set()
+
+        row = conn.execute(
+            """
+            SELECT seq
+            FROM measure_sequences
+            WHERE sequence_key = ?
+            """,
+            (sequence_key,),
+        ).fetchone()
+
+        seq = int(
+            row["seq"]
+            if row
+            else 0
+        )
+
+        while True:
+            seq += 1
+
+            candidate = (
+                f"{prefix}-{seq:04d}"
+            )
+
+            exists_submission = conn.execute(
+                """
+                SELECT 1
+                FROM draft_submissions
+                WHERE measure_id = ?
+                LIMIT 1
+                """,
+                (candidate,),
+            ).fetchone()
+
+            exists_bill = conn.execute(
+                """
+                SELECT 1
+                FROM bills_v2
+                WHERE bill_id = ?
+                LIMIT 1
+                """,
+                (candidate,),
+            ).fetchone()
+
+            if (
+                not exists_submission
+                and not exists_bill
+                and candidate not in reserved
+            ):
+                break
+
+        conn.execute(
+            """
+            INSERT INTO measure_sequences(
+                sequence_key,
+                seq
+            )
+            VALUES (?, ?)
+
+            ON CONFLICT(sequence_key) DO UPDATE SET
+                seq = excluded.seq
+            """,
+            (
+                sequence_key,
+                seq,
+            ),
+        )
+
+        return candidate
+
     def submit_draft(
         self,
         draft_id: str,
         actor_id: int,
         chamber: str,
-    ) -> bool:
-        if chamber not in {"House", "Senate"}:
-            return False
+        measure_type: str,
+        reserved_measure_ids: set[str] | None = None,
+    ) -> Optional[dict]:
+        if chamber not in {
+            "House",
+            "Senate",
+        }:
+            return None
+
+        if measure_type not in MEASURE_TYPES:
+            return None
 
         conn = self._connect()
+
         try:
-            row = conn.execute(
-                "SELECT status FROM drafts WHERE draft_id = ?",
+            draft = conn.execute(
+                """
+                SELECT *
+                FROM drafts
+                WHERE draft_id = ?
+                """,
                 (draft_id,),
             ).fetchone()
 
-            if not row or row["status"] not in {"DRAFT", "SUBMITTED"}:
-                return False
+            if (
+                not draft
+                or draft["status"] not in {
+                    "DRAFT",
+                    "SUBMITTED",
+                }
+            ):
+                return None
 
-            existing = conn.execute(
+            existing_bill = conn.execute(
                 """
-                SELECT status
+                SELECT *
+                FROM bills_v2
+                WHERE source_draft_id = ?
+                LIMIT 1
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            if existing_bill:
+                return dict(existing_bill)
+
+            existing_submission = conn.execute(
+                """
+                SELECT *
                 FROM draft_submissions
                 WHERE draft_id = ?
                 """,
                 (draft_id,),
             ).fetchone()
 
-            if existing and existing["status"] in {"SUBMITTED", "REFERRED"}:
-                return False
+            if (
+                existing_submission
+                and existing_submission["status"] in {
+                    "REFERRED",
+                    "REPORTED",
+                    "WITHDRAWN",
+                }
+            ):
+                return None
+
+            # Compatibility with the version you JUST implemented:
+            # if it already assigned a number, preserve that number.
+            if (
+                existing_submission
+                and existing_submission["measure_id"]
+            ):
+                if (
+                    existing_submission["chamber"] != chamber
+                    or
+                    existing_submission["measure_type"] != measure_type
+                ):
+                    return None
+
+                measure_id = (
+                    existing_submission["measure_id"]
+                )
+
+            else:
+                measure_id = self._next_measure_id(
+                    conn,
+                    chamber,
+                    measure_type,
+                    reserved_ids=reserved_measure_ids,
+                )
 
             now = _utcnow_iso()
+
+            snapshot = {
+                "bins": json.loads(
+                    draft["bins_json"]
+                    or "{}"
+                ),
+                "subbins": self._get_subbins_grouped(
+                    conn,
+                    draft_id,
+                ),
+            }
 
             conn.execute(
                 """
                 INSERT INTO draft_submissions(
                     draft_id,
                     chamber,
+                    measure_type,
+                    measure_id,
                     status,
                     submitted_by,
                     submitted_at,
                     updated_at
                 )
-                VALUES (?, ?, 'SUBMITTED', ?, ?, ?)
+                VALUES (
+                    ?, ?, ?, ?,
+                    'INTRODUCED',
+                    ?, ?, ?
+                )
 
                 ON CONFLICT(draft_id) DO UPDATE SET
                     chamber = excluded.chamber,
-                    status = 'SUBMITTED',
+                    measure_type = excluded.measure_type,
+                    measure_id = excluded.measure_id,
+                    status = 'INTRODUCED',
                     submitted_by = excluded.submitted_by,
                     submitted_at = excluded.submitted_at,
                     updated_at = excluded.updated_at
@@ -600,6 +1059,8 @@ class DraftsDB:
                 (
                     draft_id,
                     chamber,
+                    measure_type,
+                    measure_id,
                     actor_id,
                     now,
                     now,
@@ -608,29 +1069,165 @@ class DraftsDB:
 
             conn.execute(
                 """
+                INSERT INTO bills_v2(
+                    bill_id,
+                    source_draft_id,
+                    source_referral_id,
+                    title,
+                    short_title,
+                    measure_type,
+                    chamber_origin,
+                    current_chamber,
+                    sponsor_id,
+                    status,
+                    recommendation,
+                    content_json,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, NULL, ?, ?, ?, ?, ?, ?,
+                    'INTRODUCED',
+                    NULL, ?, ?, ?
+                )
+                """,
+                (
+                    measure_id,
+                    draft_id,
+                    draft["title"],
+                    draft["short_title"],
+                    measure_type,
+                    chamber,
+                    chamber,
+                    actor_id,
+                    json.dumps(
+                        snapshot,
+                        ensure_ascii=False,
+                    ),
+                    now,
+                    now,
+                ),
+            )
+
+            original_rows = conn.execute(
+                """
+                SELECT
+                    user_id,
+                    added_by,
+                    added_at
+                FROM draft_cosponsors
+                WHERE draft_id = ?
+                ORDER BY added_at, user_id
+                """,
+                (draft_id,),
+            ).fetchall()
+
+            for co in original_rows:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO bill_cosponsors(
+                        bill_id,
+                        user_id,
+                        original,
+                        added_by,
+                        added_at
+                    )
+                    VALUES (?, ?, 1, ?, ?)
+                    """,
+                    (
+                        measure_id,
+                        int(co["user_id"]),
+                        int(co["added_by"]),
+                        co["added_at"] or now,
+                    ),
+                )
+
+            # Introduction ends the mutable drafting stage.
+            conn.execute(
+                """
                 UPDATE drafts
-                SET status = 'SUBMITTED',
+                SET status = 'ARCHIVED',
                     updated_at = ?
                 WHERE draft_id = ?
                 """,
-                (now, draft_id),
+                (
+                    now,
+                    draft_id,
+                ),
             )
 
             self._log_event(
                 conn,
                 draft_id,
                 actor_id,
-                "submit",
-                {"chamber": chamber},
+                "introduced",
+                {
+                    "chamber": chamber,
+                    "measure_type": measure_type,
+                    "measure_id": measure_id,
+                    "original_cosponsors": [
+                        int(r["user_id"])
+                        for r in original_rows
+                    ],
+                },
+            )
+
+            conn.execute(
+                """
+                INSERT INTO bill_events(
+                    bill_id,
+                    actor_id,
+                    event_type,
+                    payload_json,
+                    created_at
+                )
+                VALUES (?, ?, 'introduced', ?, ?)
+                """,
+                (
+                    measure_id,
+                    actor_id,
+                    json.dumps(
+                        {
+                            "source_draft_id":
+                                draft_id,
+                            "chamber":
+                                chamber,
+                            "measure_type":
+                                measure_type,
+                            "original_cosponsors": [
+                                int(r["user_id"])
+                                for r in original_rows
+                            ],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    now,
+                ),
             )
 
             conn.commit()
-            return True
+
+            return {
+                "draft_id": draft_id,
+                "chamber": chamber,
+                "measure_type": measure_type,
+                "measure_id": measure_id,
+                "bill_id": measure_id,
+                "status": "INTRODUCED",
+                "submitted_by": actor_id,
+                "submitted_at": now,
+                "title": draft["title"],
+                "short_title": draft["short_title"],
+                "original_cosponsors": [
+                    int(r["user_id"])
+                    for r in original_rows
+                ],
+            }
 
         finally:
             conn.close()
 
-
+   
     def get_submission(
         self,
         draft_id: str,
@@ -647,6 +1244,157 @@ class DraftsDB:
             ).fetchone()
 
             return dict(row) if row else None
+
+        finally:
+            conn.close()
+
+    def list_draft_cosponsors(
+        self,
+        draft_id: str,
+    ) -> list[int]:
+        conn = self._connect()
+
+        try:
+            rows = conn.execute(
+                """
+                SELECT user_id
+                FROM draft_cosponsors
+                WHERE draft_id = ?
+                ORDER BY added_at, user_id
+                """,
+                (draft_id,),
+            ).fetchall()
+
+            return [
+                int(row["user_id"])
+                for row in rows
+            ]
+
+        finally:
+            conn.close()
+
+
+    def add_draft_cosponsor(
+        self,
+        draft_id: str,
+        user_id: int,
+        actor_id: int,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            draft = conn.execute(
+                """
+                SELECT owner_id, status
+                FROM drafts
+                WHERE draft_id = ?
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            if (
+                not draft
+                or draft["status"] != "DRAFT"
+            ):
+                return False
+
+            if (
+                int(draft["owner_id"])
+                == int(user_id)
+            ):
+                return False
+
+            now = _utcnow_iso()
+
+            cur = conn.execute(
+                """
+                INSERT OR IGNORE INTO draft_cosponsors(
+                    draft_id,
+                    user_id,
+                    added_by,
+                    added_at
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    draft_id,
+                    int(user_id),
+                    int(actor_id),
+                    now,
+                ),
+            )
+
+            if cur.rowcount <= 0:
+                return False
+
+            self._log_event(
+                conn,
+                draft_id,
+                actor_id,
+                "draft_cosponsor_added",
+                {
+                    "user_id": int(user_id),
+                },
+            )
+
+            conn.commit()
+            return True
+
+        finally:
+            conn.close()
+
+
+    def remove_draft_cosponsor(
+        self,
+        draft_id: str,
+        user_id: int,
+        actor_id: int,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            draft = conn.execute(
+                """
+                SELECT status
+                FROM drafts
+                WHERE draft_id = ?
+                """,
+                (draft_id,),
+            ).fetchone()
+
+            if (
+                not draft
+                or draft["status"] != "DRAFT"
+            ):
+                return False
+
+            cur = conn.execute(
+                """
+                DELETE FROM draft_cosponsors
+                WHERE draft_id = ?
+                AND user_id = ?
+                """,
+                (
+                    draft_id,
+                    int(user_id),
+                ),
+            )
+
+            if cur.rowcount <= 0:
+                return False
+
+            self._log_event(
+                conn,
+                draft_id,
+                actor_id,
+                "draft_cosponsor_removed",
+                {
+                    "user_id": int(user_id),
+                },
+            )
+
+            conn.commit()
+            return True
 
         finally:
             conn.close()
@@ -1726,6 +2474,277 @@ class DraftsDB:
             )
 
             return out
+
+        finally:
+            conn.close()
+
+    def search_bills_v2(
+        self,
+        current: str,
+        limit: int = 25,
+    ) -> list[dict]:
+        cur = (current or "").strip().lower()
+
+        conn = self._connect()
+
+        try:
+            if cur:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM bills_v2
+                    WHERE
+                        lower(bill_id) LIKE ?
+                        OR lower(title) LIKE ?
+                        OR lower(COALESCE(short_title, '')) LIKE ?
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (
+                        f"%{cur}%",
+                        f"%{cur}%",
+                        f"%{cur}%",
+                        int(limit),
+                    ),
+                ).fetchall()
+
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM bills_v2
+                    ORDER BY updated_at DESC
+                    LIMIT ?
+                    """,
+                    (int(limit),),
+                ).fetchall()
+
+            return [
+                dict(row)
+                for row in rows
+            ]
+
+        finally:
+            conn.close()
+
+
+    def list_bill_cosponsors(
+        self,
+        bill_id: str,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM bill_cosponsors
+                WHERE bill_id = ?
+                ORDER BY original DESC, added_at, user_id
+                """,
+                (bill_id,),
+            ).fetchall()
+
+            return [
+                dict(row)
+                for row in rows
+            ]
+
+        finally:
+            conn.close()
+
+
+    def add_bill_cosponsor(
+        self,
+        bill_id: str,
+        user_id: int,
+        actor_id: int,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            bill = conn.execute(
+                """
+                SELECT sponsor_id, status
+                FROM bills_v2
+                WHERE bill_id = ?
+                """,
+                (bill_id,),
+            ).fetchone()
+
+            if not bill:
+                return False
+
+            if int(bill["sponsor_id"]) == int(user_id):
+                return False
+
+            if bill["status"] in {
+                "WITHDRAWN",
+                "FAILED",
+                "ADOPTED",
+                "ENROLLED",
+                "PRESENTED",
+                "ENACTED",
+                "VETOED",
+            }:
+                return False
+
+            now = _utcnow_iso()
+
+            cur = conn.execute(
+                """
+                INSERT OR IGNORE INTO bill_cosponsors(
+                    bill_id,
+                    user_id,
+                    original,
+                    added_by,
+                    added_at
+                )
+                VALUES (?, ?, 0, ?, ?)
+                """,
+                (
+                    bill_id,
+                    int(user_id),
+                    int(actor_id),
+                    now,
+                ),
+            )
+
+            if cur.rowcount <= 0:
+                return False
+
+            conn.execute(
+                """
+                INSERT INTO bill_events(
+                    bill_id,
+                    actor_id,
+                    event_type,
+                    payload_json,
+                    created_at
+                )
+                VALUES (
+                    ?,
+                    ?,
+                    'cosponsor_added',
+                    ?,
+                    ?
+                )
+                """,
+                (
+                    bill_id,
+                    actor_id,
+                    json.dumps(
+                        {
+                            "user_id": int(user_id),
+                            "original": False,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    now,
+                ),
+            )
+
+            conn.commit()
+            return True
+
+        finally:
+            conn.close()
+
+
+    def remove_bill_cosponsor(
+        self,
+        bill_id: str,
+        user_id: int,
+        actor_id: int,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            bill = conn.execute(
+                """
+                SELECT status
+                FROM bills_v2
+                WHERE bill_id = ?
+                """,
+                (bill_id,),
+            ).fetchone()
+
+            if not bill:
+                return False
+
+            if bill["status"] in {
+                "ADOPTED",
+                "ENROLLED",
+                "PRESENTED",
+                "ENACTED",
+            }:
+                return False
+
+            existing = conn.execute(
+                """
+                SELECT original
+                FROM bill_cosponsors
+                WHERE bill_id = ?
+                AND user_id = ?
+                """,
+                (
+                    bill_id,
+                    int(user_id),
+                ),
+            ).fetchone()
+
+            if not existing:
+                return False
+
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                DELETE FROM bill_cosponsors
+                WHERE bill_id = ?
+                AND user_id = ?
+                """,
+                (
+                    bill_id,
+                    int(user_id),
+                ),
+            )
+
+            conn.execute(
+                """
+                INSERT INTO bill_events(
+                    bill_id,
+                    actor_id,
+                    event_type,
+                    payload_json,
+                    created_at
+                )
+                VALUES (
+                    ?,
+                    ?,
+                    'cosponsor_removed',
+                    ?,
+                    ?
+                )
+                """,
+                (
+                    bill_id,
+                    actor_id,
+                    json.dumps(
+                        {
+                            "user_id": int(user_id),
+                            "original": bool(
+                                existing["original"]
+                            ),
+                        },
+                        ensure_ascii=False,
+                    ),
+                    now,
+                ),
+            )
+
+            conn.commit()
+            return True
 
         finally:
             conn.close()
@@ -7837,6 +8856,11 @@ class SpideyGov(commands.Cog):
         name="src",
         description="Spidey Republic Code",
         parent=code
+    )
+    cosponsor = app_commands.Group(
+        name="cosponsor",
+        description="Manage cosponsorship of introduced measures",
+        parent=bill,
     )
 
     compare = app_commands.Group(
@@ -14973,6 +15997,37 @@ class SpideyGov(commands.Cog):
             out.append(app_commands.Choice(name=label[:100], value=d["draft_id"]))
         return out[:25]
 
+    async def measure_id_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ):
+        measures = self.drafts_db.search_bills_v2(
+            current,
+            limit=25,
+        )
+
+        out = []
+
+        for measure in measures:
+            display_id = _format_measure_id(
+                measure["bill_id"]
+            )
+
+            label = (
+                f"{display_id} [{measure['status']}] — "
+                f"{measure['title']} "
+            )
+
+            out.append(
+                app_commands.Choice(
+                    name=label[:100],
+                    value=measure["bill_id"],
+                )
+            )
+
+        return out[:25]
+
     async def _draft_submission_autocomplete(
         self,
         interaction: discord.Interaction,
@@ -15437,9 +16492,10 @@ class SpideyGov(commands.Cog):
 
         await interaction.followup.send(f"Posted: {header.jump_url}", ephemeral=True)
 
+
     @draft.command(
         name="submit",
-        description="Submit a draft to enter the legislative process.",
+        description="Submit and introduce a draft as a legislative measure.",
     )
     @app_commands.autocomplete(
         draft_id=draft_id_autocomplete
@@ -15454,13 +16510,32 @@ class SpideyGov(commands.Cog):
                 name="Senate",
                 value="Senate",
             ),
-        ]
+        ],
+        measure_type=[
+            app_commands.Choice(
+                name="Bill",
+                value="bill",
+            ),
+            app_commands.Choice(
+                name="Simple Resolution",
+                value="simple_resolution",
+            ),
+            app_commands.Choice(
+                name="Joint Resolution",
+                value="joint_resolution",
+            ),
+            app_commands.Choice(
+                name="Concurrent Resolution",
+                value="concurrent_resolution",
+            ),
+        ],
     )
     async def draft_submit(
         self,
         interaction: discord.Interaction,
         draft_id: str,
         chamber: str,
+        measure_type: str,
     ):
         await interaction.response.defer(
             ephemeral=True
@@ -15495,27 +16570,78 @@ class SpideyGov(commands.Cog):
                 ephemeral=True,
             )
 
+        prospective_cosponsors = (
+            self.drafts_db.list_draft_cosponsors(
+                draft_id
+            )
+        )
+
+        required_role = chamber_role_id(
+            chamber
+        )
+
+        ineligible = []
+
+        for user_id in prospective_cosponsors:
+            member = interaction.guild.get_member(
+                int(user_id)
+            )
+
+            if (
+                not member
+                or required_role not in {
+                    role.id
+                    for role in member.roles
+                }
+            ):
+                ineligible.append(
+                    f"<@{user_id}>"
+                )
+
+        if ineligible:
+            return await interaction.followup.send(
+                "The following prospective original cosponsor(s) "
+                f"are not members of the **{chamber}**:\n"
+                + "\n".join(ineligible)
+                + "\n\nRemove them before introducing the measure.",
+                ephemeral=True,
+            )
+
+        legacy_ids = set(
+            ensure_bills_schema(
+                self.federal_registry
+            )["items"].keys()
+        )
+
         async with self.drafts_lock:
-            ok = self.drafts_db.submit_draft(
+            submission = self.drafts_db.submit_draft(
                 draft_id,
                 interaction.user.id,
                 chamber,
+                measure_type,
+                reserved_measure_ids=legacy_ids,
             )
 
-        if not ok:
+        if not submission:
             return await interaction.followup.send(
                 "That draft is not eligible for submission, "
                 "or it is already in the legislative process.",
                 ephemeral=True,
             )
 
-        await interaction.followup.send(
-            f"✅ **{draft_id}** submitted to the "
-            f"**{chamber}**. It is awaiting committee referral.",
-            ephemeral=True,
+        display_id = _format_measure_id(
+            submission["measure_id"]
         )
 
-
+        await interaction.followup.send(
+            f"✅ **{display_id} — {d['title']}** has been "
+            f"introduced in the **{chamber}**.\n"
+            f"Source draft: **{draft_id}**\n"
+            f"Type: **{MEASURE_TYPES[measure_type]}**\n"
+            f"It is awaiting committee referral.",
+            ephemeral=True,
+        )
+ 
     @draft.command(
         name="withdraw",
         description="Withdraw a submitted draft before committee referral.",
@@ -18593,5 +19719,287 @@ class SpideyGov(commands.Cog):
             f"✅ **{node.get('name', name)}** initialized.\n"
             f"Room: {room.mention}\n"
             f"Jurisdiction: {node['jurisdiction']}",
+            ephemeral=True,
+        )
+
+    @cosponsor.command(
+        name="add",
+        description="Add yourself as a cosponsor of an introduced measure.",
+    )
+    @app_commands.autocomplete(
+        measure_id=measure_id_autocomplete
+    )
+    async def bill_cosponsor_add(
+        self,
+        interaction: discord.Interaction,
+        measure_id: str,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        measure = self.drafts_db.get_bill_v2(
+            measure_id
+        )
+
+        if not measure:
+            return await interaction.followup.send(
+                "Measure not found.",
+                ephemeral=True,
+            )
+
+        if (
+            measure["sponsor_id"]
+            == interaction.user.id
+        ):
+            return await interaction.followup.send(
+                "You are already the sponsor of this measure.",
+                ephemeral=True,
+            )
+
+        # Unlike is_in_chamber(), there is deliberately no admin
+        # override here. Cosponsorship belongs to actual legislators.
+        required_role = chamber_role_id(
+            measure["chamber_origin"]
+        )
+
+        if required_role not in {
+            role.id
+            for role in interaction.user.roles
+        }:
+            return await interaction.followup.send(
+                f"Only a member of the "
+                f"**{measure['chamber_origin']}** may cosponsor "
+                f"this measure.",
+                ephemeral=True,
+            )
+
+        existing = {
+            int(row["user_id"])
+            for row in self.drafts_db.list_bill_cosponsors(
+                measure_id
+            )
+        }
+
+        if interaction.user.id in existing:
+            return await interaction.followup.send(
+                f"You are already a cosponsor of "
+                f"**{_format_measure_id(measure_id)}**.",
+                ephemeral=True,
+            )
+
+        async with self.drafts_lock:
+            ok = self.drafts_db.add_bill_cosponsor(
+                measure_id,
+                interaction.user.id,
+                interaction.user.id,
+            )
+
+        if not ok:
+            return await interaction.followup.send(
+                "You could not be added as a cosponsor. "
+                "The measure may no longer accept cosponsors.",
+                ephemeral=True,
+            )
+
+        await interaction.followup.send(
+            f"✅ You are now a cosponsor of "
+            f"**{_format_measure_id(measure_id)} — "
+            f"{measure['title']}**.",
+            ephemeral=True,
+        )
+
+    @cosponsor.command(
+        name="remove",
+        description="Remove yourself as a cosponsor of a measure.",
+    )
+    @app_commands.autocomplete(
+        measure_id=measure_id_autocomplete
+    )
+    async def bill_cosponsor_remove(
+        self,
+        interaction: discord.Interaction,
+        measure_id: str,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        measure = self.drafts_db.get_bill_v2(
+            measure_id
+        )
+
+        if not measure:
+            return await interaction.followup.send(
+                "Measure not found.",
+                ephemeral=True,
+            )
+
+        existing = {
+            int(row["user_id"])
+            for row in self.drafts_db.list_bill_cosponsors(
+                measure_id
+            )
+        }
+
+        if interaction.user.id not in existing:
+            return await interaction.followup.send(
+                "You are not a cosponsor of that measure.",
+                ephemeral=True,
+            )
+
+        async with self.drafts_lock:
+            ok = self.drafts_db.remove_bill_cosponsor(
+                measure_id,
+                interaction.user.id,
+                interaction.user.id,
+            )
+
+        if not ok:
+            return await interaction.followup.send(
+                "Your cosponsorship could not be removed.",
+                ephemeral=True,
+            )
+
+        await interaction.followup.send(
+            f"✅ You are no longer a cosponsor of "
+            f"**{_format_measure_id(measure_id)} — "
+            f"{measure['title']}**.",
+            ephemeral=True,
+        )
+
+    @draft.command(
+        name="cosponsor_add",
+        description="Add a prospective original cosponsor to a draft.",
+    )
+    @app_commands.autocomplete(
+        draft_id=draft_id_autocomplete
+    )
+    async def draft_cosponsor_add(
+        self,
+        interaction: discord.Interaction,
+        draft_id: str,
+        member: discord.Member,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        d = self.drafts_db.get_draft(
+            draft_id
+        )
+
+        if not d or d["status"] != "DRAFT":
+            return await interaction.followup.send(
+                "That draft is not available for original cosponsorship.",
+                ephemeral=True,
+            )
+
+        if (
+            d["owner_id"] != interaction.user.id
+            and not interaction.user.guild_permissions.administrator
+        ):
+            return await interaction.followup.send(
+                "Only the draft owner can designate original cosponsors.",
+                ephemeral=True,
+            )
+
+        if member.id == d["owner_id"]:
+            return await interaction.followup.send(
+                "The draft owner will become the sponsor, not a cosponsor.",
+                ephemeral=True,
+            )
+
+        legislative_roles = {
+            SENATORS,
+            REPRESENTATIVES,
+        }
+
+        if not (
+            legislative_roles
+            & {
+                role.id
+                for role in member.roles
+            }
+        ):
+            return await interaction.followup.send(
+                "That member is not currently a member of Congress.",
+                ephemeral=True,
+            )
+
+        async with self.drafts_lock:
+            ok = self.drafts_db.add_draft_cosponsor(
+                draft_id,
+                member.id,
+                interaction.user.id,
+            )
+
+        if not ok:
+            return await interaction.followup.send(
+                "That member is already attached to the draft "
+                "or could not be added.",
+                ephemeral=True,
+            )
+
+        await interaction.followup.send(
+            f"✅ {member.mention} will be an **original cosponsor** "
+            f"if **{draft_id}** is introduced.",
+            ephemeral=True,
+        )
+
+    @draft.command(
+        name="cosponsor_remove",
+        description="Remove a prospective original cosponsor from a draft.",
+    )
+    @app_commands.autocomplete(
+        draft_id=draft_id_autocomplete
+    )
+    async def draft_cosponsor_remove(
+        self,
+        interaction: discord.Interaction,
+        draft_id: str,
+        member: discord.Member,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        d = self.drafts_db.get_draft(
+            draft_id
+        )
+
+        if not d or d["status"] != "DRAFT":
+            return await interaction.followup.send(
+                "That draft is not available for original cosponsorship changes.",
+                ephemeral=True,
+            )
+
+        if (
+            interaction.user.id != member.id
+            and d["owner_id"] != interaction.user.id
+            and not interaction.user.guild_permissions.administrator
+        ):
+            return await interaction.followup.send(
+                "Only the draft owner or the prospective cosponsor "
+                "may remove that cosponsorship.",
+                ephemeral=True,
+            )
+
+        async with self.drafts_lock:
+            ok = self.drafts_db.remove_draft_cosponsor(
+                draft_id,
+                member.id,
+                interaction.user.id,
+            )
+
+        if not ok:
+            return await interaction.followup.send(
+                "That member is not listed as a prospective original cosponsor.",
+                ephemeral=True,
+            )
+
+        await interaction.followup.send(
+            f"✅ {member.mention} removed from the prospective "
+            f"original cosponsors of **{draft_id}**.",
             ephemeral=True,
         )
