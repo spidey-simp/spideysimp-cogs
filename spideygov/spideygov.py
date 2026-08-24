@@ -54,6 +54,7 @@ SPIDEY_HOUSE = 1302330503399084144
 SENATE_VOTING_CHANNEL = 1334289687996796949
 STATE_DEPARTMENT_CHANNEL = 1424208056459198495
 BOT_DEPARTMENT_CHANNEL = 1423094053247127623
+COMMITTEE_FORUM_CHANNEL_ID = 1541302386587476008
 
 CITIZENSHIP = {
     "commons": 1415927703340716102,
@@ -393,6 +394,154 @@ class DraftsDB:
                 """
             )
             conn.commit()
+        finally:
+            conn.close()
+
+    def apply_committee_amendment(
+        self,
+        committee_item_id: str,
+        mode: str,
+        bin_key: str,
+        replacement_text: str = "",
+        replacement_title: str = "",
+        subbin_id: str | int | None = None,
+    ) -> bool:
+        if bin_key not in DRAFT_BINS:
+            return False
+
+        if mode not in {
+            "replace_bin",
+            "replace_subbin",
+            "add_subbin",
+            "delete_subbin",
+        }:
+            return False
+
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT id, status, content_json
+                FROM committee_referrals
+                WHERE committee_item_id = ?
+                """,
+                (committee_item_id,),
+            ).fetchone()
+
+            if not row:
+                return False
+
+            if row["status"] not in {
+                "REFERRED",
+                "VOTE_FAILED",
+            }:
+                return False
+
+            content = json.loads(
+                row["content_json"] or "{}"
+            )
+
+            bins = content.setdefault(
+                "bins",
+                {},
+            )
+
+            subbins = content.setdefault(
+                "subbins",
+                {},
+            )
+
+            entries = subbins.setdefault(
+                bin_key,
+                [],
+            )
+
+            if mode == "replace_bin":
+                bins[bin_key] = (
+                    replacement_text or ""
+                ).strip()
+
+            elif mode == "replace_subbin":
+                target = None
+
+                for entry in entries:
+                    if str(entry.get("id")) == str(subbin_id):
+                        target = entry
+                        break
+
+                if not target:
+                    return False
+
+                if replacement_title:
+                    target["title"] = replacement_title.strip()[:200]
+
+                target["content"] = (
+                    replacement_text or ""
+                ).strip()
+
+            elif mode == "add_subbin":
+                synthetic_id = (
+                    f"C-{int(discord.utils.utcnow().timestamp())}"
+                )
+
+                entries.append(
+                    {
+                        "id": synthetic_id,
+                        "draft_id": None,
+                        "bin_key": bin_key,
+                        "title": (
+                            replacement_title.strip()[:200]
+                            or "Committee amendment"
+                        ),
+                        "content": (
+                            replacement_text or ""
+                        ).strip(),
+                        "position": len(entries) + 1,
+                        "created_by": None,
+                        "created_at": _utcnow_iso(),
+                        "updated_at": _utcnow_iso(),
+                    }
+                )
+
+            elif mode == "delete_subbin":
+                before = len(entries)
+
+                entries[:] = [
+                    e
+                    for e in entries
+                    if str(e.get("id")) != str(subbin_id)
+                ]
+
+                if len(entries) == before:
+                    return False
+
+                for i, entry in enumerate(
+                    entries,
+                    start=1,
+                ):
+                    entry["position"] = i
+
+            conn.execute(
+                """
+                UPDATE committee_referrals
+                SET content_json = ?,
+                    updated_at = ?
+                WHERE committee_item_id = ?
+                """,
+                (
+                    json.dumps(
+                        content,
+                        ensure_ascii=False,
+                    ),
+                    _utcnow_iso(),
+                    committee_item_id,
+                ),
+            )
+
+            conn.commit()
+            return True
+
         finally:
             conn.close()
 
@@ -4757,6 +4906,57 @@ def _tally_from_message(msg: discord.Message):
     total = yea + nay + present
     return yea, nay, present, total
 
+async def _tally_committee_poll(
+    msg: discord.Message,
+    eligible_ids: list[int] | set[int],
+) -> tuple[int, int, int, int]:
+    poll = getattr(
+        msg,
+        "poll",
+        None,
+    )
+
+    if not poll:
+        return 0, 0, 0, 0
+
+    eligible = {
+        int(uid)
+        for uid in eligible_ids
+    }
+
+    yea = 0
+    nay = 0
+    present = 0
+
+    # Defensive: polls are currently created with multiple=False,
+    # but don't count the same voter twice even if that changes.
+    counted: set[int] = set()
+
+    for answer in poll.answers:
+        async for voter in answer.voters():
+            uid = int(voter.id)
+
+            if uid not in eligible:
+                continue
+
+            if uid in counted:
+                continue
+
+            counted.add(uid)
+
+            if answer.text == "Yea":
+                yea += 1
+
+            elif answer.text == "Nay":
+                nay += 1
+
+            elif answer.text == "Present":
+                present += 1
+
+    total = yea + nay + present
+
+    return yea, nay, present, total
+
 def _decide(yea: int, nay: int, present: int, threshold: str) -> str:
     # exclude 'Present' from the denominator (typical parliamentary practice)
     votes = yea + nay
@@ -5011,24 +5211,209 @@ def _format_member_mention(guild: discord.Guild, user_id: int) -> str:
     return m.mention if m else f"<@{user_id}>"
 
 def _next_hearing_info(node: dict) -> tuple[str, datetime | None]:
-    """
-    Return (title, dt) for the next upcoming hearing, or ("", None).
-    Assumes optional structure:
-      node["hearings"] = [{"title": str, "when": ISO8601, "status": "scheduled|cancelled|done"}]
-    """
-    hearings = node.get("hearings", []) or []
+    hearings = node.get("hearings") or []
+
+    # Backward compatible if an old committee somehow has a dict here.
+    if isinstance(hearings, dict):
+        hearings = list(hearings.values())
+
     best = None
     now = datetime.now(timezone.utc)
+
     for h in hearings:
+        if h.get("status", "").upper() in {
+            "CANCELLED",
+            "ADJOURNED",
+        }:
+            continue
+
         try:
-            dt = datetime.fromisoformat(h.get("when", "").replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(
+                (h.get("when") or "").replace("Z", "+00:00")
+            )
         except Exception:
             continue
+
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
+
         if dt > now and (best is None or dt < best[1]):
-            best = (h.get("title", "") or "", dt)
+            best = (
+                h.get("title", "") or "",
+                dt,
+            )
+
     return best or ("", None)
+
+def _can_serve_on_committee(
+            member: discord.Member,
+            chamber: str,
+        ) -> bool:
+            role_ids = {
+                role.id
+                for role in member.roles
+            }
+    
+            if chamber == "house":
+                return REPRESENTATIVES in role_ids
+    
+            if chamber == "senate":
+                return SENATORS in role_ids
+    
+            if chamber == "joint":
+                return (
+                    REPRESENTATIVES in role_ids
+                    or SENATORS in role_ids
+                )
+    
+            return False
+
+
+def _next_committee_record_id(
+    reg: dict,
+    prefix: str,
+) -> str:
+    """
+    Global sequences for:
+      HRG  hearings
+      INV  investigations
+      SUB  subpoenas
+      AMDT committee amendments
+    """
+    year = discord.utils.utcnow().year
+
+    seqs = reg.setdefault(
+        "committee_sequences",
+        {},
+    )
+
+    key = f"{prefix}:{year}"
+
+    seq = int(seqs.get(key, 0)) + 1
+    seqs[key] = seq
+
+    return f"{prefix}-{year}-{seq:04d}"
+
+
+def _committee_record(
+    node: dict,
+    event_type: str,
+    actor_id: int | None,
+    text: str,
+    object_id: str | None = None,
+    **extra,
+):
+    rec = {
+        "at": discord.utils.utcnow().isoformat(),
+        "event_type": event_type,
+        "actor_id": actor_id,
+        "text": text,
+        "object_id": object_id,
+    }
+
+    rec.update(extra)
+
+    records = node.setdefault(
+        "record",
+        [],
+    )
+
+    records.append(rec)
+
+    # Don't let federal_registry grow forever.
+    if len(records) > 250:
+        del records[:-250]
+
+    return rec
+
+
+def _committee_hearings(
+    node: dict,
+) -> list[dict]:
+    hearings = node.setdefault(
+        "hearings",
+        [],
+    )
+
+    # Very old data guard.
+    if isinstance(hearings, dict):
+        hearings = list(hearings.values())
+        node["hearings"] = hearings
+
+    return hearings
+
+
+def _find_committee_hearing(
+    node: dict,
+    hearing_id: str,
+) -> dict | None:
+    for h in _committee_hearings(node):
+        if h.get("hearing_id") == hearing_id:
+            return h
+
+    return None
+
+
+def _committee_investigations(
+    node: dict,
+) -> dict:
+    root = node.setdefault(
+        "investigations",
+        {},
+    )
+
+    if not isinstance(root, dict):
+        root = {}
+        node["investigations"] = root
+
+    return root
+
+
+def _committee_subpoenas(
+    node: dict,
+) -> dict:
+    root = node.setdefault(
+        "subpoenas",
+        {},
+    )
+
+    if not isinstance(root, dict):
+        root = {}
+        node["subpoenas"] = root
+
+    return root
+
+
+def _committee_markups(
+    node: dict,
+) -> dict:
+    root = node.setdefault(
+        "markups",
+        {},
+    )
+
+    if not isinstance(root, dict):
+        root = {}
+        node["markups"] = root
+
+    return root
+
+
+def _committee_member_or_control(
+    user: discord.Member,
+    node: dict,
+    chamber: str,
+) -> bool:
+    if _committee_can_control(
+        user,
+        node,
+        chamber,
+    ):
+        return True
+
+    return user.id in set(
+        node.get("members") or []
+    )
 
 def _get_committees_root(reg: dict) -> dict:
     return reg.setdefault("committees", {"senate": {}, "house": {}, "joint": {}})
@@ -6282,6 +6667,7 @@ class SpideyGov(commands.Cog):
         self._session_warning_cooldowns = {}
         ensure_motions_schema(self.federal_registry)
         normalize_registry_order(self.federal_registry)
+        self.committee_lock = asyncio.Lock()
         
 
     def cog_unload(self):
@@ -6476,7 +6862,529 @@ class SpideyGov(commands.Cog):
         
         await state_dep.send(f"New member {member.mention} joined. Residency intake thread opened: {thread.mention}")
 
+    async def _get_committee_room_thread(
+        self,
+        node: dict,
+    ) -> discord.Thread | None:
+        thread_id = node.get("room_thread_id")
+
+        if not thread_id:
+            return None
+
+        thread = self.bot.get_channel(
+            int(thread_id)
+        )
+
+        if thread is None:
+            try:
+                thread = await self.bot.fetch_channel(
+                    int(thread_id)
+                )
+            except Exception:
+                return None
+
+        if not isinstance(
+            thread,
+            discord.Thread,
+        ):
+            return None
+
+        if thread.archived:
+            try:
+                await thread.edit(
+                    archived=False,
+                    reason="Committee business resumed",
+                )
+            except Exception:
+                pass
+
+        return thread
+
+
+    async def _ensure_committee_room(
+        self,
+        chamber: str,
+        encoded_name: str,
+        node: dict,
+        parent: dict | None = None,
+    ) -> discord.Thread | None:
+        existing = await self._get_committee_room_thread(
+            node
+        )
+
+        if existing:
+            return existing
+
+        forum = self.bot.get_channel(
+            COMMITTEE_FORUM_CHANNEL_ID
+        )
+
+        if forum is None:
+            try:
+                forum = await self.bot.fetch_channel(
+                    COMMITTEE_FORUM_CHANNEL_ID
+                )
+            except Exception:
+                return None
+
+        if not isinstance(
+            forum,
+            discord.ForumChannel,
+        ):
+            return None
+
+        pretty_name = (
+            node.get("name")
+            or encoded_name.replace(
+                "_",
+                " ",
+            ).title()
+        )
+
+        body_name = chamber.title()
+
+        if parent:
+            parent_name = (
+                parent.get("name")
+                or "Parent Committee"
+            )
+
+            post_name = (
+                f"{body_name} — "
+                f"{parent_name}: {pretty_name}"
+            )
+
+            relation = (
+                f"Subcommittee of **{parent_name}**"
+            )
+
+        else:
+            post_name = (
+                f"{body_name} — {pretty_name}"
+            )
+
+            relation = (
+                f"{body_name} Congressional Committee"
+            )
+
+        jurisdiction = (
+            node.get("jurisdiction")
+            or "Jurisdiction has not yet been formally designated."
+        )
+
+        chair_id = node.get("chair_id")
+
+        opening = (
+            f"# {pretty_name}\n\n"
+            f"**{relation}**\n"
+            f"**Chair:** "
+            f"{f'<@{chair_id}>' if chair_id else 'Vacant'}\n\n"
+            f"**Jurisdiction**\n"
+            f"{jurisdiction}\n\n"
+            f"This thread is the permanent committee room. "
+            f"Referral notices, hearings, investigations, "
+            f"subpoenas, markups, votes, and committee reports "
+            f"will be entered here."
+        )
+
+        try:
+            created = await forum.create_thread(
+                name=post_name[:100],
+                content=opening,
+                reason="Create permanent congressional committee room",
+            )
+        except Exception:
+            return None
+
+        # discord.py's ForumChannel result has differed across versions.
+        thread = getattr(
+            created,
+            "thread",
+            created,
+        )
+
+        if not isinstance(
+            thread,
+            discord.Thread,
+        ):
+            return None
+
+        node["room_forum_id"] = forum.id
+        node["room_thread_id"] = thread.id
+
+        return thread
+
+
+    async def _committee_post(
+        self,
+        node: dict,
+        *,
+        content: str | None = None,
+        embed: discord.Embed | None = None,
+        file: discord.File | None = None,
+    ) -> discord.Message | None:
+        thread = await self._get_committee_room_thread(
+            node
+        )
+
+        if not thread:
+            return None
+
+        try:
+            return await thread.send(
+                content=content,
+                embed=embed,
+                file=file,
+                allowed_mentions=discord.AllowedMentions(
+                    users=True,
+                    roles=False,
+                    everyone=False,
+                ),
+            )
+        except Exception:
+            return None
+
+
+    async def hearing_id_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ):
+        chamber = getattr(
+            interaction.namespace,
+            "chamber",
+            None,
+        )
+
+        if isinstance(
+            chamber,
+            app_commands.Choice,
+        ):
+            chamber = chamber.value
+
+        name = getattr(
+            interaction.namespace,
+            "name",
+            None,
+        )
+
+        if not chamber or not name:
+            return []
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return []
+
+        cur = (current or "").lower()
+        out = []
+
+        for h in reversed(
+            _committee_hearings(node)
+        ):
+            hearing_id = h.get(
+                "hearing_id"
+            )
+
+            if not hearing_id:
+                continue
+
+            label = (
+                f"{hearing_id} — "
+                f"{h.get('title') or 'Untitled'} "
+                f"[{h.get('status', 'UNKNOWN')}]"
+            )
+
+            if not cur or cur in label.lower():
+                out.append(
+                    app_commands.Choice(
+                        name=label[:100],
+                        value=hearing_id,
+                    )
+                )
+
+        return out[:25]
     
+    async def amendment_id_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ):
+        chamber = getattr(
+            interaction.namespace,
+            "chamber",
+            None,
+        )
+
+        if isinstance(
+            chamber,
+            app_commands.Choice,
+        ):
+            chamber = chamber.value
+
+        name = getattr(
+            interaction.namespace,
+            "name",
+            None,
+        )
+
+        item_id = getattr(
+            interaction.namespace,
+            "item_id",
+            None,
+        )
+
+        if not chamber or not name or not item_id:
+            return []
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return []
+
+        markup_rec = _committee_markups(
+            node
+        ).get(item_id)
+
+        if not markup_rec:
+            return []
+
+        cur = (current or "").lower()
+        out = []
+
+        for amendment_id, amendment in markup_rec.get(
+            "amendments",
+            {},
+        ).items():
+            label = (
+                f"{amendment_id} — "
+                f"{amendment['mode'].replace('_', ' ').title()} "
+                f"[{amendment['status']}]"
+            )
+
+            if not cur or cur in label.lower():
+                out.append(
+                    app_commands.Choice(
+                        name=label[:100],
+                        value=amendment_id,
+                    )
+                )
+
+        return out[:25]
+
+
+    async def investigation_id_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ):
+        chamber = getattr(
+            interaction.namespace,
+            "chamber",
+            None,
+        )
+
+        if isinstance(
+            chamber,
+            app_commands.Choice,
+        ):
+            chamber = chamber.value
+
+        name = getattr(
+            interaction.namespace,
+            "name",
+            None,
+        )
+
+        if not chamber or not name:
+            return []
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return []
+
+        cur = (current or "").lower()
+        out = []
+
+        for inv_id, inv in reversed(
+            list(
+                _committee_investigations(
+                    node
+                ).items()
+            )
+        ):
+            label = (
+                f"{inv_id} — "
+                f"{inv.get('title') or 'Untitled'} "
+                f"[{inv.get('status', 'UNKNOWN')}]"
+            )
+
+            if not cur or cur in label.lower():
+                out.append(
+                    app_commands.Choice(
+                        name=label[:100],
+                        value=inv_id,
+                    )
+                )
+
+        return out[:25]
+
+
+    async def subpoena_id_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ):
+        chamber = getattr(
+            interaction.namespace,
+            "chamber",
+            None,
+        )
+
+        if isinstance(
+            chamber,
+            app_commands.Choice,
+        ):
+            chamber = chamber.value
+
+        name = getattr(
+            interaction.namespace,
+            "name",
+            None,
+        )
+
+        if not chamber or not name:
+            return []
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return []
+
+        cur = (current or "").lower()
+        out = []
+
+        for sub_id, sub in reversed(
+            list(
+                _committee_subpoenas(
+                    node
+                ).items()
+            )
+        ):
+            label = (
+                f"{sub_id} — "
+                f"{sub.get('recipient_name') or 'Recipient'} "
+                f"[{sub.get('status', 'UNKNOWN')}]"
+            )
+
+            if not cur or cur in label.lower():
+                out.append(
+                    app_commands.Choice(
+                        name=label[:100],
+                        value=sub_id,
+                    )
+                )
+
+        return out[:25]
+
+
+    async def hearing_witness_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ):
+        chamber = getattr(
+            interaction.namespace,
+            "chamber",
+            None,
+        )
+
+        if isinstance(
+            chamber,
+            app_commands.Choice,
+        ):
+            chamber = chamber.value
+
+        name = getattr(
+            interaction.namespace,
+            "name",
+            None,
+        )
+
+        hearing_id = getattr(
+            interaction.namespace,
+            "hearing_id",
+            None,
+        )
+
+        if not all(
+            [
+                chamber,
+                name,
+                hearing_id,
+            ]
+        ):
+            return []
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return []
+
+        h = _find_committee_hearing(
+            node,
+            hearing_id,
+        )
+
+        if not h:
+            return []
+
+        cur = (current or "").lower()
+        out = []
+
+        for witness in h.get(
+            "witnesses",
+            [],
+        ):
+            wid = witness.get(
+                "witness_id"
+            )
+
+            label = (
+                f"{wid} — "
+                f"{witness.get('display_name') or 'Witness'}"
+            )
+
+            if not cur or cur in label.lower():
+                out.append(
+                    app_commands.Choice(
+                        name=label[:100],
+                        value=wid,
+                    )
+                )
+
+        return out[:25]
 
     async def elections_contest_autocomplete(self, interaction: discord.Interaction, current: str):
         reg = self.federal_registry
@@ -6520,6 +7428,7 @@ class SpideyGov(commands.Cog):
             state["changed_by_motion"] = motion["id"]
 
         motion["effect"]["executed"] = True
+
 
 
 
@@ -6937,6 +7846,29 @@ class SpideyGov(commands.Cog):
     )
     budget=app_commands.Group(name="budget", description="Budgetary related commands")
     committees = app_commands.Group(name="committees", description="Legislative Committee commands", parent=legislature)
+    hearing = app_commands.Group(
+        name="hearing",
+        description="Committee hearing proceedings",
+        parent=legislature,
+    )
+
+    investigation = app_commands.Group(
+        name="investigation",
+        description="Congressional investigations and oversight",
+        parent=legislature,
+    )
+
+    subpoena = app_commands.Group(
+        name="subpoena",
+        description="Congressional subpoena process",
+        parent=legislature,
+    )
+
+    markup = app_commands.Group(
+        name="markup",
+        description="Committee markup and amendments",
+        parent=legislature,
+    )
 
     executive = app_commands.Group(name="executive", description="Executive commands")
     treasury = app_commands.Group(name="treasury", description="Commands for controlling the treasury.", parent=executive)
@@ -10688,6 +11620,28 @@ class SpideyGov(commands.Cog):
             embed.add_field(name="Chair", value=_format_member_mention(interaction.guild, chair_id), inline=True)
         embed.add_field(name="# Members", value=str(len(set(members))), inline=True)
 
+        jurisdiction = (
+            node.get("jurisdiction")
+            or "(not specified)"
+        )
+
+        embed.add_field(
+            name="Jurisdiction",
+            value=jurisdiction[:1024],
+            inline=False,
+        )
+
+        room_id = node.get(
+            "room_thread_id"
+        )
+
+        if room_id:
+            embed.add_field(
+                name="Committee Room",
+                value=f"<#{room_id}>",
+                inline=False,
+            )
+
         # Subcommittees list (compact; truncated safely)
         if subcs:
             names = [("• " + (sc.get("name") or "").strip()) for sc in subcs if (sc.get("name") or "").strip()]
@@ -10721,23 +11675,31 @@ class SpideyGov(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     
-    @committees.command(name="hearing_schedule", description="Schedule a hearing (committee/subcommittee)")
-    @app_commands.choices(chamber=[
-        app_commands.Choice(name="Senate", value="senate"),
-        app_commands.Choice(name="House", value="house"),
-        app_commands.Choice(name="Joint", value="joint"),
-    ])
-    @app_commands.autocomplete(name=committee_name_autocomplete)  # your existing autocomplete
-    @app_commands.choices(tz=_TZ_CHOICES)
-    @app_commands.describe(
-        chamber="Body",
-        name="Committee or subcommittee (autocomplete)",
-        title="Hearing title",
-        date="YYYY-MM-DD (e.g., 2025-10-03)",
-        time="Local time (e.g., 6:00 pm or 18:00)",
-        tz="Timezone for the provided date/time",
+    @hearing.command(
+        name="schedule",
+        description="Schedule a formal committee hearing.",
     )
-    async def committee_hearing_schedule(
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ],
+        purpose=[
+            app_commands.Choice(name="Legislative", value="LEGISLATIVE"),
+            app_commands.Choice(name="Oversight", value="OVERSIGHT"),
+            app_commands.Choice(name="Investigative", value="INVESTIGATIVE"),
+            app_commands.Choice(name="Nomination / Confirmation", value="CONFIRMATION"),
+            app_commands.Choice(name="Other", value="OTHER"),
+        ],
+        tz=_TZ_CHOICES,
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        investigation_id=investigation_id_autocomplete,
+        item_id=committee_item_autocomplete,
+    )
+    async def hearing_schedule(
         self,
         interaction: discord.Interaction,
         chamber: str,
@@ -10745,48 +11707,489 @@ class SpideyGov(commands.Cog):
         title: str,
         date: str,
         time: str,
-        tz: str = None,  # default PT
+        purpose: str = "OVERSIGHT",
+        tz: str = "America/Los_Angeles",
+        investigation_id: str | None = None,
+        item_id: str | None = None,
     ):
-        if not tz:
-            tz = "America/Los_Angeles"
+        parent, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
 
-        reg = self.federal_registry
-        parent, node = _resolve_committee_node(reg, chamber, name)
         if not node:
-            return await interaction.response.send_message("Committee not found.", ephemeral=True)
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
 
-        if not (_user_is_committee_chair(interaction.guild, interaction.user, node) or _user_has_leadership_override(interaction.user)):
-            return await interaction.response.send_message("Only the committee chair (or leadership) may schedule hearings.", ephemeral=True)
+        if not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may schedule hearings.",
+                ephemeral=True,
+            )
 
-        dt_local = _build_aware_dt(date, time, tz)
+        dt_local = _build_aware_dt(
+            date,
+            time,
+            tz,
+        )
+
         if not dt_local:
-            return await interaction.response.send_message("Invalid date/time. Use date=YYYY-MM-DD and time like '6:00 pm' or '18:00'.", ephemeral=True)
+            return await interaction.response.send_message(
+                "Invalid date/time.",
+                ephemeral=True,
+            )
 
-        dt_utc = dt_local.astimezone(timezone.utc)
-        node.setdefault("hearings", []).append({
-            "title": title,
-            "when": dt_utc.isoformat(),
-            "status": "scheduled",
+        if investigation_id:
+            inv = _committee_investigations(
+                node
+            ).get(investigation_id)
+
+            if not inv:
+                return await interaction.response.send_message(
+                    "Investigation not found in this committee.",
+                    ephemeral=True,
+                )
+
+        if item_id:
+            item = self.drafts_db.get_committee_item(
+                item_id
+            )
+
+            committee_key, subcommittee_key = (
+                _split_committee_value(name)
+            )
+
+            if (
+                not item
+                or item["committee_body"] != chamber
+                or item["committee_key"] != committee_key
+                or item["subcommittee_key"] != subcommittee_key
+            ):
+                return await interaction.response.send_message(
+                    "That legislative item is not before this committee.",
+                    ephemeral=True,
+                )
+
+        hearing_id = _next_committee_record_id(
+            self.federal_registry,
+            "HRG",
+        )
+
+        h = {
+            "hearing_id": hearing_id,
+            "title": title.strip(),
+            "purpose": purpose,
+            "when": dt_local.astimezone(
+                timezone.utc
+            ).isoformat(),
+            "status": "SCHEDULED",
+            "investigation_id": investigation_id,
+            "committee_item_id": item_id,
             "scheduled_by": interaction.user.id,
-        })
-        save_federal_registry(reg)
+            "scheduled_at": discord.utils.utcnow().isoformat(),
+            "started_at": None,
+            "ended_at": None,
+            "witnesses": [],
+            "recognized_witness_id": None,
+            "record": [],
+        }
 
-        embed = discord.Embed(
-            title="Hearing scheduled",
-            description=(parent.get("name") + " → " + node.get("name")) if parent else node.get("name"),
-            color=discord.Color.teal()
+        _committee_hearings(
+            node
+        ).append(h)
+
+        _committee_record(
+            node,
+            "hearing_scheduled",
+            interaction.user.id,
+            f"Hearing scheduled: {title.strip()}",
+            hearing_id,
         )
-        embed.add_field(name="Title", value=title, inline=False)
-        embed.add_field(
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        e = discord.Embed(
+            title=f"Hearing Notice — {hearing_id}",
+            description=title.strip(),
+            color=discord.Color.teal(),
+        )
+
+        e.add_field(
+            name="Purpose",
+            value=purpose.replace("_", " ").title(),
+        )
+
+        e.add_field(
             name="When",
-            value=f"{discord.utils.format_dt(dt_local, style='F')} ({discord.utils.format_dt(dt_local, style='R')})",
-            inline=False
+            value=(
+                f"{discord.utils.format_dt(dt_local, style='F')}\n"
+                f"{discord.utils.format_dt(dt_local, style='R')}"
+            ),
+            inline=False,
         )
-        # FIX: chamber is a str here
-        embed.set_footer(text=f"{str(chamber).title()} committee")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        if investigation_id:
+            e.add_field(
+                name="Investigation",
+                value=investigation_id,
+            )
+
+        if item_id:
+            e.add_field(
+                name="Legislation",
+                value=item_id,
+            )
+
+        await self._committee_post(
+            node,
+            embed=e,
+        )
+
+        await interaction.response.send_message(
+            f"✅ **{hearing_id}** scheduled.",
+            ephemeral=True,
+        )
 
 
+    @hearing.command(
+        name="start",
+        description="Call a committee hearing to order.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        hearing_id=hearing_id_autocomplete,
+    )
+    async def hearing_start(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        hearing_id: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        if not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may call the hearing to order.",
+                ephemeral=True,
+            )
+
+        h = _find_committee_hearing(
+            node,
+            hearing_id,
+        )
+
+        if not h:
+            return await interaction.response.send_message(
+                "Hearing not found.",
+                ephemeral=True,
+            )
+
+        if h["status"] != "SCHEDULED":
+            return await interaction.response.send_message(
+                f"This hearing is currently `{h['status']}`.",
+                ephemeral=True,
+            )
+
+        h["status"] = "IN_SESSION"
+        h["started_at"] = discord.utils.utcnow().isoformat()
+        h["started_by"] = interaction.user.id
+
+        _committee_record(
+            node,
+            "hearing_started",
+            interaction.user.id,
+            f"Hearing called to order: {h['title']}",
+            hearing_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"# {hearing_id} — Committee Will Come to Order\n\n"
+                f"**{h['title']}**\n\n"
+                f"The Committee will come to order. "
+                f"The Chair recognizes the commencement of proceedings."
+            ),
+        )
+
+        await interaction.response.send_message(
+            f"<:Gavel:1540965437687472199> **{hearing_id}** is now in session.",
+            ephemeral=True,
+        )
+
+
+    @hearing.command(
+        name="recess",
+        description="Place a committee hearing in recess.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        hearing_id=hearing_id_autocomplete,
+    )
+    async def hearing_recess(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        hearing_id: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may recess the hearing.",
+                ephemeral=True,
+            )
+
+        h = _find_committee_hearing(
+            node,
+            hearing_id,
+        )
+
+        if not h or h["status"] != "IN_SESSION":
+            return await interaction.response.send_message(
+                "That hearing is not currently in session.",
+                ephemeral=True,
+            )
+
+        h["status"] = "RECESSED"
+        h["recessed_at"] = discord.utils.utcnow().isoformat()
+
+        _committee_record(
+            node,
+            "hearing_recessed",
+            interaction.user.id,
+            "Committee hearing recessed.",
+            hearing_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"### {hearing_id} — Recess\n"
+                "The Committee stands in recess."
+            ),
+        )
+
+        await interaction.response.send_message(
+            "✅ Hearing recessed.",
+            ephemeral=True,
+        )
+
+
+    @hearing.command(
+        name="resume",
+        description="Reconvene a recessed committee hearing.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        hearing_id=hearing_id_autocomplete,
+    )
+    async def hearing_resume(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        hearing_id: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may reconvene the hearing.",
+                ephemeral=True,
+            )
+
+        h = _find_committee_hearing(
+            node,
+            hearing_id,
+        )
+
+        if not h or h["status"] != "RECESSED":
+            return await interaction.response.send_message(
+                "That hearing is not in recess.",
+                ephemeral=True,
+            )
+
+        h["status"] = "IN_SESSION"
+
+        _committee_record(
+            node,
+            "hearing_resumed",
+            interaction.user.id,
+            "Committee hearing reconvened.",
+            hearing_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"### {hearing_id} — Committee Reconvened\n"
+                "The Committee will come to order."
+            ),
+        )
+
+        await interaction.response.send_message(
+            "✅ Hearing reconvened.",
+            ephemeral=True,
+        )
+
+
+    @hearing.command(
+        name="end",
+        description="Adjourn a committee hearing.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        hearing_id=hearing_id_autocomplete,
+    )
+    async def hearing_end(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        hearing_id: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may adjourn the hearing.",
+                ephemeral=True,
+            )
+
+        h = _find_committee_hearing(
+            node,
+            hearing_id,
+        )
+
+        if not h or h["status"] not in {
+            "IN_SESSION",
+            "RECESSED",
+        }:
+            return await interaction.response.send_message(
+                "That hearing is not an active proceeding.",
+                ephemeral=True,
+            )
+
+        h["status"] = "ADJOURNED"
+        h["ended_at"] = discord.utils.utcnow().isoformat()
+        h["ended_by"] = interaction.user.id
+        h["recognized_witness_id"] = None
+
+        _committee_record(
+            node,
+            "hearing_adjourned",
+            interaction.user.id,
+            f"Hearing adjourned: {h['title']}",
+            hearing_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"### {hearing_id} — Adjourned\n"
+                "There being no further business before the Committee, "
+                "the hearing stands adjourned."
+            ),
+        )
+
+        await interaction.response.send_message(
+            "✅ Hearing adjourned.",
+            ephemeral=True,
+        )
 
     # --- new helper: parent-committee autocomplete that respects the chosen chamber ---
     async def parent_committee_by_chamber_autocomplete(self, interaction: discord.Interaction, current: str):
@@ -10809,7 +12212,6 @@ class SpideyGov(commands.Cog):
             if not cur or cur in label.lower():
                 out.append(app_commands.Choice(name=label, value=key))
         return out[:25]
-
 
     @committees.command(
         name="create",
@@ -10858,12 +12260,21 @@ class SpideyGov(commands.Cog):
     @app_commands.autocomplete(
         parent_committee=parent_committee_by_chamber_autocomplete
     )
+    @app_commands.describe(
+        chamber="House, Senate, or Joint",
+        name="Name of the committee or subcommittee",
+        chair="Initial Chair",
+        jurisdiction="The subjects and matters within the committee's jurisdiction",
+        committee_type="Type of committee",
+        parent_committee="Parent committee, if creating a subcommittee",
+    )
     async def committee_create(
         self,
         interaction: discord.Interaction,
         chamber: str,
         name: str,
         chair: discord.Member,
+        jurisdiction: str,
         committee_type: str = "standing",
         parent_committee: str | None = None,
     ):
@@ -10876,11 +12287,28 @@ class SpideyGov(commands.Cog):
                 ephemeral=True,
             )
 
-        key = _committee_key(name)
+        if not _can_serve_on_committee(
+            chair,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "The Chair must be a member of the chamber represented by this committee.",
+                ephemeral=True,
+            )
+
+        clean_name = name.strip()
+        clean_jurisdiction = jurisdiction.strip()
+        key = _committee_key(clean_name)
 
         if not key:
             return await interaction.response.send_message(
                 "Invalid committee name.",
+                ephemeral=True,
+            )
+
+        if not clean_jurisdiction:
+            return await interaction.response.send_message(
+                "A committee must have a jurisdiction.",
                 ephemeral=True,
             )
 
@@ -10892,6 +12320,12 @@ class SpideyGov(commands.Cog):
             chamber,
             {},
         )
+
+        now = discord.utils.utcnow().isoformat()
+
+        # --------------------------------------------------
+        # SUBCOMMITTEE
+        # --------------------------------------------------
 
         if parent_committee:
             parent = bucket.get(
@@ -10915,27 +12349,88 @@ class SpideyGov(commands.Cog):
                     ephemeral=True,
                 )
 
-            subs[key] = {
-                "name": name.strip(),
+            new_node = {
+                "name": clean_name,
                 "type": committee_type,
                 "chair_id": chair.id,
                 "members": [chair.id],
                 "sub_committees": {},
-                "created_at": (
-                    discord.utils.utcnow().isoformat()
-                ),
+                "jurisdiction": clean_jurisdiction,
+
+                # Institutional records.
+                "hearings": [],
+                "investigations": {},
+                "subpoenas": {},
+                "markups": {},
+                "record": [],
+
+                # Permanent forum room.
+                "room_forum_id": None,
+                "room_thread_id": None,
+
+                "created_at": now,
                 "created_by": interaction.user.id,
             }
+
+            # Put it into the registry temporarily so the room
+            # provisioner can work with the real node.
+            subs[key] = new_node
+
+            encoded_name = (
+                f"{parent_committee}::{key}"
+            )
+
+            room = await self._ensure_committee_room(
+                chamber,
+                encoded_name,
+                new_node,
+                parent,
+            )
+
+            # Committee creation is atomic from the user's
+            # perspective. No room = no committee.
+            if not room:
+                subs.pop(
+                    key,
+                    None,
+                )
+
+                save_federal_registry(
+                    reg
+                )
+
+                return await interaction.response.send_message(
+                    "I couldn't create the subcommittee's permanent "
+                    "forum room, so the subcommittee was not created. "
+                    "Check my permissions in the committee forum.",
+                    ephemeral=True,
+                )
+
+            _committee_record(
+                new_node,
+                "committee_created",
+                interaction.user.id,
+                (
+                    f"Subcommittee created under "
+                    f"{parent.get('name', parent_committee)}."
+                ),
+            )
 
             save_federal_registry(
                 reg
             )
 
             return await interaction.response.send_message(
-                f"✅ Created **{name.strip()}** under "
-                f"**{parent.get('name', parent_committee)}**.",
+                f"✅ Created **{clean_name}** under "
+                f"**{parent.get('name', parent_committee)}**.\n"
+                f"**Chair:** {chair.mention}\n"
+                f"**Committee room:** {room.mention}",
                 ephemeral=True,
             )
+
+        # --------------------------------------------------
+        # TOP-LEVEL COMMITTEE
+        # --------------------------------------------------
 
         if key in bucket:
             return await interaction.response.send_message(
@@ -10943,28 +12438,73 @@ class SpideyGov(commands.Cog):
                 ephemeral=True,
             )
 
-        bucket[key] = {
-            "name": name.strip(),
+        new_node = {
+            "name": clean_name,
             "type": committee_type,
             "chair_id": chair.id,
             "members": [chair.id],
             "sub_committees": {},
-            "created_at": (
-                discord.utils.utcnow().isoformat()
-            ),
+            "jurisdiction": clean_jurisdiction,
+
+            # Institutional records.
+            "hearings": [],
+            "investigations": {},
+            "subpoenas": {},
+            "markups": {},
+            "record": [],
+
+            # Permanent forum room.
+            "room_forum_id": None,
+            "room_thread_id": None,
+
+            "created_at": now,
             "created_by": interaction.user.id,
         }
+
+        bucket[key] = new_node
+
+        room = await self._ensure_committee_room(
+            chamber,
+            key,
+            new_node,
+            None,
+        )
+
+        if not room:
+            bucket.pop(
+                key,
+                None,
+            )
+
+            save_federal_registry(
+                reg
+            )
+
+            return await interaction.response.send_message(
+                "I couldn't create the committee's permanent "
+                "forum room, so the committee was not created. "
+                "Check my permissions in the committee forum.",
+                ephemeral=True,
+            )
+
+        _committee_record(
+            new_node,
+            "committee_created",
+            interaction.user.id,
+            "Committee formally created.",
+        )
 
         save_federal_registry(
             reg
         )
 
         await interaction.response.send_message(
-            f"✅ Created **{name.strip()}**.",
+            f"✅ Created **{clean_name}**.\n"
+            f"**Chair:** {chair.mention}\n"
+            f"**Committee room:** {room.mention}",
             ephemeral=True,
         )
-
-
+   
     @committees.command(
         name="delete",
         description="Delete an empty committee or subcommittee.",
@@ -11030,6 +12570,51 @@ class SpideyGov(commands.Cog):
                 ephemeral=True,
             )
 
+        active_hearings = [
+            h
+            for h in _committee_hearings(node)
+            if h.get("status") in {
+                "SCHEDULED",
+                "IN_SESSION",
+                "RECESSED",
+            }
+        ]
+
+        active_investigations = [
+            inv
+            for inv in _committee_investigations(node).values()
+            if inv.get("status") == "OPEN"
+        ]
+
+        active_markups = [
+            m
+            for m in _committee_markups(node).values()
+            if m.get("status") == "OPEN"
+        ]
+
+        active_subpoenas = [
+            sub
+            for sub in _committee_subpoenas(node).values()
+            if sub.get("status") in {
+                "ISSUED",
+                "CHALLENGED",
+                "PARTIALLY_COMPLIED",
+                "NONCOMPLIANT",
+            }
+        ]
+
+        if (
+            active_hearings
+            or active_investigations
+            or active_markups
+            or active_subpoenas
+        ):
+            return await interaction.response.send_message(
+                "This committee still has active institutional business "
+                "and cannot be deleted.",
+                ephemeral=True,
+            )
+
         bucket = _get_committees_root(
             self.federal_registry
         ).setdefault(
@@ -11060,6 +12645,25 @@ class SpideyGov(commands.Cog):
             f"🗑️ Deleted **{node.get('name', name)}**.",
             ephemeral=True,
         )
+
+        room = await self._get_committee_room_thread(
+            node
+        )
+
+        if room:
+            try:
+                await room.send(
+                    "### Committee Dissolved\n"
+                    "This committee has been formally dissolved."
+                )
+
+                await room.edit(
+                    archived=True,
+                    locked=True,
+                    reason="Committee dissolved",
+                )
+            except Exception:
+                pass
 
 
     @committees.command(
@@ -11101,6 +12705,15 @@ class SpideyGov(commands.Cog):
                 "Only chamber leadership may appoint committee members.",
                 ephemeral=True,
             )
+        
+        if not _can_serve_on_committee(
+            member,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "That member is not eligible to serve on this committee.",
+                ephemeral=True,
+            )
 
         _, node = _resolve_committee_node(
             self.federal_registry,
@@ -11122,9 +12735,41 @@ class SpideyGov(commands.Cog):
         if as_chair:
             node["chair_id"] = member.id
 
+        if added:
+            _committee_record(
+                node,
+                "member_appointed",
+                interaction.user.id,
+                f"{member.display_name} appointed to the Committee.",
+                str(member.id),
+            )
+
+        if as_chair:
+            _committee_record(
+                node,
+                "chair_appointed",
+                interaction.user.id,
+                f"{member.display_name} designated Chair.",
+                str(member.id),
+            )
+
         save_federal_registry(
             self.federal_registry
         )
+
+        if added or as_chair:
+            await self._committee_post(
+                node,
+                content=(
+                    "### Committee Membership\n"
+                    f"{member.mention} has been "
+                    + (
+                        "appointed to the Committee and designated Chair."
+                        if as_chair
+                        else "appointed to the Committee."
+                    )
+                ),
+            )
 
         note = (
             " and made Chair"
@@ -11207,6 +12852,9 @@ class SpideyGov(commands.Cog):
             or []
         )
 
+        was_member = member.id in members
+        was_chair = node.get("chair_id") == member.id
+
         members.discard(
             member.id
         )
@@ -11218,9 +12866,36 @@ class SpideyGov(commands.Cog):
         if node.get("chair_id") == member.id:
             node["chair_id"] = None
 
+        if was_member:
+            _committee_record(
+                node,
+                "member_removed",
+                interaction.user.id,
+                f"{member.display_name} removed from the Committee.",
+                str(member.id),
+            )
+
+        if was_chair:
+            _committee_record(
+                node,
+                "chair_vacated",
+                interaction.user.id,
+                f"{member.display_name} removed as Chair.",
+                str(member.id),
+            )
+
         save_federal_registry(
             self.federal_registry
         )
+
+        if was_member:
+            await self._committee_post(
+                node,
+                content=(
+                    "### Committee Membership\n"
+                    f"{member.mention} has been removed from the Committee."
+                ),
+            )
 
         await interaction.response.send_message(
             f"✅ Removed {member.mention} from "
@@ -11280,6 +12955,19 @@ class SpideyGov(commands.Cog):
                 ephemeral=True,
             )
 
+        if not _can_serve_on_committee(
+            chair,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "That member is not eligible to serve on this committee.",
+                ephemeral=True,
+            )
+
+        old_chair_id = node.get(
+            "chair_id"
+        )
+
         node["chair_id"] = chair.id
 
         _add_member(
@@ -11287,8 +12975,25 @@ class SpideyGov(commands.Cog):
             chair.id,
         )
 
+        _committee_record(
+            node,
+            "chair_appointed",
+            interaction.user.id,
+            f"{chair.display_name} designated Chair.",
+            str(chair.id),
+            former_chair_id=old_chair_id,
+        )
+
         save_federal_registry(
             self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                "### Committee Chair\n"
+                f"{chair.mention} has been designated Chair of the Committee."
+            ),
         )
 
         await interaction.response.send_message(
@@ -11354,6 +13059,10 @@ class SpideyGov(commands.Cog):
         for member in role.members:
             if (
                 not member.bot
+                and _can_serve_on_committee(
+                    member,
+                    chamber,
+                )
                 and _add_member(
                     node,
                     member.id,
@@ -11361,9 +13070,31 @@ class SpideyGov(commands.Cog):
             ):
                 added += 1
 
+        if added:
+            _committee_record(
+                node,
+                "members_bulk_appointed",
+                interaction.user.id,
+                (
+                    f"{added} member(s) appointed from "
+                    f"the Discord role {role.name}."
+                ),
+                str(role.id),
+            )
+
         save_federal_registry(
             self.federal_registry
         )
+
+        if added:
+            await self._committee_post(
+                node,
+                content=(
+                    "### Committee Membership\n"
+                    f"**{added}** member(s) have been appointed "
+                    f"from {role.mention}."
+                ),
+            )
 
         await interaction.response.send_message(
             f"✅ Appointed **{added}** new members to "
@@ -13543,7 +15274,7 @@ class SpideyGov(commands.Cog):
 
         await interaction.followup.send(f"Moved subbin **#{subbin_id}** to position **{new_position}**.", ephemeral=True)
     
-    async def _draft_chunk_text(self, text: str, limit: int = 1700) -> list[str]:
+    def _draft_chunk_text(self, text: str, limit: int = 1700) -> list[str]:
         lines = (text or "").splitlines() or [""]
         chunks: list[str] = []
         cur: list[str] = []
@@ -13563,15 +15294,16 @@ class SpideyGov(commands.Cog):
             chunks.append("\n".join(cur))
         return chunks or ["(empty)"]
 
+    
 
-    async def _draft_render_subbin_text(self, d: dict, sb: dict) -> tuple[str, str]:
+    def _draft_render_subbin_text(self, d: dict, sb: dict) -> tuple[str, str]:
         header = f"{d['draft_id']} — {d['title']}"
         where = f"{DRAFT_BINS.get(sb['bin_key'], sb['bin_key'])} • [{sb['id']}] {sb['title']}"
         body = (sb.get("content") or "").strip() or "—"
         return header, f"{where}\n\n{body}"
 
 
-    async def _draft_render_full_pages(self, d: dict) -> list[str]:
+    def _draft_render_full_pages(self, d: dict) -> list[str]:
         pages: list[str] = []
 
         meta = [
@@ -13914,6 +15646,28 @@ class SpideyGov(commands.Cog):
                 ephemeral=True,
             )
 
+        _committee_record(
+            node,
+            "legislation_referred",
+            interaction.user.id,
+            f"{item['committee_item_id']} referred to the Committee.",
+            item["committee_item_id"],
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"# Legislative Referral\n\n"
+                f"**{item['committee_item_id']} — {item['title']}**\n\n"
+                f"The measure has been referred to this Committee.\n"
+                f"Source draft: `{draft_id}`"
+            ),
+        )
+
         await interaction.response.send_message(
             f"📥 **{item['committee_item_id']} — "
             f"{item['title']}** has been referred to "
@@ -14130,11 +15884,30 @@ class SpideyGov(commands.Cog):
                 "for a committee vote.",
                 ephemeral=True,
             )
+    
+        markup_rec = _committee_markups(
+            node
+        ).get(item_id)
 
-        target = (
-            channel
-            or interaction.channel
-        )
+        if (
+            markup_rec
+            and markup_rec.get("status") == "OPEN"
+        ):
+            return await interaction.response.send_message(
+                "Committee markup is still open on this measure. "
+                "Close markup before opening a vote to report.",
+                ephemeral=True,
+            )
+
+        target = channel
+
+        if target is None:
+            target = await self._get_committee_room_thread(
+                node
+            )
+
+        if target is None:
+            target = interaction.channel
 
         if not isinstance(
             target,
@@ -14291,11 +16064,19 @@ class SpideyGov(commands.Cog):
         )
 
         ref = self.drafts_db.get_committee_item(
-            item_id,
-            chamber,
-            committee_key,
-            subcommittee_key,
+            item_id
         )
+
+        if (
+            not ref
+            or ref["committee_body"] != chamber
+            or ref["committee_key"] != committee_key
+            or ref["subcommittee_key"] != subcommittee_key
+        ):
+            return await interaction.followup.send(
+                "That item is not before this committee.",
+                ephemeral=True,
+            )
 
         if (
             not ref
@@ -14349,8 +16130,14 @@ class SpideyGov(commands.Cog):
         except Exception:
             pass
 
-        yea, nay, present, total = (
-            _tally_from_message(msg)
+        eligible_ids = _committee_eligible_ids(
+            interaction.guild,
+            node,
+        )
+
+        yea, nay, present, total = await _tally_committee_poll(
+            msg,
+            eligible_ids,
         )
 
         quorum = int(
@@ -14499,10 +16286,18 @@ class SpideyGov(commands.Cog):
         )
 
         ref = self.drafts_db.get_committee_item(
-            item_id,
-            chamber,
-            committee_key,
-            subcommittee_key,
+            item_id
+        )
+
+        if (
+            not ref
+            or ref["committee_body"] != chamber
+            or ref["committee_key"] != committee_key
+            or ref["subcommittee_key"] != subcommittee_key
+        ):
+            return await interaction.followup.send(
+                "That item is not before this committee.",
+                ephemeral=True,
         )
 
         if (
@@ -14543,6 +16338,33 @@ class SpideyGov(commands.Cog):
             " ",
         ).title()
 
+        _committee_record(
+            node,
+            "legislation_reported",
+            interaction.user.id,
+            (
+                f"{new_bill['committee_item_id']} reported "
+                f"as {new_bill['bill_id']}."
+            ),
+            new_bill["bill_id"],
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"# Ordered Reported\n\n"
+                f"**{new_bill['committee_item_id']}** has been "
+                f"ordered reported "
+                f"**{recommendation.lower() or 'without recommendation'}**.\n\n"
+                f"The measure is designated "
+                f"**{new_bill['bill_id']} — {new_bill['title']}**."
+            ),
+        )
+
         await interaction.followup.send(
             f"✅ **{new_bill['bill_id']} — "
             f"{new_bill['title']}** has been reported by "
@@ -14554,4 +16376,2121 @@ class SpideyGov(commands.Cog):
             f"Original draft: "
             f"**{new_bill['source_draft_id']}**",
             ephemeral=False,
+        )
+
+    @committees.command(
+        name="record",
+        description="View the committee's recent institutional record.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete
+    )
+    async def committee_record_view(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        records = (
+            node.get("record")
+            or []
+        )[-20:]
+
+        e = discord.Embed(
+            title=(
+                f"{node.get('name', name)} "
+                "— Committee Record"
+            ),
+            color=discord.Color.dark_teal(),
+        )
+
+        if not records:
+            e.description = "(No recorded committee activity.)"
+
+        else:
+            lines = []
+
+            for rec in reversed(records):
+                actor = rec.get(
+                    "actor_id"
+                )
+
+                obj = rec.get(
+                    "object_id"
+                )
+
+                prefix = (
+                    f"`{obj}` "
+                    if obj
+                    else ""
+                )
+
+                actor_text = (
+                    f" — <@{actor}>"
+                    if actor
+                    else ""
+                )
+
+                lines.append(
+                    f"{prefix}{rec.get('text', 'Activity')}"
+                    f"{actor_text}"
+                )
+
+            e.description = "\n\n".join(
+                lines
+            )[:4000]
+
+        await interaction.response.send_message(
+            embed=e
+        )
+
+    @hearing.command(
+        name="witness_add",
+        description="Add a witness to a committee hearing.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        hearing_id=hearing_id_autocomplete,
+    )
+    async def hearing_witness_add(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        hearing_id: str,
+        witness: discord.Member | None = None,
+        witness_name: str | None = None,
+        capacity: str = "Witness",
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may add witnesses.",
+                ephemeral=True,
+            )
+
+        h = _find_committee_hearing(
+            node,
+            hearing_id,
+        )
+
+        if not h:
+            return await interaction.response.send_message(
+                "Hearing not found.",
+                ephemeral=True,
+            )
+
+        if not witness and not witness_name:
+            return await interaction.response.send_message(
+                "Specify either a Discord member or an external witness name.",
+                ephemeral=True,
+            )
+
+        witnesses = h.setdefault(
+            "witnesses",
+            [],
+        )
+
+        witness_id = (
+            f"{hearing_id}-W{len(witnesses) + 1}"
+        )
+
+        display_name = (
+            witness.display_name
+            if witness
+            else witness_name.strip()
+        )
+
+        rec = {
+            "witness_id": witness_id,
+            "user_id": witness.id if witness else None,
+            "display_name": display_name,
+            "capacity": capacity.strip(),
+            "status": "INVITED",
+            "subpoena_id": None,
+            "testimony": [],
+            "added_by": interaction.user.id,
+            "added_at": discord.utils.utcnow().isoformat(),
+        }
+
+        witnesses.append(rec)
+
+        _committee_record(
+            node,
+            "witness_added",
+            interaction.user.id,
+            f"{display_name} added as a hearing witness.",
+            witness_id,
+            hearing_id=hearing_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"### Witness Notice — {witness_id}\n"
+                f"**{display_name}**\n"
+                f"Capacity: {capacity.strip()}\n"
+                f"Hearing: **{hearing_id}**"
+            ),
+        )
+
+        await interaction.response.send_message(
+            f"✅ Added **{display_name}** as `{witness_id}`.",
+            ephemeral=True,
+        )
+
+
+    @hearing.command(
+        name="witness_recognize",
+        description="Recognize a witness to testify.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        hearing_id=hearing_id_autocomplete,
+        witness_id=hearing_witness_autocomplete,
+    )
+    async def hearing_witness_recognize(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        hearing_id: str,
+        witness_id: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may recognize witnesses.",
+                ephemeral=True,
+            )
+
+        h = _find_committee_hearing(
+            node,
+            hearing_id,
+        )
+
+        if not h or h["status"] != "IN_SESSION":
+            return await interaction.response.send_message(
+                "The hearing is not in session.",
+                ephemeral=True,
+            )
+
+        witness = next(
+            (
+                w
+                for w in h.get("witnesses", [])
+                if w.get("witness_id") == witness_id
+            ),
+            None,
+        )
+
+        if not witness:
+            return await interaction.response.send_message(
+                "Witness not found.",
+                ephemeral=True,
+            )
+
+        h["recognized_witness_id"] = witness_id
+        witness["status"] = "RECOGNIZED"
+
+        _committee_record(
+            node,
+            "witness_recognized",
+            interaction.user.id,
+            f"{witness['display_name']} recognized to testify.",
+            witness_id,
+            hearing_id=hearing_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"**CHAIR:** The Committee recognizes "
+                f"**{witness['display_name']}** for testimony."
+            ),
+        )
+
+        await interaction.response.send_message(
+            "✅ Witness recognized.",
+            ephemeral=True,
+        )
+
+
+    @hearing.command(
+        name="testimony",
+        description="Enter witness testimony into the hearing record.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        hearing_id=hearing_id_autocomplete,
+        witness_id=hearing_witness_autocomplete,
+    )
+    async def hearing_testimony(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        hearing_id: str,
+        witness_id: str,
+        testimony: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        h = _find_committee_hearing(
+            node,
+            hearing_id,
+        )
+
+        if not h or h["status"] != "IN_SESSION":
+            return await interaction.response.send_message(
+                "The hearing is not in session.",
+                ephemeral=True,
+            )
+
+        witness = next(
+            (
+                w
+                for w in h.get("witnesses", [])
+                if w.get("witness_id") == witness_id
+            ),
+            None,
+        )
+
+        if not witness:
+            return await interaction.response.send_message(
+                "Witness not found.",
+                ephemeral=True,
+            )
+
+        allowed = _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        )
+
+        if witness.get("user_id") == interaction.user.id:
+            allowed = True
+
+        if not allowed:
+            return await interaction.response.send_message(
+                "Only that witness or committee leadership may enter this testimony.",
+                ephemeral=True,
+            )
+
+        entry = {
+            "text": testimony.strip(),
+            "entered_by": interaction.user.id,
+            "entered_at": discord.utils.utcnow().isoformat(),
+        }
+
+        witness.setdefault(
+            "testimony",
+            [],
+        ).append(entry)
+
+        witness["status"] = "TESTIFIED"
+
+        _committee_record(
+            node,
+            "testimony_entered",
+            interaction.user.id,
+            f"Testimony entered by {witness['display_name']}.",
+            witness_id,
+            hearing_id=hearing_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        chunks = self._draft_chunk_text(
+            testimony.strip(),
+            limit=1700,
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"### Testimony — {witness['display_name']}\n"
+                f"`{hearing_id}`\n\n{chunks[0]}"
+            ),
+        )
+
+        room = await self._get_committee_room_thread(
+            node
+        )
+
+        if room:
+            for chunk in chunks[1:]:
+                await room.send(chunk)
+
+        await interaction.response.send_message(
+            "✅ Testimony entered into the hearing record.",
+            ephemeral=True,
+        )
+
+
+    @hearing.command(
+        name="exhibit",
+        description="Enter an exhibit into a committee hearing record.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        hearing_id=hearing_id_autocomplete,
+    )
+    async def hearing_exhibit(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        hearing_id: str,
+        title: str,
+        attachment: discord.Attachment,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_member_or_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only committee members may enter exhibits.",
+                ephemeral=True,
+            )
+
+        h = _find_committee_hearing(
+            node,
+            hearing_id,
+        )
+
+        if not h:
+            return await interaction.response.send_message(
+                "Hearing not found.",
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        try:
+            file = await attachment.to_file()
+        except Exception:
+            return await interaction.followup.send(
+                "I could not read that attachment.",
+                ephemeral=True,
+            )
+
+        exhibit_no = (
+            len(
+                h.setdefault(
+                    "exhibits",
+                    [],
+                )
+            )
+            + 1
+        )
+
+        msg = await self._committee_post(
+            node,
+            content=(
+                f"### Committee Exhibit {exhibit_no}\n"
+                f"**{title.strip()}**\n"
+                f"Hearing: `{hearing_id}`"
+            ),
+            file=file,
+        )
+
+        exhibit = {
+            "number": exhibit_no,
+            "title": title.strip(),
+            "filename": attachment.filename,
+            "entered_by": interaction.user.id,
+            "entered_at": discord.utils.utcnow().isoformat(),
+            "message_id": msg.id if msg else None,
+            "jump_url": msg.jump_url if msg else None,
+        }
+
+        h["exhibits"].append(
+            exhibit
+        )
+
+        _committee_record(
+            node,
+            "exhibit_entered",
+            interaction.user.id,
+            f"Committee Exhibit {exhibit_no}: {title.strip()}",
+            hearing_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await interaction.followup.send(
+            f"✅ Entered as **Committee Exhibit {exhibit_no}**.",
+            ephemeral=True,
+        )
+    
+    @investigation.command(
+        name="open",
+        description="Open a formal congressional investigation.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete
+    )
+    async def investigation_open(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        title: str,
+        description: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may open an investigation.",
+                ephemeral=True,
+            )
+
+        inv_id = _next_committee_record_id(
+            self.federal_registry,
+            "INV",
+        )
+
+        inv = {
+            "investigation_id": inv_id,
+            "title": title.strip(),
+            "description": description.strip(),
+            "status": "OPEN",
+            "opened_by": interaction.user.id,
+            "opened_at": discord.utils.utcnow().isoformat(),
+            "closed_by": None,
+            "closed_at": None,
+            "findings": None,
+        }
+
+        _committee_investigations(
+            node
+        )[inv_id] = inv
+
+        _committee_record(
+            node,
+            "investigation_opened",
+            interaction.user.id,
+            f"Investigation opened: {title.strip()}",
+            inv_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        e = discord.Embed(
+            title=f"Investigation Opened — {inv_id}",
+            description=title.strip(),
+            color=discord.Color.dark_red(),
+        )
+
+        e.add_field(
+            name="Scope",
+            value=description.strip()[:1024],
+            inline=False,
+        )
+
+        await self._committee_post(
+            node,
+            embed=e,
+        )
+
+        await interaction.response.send_message(
+            f"✅ Opened **{inv_id}**.",
+            ephemeral=True,
+        )
+
+
+    @investigation.command(
+        name="info",
+        description="View a congressional investigation.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        investigation_id=investigation_id_autocomplete,
+    )
+    async def investigation_info(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        investigation_id: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        inv = _committee_investigations(
+            node
+        ).get(investigation_id)
+
+        if not inv:
+            return await interaction.response.send_message(
+                "Investigation not found.",
+                ephemeral=True,
+            )
+
+        e = discord.Embed(
+            title=f"{investigation_id} — {inv['title']}",
+            description=inv.get("description") or "",
+            color=discord.Color.dark_red(),
+        )
+
+        e.add_field(
+            name="Status",
+            value=inv.get("status", "UNKNOWN"),
+        )
+
+        related_subpoenas = [
+            sid
+            for sid, sub in _committee_subpoenas(node).items()
+            if sub.get("investigation_id") == investigation_id
+        ]
+
+        related_hearings = [
+            h["hearing_id"]
+            for h in _committee_hearings(node)
+            if h.get("investigation_id") == investigation_id
+        ]
+
+        e.add_field(
+            name="Hearings",
+            value=(
+                ", ".join(related_hearings)
+                or "(none)"
+            ),
+            inline=False,
+        )
+
+        e.add_field(
+            name="Subpoenas",
+            value=(
+                ", ".join(related_subpoenas)
+                or "(none)"
+            ),
+            inline=False,
+        )
+
+        if inv.get("findings"):
+            e.add_field(
+                name="Findings",
+                value=inv["findings"][:1024],
+                inline=False,
+            )
+
+        await interaction.response.send_message(
+            embed=e
+        )
+
+
+    @investigation.command(
+        name="close",
+        description="Close a congressional investigation and enter findings.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        investigation_id=investigation_id_autocomplete,
+    )
+    async def investigation_close(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        investigation_id: str,
+        findings: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may close an investigation.",
+                ephemeral=True,
+            )
+
+        inv = _committee_investigations(
+            node
+        ).get(investigation_id)
+
+        if not inv:
+            return await interaction.response.send_message(
+                "Investigation not found.",
+                ephemeral=True,
+            )
+
+        if inv["status"] == "CLOSED":
+            return await interaction.response.send_message(
+                "That investigation is already closed.",
+                ephemeral=True,
+            )
+
+        inv["status"] = "CLOSED"
+        inv["findings"] = findings.strip()
+        inv["closed_by"] = interaction.user.id
+        inv["closed_at"] = discord.utils.utcnow().isoformat()
+
+        _committee_record(
+            node,
+            "investigation_closed",
+            interaction.user.id,
+            f"Investigation closed: {inv['title']}",
+            investigation_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"# Investigation Closed — {investigation_id}\n\n"
+                f"**{inv['title']}**\n\n"
+                f"### Findings\n"
+                f"{findings.strip()}"
+            ),
+        )
+
+        await interaction.response.send_message(
+            "✅ Investigation closed and findings entered.",
+            ephemeral=True,
+        )
+
+    @subpoena.command(
+        name="issue",
+        description="Issue a committee subpoena for testimony or documents.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ],
+        kind=[
+            app_commands.Choice(name="Testimony", value="TESTIMONY"),
+            app_commands.Choice(name="Documents", value="DOCUMENTS"),
+            app_commands.Choice(name="Testimony and documents", value="BOTH"),
+        ],
+        tz=_TZ_CHOICES,
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        investigation_id=investigation_id_autocomplete,
+        hearing_id=hearing_id_autocomplete,
+    )
+    async def subpoena_issue(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        kind: str,
+        description: str,
+        recipient: discord.Member | None = None,
+        recipient_name: str | None = None,
+        investigation_id: str | None = None,
+        hearing_id: str | None = None,
+        due_date: str | None = None,
+        due_time: str | None = None,
+        tz: str = "America/Los_Angeles",
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may issue subpoenas.",
+                ephemeral=True,
+            )
+
+        if not recipient and not recipient_name:
+            return await interaction.response.send_message(
+                "Specify a Discord member or an external recipient name.",
+                ephemeral=True,
+            )
+
+        if investigation_id:
+            if investigation_id not in _committee_investigations(node):
+                return await interaction.response.send_message(
+                    "Investigation not found.",
+                    ephemeral=True,
+                )
+
+        if hearing_id:
+            if not _find_committee_hearing(
+                node,
+                hearing_id,
+            ):
+                return await interaction.response.send_message(
+                    "Hearing not found.",
+                    ephemeral=True,
+                )
+
+        due_at = None
+
+        if due_date or due_time:
+            if not due_date or not due_time:
+                return await interaction.response.send_message(
+                    "Provide both due_date and due_time.",
+                    ephemeral=True,
+                )
+
+            due_dt = _build_aware_dt(
+                due_date,
+                due_time,
+                tz,
+            )
+
+            if not due_dt:
+                return await interaction.response.send_message(
+                    "Invalid subpoena deadline.",
+                    ephemeral=True,
+                )
+
+            due_at = due_dt.astimezone(
+                timezone.utc
+            ).isoformat()
+
+        sub_id = _next_committee_record_id(
+            self.federal_registry,
+            "SUB",
+        )
+
+        display_name = (
+            recipient.display_name
+            if recipient
+            else recipient_name.strip()
+        )
+
+        sub = {
+            "subpoena_id": sub_id,
+            "recipient_user_id": (
+                recipient.id
+                if recipient
+                else None
+            ),
+            "recipient_name": display_name,
+            "kind": kind,
+            "description": description.strip(),
+            "investigation_id": investigation_id,
+            "hearing_id": hearing_id,
+            "due_at": due_at,
+            "status": "ISSUED",
+            "issued_by": interaction.user.id,
+            "issued_at": discord.utils.utcnow().isoformat(),
+            "response": None,
+            "challenge": None,
+        }
+
+        _committee_subpoenas(
+            node
+        )[sub_id] = sub
+
+        _committee_record(
+            node,
+            "subpoena_issued",
+            interaction.user.id,
+            f"Subpoena issued to {display_name}.",
+            sub_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        e = discord.Embed(
+            title=f"SUBPOENA — {sub_id}",
+            description=(
+                f"The Committee commands **{display_name}** "
+                f"to comply with the following compulsory process."
+            ),
+            color=discord.Color.dark_gold(),
+        )
+
+        e.add_field(
+            name="Demand",
+            value=description.strip()[:1024],
+            inline=False,
+        )
+
+        e.add_field(
+            name="Type",
+            value=kind.replace("_", " ").title(),
+        )
+
+        if investigation_id:
+            e.add_field(
+                name="Investigation",
+                value=investigation_id,
+            )
+
+        if hearing_id:
+            e.add_field(
+                name="Hearing",
+                value=hearing_id,
+            )
+
+        if due_at:
+            due_dt = datetime.fromisoformat(
+                due_at
+            )
+
+            e.add_field(
+                name="Compliance Due",
+                value=discord.utils.format_dt(
+                    due_dt,
+                    style="F",
+                ),
+                inline=False,
+            )
+
+        await self._committee_post(
+            node,
+            embed=e,
+        )
+
+        if hearing_id:
+            h = _find_committee_hearing(
+                node,
+                hearing_id,
+            )
+
+            if h:
+                for w in h.get(
+                    "witnesses",
+                    [],
+                ):
+                    if (
+                        recipient
+                        and w.get("user_id") == recipient.id
+                    ):
+                        w["subpoena_id"] = sub_id
+                        w["status"] = "SUBPOENAED"
+
+                save_federal_registry(
+                    self.federal_registry
+                )
+
+        await interaction.response.send_message(
+            f"✅ Issued **{sub_id}**.",
+            ephemeral=True,
+        )
+
+
+    @subpoena.command(
+        name="view",
+        description="View a committee subpoena.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        subpoena_id=subpoena_id_autocomplete,
+    )
+    async def subpoena_view(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        subpoena_id: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        sub = _committee_subpoenas(
+            node
+        ).get(subpoena_id)
+
+        if not sub:
+            return await interaction.response.send_message(
+                "Subpoena not found.",
+                ephemeral=True,
+            )
+
+        e = discord.Embed(
+            title=f"{subpoena_id} — {sub['recipient_name']}",
+            description=sub.get("description") or "",
+            color=discord.Color.dark_gold(),
+        )
+
+        e.add_field(
+            name="Status",
+            value=sub.get("status", "UNKNOWN"),
+        )
+
+        e.add_field(
+            name="Type",
+            value=sub.get("kind", "UNKNOWN").title(),
+        )
+
+        if sub.get("investigation_id"):
+            e.add_field(
+                name="Investigation",
+                value=sub["investigation_id"],
+            )
+
+        if sub.get("hearing_id"):
+            e.add_field(
+                name="Hearing",
+                value=sub["hearing_id"],
+            )
+
+        if sub.get("response"):
+            e.add_field(
+                name="Response",
+                value=sub["response"][:1024],
+                inline=False,
+            )
+
+        if sub.get("challenge"):
+            e.add_field(
+                name="Challenge",
+                value=sub["challenge"][:1024],
+                inline=False,
+            )
+
+        await interaction.response.send_message(
+            embed=e
+        )
+
+
+    @subpoena.command(
+        name="respond",
+        description="Respond to a subpoena.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ],
+        compliance=[
+            app_commands.Choice(name="Complied", value="COMPLIED"),
+            app_commands.Choice(name="Partially complied", value="PARTIALLY_COMPLIED"),
+        ],
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        subpoena_id=subpoena_id_autocomplete,
+    )
+    async def subpoena_respond(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        subpoena_id: str,
+        compliance: str,
+        response: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        sub = _committee_subpoenas(
+            node
+        ).get(subpoena_id)
+
+        if not sub:
+            return await interaction.response.send_message(
+                "Subpoena not found.",
+                ephemeral=True,
+            )
+
+        permitted = (
+            sub.get("recipient_user_id") == interaction.user.id
+            or _committee_can_control(
+                interaction.user,
+                node,
+                chamber,
+            )
+        )
+
+        if not permitted:
+            return await interaction.response.send_message(
+                "You are not the subpoena recipient.",
+                ephemeral=True,
+            )
+
+        sub["status"] = compliance
+        sub["response"] = response.strip()
+        sub["responded_by"] = interaction.user.id
+        sub["responded_at"] = discord.utils.utcnow().isoformat()
+
+        _committee_record(
+            node,
+            "subpoena_response",
+            interaction.user.id,
+            f"{subpoena_id} received a response.",
+            subpoena_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"### Subpoena Response — {subpoena_id}\n"
+                f"Status: **{compliance.replace('_', ' ').title()}**\n\n"
+                f"{response.strip()}"
+            ),
+        )
+
+        await interaction.response.send_message(
+            "✅ Response entered.",
+            ephemeral=True,
+        )
+
+
+    @subpoena.command(
+        name="challenge",
+        description="Challenge a committee subpoena.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        subpoena_id=subpoena_id_autocomplete,
+    )
+    async def subpoena_challenge(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        subpoena_id: str,
+        grounds: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        sub = _committee_subpoenas(
+            node
+        ).get(subpoena_id)
+
+        if not sub:
+            return await interaction.response.send_message(
+                "Subpoena not found.",
+                ephemeral=True,
+            )
+
+        if (
+            sub.get("recipient_user_id") != interaction.user.id
+            and not _committee_can_control(
+                interaction.user,
+                node,
+                chamber,
+            )
+        ):
+            return await interaction.response.send_message(
+                "Only the subpoena recipient may challenge it.",
+                ephemeral=True,
+            )
+
+        sub["challenge"] = grounds.strip()
+        sub["challenge_by"] = interaction.user.id
+        sub["challenge_at"] = discord.utils.utcnow().isoformat()
+        sub["status"] = "CHALLENGED"
+
+        _committee_record(
+            node,
+            "subpoena_challenged",
+            interaction.user.id,
+            f"{subpoena_id} was challenged.",
+            subpoena_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"### Challenge to Subpoena — {subpoena_id}\n"
+                f"{grounds.strip()}"
+            ),
+        )
+
+        await interaction.response.send_message(
+            "✅ Challenge entered.",
+            ephemeral=True,
+        )
+
+
+    @subpoena.command(
+        name="status",
+        description="Set the committee's disposition of a subpoena.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ],
+        status=[
+            app_commands.Choice(name="Issued", value="ISSUED"),
+            app_commands.Choice(name="Complied", value="COMPLIED"),
+            app_commands.Choice(name="Partially complied", value="PARTIALLY_COMPLIED"),
+            app_commands.Choice(name="Noncompliant", value="NONCOMPLIANT"),
+            app_commands.Choice(name="Quashed", value="QUASHED"),
+            app_commands.Choice(name="Withdrawn", value="WITHDRAWN"),
+            app_commands.Choice(name="Contempt referred", value="CONTEMPT_REFERRED"),
+        ],
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        subpoena_id=subpoena_id_autocomplete,
+    )
+    async def subpoena_status(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        subpoena_id: str,
+        status: str,
+        note: str | None = None,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may dispose of subpoenas.",
+                ephemeral=True,
+            )
+
+        sub = _committee_subpoenas(
+            node
+        ).get(subpoena_id)
+
+        if not sub:
+            return await interaction.response.send_message(
+                "Subpoena not found.",
+                ephemeral=True,
+            )
+
+        sub["status"] = status
+        sub["status_note"] = note
+        sub["status_changed_by"] = interaction.user.id
+        sub["status_changed_at"] = discord.utils.utcnow().isoformat()
+
+        _committee_record(
+            node,
+            "subpoena_status",
+            interaction.user.id,
+            f"{subpoena_id}: {status.replace('_', ' ').title()}",
+            subpoena_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        body = (
+            f"### Subpoena Disposition — {subpoena_id}\n"
+            f"**{status.replace('_', ' ').title()}**"
+        )
+
+        if note:
+            body += f"\n\n{note}"
+
+        await self._committee_post(
+            node,
+            content=body,
+        )
+
+        await interaction.response.send_message(
+            "✅ Subpoena status updated.",
+            ephemeral=True,
+        )
+
+    @markup.command(
+        name="open",
+        description="Open committee markup on referred legislation.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        item_id=committee_item_autocomplete,
+    )
+    async def markup_open(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        item_id: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may open markup.",
+                ephemeral=True,
+            )
+
+        item = self.drafts_db.get_committee_item(
+            item_id
+        )
+
+        committee_key, subcommittee_key = (
+            _split_committee_value(name)
+        )
+
+        if (
+            not item
+            or item["committee_body"] != chamber
+            or item["committee_key"] != committee_key
+            or item["subcommittee_key"] != subcommittee_key
+        ):
+            return await interaction.response.send_message(
+                "That legislation is not before this committee.",
+                ephemeral=True,
+            )
+
+        if item["status"] not in {
+            "REFERRED",
+            "VOTE_FAILED",
+        }:
+            return await interaction.response.send_message(
+                "That item is not eligible for markup.",
+                ephemeral=True,
+            )
+
+        markups = _committee_markups(
+            node
+        )
+
+        existing = markups.get(
+            item_id
+        )
+
+        if existing and existing.get("status") == "OPEN":
+            return await interaction.response.send_message(
+                "Markup is already open on that item.",
+                ephemeral=True,
+            )
+
+        markups[item_id] = {
+            "item_id": item_id,
+            "status": "OPEN",
+            "opened_by": interaction.user.id,
+            "opened_at": discord.utils.utcnow().isoformat(),
+            "closed_by": None,
+            "closed_at": None,
+            "amendments": {},
+        }
+
+        _committee_record(
+            node,
+            "markup_opened",
+            interaction.user.id,
+            f"Markup opened on {item_id}.",
+            item_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"# Markup — {item_id}\n\n"
+                f"**{item['title']}**\n\n"
+                f"The Committee will proceed to consideration "
+                f"and amendment of the measure."
+            ),
+        )
+
+        await interaction.response.send_message(
+            f"✅ Markup opened on **{item_id}**.",
+            ephemeral=True,
+        )
+
+
+    @markup.command(
+        name="amend",
+        description="Propose an amendment during committee markup.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ],
+        bin_key=[
+            app_commands.Choice(
+                name=label,
+                value=key,
+            )
+            for key, label in DRAFT_BINS.items()
+        ],
+        mode=[
+            app_commands.Choice(name="Replace entire bin", value="replace_bin"),
+            app_commands.Choice(name="Replace subbin", value="replace_subbin"),
+            app_commands.Choice(name="Add subbin", value="add_subbin"),
+            app_commands.Choice(name="Delete subbin", value="delete_subbin"),
+        ],
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        item_id=committee_item_autocomplete,
+    )
+    async def markup_amend(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        item_id: str,
+        mode: str,
+        bin_key: str,
+        text: str = "",
+        title: str = "",
+        subbin_id: str | None = None,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_member_or_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only committee members may offer amendments.",
+                ephemeral=True,
+            )
+
+        markup_rec = _committee_markups(
+            node
+        ).get(item_id)
+
+        if not markup_rec or markup_rec.get("status") != "OPEN":
+            return await interaction.response.send_message(
+                "Markup is not open on that legislation.",
+                ephemeral=True,
+            )
+
+        if mode in {
+            "replace_subbin",
+            "delete_subbin",
+        } and not subbin_id:
+            return await interaction.response.send_message(
+                "That amendment mode requires a subbin_id.",
+                ephemeral=True,
+            )
+
+        amendment_id = _next_committee_record_id(
+            self.federal_registry,
+            "AMDT",
+        )
+
+        amendment = {
+            "amendment_id": amendment_id,
+            "item_id": item_id,
+            "proposer_id": interaction.user.id,
+            "mode": mode,
+            "bin_key": bin_key,
+            "subbin_id": subbin_id,
+            "title": title.strip(),
+            "text": text.strip(),
+            "status": "PROPOSED",
+            "proposed_at": discord.utils.utcnow().isoformat(),
+            "poll_channel_id": None,
+            "poll_message_id": None,
+        }
+
+        markup_rec.setdefault(
+            "amendments",
+            {},
+        )[amendment_id] = amendment
+
+        _committee_record(
+            node,
+            "amendment_proposed",
+            interaction.user.id,
+            f"{amendment_id} proposed to {item_id}.",
+            amendment_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        e = discord.Embed(
+            title=f"Committee Amendment — {amendment_id}",
+            description=f"To **{item_id}**",
+            color=discord.Color.orange(),
+        )
+
+        e.add_field(
+            name="Operation",
+            value=mode.replace("_", " ").title(),
+        )
+
+        e.add_field(
+            name="Bin",
+            value=DRAFT_BINS.get(
+                bin_key,
+                bin_key,
+            ),
+        )
+
+        if subbin_id:
+            e.add_field(
+                name="Subbin",
+                value=str(subbin_id),
+            )
+
+        if title:
+            e.add_field(
+                name="Title",
+                value=title[:1024],
+                inline=False,
+            )
+
+        if text:
+            e.add_field(
+                name="Proposed Text",
+                value=text[:1024],
+                inline=False,
+            )
+
+        await self._committee_post(
+            node,
+            embed=e,
+        )
+
+        await interaction.response.send_message(
+            f"✅ Offered **{amendment_id}**.",
+            ephemeral=True,
+        )
+
+    @markup.command(
+        name="vote_open",
+        description="Open a committee vote on a markup amendment.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        item_id=committee_item_autocomplete,
+        amendment_id=amendment_id_autocomplete,
+    )
+    async def markup_vote_open(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        item_id: str,
+        amendment_id: str,
+        hours: app_commands.Range[int, 1, 168] = 24,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may open the vote.",
+                ephemeral=True,
+            )
+
+        markup_rec = _committee_markups(
+            node
+        ).get(item_id)
+
+        amendment = (
+            markup_rec.get(
+                "amendments",
+                {},
+            ).get(amendment_id)
+            if markup_rec
+            else None
+        )
+
+        if not amendment or amendment["status"] != "PROPOSED":
+            return await interaction.response.send_message(
+                "That amendment is not awaiting a vote.",
+                ephemeral=True,
+            )
+
+        room = await self._get_committee_room_thread(
+            node
+        )
+
+        if not room:
+            return await interaction.response.send_message(
+                "The committee has no functioning room.",
+                ephemeral=True,
+            )
+
+        eligible_ids = _committee_eligible_ids(
+            interaction.guild,
+            node,
+        )
+
+        quorum = quorum_required(
+            len(eligible_ids)
+        )
+
+        poll = discord.Poll(
+            question=(
+                f"Shall {amendment_id} to {item_id} be agreed to?"
+            ),
+            duration=timedelta(
+                hours=int(hours)
+            ),
+            multiple=False,
+        )
+
+        poll.add_answer(
+            text="Yea",
+            emoji="✅",
+        )
+
+        poll.add_answer(
+            text="Nay",
+            emoji="❌",
+        )
+
+        poll.add_answer(
+            text="Present",
+            emoji="➖",
+        )
+
+        msg = await room.send(
+            f"### Amendment Vote — {amendment_id}\n"
+            f"Measure: **{item_id}**\n"
+            f"Quorum: **{quorum}**",
+            poll=poll,
+        )
+
+        amendment["status"] = "VOTE_OPEN"
+        amendment["poll_channel_id"] = room.id
+        amendment["poll_message_id"] = msg.id
+        amendment["vote_opened_by"] = interaction.user.id
+        amendment["vote_opened_at"] = discord.utils.utcnow().isoformat()
+        amendment["quorum"] = quorum
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await interaction.response.send_message(
+            f"✅ Vote opened: {msg.jump_url}",
+            ephemeral=True,
+        )
+
+
+    @markup.command(
+        name="vote_close",
+        description="Close a committee vote on a markup amendment.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        item_id=committee_item_autocomplete,
+        amendment_id=amendment_id_autocomplete,
+    )
+    async def markup_vote_close(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        item_id: str,
+        amendment_id: str,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.followup.send(
+                "Only the Chair or chamber leadership may close the vote.",
+                ephemeral=True,
+            )
+
+        markup_rec = _committee_markups(
+            node
+        ).get(item_id)
+
+        amendment = (
+            markup_rec.get(
+                "amendments",
+                {},
+            ).get(amendment_id)
+            if markup_rec
+            else None
+        )
+
+        if not amendment or amendment["status"] != "VOTE_OPEN":
+            return await interaction.followup.send(
+                "That amendment has no open vote.",
+                ephemeral=True,
+            )
+
+        channel = self.bot.get_channel(
+            int(amendment["poll_channel_id"])
+        )
+
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(
+                    int(amendment["poll_channel_id"])
+                )
+            except Exception:
+                return await interaction.followup.send(
+                    "Could not locate the vote channel.",
+                    ephemeral=True,
+                )
+
+        try:
+            msg = await channel.fetch_message(
+                int(amendment["poll_message_id"])
+            )
+        except Exception:
+            return await interaction.followup.send(
+                "Could not fetch the amendment poll.",
+                ephemeral=True,
+            )
+
+        try:
+            msg = await msg.end_poll()
+        except Exception:
+            try:
+                msg = await channel.fetch_message(
+                    msg.id
+                )
+            except Exception:
+                pass
+
+        eligible_ids = _committee_eligible_ids(
+            interaction.guild,
+            node,
+        )
+
+        yea, nay, present, total = await _tally_committee_poll(
+            msg,
+            eligible_ids,
+        )
+
+        quorum = int(
+            amendment.get("quorum")
+            or 0
+        )
+
+        if total < quorum:
+            outcome = "NO_QUORUM"
+
+        else:
+            outcome = _decide(
+                yea,
+                nay,
+                present,
+                "simple",
+            )
+
+        if outcome == "PASSED":
+            applied = self.drafts_db.apply_committee_amendment(
+                committee_item_id=item_id,
+                mode=amendment["mode"],
+                bin_key=amendment["bin_key"],
+                replacement_text=amendment.get("text") or "",
+                replacement_title=amendment.get("title") or "",
+                subbin_id=amendment.get("subbin_id"),
+            )
+
+            if not applied:
+                return await interaction.followup.send(
+                    "The amendment passed, but I could not apply it "
+                    "to the committee text. The vote record has not "
+                    "been finalized.",
+                    ephemeral=True,
+                )
+
+            amendment["status"] = "ADOPTED"
+
+        elif outcome == "FAILED":
+            amendment["status"] = "REJECTED"
+
+        else:
+            amendment["status"] = "PROPOSED"
+
+        amendment["yea"] = yea
+        amendment["nay"] = nay
+        amendment["present"] = present
+        amendment["outcome"] = outcome
+        amendment["vote_closed_by"] = interaction.user.id
+        amendment["vote_closed_at"] = discord.utils.utcnow().isoformat()
+
+        _committee_record(
+            node,
+            "amendment_vote",
+            interaction.user.id,
+            (
+                f"{amendment_id}: "
+                f"{outcome.replace('_', ' ').title()} "
+                f"({yea}-{nay}-{present})"
+            ),
+            amendment_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"### Amendment Vote Result — {amendment_id}\n"
+                f"**{outcome.replace('_', ' ').title()}**\n"
+                f"Yea {yea} · Nay {nay} · Present {present}"
+            ),
+        )
+
+        await interaction.followup.send(
+            f"✅ {amendment_id}: **{outcome.replace('_', ' ')}**.",
+            ephemeral=True,
+        )
+
+
+    @markup.command(
+        name="close",
+        description="Close committee markup on legislation.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete,
+        item_id=committee_item_autocomplete,
+    )
+    async def markup_close(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        item_id: str,
+    ):
+        _, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node or not _committee_can_control(
+            interaction.user,
+            node,
+            chamber,
+        ):
+            return await interaction.response.send_message(
+                "Only the Chair or chamber leadership may close markup.",
+                ephemeral=True,
+            )
+
+        markup_rec = _committee_markups(
+            node
+        ).get(item_id)
+
+        if not markup_rec or markup_rec.get("status") != "OPEN":
+            return await interaction.response.send_message(
+                "Markup is not open.",
+                ephemeral=True,
+            )
+
+        pending_votes = [
+            a
+            for a in markup_rec.get(
+                "amendments",
+                {},
+            ).values()
+            if a.get("status") == "VOTE_OPEN"
+        ]
+
+        if pending_votes:
+            return await interaction.response.send_message(
+                "An amendment vote is still open.",
+                ephemeral=True,
+            )
+
+        markup_rec["status"] = "CLOSED"
+        markup_rec["closed_by"] = interaction.user.id
+        markup_rec["closed_at"] = discord.utils.utcnow().isoformat()
+
+        adopted = [
+            aid
+            for aid, a in markup_rec.get(
+                "amendments",
+                {},
+            ).items()
+            if a.get("status") == "ADOPTED"
+        ]
+
+        _committee_record(
+            node,
+            "markup_closed",
+            interaction.user.id,
+            f"Markup closed on {item_id}.",
+            item_id,
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await self._committee_post(
+            node,
+            content=(
+                f"# Markup Concluded — {item_id}\n\n"
+                f"Adopted amendments: "
+                f"{', '.join(adopted) if adopted else '(none)'}\n\n"
+                f"The measure is ready for the Committee's "
+                f"vote on whether to report."
+            ),
+        )
+
+        await interaction.response.send_message(
+            "✅ Markup closed.",
+            ephemeral=True,
         )
