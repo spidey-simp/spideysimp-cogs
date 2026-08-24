@@ -7094,9 +7094,9 @@ class SpideyGov(commands.Cog):
                 continue
 
             label = (
-                f"{hearing_id} — "
-                f"{h.get('title') or 'Untitled'} "
-                f"[{h.get('status', 'UNKNOWN')}]"
+                f"{hearing_id} "
+                f"[{h.get('status', 'UNKNOWN')}] — "
+                f"{h.get('title') or 'Untitled'}"
             )
 
             if not cur or cur in label.lower():
@@ -16563,15 +16563,38 @@ class SpideyGov(commands.Cog):
             self.federal_registry
         )
 
+        witness_label = (
+            witness.mention
+            if witness
+            else f"**{display_name}**"
+        )
+
         await self._committee_post(
             node,
             content=(
                 f"### Witness Notice — {witness_id}\n"
-                f"**{display_name}**\n"
+                f"{witness_label}\n"
                 f"Capacity: {capacity.strip()}\n"
                 f"Hearing: **{hearing_id}**"
             ),
         )
+
+        if witness:
+            try:
+                when_text = h.get("when") or "See the committee notice for scheduling information."
+
+                await witness.send(
+                    f"### Senate Committee Witness Invitation\n\n"
+                    f"You have been invited to appear as a witness before "
+                    f"**{node.get('name', 'the Committee')}**.\n\n"
+                    f"**Hearing:** {h.get('title') or hearing_id}\n"
+                    f"**Hearing ID:** {hearing_id}\n"
+                    f"**When:** {when_text}\n"
+                    f"**Capacity:** {capacity.strip()}\n\n"
+                    f"Please contact the Committee Chair if you have any questions."
+                )
+            except Exception:
+                pass
 
         await interaction.response.send_message(
             f"✅ Added **{display_name}** as `{witness_id}`.",
