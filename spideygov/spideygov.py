@@ -18494,3 +18494,81 @@ class SpideyGov(commands.Cog):
             "✅ Markup closed.",
             ephemeral=True,
         )
+
+    @committees.command(
+        name="bootstrap_existing",
+        description="TEMPORARY: initialize an existing committee.",
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(name="Senate", value="senate"),
+            app_commands.Choice(name="House", value="house"),
+            app_commands.Choice(name="Joint", value="joint"),
+        ]
+    )
+    @app_commands.autocomplete(
+        name=committee_name_autocomplete
+    )
+    async def committee_bootstrap_existing(
+        self,
+        interaction: discord.Interaction,
+        chamber: str,
+        name: str,
+        jurisdiction: str,
+    ):
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(
+                "Administrator only.",
+                ephemeral=True,
+            )
+
+        parent, node = _resolve_committee_node(
+            self.federal_registry,
+            chamber,
+            name,
+        )
+
+        if not node:
+            return await interaction.response.send_message(
+                "Committee not found.",
+                ephemeral=True,
+            )
+
+        node["jurisdiction"] = jurisdiction.strip()
+
+        node.setdefault("hearings", [])
+        node.setdefault("investigations", {})
+        node.setdefault("subpoenas", {})
+        node.setdefault("markups", {})
+        node.setdefault("record", [])
+
+        room = await self._ensure_committee_room(
+            chamber,
+            name,
+            node,
+            parent,
+        )
+
+        if not room:
+            return await interaction.response.send_message(
+                "I couldn't create the committee room.",
+                ephemeral=True,
+            )
+
+        _committee_record(
+            node,
+            "committee_initialized",
+            interaction.user.id,
+            "Existing committee initialized under the new committee system.",
+        )
+
+        save_federal_registry(
+            self.federal_registry
+        )
+
+        await interaction.response.send_message(
+            f"✅ **{node.get('name', name)}** initialized.\n"
+            f"Room: {room.mention}\n"
+            f"Jurisdiction: {node['jurisdiction']}",
+            ephemeral=True,
+        )
