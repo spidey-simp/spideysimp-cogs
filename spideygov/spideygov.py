@@ -57,7 +57,7 @@ BOT_DEPARTMENT_CHANNEL = 1423094053247127623
 COMMITTEE_FORUM_CHANNEL_ID = 1541302386587476008
 
 CITIZENSHIP = {
-    "commons": 1415927703340716102,
+    "new_york": 1415927703340716102,
     "gaming": 1415928304757637175,
     "dp": 1415928367730921482,
     "crazy_times": 1415928481505738792,
@@ -151,6 +151,102 @@ def _format_measure_id(measure_id: str) -> str:
             return f"{display}{raw_num}"
 
     return measure_id
+
+# --- Public opinion issue taxonomy ---
+#
+# These are national ISSUE categories, not territorial/state categories.
+# Keep the machine keys stable once public-opinion data begins using them.
+PUBLIC_ISSUE_CATEGORIES = {
+    "economy": {
+        "name": "Economy",
+        "description": "Overall economic health, growth, employment, productivity, investment, and business activity.",
+    },
+    "living_standards": {
+        "name": "Living Standards / Affordability",
+        "description": "How comfortably ordinary people can live, including wages, poverty, prices, inequality, and household financial pressure.",
+    },
+    "government_finances": {
+        "name": "Government Finances",
+        "description": "The fiscal condition of government, including revenue, spending, deficits, debt, and long-term sustainability.",
+    },
+    "healthcare": {
+        "name": "Healthcare",
+        "description": "Healthcare access, affordability, quality, capacity, and population health outcomes.",
+    },
+    "education": {
+        "name": "Education",
+        "description": "Access to, quality of, and affordability of education and the strength of educational institutions.",
+    },
+    "housing": {
+        "name": "Housing",
+        "description": "Housing availability, affordability, stability, quality, homelessness, and residential supply pressures.",
+    },
+    "public_safety": {
+        "name": "Public Safety",
+        "description": "Crime, violence, emergency threats, community safety, and the public's exposure to physical harm.",
+    },
+    "justice_system": {
+        "name": "Justice System",
+        "description": "The fairness, effectiveness, accessibility, timeliness, and integrity of courts, policing, corrections, and legal process.",
+    },
+    "immigration": {
+        "name": "Immigration",
+        "description": "The functioning of immigration, border, visa, asylum, residency, naturalization, and integration systems.",
+    },
+    "individual_liberties": {
+        "name": "Individual Liberties / Personal Freedom",
+        "description": "The ability of individuals to make personal choices and exercise freedoms without unjustified government interference.",
+    },
+    "human_rights": {
+        "name": "Human Rights / Equality",
+        "description": "Equal treatment, protection from discrimination and abuse, and the practical protection of fundamental human rights.",
+    },
+    "social_cohesion": {
+        "name": "Social Cohesion / Intergroup Relations",
+        "description": "Social trust, polarization, racial and religious tension, intergroup acceptance, communal conflict, and civic cohesion.",
+    },
+    "governance": {
+        "name": "Governance / Institutions",
+        "description": "Government effectiveness, democratic functioning, administrative capacity, corruption, transparency, legitimacy, and institutional trust.",
+    },
+    "infrastructure": {
+        "name": "Infrastructure",
+        "description": "Transportation, utilities, communications, public works, resilience, and the physical systems society depends upon.",
+    },
+    "energy": {
+        "name": "Energy",
+        "description": "Energy availability, reliability, affordability, production capacity, security, and transition pressures.",
+    },
+    "environment": {
+        "name": "Environment",
+        "description": "Pollution, emissions, climate pressures, ecosystems, conservation, and environmental quality.",
+    },
+    "military_national_security": {
+        "name": "Military / National Security",
+        "description": "Military readiness, defense capability, terrorism, strategic threats, homeland security, and national-security resilience.",
+    },
+    "foreign_affairs": {
+        "name": "Foreign Affairs",
+        "description": "Diplomacy, alliances, international influence, foreign assistance, trade relations, and relations with other nations.",
+    },
+    "science_technology": {
+        "name": "Science & Technology",
+        "description": "Scientific capacity, research, innovation, emerging technology, digital systems, and technological competitiveness.",
+    },
+}
+
+PUBLIC_ISSUE_ORDER = tuple(PUBLIC_ISSUE_CATEGORIES.keys())
+
+
+def _public_issue_choices() -> list[app_commands.Choice[str]]:
+    """Reusable slash-command choices for the canonical national issue taxonomy."""
+    return [
+        app_commands.Choice(
+            name=PUBLIC_ISSUE_CATEGORIES[key]["name"],
+            value=key,
+        )
+        for key in PUBLIC_ISSUE_ORDER
+    ]
 
 
 MOTION_TYPES = {
@@ -5221,10 +5317,10 @@ class USCSectionPaginator(discord.ui.View):
         await interaction.response.edit_message(view=None)
 
 CATEGORIES = {
-    "commons": {
-        "name": "Commons",
-        "description": "The general use category for the server.",
-        "role_id": CITIZENSHIP["commons"],
+    "new_york": {
+        "name": "New York",
+        "description": "The home of the Big Apple, Spiagara Falls, and where dreams are made of.",
+        "role_id": CITIZENSHIP["new_york"],
     },
     "gaming": {
         "name": "Gaming",
@@ -8834,9 +8930,11 @@ class SpideyGov(commands.Cog):
     registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
-   
-    news = app_commands.Group(name="news", description="News network tools")
-    social = app_commands.Group(name="social", description="Spidder (in-universe social feed)")
+
+    public = app_commands.Group(name="public", description="The Spidey Republic Public")
+    news = app_commands.Group(name="news", description="News network tools", parent=public)
+    social = app_commands.Group(name="social", description="Spidder (in-universe social feed)", parent=public)
+    opinion = app_commands.Group(name="opinion", description="Commands for seeing the public opinion", parent=public)
 
     legislature = app_commands.Group(name="legislature", description="Legislative commands")
     bill = app_commands.Group(name="bill", description="Bills and legislative instruments")
@@ -10292,7 +10390,7 @@ class SpideyGov(commands.Cog):
             if not isinstance(counts, dict) or not counts:
                 raise ValueError
         except Exception:
-            return await interaction.response.send_message("Bad JSON. Expect: {\"commons\": 5, \"gaming\": 3, ...}", ephemeral=True)
+            return await interaction.response.send_message("Bad JSON. Expect: {\"new_york\": 5, \"gaming\": 3, ...}", ephemeral=True)
 
         # equal proportions divisor method (quick and dirty)
         seats = {k: 1 for k in counts}  # min 1
@@ -11434,7 +11532,7 @@ class SpideyGov(commands.Cog):
     @app_commands.describe(new_citizenship="The citizenship role to move to")
     @app_commands.checks.has_role(CITIZENSHIP_ROLE)
     @app_commands.choices(new_citizenship=[
-        app_commands.Choice(name="Commons", value="commons"),
+        app_commands.Choice(name="New York", value="new_york"),
         app_commands.Choice(name="Gaming", value="gaming"),
         app_commands.Choice(name="Spideyton, District of Parker", value="dp"),
         app_commands.Choice(name="Crazy Times", value="crazy_times"),
@@ -11675,7 +11773,7 @@ class SpideyGov(commands.Cog):
         ],
         # optional category for citizenship approval
         category=[
-            app_commands.Choice(name="Commons", value="commons"),
+            app_commands.Choice(name="New York", value="new_york"),
             app_commands.Choice(name="Gaming", value="gaming"),
             app_commands.Choice(name="Spideyton, District of Parker", value="dp"),
             app_commands.Choice(name="Crazy Times", value="crazy_times"),
@@ -11825,7 +11923,7 @@ class SpideyGov(commands.Cog):
         category="The category to view info about"
     )
     @app_commands.choices(category=[
-        app_commands.Choice(name="Commons", value="commons"),
+        app_commands.Choice(name="New York", value="new_york"),
         app_commands.Choice(name="Gaming", value="gaming"),
         app_commands.Choice(name="Spideyton, District of Parker", value="dp"),
         app_commands.Choice(name="Crazy Times", value="crazy_times"),
@@ -20001,5 +20099,40 @@ class SpideyGov(commands.Cog):
         await interaction.followup.send(
             f"✅ {member.mention} removed from the prospective "
             f"original cosponsors of **{draft_id}**.",
+            ephemeral=True,
+        )
+
+    @opinion.command(
+        name="categories",
+        description="View the national issue categories tracked by the public-opinion system.",
+    )
+    async def opinion_categories(
+        self,
+        interaction: discord.Interaction,
+    ):
+        embed = discord.Embed(
+            title="National Public Opinion Categories",
+            description=(
+                "These are the canonical national issues used by the "
+                "Spidey Republic public-opinion system."
+            ),
+            color=discord.Color.blurple(),
+        )
+
+        for key in PUBLIC_ISSUE_ORDER:
+            issue = PUBLIC_ISSUE_CATEGORIES[key]
+
+            embed.add_field(
+                name=issue["name"],
+                value=issue["description"],
+                inline=False,
+            )
+
+        embed.set_footer(
+            text=f"{len(PUBLIC_ISSUE_ORDER)} national issue categories"
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
             ephemeral=True,
         )
