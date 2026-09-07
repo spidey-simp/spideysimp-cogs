@@ -712,6 +712,33 @@ class PublicOpinionDB:
         finally:
             conn.close()
 
+PUBLIC_OPINION_SORT_CHOICES = [
+    app_commands.Choice(
+        name="Highest score",
+        value="score_high",
+    ),
+    app_commands.Choice(
+        name="Lowest score",
+        value="score_low",
+    ),
+    app_commands.Choice(
+        name="Highest salience",
+        value="salience_high",
+    ),
+    app_commands.Choice(
+        name="Lowest salience",
+        value="salience_low",
+    ),
+    app_commands.Choice(
+        name="Highest trend",
+        value="trend_high",
+    ),
+    app_commands.Choice(
+        name="Lowest trend",
+        value="trend_low",
+    ),
+]
+
 MOTION_TYPES = {
     "adjourn": {
         "name": "Motion to Adjourn",
@@ -20701,4 +20728,180 @@ class SpideyGov(commands.Cog):
             ephemeral=True,
         )
 
-        
+    @opinion.command(
+        name="dashboard",
+        description="View and sort national public-opinion conditions.",
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.choices(
+        sort_by=PUBLIC_OPINION_SORT_CHOICES,
+    )
+    async def opinion_dashboard(
+        self,
+        interaction: discord.Interaction,
+        sort_by: app_commands.Choice[str],
+    ):
+        async with self.public_opinion_lock:
+            rows = self.public_opinion_db.list_issues()
+
+        if not rows:
+            await interaction.response.send_message(
+                "❌ No public-opinion data exists.",
+                ephemeral=True,
+            )
+            return
+
+        def numeric(
+            row: dict,
+            field: str,
+            default: float,
+        ) -> float:
+            value = row.get(field)
+
+            if value is None:
+                return default
+
+            return float(value)
+
+        sort_value = sort_by.value
+
+        if sort_value == "score_high":
+            rows.sort(
+                key=lambda row: numeric(
+                    row,
+                    "condition_score",
+                    -999,
+                ),
+                reverse=True,
+            )
+            sort_label = "Highest Condition Score"
+
+        elif sort_value == "score_low":
+            rows.sort(
+                key=lambda row: numeric(
+                    row,
+                    "condition_score",
+                    999,
+                ),
+            )
+            sort_label = "Lowest Condition Score"
+
+        elif sort_value == "salience_high":
+            rows.sort(
+                key=lambda row: numeric(
+                    row,
+                    "effective_salience",
+                    -999,
+                ),
+                reverse=True,
+            )
+            sort_label = "Highest Salience"
+
+        elif sort_value == "salience_low":
+            rows.sort(
+                key=lambda row: numeric(
+                    row,
+                    "effective_salience",
+                    999,
+                ),
+            )
+            sort_label = "Lowest Salience"
+
+        elif sort_value == "trend_high":
+            rows.sort(
+                key=lambda row: numeric(
+                    row,
+                    "trend",
+                    -999,
+                ),
+                reverse=True,
+            )
+            sort_label = "Highest Trend"
+
+        elif sort_value == "trend_low":
+            rows.sort(
+                key=lambda row: numeric(
+                    row,
+                    "trend",
+                    999,
+                ),
+            )
+            sort_label = "Lowest Trend"
+
+        else:
+            await interaction.response.send_message(
+                "❌ Invalid sorting method.",
+                ephemeral=True,
+            )
+            return
+
+        lines = []
+
+        for index, row in enumerate(
+            rows,
+            start=1,
+        ):
+            issue_key = row["issue_key"]
+
+            info = PUBLIC_ISSUE_CATEGORIES.get(
+                issue_key,
+                {
+                    "name": issue_key,
+                },
+            )
+
+            score = row.get("condition_score")
+            salience = row.get("effective_salience")
+            trend = row.get("trend")
+
+            score_text = (
+                f"{float(score):.1f}"
+                if score is not None
+                else "—"
+            )
+
+            salience_text = (
+                f"{float(salience):.1f}"
+                if salience is not None
+                else "—"
+            )
+
+            if trend is None:
+                trend_text = "—"
+
+            else:
+                trend_value = float(trend)
+
+                if trend_value > 0:
+                    trend_text = f"▲ +{trend_value:.1f}"
+
+                elif trend_value < 0:
+                    trend_text = f"▼ {trend_value:.1f}"
+
+                else:
+                    trend_text = "● 0.0"
+
+            lines.append(
+                f"**{index}. {info['name']}**\n"
+                f"Score: `{score_text}` • "
+                f"Salience: `{salience_text}` • "
+                f"Trend: `{trend_text}`"
+            )
+
+        embed = discord.Embed(
+            title="National Conditions Dashboard",
+            description="\n\n".join(lines),
+            color=discord.Color.blurple(),
+        )
+
+        embed.set_footer(
+            text=(
+                f"Sorted by: {sort_label} • "
+                "Salience uses effective salience"
+            )
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True,
+        )
