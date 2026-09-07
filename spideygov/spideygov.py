@@ -679,6 +679,183 @@ class PublicOpinionDB:
         finally:
             conn.close()
 
+    def advance_salience(
+        self,
+        *,
+        actor_id: int | None = None,
+        reason: str = "Daily salience update",
+    ) -> list[dict]:
+        """
+        Advance public salience by one simulated day.
+
+        Condition-driven salience changes are intentionally slow.
+        """
+        conn = self._connect()
+
+        try:
+            rows = [
+                dict(row)
+                for row in conn.execute(
+                    """
+                    SELECT *
+                    FROM public_issue_state
+                    """
+                ).fetchall()
+            ]
+
+            if not rows:
+                return []
+
+            results = []
+
+            # First calculate everyone's new current salience.
+            for row in rows:
+                baseline = float(
+                    row.get("baseline_salience")
+                    or 0.0
+                )
+
+                old_current = row.get(
+                    "current_salience"
+                )
+
+                if old_current is None:
+                    old_current = baseline
+
+                old_current = float(old_current)
+
+                target = _public_salience_target(
+                    row
+                )
+
+                new_current = _public_move_salience(
+                    old_current,
+                    target,
+                )
+
+                row["_old_current"] = old_current
+                row["_target"] = target
+                row["current_salience"] = new_current
+
+            # Then calculate drown-out using everyone's
+            # newly updated current salience.
+            effective = _public_effective_saliences(
+                rows
+            )
+
+            now = _utcnow_iso()
+
+            for row in rows:
+                key = row["issue_key"]
+
+                old_effective = row.get(
+                    "effective_salience"
+                )
+
+                if old_effective is None:
+                    old_effective = row["_old_current"]
+
+                old_effective = float(
+                    old_effective
+                )
+
+                new_current = float(
+                    row["current_salience"]
+                )
+
+                new_effective = float(
+                    effective[key]
+                )
+
+                conn.execute(
+                    """
+                    UPDATE public_issue_state
+                    SET
+                        current_salience = ?,
+                        effective_salience = ?,
+                        updated_at = ?
+                    WHERE issue_key = ?
+                    """,
+                    (
+                        new_current,
+                        new_effective,
+                        now,
+                        key,
+                    ),
+                )
+
+                conn.execute(
+                    """
+                    INSERT INTO public_issue_history(
+                        issue_key,
+                        condition_score,
+                        ordinary_low,
+                        ordinary_high,
+                        trend,
+                        baseline_salience,
+                        current_salience,
+                        effective_salience,
+                        institutional_coverage,
+                        reason,
+                        actor_id,
+                        recorded_at
+                    )
+                    VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    )
+                    """,
+                    (
+                        key,
+                        row.get("condition_score"),
+                        row.get("ordinary_low"),
+                        row.get("ordinary_high"),
+                        row.get("trend"),
+                        row.get("baseline_salience"),
+                        new_current,
+                        new_effective,
+                        row.get(
+                            "institutional_coverage"
+                        ),
+                        reason,
+                        actor_id,
+                        now,
+                    ),
+                )
+
+                results.append(
+                    {
+                        "issue_key": key,
+
+                        "previous_salience":
+                            row["_old_current"],
+
+                        "current_salience":
+                            new_current,
+
+                        "target_salience":
+                            row["_target"],
+
+                        "previous_effective":
+                            old_effective,
+
+                        "effective_salience":
+                            new_effective,
+
+                        "change":
+                            (
+                                new_current
+                                - row["_old_current"]
+                            ),
+                    }
+                )
+
+            conn.commit()
+
+            return results
+
+        finally:
+            conn.close()
+
     def get_history(
         self,
         issue_key: str,
@@ -738,6 +915,235 @@ PUBLIC_OPINION_SORT_CHOICES = [
         value="trend_low",
     ),
 ]
+
+
+# --- Public salience behavior ---
+
+# Conditions below this begin creating additional public concern.
+PUBLIC_SALIENCE_CONDITION_THRESHOLD = 55.0
+
+# Each condition point below the threshold adds this much
+# to the issue's target salience.
+PUBLIC_SALIENCE_CONDITION_WEIGHT = 0.40
+
+# Negative condition trends increase target salience.
+# Example: trend -1.0 adds 2 salience points to the target.
+PUBLIC_SALIENCE_NEGATIVE_TREND_WEIGHT = 2.0
+
+# Salience should move slowly.
+#
+# Each day, public attention closes only 3% of the distance
+# between current salience and target salience.
+PUBLIC_SALIENCE_DAILY_RESPONSE = 0.03
+
+# Even if the target suddenly becomes much higher/lower,
+# ordinary condition-driven movement cannot exceed this
+# amount per simulated day.
+PUBLIC_SALIENCE_MAX_DAILY_MOVE = 0.35
+
+
+# --- Drown-out behavior ---
+
+PUBLIC_SALIENCE_DROWNOUT_THRESHOLD = 90.0
+
+# Every point above 90 suppresses competing issues by 5%.
+#
+# 91 -> 5%
+# 95 -> 25%
+# 100 -> 50%
+PUBLIC_SALIENCE_DROWNOUT_SUPPRESSION_PER_POINT = 0.05
+
+PUBLIC_SALIENCE_DROWNOUT_MAX_SUPPRESSION = 0.50
+
+# Persistent issues should not completely disappear merely
+# because another issue dominates the public agenda.
+PUBLIC_SALIENCE_DROWNOUT_BASELINE_FLOOR = 0.60
+
+# If another issue is within one point of the highest
+# drown-out issue, treat them as co-dominant.
+PUBLIC_SALIENCE_CO_DOMINANT_MARGIN = 1.0
+
+def _public_clamp_score(value: float) -> float:
+    return max(
+        0.0,
+        min(100.0, float(value)),
+    )
+
+
+def _public_salience_target(
+    row: dict,
+    *,
+    event_pressure: float = 0.0,
+) -> float:
+    """
+    Calculate where public attention currently wants to go.
+
+    This does NOT immediately become current_salience.
+    Current salience moves slowly toward this value.
+
+    event_pressure is reserved for the active-events system.
+    """
+    baseline = float(
+        row.get("baseline_salience")
+        if row.get("baseline_salience") is not None
+        else 0.0
+    )
+
+    target = baseline
+
+    condition = row.get("condition_score")
+
+    if condition is not None:
+        condition = float(condition)
+
+        if condition < PUBLIC_SALIENCE_CONDITION_THRESHOLD:
+            target += (
+                PUBLIC_SALIENCE_CONDITION_THRESHOLD
+                - condition
+            ) * PUBLIC_SALIENCE_CONDITION_WEIGHT
+
+    trend = row.get("trend")
+
+    if trend is not None:
+        trend = float(trend)
+
+        if trend < 0:
+            target += (
+                abs(trend)
+                * PUBLIC_SALIENCE_NEGATIVE_TREND_WEIGHT
+            )
+
+    # Active events will eventually feed pressure in here.
+    target += max(
+        0.0,
+        float(event_pressure),
+    )
+
+    return _public_clamp_score(target)
+
+
+def _public_move_salience(
+    current: float,
+    target: float,
+) -> float:
+    """
+    Move current salience slowly toward its target.
+    """
+    current = float(current)
+    target = float(target)
+
+    difference = target - current
+
+    if abs(difference) < 0.01:
+        return target
+
+    movement = (
+        difference
+        * PUBLIC_SALIENCE_DAILY_RESPONSE
+    )
+
+    movement = max(
+        -PUBLIC_SALIENCE_MAX_DAILY_MOVE,
+        min(
+            PUBLIC_SALIENCE_MAX_DAILY_MOVE,
+            movement,
+        ),
+    )
+
+    return _public_clamp_score(
+        current + movement
+    )
+
+def _public_effective_saliences(
+    rows: list[dict],
+) -> dict[str, float]:
+    """
+    Calculate effective salience after drown-out.
+
+    current_salience remains the issue's underlying attention.
+    effective_salience represents how much attention actually
+    reaches it after another issue dominates the agenda.
+    """
+    if not rows:
+        return {}
+
+    currents = {}
+
+    for row in rows:
+        current = row.get("current_salience")
+
+        if current is None:
+            current = (
+                row.get("baseline_salience")
+                or 0.0
+            )
+
+        currents[row["issue_key"]] = float(current)
+
+    highest = max(currents.values())
+
+    # Nothing is currently drowning out the agenda.
+    if highest <= PUBLIC_SALIENCE_DROWNOUT_THRESHOLD:
+        return dict(currents)
+
+    dominant_keys = {
+        key
+        for key, value in currents.items()
+        if (
+            value > PUBLIC_SALIENCE_DROWNOUT_THRESHOLD
+            and value
+            >= (
+                highest
+                - PUBLIC_SALIENCE_CO_DOMINANT_MARGIN
+            )
+        )
+    }
+
+    suppression = min(
+        PUBLIC_SALIENCE_DROWNOUT_MAX_SUPPRESSION,
+        (
+            highest
+            - PUBLIC_SALIENCE_DROWNOUT_THRESHOLD
+        )
+        * PUBLIC_SALIENCE_DROWNOUT_SUPPRESSION_PER_POINT,
+    )
+
+    effective = {}
+
+    for row in rows:
+        key = row["issue_key"]
+        current = currents[key]
+
+        if key in dominant_keys:
+            effective[key] = current
+            continue
+
+        suppressed = (
+            current
+            * (1.0 - suppression)
+        )
+
+        baseline = float(
+            row.get("baseline_salience")
+            or 0.0
+        )
+
+        # The floor can never raise effective salience
+        # above the issue's actual current salience.
+        floor = min(
+            current,
+            baseline
+            * PUBLIC_SALIENCE_DROWNOUT_BASELINE_FLOOR,
+        )
+
+        effective[key] = _public_clamp_score(
+            max(
+                suppressed,
+                floor,
+            )
+        )
+
+    return effective
 
 MOTION_TYPES = {
     "adjourn": {
@@ -20898,6 +21304,88 @@ class SpideyGov(commands.Cog):
             text=(
                 f"Sorted by: {sort_label} • "
                 "Salience uses effective salience"
+            )
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True,
+        )
+
+    @opinion.command(
+        name="advance_salience",
+        description="Advance national issue salience by one simulated day.",
+    )
+    @app_commands.checks.has_permissions(
+        administrator=True
+    )
+    async def opinion_advance_salience(
+        self,
+        interaction: discord.Interaction,
+    ):
+        async with self.public_opinion_lock:
+            results = (
+                self.public_opinion_db.advance_salience(
+                    actor_id=interaction.user.id,
+                )
+            )
+
+        if not results:
+            await interaction.response.send_message(
+                "❌ No public-opinion data exists.",
+                ephemeral=True,
+            )
+            return
+
+        results.sort(
+            key=lambda row: abs(row["change"]),
+            reverse=True,
+        )
+
+        lines = []
+
+        for row in results:
+            key = row["issue_key"]
+
+            name = PUBLIC_ISSUE_CATEGORIES.get(
+                key,
+                {},
+            ).get(
+                "name",
+                key,
+            )
+
+            old = row["previous_salience"]
+            new = row["current_salience"]
+            target = row["target_salience"]
+            effective = row["effective_salience"]
+
+            change = row["change"]
+
+            if change > 0:
+                change_text = f"+{change:.2f}"
+
+            else:
+                change_text = f"{change:.2f}"
+
+            lines.append(
+                f"**{name}**\n"
+                f"`{old:.2f} → {new:.2f}` "
+                f"({change_text}) • "
+                f"Target `{target:.1f}` • "
+                f"Effective `{effective:.2f}`"
+            )
+
+        embed = discord.Embed(
+            title="Daily Salience Update",
+            description="\n\n".join(lines),
+            color=discord.Color.blurple(),
+        )
+
+        embed.set_footer(
+            text=(
+                "Condition-driven salience movement "
+                "is intentionally gradual."
             )
         )
 

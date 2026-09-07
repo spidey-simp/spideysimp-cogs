@@ -45,7 +45,13 @@ class Dictionary(commands.Cog):
             self._wordlist = []
     
     async def cog_load(self):
-        self.session = ClientSession(timeout=ClientTimeout(total=12))
+        self.session = ClientSession(
+            timeout=ClientTimeout(
+                total=15,
+                connect=5,
+                sock_read=10,
+            )
+        )
 
     async def cog_unload(self):
         if self.session and not self.session.closed:
@@ -53,19 +59,47 @@ class Dictionary(commands.Cog):
 
     async def fetch_definition(self, word: str) -> Optional[dict | list]:
         assert self.session is not None
-        try:
-            async with self.session.get(API_URL.format(word=word)) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-        # Surface structured errors when present
-                try:
-                    return {"error": await resp.json()}
-                except Exception:  
-                    return {"error": {"title": f"HTTP {resp.status}", "message": "Request failed."}}
-        except asyncio.TimeoutError:
-            return {"error": {"title": "Timeout", "message": "Dictionary lookup took too long."}}
-        except Exception as e:
-            return {"error": {"title": "Error", "message": str(e)}}
+
+        for attempt in range(3):
+            try:
+                async with self.session.get(
+                    API_URL.format(word=word)
+                ) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+
+                    try:
+                        return {"error": await resp.json()}
+                    except Exception:
+                        return {
+                            "error": {
+                                "title": f"HTTP {resp.status}",
+                                "message": "Request failed.",
+                            }
+                        }
+
+            except asyncio.TimeoutError:
+                if attempt < 2:
+                    await asyncio.sleep(1 + attempt)
+                    continue
+
+                return {
+                    "error": {
+                        "title": "Dictionary Service Unavailable",
+                        "message": (
+                            "The dictionary provider is currently taking too long "
+                            "to respond. Please try again later."
+                        ),
+                    }
+                }
+
+            except Exception as e:
+                return {
+                    "error": {
+                        "title": "Error",
+                        "message": str(e),
+                    }
+                }
                 
     def fold_entries(self, data: list) -> tuple[dict[str, list[dict]], list[dict], list[str]]:
         """Return (by_pos, phonetics, sources).
