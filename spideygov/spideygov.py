@@ -237,6 +237,11 @@ PUBLIC_ISSUE_CATEGORIES = {
 
 PUBLIC_ISSUE_ORDER = tuple(PUBLIC_ISSUE_CATEGORIES.keys())
 
+PUBLIC_OPINION_DB_FILE = os.path.join(
+    BASE_DIR,
+    "public_opinion.sqlite3",
+)
+
 
 def _public_issue_choices() -> list[app_commands.Choice[str]]:
     """Reusable slash-command choices for the canonical national issue taxonomy."""
@@ -248,6 +253,464 @@ def _public_issue_choices() -> list[app_commands.Choice[str]]:
         for key in PUBLIC_ISSUE_ORDER
     ]
 
+_PUBLIC_STATE_UNSET = object()
+
+
+class PublicOpinionDB:
+    """
+    Stores the current national condition of each public issue.
+
+    The issue names/descriptions remain in PUBLIC_ISSUE_CATEGORIES.
+    SQLite stores only dynamic simulation state.
+
+    Scores/salience generally use a 0-100 scale.
+    Rows are created blank. Starting values are established separately.
+    """
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.init()
+
+    def _connect(self) -> sqlite3.Connection:
+        os.makedirs(
+            os.path.dirname(self.db_path),
+            exist_ok=True,
+        )
+
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+
+        conn.execute(
+            "PRAGMA foreign_keys = ON;"
+        )
+        conn.execute(
+            "PRAGMA journal_mode = WAL;"
+        )
+        conn.execute(
+            "PRAGMA synchronous = NORMAL;"
+        )
+
+        return conn
+
+    def init(self) -> None:
+        conn = self._connect()
+
+        try:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS public_issue_state (
+                    issue_key TEXT PRIMARY KEY,
+
+                    -- Overall present condition of the issue.
+                    condition_score REAL,
+
+                    -- Range toward which this category would ordinarily
+                    -- tend in the absence of major pressures.
+                    ordinary_low REAL,
+                    ordinary_high REAL,
+
+                    -- Recent directional movement in condition_score.
+                    -- Positive = improving; negative = worsening.
+                    trend REAL,
+
+                    -- Public attention.
+                    baseline_salience REAL,
+                    current_salience REAL,
+
+                    -- Salience after drown-out/suppression effects.
+                    -- Logic for this comes later.
+                    effective_salience REAL,
+
+                    -- How complete/functional the relevant legal,
+                    -- administrative, and institutional framework is.
+                    institutional_coverage REAL,
+
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+
+                    CHECK (
+                        condition_score IS NULL
+                        OR condition_score BETWEEN 0 AND 100
+                    ),
+
+                    CHECK (
+                        ordinary_low IS NULL
+                        OR ordinary_low BETWEEN 0 AND 100
+                    ),
+
+                    CHECK (
+                        ordinary_high IS NULL
+                        OR ordinary_high BETWEEN 0 AND 100
+                    ),
+
+                    CHECK (
+                        baseline_salience IS NULL
+                        OR baseline_salience BETWEEN 0 AND 100
+                    ),
+
+                    CHECK (
+                        current_salience IS NULL
+                        OR current_salience BETWEEN 0 AND 100
+                    ),
+
+                    CHECK (
+                        effective_salience IS NULL
+                        OR effective_salience BETWEEN 0 AND 100
+                    ),
+
+                    CHECK (
+                        institutional_coverage IS NULL
+                        OR institutional_coverage BETWEEN 0 AND 100
+                    ),
+
+                    CHECK (
+                        ordinary_low IS NULL
+                        OR ordinary_high IS NULL
+                        OR ordinary_low <= ordinary_high
+                    )
+                );
+
+
+                CREATE TABLE IF NOT EXISTS public_issue_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                    issue_key TEXT NOT NULL,
+
+                    condition_score REAL,
+                    ordinary_low REAL,
+                    ordinary_high REAL,
+                    trend REAL,
+
+                    baseline_salience REAL,
+                    current_salience REAL,
+                    effective_salience REAL,
+
+                    institutional_coverage REAL,
+
+                    -- Why this snapshot was created.
+                    reason TEXT,
+
+                    -- Discord user who caused the change, if applicable.
+                    actor_id INTEGER,
+
+                    recorded_at TEXT NOT NULL,
+
+                    FOREIGN KEY(issue_key)
+                        REFERENCES public_issue_state(issue_key)
+                        ON DELETE CASCADE
+                );
+
+
+                CREATE INDEX IF NOT EXISTS
+                    idx_public_issue_history_issue
+                ON public_issue_history(
+                    issue_key,
+                    recorded_at
+                );
+                """
+            )
+
+            # Ensure every canonical issue has a storage row.
+            #
+            # INSERT OR IGNORE means adding a new issue to the taxonomy
+            # later creates its row without disturbing existing data.
+            now = _utcnow_iso()
+
+            for issue_key in PUBLIC_ISSUE_ORDER:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO public_issue_state(
+                        issue_key,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        issue_key,
+                        now,
+                        now,
+                    ),
+                )
+
+            conn.commit()
+
+        finally:
+            conn.close()
+
+    def get_issue(
+        self,
+        issue_key: str,
+    ) -> dict | None:
+        if issue_key not in PUBLIC_ISSUE_CATEGORIES:
+            return None
+
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM public_issue_state
+                WHERE issue_key = ?
+                """,
+                (issue_key,),
+            ).fetchone()
+
+            return dict(row) if row else None
+
+        finally:
+            conn.close()
+
+    def list_issues(self) -> list[dict]:
+        """
+        Return current state in canonical display order.
+        """
+        conn = self._connect()
+
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM public_issue_state
+                """
+            ).fetchall()
+
+            by_key = {
+                row["issue_key"]: dict(row)
+                for row in rows
+            }
+
+            return [
+                by_key[key]
+                for key in PUBLIC_ISSUE_ORDER
+                if key in by_key
+            ]
+
+        finally:
+            conn.close()
+
+    def update_issue(
+        self,
+        issue_key: str,
+        *,
+        condition_score=_PUBLIC_STATE_UNSET,
+        ordinary_low=_PUBLIC_STATE_UNSET,
+        ordinary_high=_PUBLIC_STATE_UNSET,
+        trend=_PUBLIC_STATE_UNSET,
+        baseline_salience=_PUBLIC_STATE_UNSET,
+        current_salience=_PUBLIC_STATE_UNSET,
+        effective_salience=_PUBLIC_STATE_UNSET,
+        institutional_coverage=_PUBLIC_STATE_UNSET,
+        reason: str | None = None,
+        actor_id: int | None = None,
+    ) -> dict | None:
+        """
+        Partially update one issue and save a complete history snapshot.
+
+        Passing no value leaves that field unchanged.
+        Passing None explicitly clears that field.
+        """
+        if issue_key not in PUBLIC_ISSUE_CATEGORIES:
+            return None
+
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM public_issue_state
+                WHERE issue_key = ?
+                """,
+                (issue_key,),
+            ).fetchone()
+
+            if not row:
+                return None
+
+            state = dict(row)
+
+            incoming = {
+                "condition_score":
+                    condition_score,
+
+                "ordinary_low":
+                    ordinary_low,
+
+                "ordinary_high":
+                    ordinary_high,
+
+                "trend":
+                    trend,
+
+                "baseline_salience":
+                    baseline_salience,
+
+                "current_salience":
+                    current_salience,
+
+                "effective_salience":
+                    effective_salience,
+
+                "institutional_coverage":
+                    institutional_coverage,
+            }
+
+            for field, value in incoming.items():
+                if value is _PUBLIC_STATE_UNSET:
+                    continue
+
+                state[field] = (
+                    None
+                    if value is None
+                    else float(value)
+                )
+
+            bounded_fields = {
+                "condition_score",
+                "ordinary_low",
+                "ordinary_high",
+                "baseline_salience",
+                "current_salience",
+                "effective_salience",
+                "institutional_coverage",
+            }
+
+            for field in bounded_fields:
+                value = state.get(field)
+
+                if value is None:
+                    continue
+
+                if not 0 <= float(value) <= 100:
+                    raise ValueError(
+                        f"{field} must be between 0 and 100."
+                    )
+
+            low = state.get("ordinary_low")
+            high = state.get("ordinary_high")
+
+            if (
+                low is not None
+                and high is not None
+                and float(low) > float(high)
+            ):
+                raise ValueError(
+                    "ordinary_low cannot exceed ordinary_high."
+                )
+
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                UPDATE public_issue_state
+                SET
+                    condition_score = ?,
+                    ordinary_low = ?,
+                    ordinary_high = ?,
+                    trend = ?,
+                    baseline_salience = ?,
+                    current_salience = ?,
+                    effective_salience = ?,
+                    institutional_coverage = ?,
+                    updated_at = ?
+                WHERE issue_key = ?
+                """,
+                (
+                    state["condition_score"],
+                    state["ordinary_low"],
+                    state["ordinary_high"],
+                    state["trend"],
+                    state["baseline_salience"],
+                    state["current_salience"],
+                    state["effective_salience"],
+                    state["institutional_coverage"],
+                    now,
+                    issue_key,
+                ),
+            )
+
+            conn.execute(
+                """
+                INSERT INTO public_issue_history(
+                    issue_key,
+                    condition_score,
+                    ordinary_low,
+                    ordinary_high,
+                    trend,
+                    baseline_salience,
+                    current_salience,
+                    effective_salience,
+                    institutional_coverage,
+                    reason,
+                    actor_id,
+                    recorded_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
+                """,
+                (
+                    issue_key,
+                    state["condition_score"],
+                    state["ordinary_low"],
+                    state["ordinary_high"],
+                    state["trend"],
+                    state["baseline_salience"],
+                    state["current_salience"],
+                    state["effective_salience"],
+                    state["institutional_coverage"],
+                    (
+                        reason.strip()
+                        if reason
+                        else None
+                    ),
+                    actor_id,
+                    now,
+                ),
+            )
+
+            conn.commit()
+
+            state["updated_at"] = now
+            return state
+
+        finally:
+            conn.close()
+
+    def get_history(
+        self,
+        issue_key: str,
+        limit: int = 50,
+    ) -> list[dict]:
+        if issue_key not in PUBLIC_ISSUE_CATEGORIES:
+            return []
+
+        conn = self._connect()
+
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM public_issue_history
+                WHERE issue_key = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (
+                    issue_key,
+                    max(1, min(int(limit), 500)),
+                ),
+            ).fetchall()
+
+            return [
+                dict(row)
+                for row in rows
+            ]
+
+        finally:
+            conn.close()
 
 MOTION_TYPES = {
     "adjourn": {
@@ -7783,6 +8246,15 @@ class SpideyGov(commands.Cog):
         ensure_motions_schema(self.federal_registry)
         normalize_registry_order(self.federal_registry)
         self.committee_lock = asyncio.Lock()
+
+        self.social_db = SocialAccountsDB(SOCIAL_DB_FILE)
+        self.social_lock = asyncio.Lock()
+
+        # --- Public opinion database init ---
+        self.public_opinion_db = PublicOpinionDB(
+            PUBLIC_OPINION_DB_FILE
+        )
+        self.public_opinion_lock = asyncio.Lock()
         
 
     def cog_unload(self):
@@ -20136,3 +20608,97 @@ class SpideyGov(commands.Cog):
             embed=embed,
             ephemeral=True,
         )
+
+    @opinion.command(
+        name="initialize_issue",
+        description="Set the initial simulation values for a public issue.",
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.choices(issue=_public_issue_choices())
+    async def opinion_initialize_issue(
+        self,
+        interaction: discord.Interaction,
+        issue: app_commands.Choice[str],
+        condition_score: float,
+        ordinary_low: float,
+        ordinary_high: float,
+        trend: float,
+        baseline_salience: float,
+        institutional_coverage: float,
+    ):
+        try:
+            async with self.public_opinion_lock:
+                state = self.public_opinion_db.update_issue(
+                    issue.value,
+                    condition_score=condition_score,
+                    ordinary_low=ordinary_low,
+                    ordinary_high=ordinary_high,
+                    trend=trend,
+                    baseline_salience=baseline_salience,
+
+                    # At initialization, current/effective salience
+                    # begin at the category's baseline.
+                    current_salience=baseline_salience,
+                    effective_salience=baseline_salience,
+
+                    institutional_coverage=institutional_coverage,
+
+                    reason="Initial national condition",
+                    actor_id=interaction.user.id,
+                )
+
+        except ValueError as e:
+            await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+            return
+
+        if not state:
+            await interaction.response.send_message(
+                "❌ That public issue could not be found.",
+                ephemeral=True,
+            )
+            return
+
+        info = PUBLIC_ISSUE_CATEGORIES[issue.value]
+
+        embed = discord.Embed(
+            title=f"Initialized: {info['name']}",
+            color=discord.Color.green(),
+        )
+
+        embed.add_field(
+            name="Condition",
+            value=f"{state['condition_score']:.1f}",
+        )
+
+        embed.add_field(
+            name="Ordinary Range",
+            value=(
+                f"{state['ordinary_low']:.1f}"
+                f"–{state['ordinary_high']:.1f}"
+            ),
+        )
+
+        embed.add_field(
+            name="Trend",
+            value=f"{state['trend']:+.1f}",
+        )
+
+        embed.add_field(
+            name="Baseline Salience",
+            value=f"{state['baseline_salience']:.1f}",
+        )
+
+        embed.add_field(
+            name="Institutional Coverage",
+            value=f"{state['institutional_coverage']:.1f}",
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True,
+        )
+
+        
