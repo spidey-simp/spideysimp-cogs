@@ -10257,7 +10257,8 @@ class SpideyGov(commands.Cog):
 
     government = app_commands.Group(name="government", description="Government-related commands")
     category = app_commands.Group(name="category", description="Category management commands", parent=government)
-    registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry")
+    registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
+    constitution = app_commands.Group(name="constitution", description="Commands for viewing the Constitution")
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
 
@@ -13350,7 +13351,7 @@ class SpideyGov(commands.Cog):
 
 
 
-    @registry.command(name="constitution_upload_amendment", description="Upload an Amendment via modal")
+    @constitution.command(name="upload_amendment", description="Upload an Amendment via modal")
     @app_commands.checks.has_permissions(administrator=True)
     @app_commands.describe(
         number="Amendment number (Arabic input, e.g., 14)",
@@ -13369,7 +13370,7 @@ class SpideyGov(commands.Cog):
         )
 
 
-    @registry.command(name="view_constitution", description="View Articles/Amendments (with headings; IRL or Court labels)")
+    @constitution.command(name="view", description="View Articles/Amendments (with headings; IRL or Court labels)")
     @app_commands.autocomplete(article=constitution_article_autocomplete, amendment=constitution_amendment_autocomplete, section=constitution_section_autocomplete)
     @app_commands.choices(style=[
         app_commands.Choice(name="IRL (default)", value="irl"),
@@ -13443,43 +13444,6 @@ class SpideyGov(commands.Cog):
         embed = discord.Embed(title=f"Constitution — {title_line}", description="".join(parts), color=discord.Color.gold())
         await interaction.response.send_message(embed=embed, ephemeral=False)
 
-    @registry.command(name="constitution_set_heading", description="Set a heading (Article/Amendment or specific Section)")
-    @app_commands.checks.has_permissions(administrator=True)
-    @app_commands.describe(
-        article="Article number (Arabic, e.g., 1)",
-        amendment="Amendment number (Arabic, e.g., 14)",
-        section="Section number (optional; leave empty to set the Article/Amendment heading)"
-    )
-    async def constitution_set_heading(
-        self,
-        interaction: discord.Interaction,
-        article: int | None = None,
-        amendment: int | None = None,
-        section: int | None = None
-    ):
-        # XOR on article/amendment
-        if (article is None and amendment is None) or (article is not None and amendment is not None):
-            return await interaction.response.send_message(
-                "Specify either an article or an amendment (not both).", ephemeral=True
-            )
-        const = self.federal_registry.setdefault("constitution", {})
-        bucket = "articles" if article is not None else "amendments"
-        number = article if article is not None else amendment
-        node = const.setdefault(bucket, {}).get(str(number))
-        if not node:
-            return await interaction.response.send_message(f"{bucket[:-1].capitalize()} {number} not found.", ephemeral=True)
-
-        path_label = f"{'Article' if bucket=='articles' else 'Amendment'} {number}"
-        target = node
-        if section is not None:
-            secs = node.get("sections", {})
-            s = secs.get(str(section))
-            if not s:
-                return await interaction.response.send_message(f"Section {section} not found in {path_label}.", ephemeral=True)
-            target = s
-            path_label = f"{path_label}, Section {section}"
-
-        await interaction.response.send_modal(ConstitutionSetHeadingModal(path_label=path_label, node=target))
 
     async def bill_id_autocomplete(self, interaction: discord.Interaction, current: str):
         current = (current or "").lower()
@@ -21825,8 +21789,8 @@ class SpideyGov(commands.Cog):
             ephemeral=True,
         )
 
-    @registry.command(
-        name="full_constitution",
+    @constitution.command(
+        name="view_full",
         description="Receive the complete Constitution by direct message.",
     )
     async def full_constitution(
