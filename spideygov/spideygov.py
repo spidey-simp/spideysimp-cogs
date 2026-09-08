@@ -152,6 +152,165 @@ def _format_measure_id(measure_id: str) -> str:
 
     return measure_id
 
+
+def _render_full_constitution(const: dict) -> str:
+    lines: list[str] = []
+
+    lines.append("CONSTITUTION OF THE SPIDEY REPUBLIC")
+    lines.append("=" * 38)
+    lines.append("")
+
+    articles = const.get("articles", {})
+
+    for article_num in sorted(
+        articles.keys(),
+        key=lambda x: int(x) if str(x).isdigit() else 10**9,
+    ):
+        article = articles[article_num]
+
+        heading = (
+            article.get("heading")
+            or ""
+        ).strip()
+
+        title = f"ARTICLE {to_roman(int(article_num))}"
+
+        if heading:
+            title += f" — {heading}"
+
+        lines.append(title)
+        lines.append("-" * len(title))
+        lines.append("")
+
+        sections = article.get("sections", {})
+
+        # Article with no numbered sections.
+        if (
+            isinstance(sections, dict)
+            and "text" in sections
+        ):
+            lines.append(
+                str(sections.get("text") or "").strip()
+            )
+            lines.append("")
+            lines.append("")
+            continue
+
+        for section_num in sorted(
+            sections.keys(),
+            key=lambda x: int(x) if str(x).isdigit() else 10**9,
+        ):
+            section = sections[section_num]
+
+            if not isinstance(section, dict):
+                continue
+
+            section_heading = (
+                section.get("heading")
+                or ""
+            ).strip()
+
+            label = f"Section {section_num}"
+
+            if section_heading:
+                label += f" — {section_heading}"
+
+            lines.append(label)
+            lines.append("")
+
+            text = str(
+                section.get("text")
+                or ""
+            ).strip()
+
+            if text:
+                lines.append(text)
+
+            lines.append("")
+            lines.append("")
+
+    lines.append("")
+    lines.append("AMENDMENTS")
+    lines.append("=" * 10)
+    lines.append("")
+
+    amendments = const.get("amendments", {})
+
+    for amendment_num in sorted(
+        amendments.keys(),
+        key=lambda x: int(x) if str(x).isdigit() else 10**9,
+    ):
+        amendment = amendments[amendment_num]
+
+        heading = (
+            amendment.get("heading")
+            or ""
+        ).strip()
+
+        title = (
+            f"AMENDMENT "
+            f"{to_roman(int(amendment_num))}"
+        )
+
+        if heading:
+            title += f" — {heading}"
+
+        lines.append(title)
+        lines.append("-" * len(title))
+        lines.append("")
+
+        sections = amendment.get(
+            "sections",
+            {},
+        )
+
+        # Amendment with one unnumbered body.
+        if (
+            isinstance(sections, dict)
+            and "text" in sections
+        ):
+            lines.append(
+                str(sections.get("text") or "").strip()
+            )
+            lines.append("")
+            lines.append("")
+            continue
+
+        for section_num in sorted(
+            sections.keys(),
+            key=lambda x: int(x) if str(x).isdigit() else 10**9,
+        ):
+            section = sections[section_num]
+
+            if not isinstance(section, dict):
+                continue
+
+            section_heading = (
+                section.get("heading")
+                or ""
+            ).strip()
+
+            label = f"Section {section_num}"
+
+            if section_heading:
+                label += f" — {section_heading}"
+
+            lines.append(label)
+            lines.append("")
+
+            text = str(
+                section.get("text")
+                or ""
+            ).strip()
+
+            if text:
+                lines.append(text)
+
+            lines.append("")
+            lines.append("")
+
+    return "\n".join(lines).strip() + "\n"
+
 # --- Public opinion issue taxonomy ---
 #
 # These are national ISSUE categories, not territorial/state categories.
@@ -10098,7 +10257,7 @@ class SpideyGov(commands.Cog):
 
     government = app_commands.Group(name="government", description="Government-related commands")
     category = app_commands.Group(name="category", description="Category management commands", parent=government)
-    registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry", parent=government)
+    registry = app_commands.Group(name="registry", description="Commands for viewing and updating the federal registry")
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
 
@@ -21663,5 +21822,74 @@ class SpideyGov(commands.Cog):
 
         await interaction.response.send_message(
             embed=embed,
+            ephemeral=True,
+        )
+
+    @registry.command(
+        name="full_constitution",
+        description="Receive the complete Constitution by direct message.",
+    )
+    async def full_constitution(
+        self,
+        interaction: discord.Interaction,
+    ):
+        const = self.federal_registry.get(
+            "constitution",
+            {},
+        )
+
+        if not const:
+            return await interaction.response.send_message(
+                "The Constitution could not be found in the Federal Registry.",
+                ephemeral=True,
+            )
+
+        await interaction.response.defer(
+            ephemeral=True,
+            thinking=True,
+        )
+
+        text = _render_full_constitution(
+            const
+        )
+
+        data = io.BytesIO(
+            text.encode("utf-8")
+        )
+
+        file = discord.File(
+            data,
+            filename="Constitution_of_the_Spidey_Republic.txt",
+        )
+
+        try:
+            await interaction.user.send(
+                content=(
+                    "**Constitution of the Spidey Republic**\n"
+                    "The complete current Constitution is attached."
+                ),
+                file=file,
+            )
+
+        except discord.Forbidden:
+            return await interaction.followup.send(
+                (
+                    "I couldn't send you a direct message. "
+                    "Please enable DMs from server members and try again."
+                ),
+                ephemeral=True,
+            )
+
+        except discord.HTTPException:
+            return await interaction.followup.send(
+                (
+                    "Discord couldn't deliver the Constitution. "
+                    "Please try again shortly."
+                ),
+                ephemeral=True,
+            )
+
+        await interaction.followup.send(
+            "The complete Constitution has been sent to your DMs.",
             ephemeral=True,
         )
