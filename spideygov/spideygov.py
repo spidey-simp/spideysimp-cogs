@@ -8280,26 +8280,6 @@ class ConstitutionUploadModal(discord.ui.Modal, title="Upload Constitution Text"
         save_federal_registry(interaction.client.get_cog("SpideyGov").federal_registry)
 
 
-class ConstitutionSetHeadingModal(discord.ui.Modal, title="Set Constitution Heading"):
-    def __init__(self, *, path_label: str, node: dict):
-        super().__init__()
-        self.node = node
-        self.heading = discord.ui.TextInput(
-            label=f"Heading for {path_label}",
-            required=True, style=discord.TextStyle.short, max_length=100
-        )
-        self.add_item(self.heading)
-
-    async def on_submit(self, interaction: discord.Interaction):
-        # Node may be article/amendment (has 'heading') OR a section node
-        if "text" in self.node and len(self.node) == 1:
-            # this would be a single-body container; not applicable here
-            pass
-        elif "heading" in self.node:
-            self.node["heading"] = self.heading.value.strip()
-
-        save_federal_registry(interaction.client.get_cog("SpideyGov").federal_registry)
-        await interaction.response.send_message("✅ Heading updated.", ephemeral=True)
 
 class LegislativeProposalModal(discord.ui.Modal, title="Legislative Proposal"):
     def __init__(self, title: str, type: str, sponsor: discord.Member,
