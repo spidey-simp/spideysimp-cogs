@@ -235,6 +235,96 @@ PUBLIC_ISSUE_CATEGORIES = {
     },
 }
 
+MEDIA_COVERAGE_TIERS = {
+    "obscure": {
+        "name": "Obscure",
+        "level": 0,
+        "multiplier": 0.15,
+        "description": (
+            "Very limited awareness. Mostly niche, specialist, "
+            "or small-community attention."
+        ),
+    },
+
+    "local": {
+        "name": "Local",
+        "level": 1,
+        "multiplier": 0.35,
+        "description": (
+            "Meaningful coverage within a city, state, "
+            "district, or local media market."
+        ),
+    },
+
+    "regional": {
+        "name": "Regional",
+        "level": 2,
+        "multiplier": 0.60,
+        "description": (
+            "Coverage extends across multiple communities "
+            "or a substantial geographic region."
+        ),
+    },
+
+    "national": {
+        "name": "National",
+        "level": 3,
+        "multiplier": 1.00,
+        "description": (
+            "A major national story receiving widespread "
+            "news and public attention."
+        ),
+    },
+
+    "dominant_national": {
+        "name": "Dominant National",
+        "level": 4,
+        "multiplier": 1.40,
+        "description": (
+            "One of the defining national stories of the moment, "
+            "receiving extraordinary sustained coverage."
+        ),
+    },
+}
+
+
+MEDIA_COVERAGE_ORDER = (
+    "obscure",
+    "local",
+    "regional",
+    "national",
+    "dominant_national",
+)
+
+
+def _media_coverage_choices(
+) -> list[app_commands.Choice[str]]:
+    return [
+        app_commands.Choice(
+            name=MEDIA_COVERAGE_TIERS[key]["name"],
+            value=key,
+        )
+        for key in MEDIA_COVERAGE_ORDER
+    ]
+
+
+def _media_coverage_multiplier(
+    coverage_key: str,
+) -> float:
+    tier = MEDIA_COVERAGE_TIERS.get(
+        coverage_key
+    )
+
+    if not tier:
+        raise ValueError(
+            f"Unknown media coverage tier: "
+            f"{coverage_key}"
+        )
+
+    return float(
+        tier["multiplier"]
+    )
+
 PUBLIC_ISSUE_ORDER = tuple(PUBLIC_ISSUE_CATEGORIES.keys())
 
 PUBLIC_OPINION_DB_FILE = os.path.join(
@@ -315,6 +405,8 @@ class PublicOpinionDB:
 
                     -- Public attention.
                     baseline_salience REAL,
+                    structural_salience REAL,
+                    event_salience REAL NOT NULL DEFAULT 0,
                     current_salience REAL,
 
                     -- Salience after drown-out/suppression effects.
@@ -382,6 +474,8 @@ class PublicOpinionDB:
                     trend REAL,
 
                     baseline_salience REAL,
+                    structural_salience REAL,
+                    event_salience REAL,
                     current_salience REAL,
                     effective_salience REAL,
 
@@ -409,6 +503,8 @@ class PublicOpinionDB:
                 );
                 """
             )
+
+            self._migrate_salience_split(conn)
 
             # Ensure every canonical issue has a storage row.
             #
@@ -504,6 +600,8 @@ class PublicOpinionDB:
         institutional_coverage=_PUBLIC_STATE_UNSET,
         reason: str | None = None,
         actor_id: int | None = None,
+        structural_salience=_PUBLIC_STATE_UNSET,
+        event_salience=_PUBLIC_STATE_UNSET,
     ) -> dict | None:
         """
         Partially update one issue and save a complete history snapshot.
@@ -555,6 +653,12 @@ class PublicOpinionDB:
 
                 "institutional_coverage":
                     institutional_coverage,
+
+                "structural_salience":
+                    structural_salience,
+
+                "event_salience":
+                    event_salience,
             }
 
             for field, value in incoming.items():
@@ -575,6 +679,8 @@ class PublicOpinionDB:
                 "current_salience",
                 "effective_salience",
                 "institutional_coverage",
+                "structural_salience",
+                "event_salience",
             }
 
             for field in bounded_fields:
@@ -611,6 +717,8 @@ class PublicOpinionDB:
                     ordinary_high = ?,
                     trend = ?,
                     baseline_salience = ?,
+                    structural_salience = ?,
+                    event_salience = ?,
                     current_salience = ?,
                     effective_salience = ?,
                     institutional_coverage = ?,
@@ -623,6 +731,8 @@ class PublicOpinionDB:
                     state["ordinary_high"],
                     state["trend"],
                     state["baseline_salience"],
+                    state["structural_salience"],
+                    state["event_salience"],
                     state["current_salience"],
                     state["effective_salience"],
                     state["institutional_coverage"],
@@ -640,6 +750,8 @@ class PublicOpinionDB:
                     ordinary_high,
                     trend,
                     baseline_salience,
+                    structural_salience,
+                    event_salience,
                     current_salience,
                     effective_salience,
                     institutional_coverage,
@@ -648,7 +760,8 @@ class PublicOpinionDB:
                     recorded_at
                 )
                 VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -658,6 +771,8 @@ class PublicOpinionDB:
                     state["ordinary_high"],
                     state["trend"],
                     state["baseline_salience"],
+                    state["structural_salience"],
+                    state["event_salience"],
                     state["current_salience"],
                     state["effective_salience"],
                     state["institutional_coverage"],
@@ -683,12 +798,13 @@ class PublicOpinionDB:
         self,
         *,
         actor_id: int | None = None,
-        reason: str = "Daily salience update",
+        reason: str = "Daily structural salience update",
     ) -> list[dict]:
         """
-        Advance public salience by one simulated day.
+        Advance slow-moving structural salience by one simulated day.
 
-        Condition-driven salience changes are intentionally slow.
+        Event salience is NOT changed here.
+        Event updates will have their own immediate mechanics.
         """
         conn = self._connect()
 
@@ -708,37 +824,56 @@ class PublicOpinionDB:
 
             results = []
 
-            # First calculate everyone's new current salience.
+            # First update structural salience.
             for row in rows:
                 baseline = float(
                     row.get("baseline_salience")
                     or 0.0
                 )
 
-                old_current = row.get(
-                    "current_salience"
+                old_structural = row.get(
+                    "structural_salience"
                 )
 
-                if old_current is None:
-                    old_current = baseline
+                if old_structural is None:
+                    old_structural = baseline
 
-                old_current = float(old_current)
+                old_structural = float(
+                    old_structural
+                )
 
                 target = _public_salience_target(
                     row
                 )
 
-                new_current = _public_move_salience(
-                    old_current,
+                new_structural = _public_move_salience(
+                    old_structural,
                     target,
                 )
 
-                row["_old_current"] = old_current
-                row["_target"] = target
-                row["current_salience"] = new_current
+                event_salience = float(
+                    row.get("event_salience")
+                    or 0.0
+                )
 
-            # Then calculate drown-out using everyone's
-            # newly updated current salience.
+                current = _public_clamp_score(
+                    new_structural
+                    + event_salience
+                )
+
+                row["_old_structural"] = (
+                    old_structural
+                )
+
+                row["_target"] = target
+
+                row["structural_salience"] = (
+                    new_structural
+                )
+
+                row["current_salience"] = current
+
+            # Then apply drown-out to combined attention.
             effective = _public_effective_saliences(
                 rows
             )
@@ -748,18 +883,16 @@ class PublicOpinionDB:
             for row in rows:
                 key = row["issue_key"]
 
-                old_effective = row.get(
-                    "effective_salience"
+                new_structural = float(
+                    row["structural_salience"]
                 )
 
-                if old_effective is None:
-                    old_effective = row["_old_current"]
-
-                old_effective = float(
-                    old_effective
+                event_salience = float(
+                    row.get("event_salience")
+                    or 0.0
                 )
 
-                new_current = float(
+                current = float(
                     row["current_salience"]
                 )
 
@@ -771,13 +904,17 @@ class PublicOpinionDB:
                     """
                     UPDATE public_issue_state
                     SET
+                        structural_salience = ?,
+                        event_salience = ?,
                         current_salience = ?,
                         effective_salience = ?,
                         updated_at = ?
                     WHERE issue_key = ?
                     """,
                     (
-                        new_current,
+                        new_structural,
+                        event_salience,
+                        current,
                         new_effective,
                         now,
                         key,
@@ -793,6 +930,8 @@ class PublicOpinionDB:
                         ordinary_high,
                         trend,
                         baseline_salience,
+                        structural_salience,
+                        event_salience,
                         current_salience,
                         effective_salience,
                         institutional_coverage,
@@ -801,7 +940,8 @@ class PublicOpinionDB:
                         recorded_at
                     )
                     VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                        ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?
                     )
                     """,
                     (
@@ -811,7 +951,9 @@ class PublicOpinionDB:
                         row.get("ordinary_high"),
                         row.get("trend"),
                         row.get("baseline_salience"),
-                        new_current,
+                        new_structural,
+                        event_salience,
+                        current,
                         new_effective,
                         row.get(
                             "institutional_coverage"
@@ -826,25 +968,28 @@ class PublicOpinionDB:
                     {
                         "issue_key": key,
 
-                        "previous_salience":
-                            row["_old_current"],
+                        "previous_structural":
+                            row["_old_structural"],
+
+                        "structural_salience":
+                            new_structural,
+
+                        "event_salience":
+                            event_salience,
 
                         "current_salience":
-                            new_current,
+                            current,
 
                         "target_salience":
                             row["_target"],
-
-                        "previous_effective":
-                            old_effective,
 
                         "effective_salience":
                             new_effective,
 
                         "change":
                             (
-                                new_current
-                                - row["_old_current"]
+                                new_structural
+                                - row["_old_structural"]
                             ),
                     }
                 )
@@ -856,6 +1001,7 @@ class PublicOpinionDB:
         finally:
             conn.close()
 
+    
     def get_history(
         self,
         issue_key: str,
@@ -888,6 +1034,131 @@ class PublicOpinionDB:
 
         finally:
             conn.close()
+
+    def _migrate_salience_split(
+        self,
+        conn: sqlite3.Connection,
+    ) -> None:
+        state_cols = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(public_issue_state)"
+            ).fetchall()
+        }
+
+        if "structural_salience" not in state_cols:
+            conn.execute(
+                """
+                ALTER TABLE public_issue_state
+                ADD COLUMN structural_salience REAL
+                """
+            )
+
+        if "event_salience" not in state_cols:
+            conn.execute(
+                """
+                ALTER TABLE public_issue_state
+                ADD COLUMN event_salience REAL
+                NOT NULL DEFAULT 0
+                """
+            )
+
+        history_cols = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(public_issue_history)"
+            ).fetchall()
+        }
+
+        if "structural_salience" not in history_cols:
+            conn.execute(
+                """
+                ALTER TABLE public_issue_history
+                ADD COLUMN structural_salience REAL
+                """
+            )
+
+        if "event_salience" not in history_cols:
+            conn.execute(
+                """
+                ALTER TABLE public_issue_history
+                ADD COLUMN event_salience REAL
+                """
+            )
+
+        # Existing values were entirely structural because
+        # the event system did not exist yet.
+        conn.execute(
+            """
+            UPDATE public_issue_state
+            SET structural_salience =
+                COALESCE(
+                    structural_salience,
+                    current_salience,
+                    baseline_salience,
+                    0
+                )
+            """
+        )
+
+        conn.execute(
+            """
+            UPDATE public_issue_state
+            SET event_salience =
+                COALESCE(
+                    event_salience,
+                    0
+                )
+            """
+        )
+
+        conn.execute(
+            """
+            UPDATE public_issue_state
+            SET current_salience =
+                MIN(
+                    100,
+                    COALESCE(structural_salience, 0)
+                    + COALESCE(event_salience, 0)
+                )
+            """
+        )
+
+        conn.execute(
+            """
+            UPDATE public_issue_state
+            SET effective_salience =
+                COALESCE(
+                    effective_salience,
+                    current_salience
+                )
+            """
+        )
+
+        # Preserve old history as structural attention.
+        conn.execute(
+            """
+            UPDATE public_issue_history
+            SET structural_salience =
+                COALESCE(
+                    structural_salience,
+                    current_salience,
+                    baseline_salience,
+                    0
+                )
+            """
+        )
+
+        conn.execute(
+            """
+            UPDATE public_issue_history
+            SET event_salience =
+                COALESCE(
+                    event_salience,
+                    0
+                )
+            """
+        )
 
 PUBLIC_OPINION_SORT_CHOICES = [
     app_commands.Choice(
@@ -972,16 +1243,15 @@ def _public_clamp_score(value: float) -> float:
 
 def _public_salience_target(
     row: dict,
-    *,
-    event_pressure: float = 0.0,
 ) -> float:
     """
-    Calculate where public attention currently wants to go.
+    Calculate the slow-moving structural salience target.
 
-    This does NOT immediately become current_salience.
-    Current salience moves slowly toward this value.
+    Only baseline attention, underlying conditions, and
+    condition trends affect this target.
 
-    event_pressure is reserved for the active-events system.
+    Event attention is handled separately through
+    event_salience and does not move through this function.
     """
     baseline = float(
         row.get("baseline_salience")
@@ -1013,21 +1283,14 @@ def _public_salience_target(
                 * PUBLIC_SALIENCE_NEGATIVE_TREND_WEIGHT
             )
 
-    # Active events will eventually feed pressure in here.
-    target += max(
-        0.0,
-        float(event_pressure),
-    )
-
     return _public_clamp_score(target)
-
 
 def _public_move_salience(
     current: float,
     target: float,
 ) -> float:
     """
-    Move current salience slowly toward its target.
+    Move structural salience slowly toward its target.
     """
     current = float(current)
     target = float(target)
@@ -6722,21 +6985,24 @@ def fmt_amendment(n: int, style: str) -> str:
     return f"Amendment {n if style == 'irl' else to_roman(n)}"
 
 def ensure_constitution_schema(reg: dict) -> None:
-    """
-    Backfill headings + sections containers without disturbing existing text.
-    Call once before any constitution commands run (e.g., Cog __init__).
-    """
     const = reg.setdefault("constitution", {})
+
+    const.setdefault("ratified_at", None)
+    const.setdefault("effective_at", None)
+
     for bucket in ("articles", "amendments"):
         b = const.setdefault(bucket, {})
+
         for _, node in list(b.items()):
             if not isinstance(node, dict):
                 continue
+
             node.setdefault("heading", "")
             secs = node.setdefault("sections", {})
-            # If single-body (no sections), 'sections' will be {"text": "..."}; leave as-is.
+
             if isinstance(secs, dict) and "text" in secs and len(secs) == 1:
                 continue
+
             for _, s in list(secs.items()):
                 if isinstance(s, dict):
                     s.setdefault("heading", "")
@@ -21071,6 +21337,8 @@ class SpideyGov(commands.Cog):
 
                     # At initialization, current/effective salience
                     # begin at the category's baseline.
+                    structural_salience=baseline_salience,
+                    event_salience=0,
                     current_salience=baseline_salience,
                     effective_salience=baseline_salience,
 
@@ -21355,8 +21623,10 @@ class SpideyGov(commands.Cog):
                 key,
             )
 
-            old = row["previous_salience"]
-            new = row["current_salience"]
+            old = row["previous_structural"]
+            new = row["structural_salience"]
+            event = row["event_salience"]
+            current = row["current_salience"]
             target = row["target_salience"]
             effective = row["effective_salience"]
 
@@ -21370,9 +21640,11 @@ class SpideyGov(commands.Cog):
 
             lines.append(
                 f"**{name}**\n"
-                f"`{old:.2f} → {new:.2f}` "
+                f"Structural `{old:.2f} → {new:.2f}` "
                 f"({change_text}) • "
-                f"Target `{target:.1f}` • "
+                f"Target `{target:.1f}`\n"
+                f"Event `+{event:.2f}` • "
+                f"Current `{current:.2f}` • "
                 f"Effective `{effective:.2f}`"
             )
 
