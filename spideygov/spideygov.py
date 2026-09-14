@@ -4539,18 +4539,105 @@ def _render_congress_chart(
             _senate_hemicycle_points()
         )
 
-    seat_parties = []
+    if chamber == "senate":
+        # The Senate's sparse five-row geometry makes
+        # party boundaries visually obvious. Reserve
+        # centrist seats explicitly so independents do
+        # not get broken apart by the x-sorted layout.
 
-    for party_id in (
-        CONGRESS_DISPLAY_ORDER
-    ):
-        seat_parties.extend(
-            [party_id]
-            * counts.get(
-                party_id,
-                0,
-            )
+        seat_parties = [
+            None
+            for _ in points
+        ]
+
+        reserved = set()
+
+        # Seats closest to the center axis.
+        #
+        # With the current 100-seat geometry, the first
+        # two form a visually adjacent central pair.
+        central_indices = sorted(
+            range(len(points)),
+            key=lambda i: (
+                abs(points[i][0]),
+                -points[i][1],
+            ),
         )
+
+        # Independents occupy the center first.
+        for _ in range(
+            counts.get("IND", 0)
+        ):
+            index = next(
+                i
+                for i in central_indices
+                if i not in reserved
+            )
+
+            seat_parties[index] = "IND"
+            reserved.add(index)
+
+        # Vacancies, if we eventually have any, also
+        # belong near the center rather than inside
+        # either party block.
+        for _ in range(
+            counts.get("VAC", 0)
+        ):
+            index = next(
+                i
+                for i in central_indices
+                if i not in reserved
+            )
+
+            seat_parties[index] = "VAC"
+            reserved.add(index)
+
+        # Everything else is divided cleanly
+        # left-to-right between the two major parties.
+        remaining = sorted(
+            (
+                i
+                for i in range(
+                    len(points)
+                )
+                if i not in reserved
+            ),
+            key=lambda i: (
+                points[i][0],
+                points[i][1],
+            ),
+        )
+
+        liberal_count = counts.get(
+            "LIB",
+            0,
+        )
+
+        for index in remaining[
+            :liberal_count
+        ]:
+            seat_parties[index] = "LIB"
+
+        for index in remaining[
+            liberal_count:
+        ]:
+            seat_parties[index] = "CON"
+
+    else:
+        # The House is dense enough that the ordinary
+        # left-to-right fill already looks natural.
+        seat_parties = []
+
+        for party_id in (
+            CONGRESS_DISPLAY_ORDER
+        ):
+            seat_parties.extend(
+                [party_id]
+                * counts.get(
+                    party_id,
+                    0,
+                )
+            )
 
     fig = plt.figure(
         figsize=(14, 10),
@@ -4581,7 +4668,7 @@ def _render_congress_chart(
     # Seat markers need to be fairly large or
     # the chamber looks sparse rather than packed.
     if chamber == "house":
-        marker_size = 138
+        marker_size = 150
     else:
         marker_size = 1500
 
