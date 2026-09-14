@@ -4541,16 +4541,146 @@ def _render_congress_chart(
             _senate_hemicycle_points()
         )
 
-    seat_parties = []
+    if chamber == "house":
+    
+        seat_parties = [
+            None
+            for _ in points
+        ]
 
-    for party_id in CONGRESS_DISPLAY_ORDER:
-        seat_parties.extend(
-            [party_id]
-            * counts.get(
-                party_id,
-                0,
+        ind_count = counts.get(
+            "IND",
+            0,
+        )
+
+        # Seats nearest the ideological center line.
+        center_candidates = sorted(
+            range(len(points)),
+            key=lambda i: (
+                abs(points[i][0]),
+                -points[i][1],
+            ),
+        )
+
+        if ind_count == 1:
+            ind_slots = [
+                center_candidates[0]
+            ]
+
+        elif ind_count == 2:
+            left = min(
+                (
+                    i
+                    for i in range(len(points))
+                    if points[i][0] < 0
+                ),
+                key=lambda i: (
+                    abs(points[i][0]),
+                    -points[i][1],
+                ),
+            )
+
+            right = min(
+                (
+                    i
+                    for i in range(len(points))
+                    if points[i][0] > 0
+                ),
+                key=lambda i: (
+                    abs(points[i][0]),
+                    -points[i][1],
+                ),
+            )
+
+            ind_slots = [
+                left,
+                right,
+            ]
+
+        else:
+            top = center_candidates[0]
+
+            left = min(
+                (
+                    i
+                    for i in range(len(points))
+                    if (
+                        points[i][0] < 0
+                        and i != top
+                    )
+                ),
+                key=lambda i: (
+                    abs(points[i][0]),
+                    -points[i][1],
+                ),
+            )
+
+            right = min(
+                (
+                    i
+                    for i in range(len(points))
+                    if (
+                        points[i][0] > 0
+                        and i != top
+                    )
+                ),
+                key=lambda i: (
+                    abs(points[i][0]),
+                    -points[i][1],
+                ),
+            )
+
+            ind_slots = [
+                left,
+                top,
+                right,
+            ][:ind_count]
+
+        for index in ind_slots:
+            seat_parties[index] = "IND"
+
+        remaining = [
+            i
+            for i in range(len(points))
+            if seat_parties[i] is None
+        ]
+
+        remaining.sort(
+            key=lambda i: (
+                points[i][0],
+                points[i][1],
             )
         )
+
+        party_stream = (
+            ["LIB"]
+            * counts.get("LIB", 0)
+            + ["VAC"]
+            * counts.get("VAC", 0)
+            + ["CON"]
+            * counts.get("CON", 0)
+        )
+
+        for index, party_id in zip(
+            remaining,
+            party_stream,
+        ):
+            seat_parties[index] = party_id
+
+    else:
+        # Senate already uses angular seat ordering,
+        # which gives the independents a natural
+        # center placement.
+        seat_parties = []
+
+        for party_id in CONGRESS_DISPLAY_ORDER:
+            seat_parties.extend(
+                [party_id]
+                * counts.get(
+                    party_id,
+                    0,
+                )
+            )
 
 
     fig = plt.figure(
