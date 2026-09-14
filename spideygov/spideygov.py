@@ -4395,6 +4395,90 @@ def _hemicycle_points(
     points.sort(key=lambda point: (point[0], point[1]))
     return points
 
+def _senate_hemicycle_points() -> list[tuple[float, float]]:
+    """
+    Senate-specific 100-seat geometry.
+
+    Five tightly packed concentric rows,
+    modeled after conventional U.S. Senate
+    hemicycle graphics.
+    """
+
+    row_counts = [
+        14,
+        16,
+        20,
+        24,
+        26,
+    ]
+
+    inner_radius = 0.53
+    outer_radius = 1.00
+
+    radii = [
+        inner_radius
+        + (
+            outer_radius
+            - inner_radius
+        )
+        * (
+            index
+            / (len(row_counts) - 1)
+        )
+        for index in range(
+            len(row_counts)
+        )
+    ]
+
+    points = []
+
+    # Slightly larger side margins than the House.
+    margin = math.radians(8)
+
+    for radius, count in zip(
+        radii,
+        row_counts,
+    ):
+        span = (
+            math.pi
+            - (2 * margin)
+        )
+
+        angles = [
+            math.pi
+            - margin
+            - (
+                index
+                * span
+                / (count - 1)
+            )
+            for index in range(
+                count
+            )
+        ]
+
+        for angle in angles:
+            points.append(
+                (
+                    radius
+                    * math.cos(angle),
+
+                    radius
+                    * math.sin(angle),
+                )
+            )
+
+    # Still allows party blocks to fill
+    # left -> center -> right.
+    points.sort(
+        key=lambda point: (
+            point[0],
+            point[1],
+        )
+    )
+
+    return points
+
 def _render_congress_chart(
     snapshot: dict,
     chamber: str,
@@ -4451,10 +4535,8 @@ def _render_congress_chart(
             inner_radius=0.46,
         )
     else:
-        points = _hemicycle_points(
-            total_seats,
-            rows=8,
-            inner_radius=0.34,
+        points = (
+            _senate_hemicycle_points()
         )
 
     seat_parties = []
@@ -4501,7 +4583,7 @@ def _render_congress_chart(
     if chamber == "house":
         marker_size = 138
     else:
-        marker_size = 430
+        marker_size = 1500
 
     for party_id in (
         CONGRESS_DISPLAY_ORDER
