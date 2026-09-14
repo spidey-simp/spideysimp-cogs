@@ -169,7 +169,15 @@ CURRENT_CONGRESS_SEED = {
         "CON": 47,
         "IND": 2,
     },
-    "vice_president_party": "LIB",
+
+}
+
+CURRENT_VICE_PRESIDENT = {
+    "name": "Jeri Jackson",
+    "party": "LIB",
+    "npc": True,
+    "incumbent": True,
+    "office": "VICE_PRESIDENT",
 }
 
 
@@ -4221,7 +4229,9 @@ def _seed_congress_snapshot(
     if existing and not force:
         return existing
 
-    used_names: set[str] = set()
+    used_names: set[str] = {
+        CURRENT_VICE_PRESIDENT["name"]
+    }
 
     house_members = (
         _build_congress_members(
@@ -4243,10 +4253,8 @@ def _seed_congress_snapshot(
         )
     )
 
-    vp_person = (
-        _generate_congress_person(
-            used_names
-        )
+    vp_person = dict(
+        CURRENT_VICE_PRESIDENT
     )
 
     snapshot = {
@@ -4268,14 +4276,7 @@ def _seed_congress_snapshot(
             "majority": 51,
             "members": senate_members,
 
-            "vice_president": {
-                **vp_person,
-                "party": (
-                    CURRENT_CONGRESS_SEED[
-                        "vice_president_party"
-                    ]
-                ),
-            },
+            "vice_president": vp_person,
         },
     }
 
@@ -4284,6 +4285,47 @@ def _seed_congress_snapshot(
     )
 
     return snapshot
+
+def _set_current_vice_president(
+    name: str,
+    party_id: str,
+    incumbent: bool = True,
+) -> dict:
+    snapshot = (
+        _load_congress_snapshot()
+    )
+
+    if not snapshot:
+        raise ValueError(
+            "No current Congress exists."
+        )
+
+    if party_id not in CONGRESS_PARTIES:
+        raise ValueError(
+            "Unknown party."
+        )
+
+    vp = {
+        "name": name.strip(),
+        "party": party_id,
+        "npc": True,
+        "incumbent": bool(
+            incumbent
+        ),
+        "office": "VICE_PRESIDENT",
+    }
+
+    snapshot[
+        "senate"
+    ][
+        "vice_president"
+    ] = vp
+
+    _save_congress_snapshot(
+        snapshot
+    )
+
+    return vp
 
 def _integer_apportion(
     total: int,
@@ -28778,6 +28820,75 @@ class SpideyGov(commands.Cog):
             file=discord.File(
                 data,
                 filename=filename,
+            ),
+            ephemeral=True,
+        )
+
+    @elections.command(
+        name="congress_set_vp",
+        description=(
+            "Set the current Vice President."
+        ),
+    )
+    @app_commands.checks.has_permissions(
+        administrator=True
+    )
+    @app_commands.choices(
+        party=[
+            app_commands.Choice(
+                name="Liberal Party",
+                value="LIB",
+            ),
+            app_commands.Choice(
+                name="Conservative Party",
+                value="CON",
+            ),
+            app_commands.Choice(
+                name="Independent",
+                value="IND",
+            ),
+        ]
+    )
+    async def congress_set_vp(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        party: app_commands.Choice[str],
+        incumbent: bool = True,
+    ):
+        try:
+            vp = (
+                _set_current_vice_president(
+                    name,
+                    party.value,
+                    incumbent,
+                )
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        party_name = (
+            CONGRESS_PARTIES[
+                vp["party"]
+            ]["name"]
+        )
+
+        incumbent_text = (
+            "Incumbent"
+            if vp["incumbent"]
+            else "Not incumbent"
+        )
+
+        await interaction.response.send_message(
+            (
+                "✅ **Vice President updated.**\n"
+                f"**{vp['name']}**\n"
+                f"{party_name}\n"
+                f"{incumbent_text}"
             ),
             ephemeral=True,
         )
