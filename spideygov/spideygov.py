@@ -4338,102 +4338,61 @@ def _integer_apportion(
 
     return base
 
-
 def _hemicycle_points(
     total_seats: int,
     rows: int | None = None,
+    inner_radius: float | None = None,
+    outer_radius: float = 1.00,
+    margin_deg: float = 4.0,
 ) -> list[tuple[float, float]]:
     if rows is None:
         if total_seats >= 300:
             rows = 11
-        elif total_seats >= 80:
-            rows = 6
+        elif total_seats >= 120:
+            rows = 8
+        elif total_seats >= 90:
+            rows = 7
         else:
-            rows = 5
+            rows = 6
 
-    inner_radius = 0.46
-    outer_radius = 1.00
+    if inner_radius is None:
+        if total_seats >= 300:
+            inner_radius = 0.46
+        elif total_seats >= 90:
+            inner_radius = 0.34
+        else:
+            inner_radius = 0.32
 
     radii = [
         inner_radius
-        + (
-            outer_radius
-            - inner_radius
-        )
-        * (
-            index
-            / (rows - 1)
-        )
-        for index in range(
-            rows
-        )
+        + (outer_radius - inner_radius) * (index / (rows - 1))
+        for index in range(rows)
     ]
 
-    seats_per_row = (
-        _integer_apportion(
-            total_seats,
-            radii,
-        )
+    seats_per_row = _integer_apportion(
+        total_seats,
+        radii,
     )
 
     points = []
+    margin = math.radians(margin_deg)
 
-    # Small gap at each bottom corner.
-    margin = math.radians(4)
-
-    for radius, count in zip(
-        radii,
-        seats_per_row,
-    ):
+    for radius, count in zip(radii, seats_per_row):
         if count <= 1:
-            angles = [
-                math.pi / 2
-            ]
-
+            angles = [math.pi / 2]
         else:
-            span = (
-                math.pi
-                - (2 * margin)
-            )
-
+            span = math.pi - (2 * margin)
             angles = [
-                math.pi
-                - margin
-                - (
-                    index
-                    * span
-                    / (count - 1)
-                )
-                for index in range(
-                    count
-                )
+                math.pi - margin - (index * span / (count - 1))
+                for index in range(count)
             ]
 
         for angle in angles:
-            x = (
-                radius
-                * math.cos(angle)
-            )
+            x = radius * math.cos(angle)
+            y = radius * math.sin(angle)
+            points.append((x, y))
 
-            y = (
-                radius
-                * math.sin(angle)
-            )
-
-            points.append(
-                (x, y)
-            )
-
-    # Parties will fill from ideological
-    # left -> center -> right.
-    points.sort(
-        key=lambda point:
-            (
-                point[0],
-                point[1],
-            )
-    )
-
+    points.sort(key=lambda point: (point[0], point[1]))
     return points
 
 def _render_congress_chart(
@@ -4485,9 +4444,18 @@ def _render_congress_chart(
             "Spidey Republic Senate"
         )
 
-    points = _hemicycle_points(
-        total_seats
-    )
+    if chamber == "house":
+        points = _hemicycle_points(
+            total_seats,
+            rows=11,
+            inner_radius=0.46,
+        )
+    else:
+        points = _hemicycle_points(
+            total_seats,
+            rows=8,
+            inner_radius=0.34,
+        )
 
     seat_parties = []
 
@@ -4530,13 +4498,10 @@ def _render_congress_chart(
 
     # Seat markers need to be fairly large or
     # the chamber looks sparse rather than packed.
-    marker_size = max(
-        120,
-        min(
-            550,
-            60_000 / total_seats,
-        ),
-    )
+    if chamber == "house":
+        marker_size = 138
+    else:
+        marker_size = 430
 
     for party_id in (
         CONGRESS_DISPLAY_ORDER
