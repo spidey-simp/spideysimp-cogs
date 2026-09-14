@@ -26,6 +26,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from typing import Optional
 
+import csv
+from collections import Counter
+from matplotlib.patches import Circle
+
 try:
     import docx  # python-docx
 except Exception:
@@ -123,6 +127,84 @@ MEASURE_TYPES = {
     "concurrent_resolution": "Concurrent Resolution",
 }
 
+
+# ============================================================
+# CONGRESS ROSTER / VISUALIZATION
+# ============================================================
+
+CONGRESS_SNAPSHOT_FILE = os.path.join(
+    BASE_DIR,
+    "congress_snapshot.json",
+)
+
+NPC_NAME_FILES = {
+    1965: os.path.join(
+        BASE_DIR,
+        "girl_boy_names_1965.json",
+    ),
+    1975: os.path.join(
+        BASE_DIR,
+        "girl_boy_names_1975.json",
+    ),
+    1985: os.path.join(
+        BASE_DIR,
+        "girl_boy_names_1985.json",
+    ),
+}
+
+NPC_SURNAME_FILE = os.path.join(
+    BASE_DIR,
+    "common-surnames-by-country.csv",
+)
+
+
+# Initial fictional composition of the current Congress.
+CURRENT_CONGRESS_SEED = {
+    "house": {
+        "LIB": 211,
+        "CON": 221,
+        "IND": 3,
+    },
+    "senate": {
+        "LIB": 51,
+        "CON": 47,
+        "IND": 2,
+    },
+    "vice_president_party": "LIB",
+}
+
+
+CONGRESS_PARTIES = {
+    "LIB": {
+        "name": "Liberal Party",
+        "color": "#2E6FBB",
+    },
+    "CON": {
+        "name": "Conservative Party",
+        "color": "#D63C3C",
+    },
+    "IND": {
+        "name": "Independent",
+        "color": "#D7A928",
+    },
+    "VAC": {
+        "name": "Vacant",
+        "color": "#9A9A9A",
+    },
+}
+
+
+# Left -> center -> right on the chart.
+CONGRESS_DISPLAY_ORDER = [
+    "LIB",
+    "IND",
+    "VAC",
+    "CON",
+]
+
+
+_NPC_FIRST_NAME_CACHE = None
+_NPC_SURNAME_CACHE = None
 
 def _format_measure_id(measure_id: str) -> str:
     if not measure_id:
@@ -310,6 +392,4466 @@ def _render_full_constitution(const: dict) -> str:
             lines.append("")
 
     return "\n".join(lines).strip() + "\n"
+
+
+# --- Political parties / conventions ---
+
+PARTY_DB_FILE = os.path.join(
+    BASE_DIR,
+    "parties.sqlite3",
+)
+
+PARTY_OFFICES = (
+    "chair",
+    "vice_chair",
+    "treasurer",
+    "secretary",
+)
+
+PARTY_CONVENTION_TYPES = {
+    "special_nominating": "Special Nominating Convention",
+    "nominating": "Nominating Convention",
+    "organizational": "Organizational Convention",
+    "special": "Special Convention",
+}
+
+PARTY_BUSINESS_TYPES = {
+    "platform": "Platform",
+    "bylaws": "Bylaws",
+    "rule": "Rule",
+    "resolution": "Resolution",
+    "charter_amendment": "Charter Amendment",
+    "other": "Other Business",
+}
+
+
+def _party_clean_id(value: str) -> str:
+    value = re.sub(
+        r"[^A-Za-z0-9_-]+",
+        "",
+        (value or "").upper(),
+    )
+
+    return value[:16]
+
+
+def _party_bool(value) -> int:
+    return 1 if bool(value) else 0
+
+
+class PartyDB:
+    """
+    Persistent party, convention, delegate,
+    ballot, and treasury state.
+    """
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.init()
+
+    def _connect(self) -> sqlite3.Connection:
+        os.makedirs(
+            os.path.dirname(self.db_path),
+            exist_ok=True,
+        )
+
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+
+        conn.execute(
+            "PRAGMA foreign_keys = ON;"
+        )
+
+        conn.execute(
+            "PRAGMA journal_mode = WAL;"
+        )
+
+        conn.execute(
+            "PRAGMA synchronous = NORMAL;"
+        )
+
+        return conn
+
+    def init(self) -> None:
+        conn = self._connect()
+
+        try:
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS parties (
+                    party_id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    abbreviation TEXT NOT NULL UNIQUE,
+                    color TEXT,
+                    description TEXT,
+                    role_id INTEGER,
+                    status TEXT NOT NULL DEFAULT 'ACTIVE',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS party_memberships (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                    party_id TEXT NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    state_key TEXT,
+
+                    status TEXT NOT NULL,
+                    source TEXT NOT NULL,
+
+                    other_party TEXT,
+                    retain_other INTEGER NOT NULL DEFAULT 0,
+
+                    applied_at TEXT NOT NULL,
+                    decided_at TEXT,
+                    decided_by INTEGER,
+                    ended_at TEXT,
+
+                    notes TEXT,
+
+                    UNIQUE(
+                        party_id,
+                        user_id
+                    ),
+
+                    FOREIGN KEY(party_id)
+                        REFERENCES parties(party_id)
+                        ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS
+                    idx_party_memberships_party_status
+                ON party_memberships(
+                    party_id,
+                    status
+                );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_dual_approvals (
+                        party_id TEXT NOT NULL,
+                        other_party_id TEXT NOT NULL,
+                        conditions TEXT,
+                        approved_by INTEGER,
+                        approved_at TEXT NOT NULL,
+
+                        PRIMARY KEY(
+                            party_id,
+                            other_party_id
+                        ),
+
+                        FOREIGN KEY(party_id)
+                            REFERENCES parties(party_id)
+                            ON DELETE CASCADE
+                    );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_officers (
+                        party_id TEXT NOT NULL,
+                        office TEXT NOT NULL,
+                        user_id INTEGER NOT NULL,
+                        interim INTEGER NOT NULL DEFAULT 0,
+                        started_at TEXT NOT NULL,
+                        appointed_by INTEGER,
+
+                        PRIMARY KEY(
+                            party_id,
+                            office
+                        ),
+
+                        FOREIGN KEY(party_id)
+                            REFERENCES parties(party_id)
+                            ON DELETE CASCADE
+                    );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_state_orgs (
+                        party_id TEXT NOT NULL,
+                        state_key TEXT NOT NULL,
+                        name TEXT,
+                        chair_user_id INTEGER,
+
+                        recognized INTEGER
+                            NOT NULL DEFAULT 1,
+
+                        recognized_at TEXT NOT NULL,
+                        recognized_by INTEGER,
+
+                        PRIMARY KEY(
+                            party_id,
+                            state_key
+                        ),
+
+                        FOREIGN KEY(party_id)
+                            REFERENCES parties(party_id)
+                            ON DELETE CASCADE
+                    );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_conventions (
+                        convention_id TEXT PRIMARY KEY,
+                        party_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        convention_type TEXT NOT NULL,
+
+                        start_date TEXT NOT NULL,
+                        end_date TEXT NOT NULL,
+                        filing_deadline TEXT,
+
+                        status TEXT
+                            NOT NULL DEFAULT 'SCHEDULED',
+
+                        presiding_user_id INTEGER,
+                        channel_id INTEGER,
+
+                        agenda_text TEXT,
+                        rules_json TEXT
+                            NOT NULL DEFAULT '{}',
+
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+
+                        FOREIGN KEY(party_id)
+                            REFERENCES parties(party_id)
+                            ON DELETE CASCADE
+                    );
+
+                CREATE INDEX IF NOT EXISTS
+                    idx_party_conventions_party
+                ON party_conventions(
+                    party_id,
+                    start_date
+                );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_convention_delegates (
+                        delegate_id INTEGER
+                            PRIMARY KEY AUTOINCREMENT,
+
+                        convention_id TEXT NOT NULL,
+
+                        user_id INTEGER,
+                        display_name TEXT NOT NULL,
+
+                        state_key TEXT,
+
+                        delegate_type TEXT
+                            NOT NULL DEFAULT 'DELEGATE',
+
+                        simulated INTEGER
+                            NOT NULL DEFAULT 0,
+
+                        vote_weight REAL
+                            NOT NULL DEFAULT 1,
+
+                        credential_status TEXT
+                            NOT NULL DEFAULT 'CREDENTIALED',
+
+                        present INTEGER
+                            NOT NULL DEFAULT 0,
+
+                        pledged_candidate_id INTEGER,
+
+                        selected_at TEXT NOT NULL,
+                        selected_by INTEGER,
+
+                        FOREIGN KEY(convention_id)
+                            REFERENCES party_conventions(
+                                convention_id
+                            )
+                            ON DELETE CASCADE
+                    );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS
+                    idx_party_delegate_user
+                ON party_convention_delegates(
+                    convention_id,
+                    user_id
+                )
+                WHERE user_id IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS
+                    party_candidates (
+                        candidate_id INTEGER
+                            PRIMARY KEY AUTOINCREMENT,
+
+                        convention_id TEXT NOT NULL,
+
+                        user_id INTEGER NOT NULL,
+                        display_name TEXT NOT NULL,
+
+                        office TEXT NOT NULL,
+                        statement TEXT,
+
+                        status TEXT
+                            NOT NULL DEFAULT 'FILED',
+
+                        filed_at TEXT NOT NULL,
+
+                        certified_at TEXT,
+                        certified_by INTEGER,
+
+                        withdrawn_at TEXT,
+
+                        UNIQUE(
+                            convention_id,
+                            user_id,
+                            office
+                        ),
+
+                        FOREIGN KEY(convention_id)
+                            REFERENCES party_conventions(
+                                convention_id
+                            )
+                            ON DELETE CASCADE
+                    );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_business (
+                        business_id INTEGER
+                            PRIMARY KEY AUTOINCREMENT,
+
+                        convention_id TEXT NOT NULL,
+
+                        business_type TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        body_text TEXT NOT NULL,
+
+                        status TEXT
+                            NOT NULL DEFAULT 'FILED',
+
+                        threshold TEXT
+                            NOT NULL DEFAULT 'majority',
+
+                        notice_date TEXT,
+
+                        filed_by INTEGER,
+                        filed_at TEXT NOT NULL,
+
+                        adopted_at TEXT,
+
+                        FOREIGN KEY(convention_id)
+                            REFERENCES party_conventions(
+                                convention_id
+                            )
+                            ON DELETE CASCADE
+                    );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_ballots (
+                        ballot_id INTEGER
+                            PRIMARY KEY AUTOINCREMENT,
+
+                        convention_id TEXT NOT NULL,
+
+                        ballot_type TEXT NOT NULL,
+                        round_no INTEGER
+                            NOT NULL DEFAULT 1,
+
+                        office TEXT,
+                        business_id INTEGER,
+
+                        question TEXT NOT NULL,
+
+                        threshold TEXT
+                            NOT NULL DEFAULT 'majority',
+
+                        status TEXT
+                            NOT NULL DEFAULT 'OPEN',
+
+                        opened_by INTEGER,
+                        opened_at TEXT NOT NULL,
+
+                        closed_by INTEGER,
+                        closed_at TEXT,
+
+                        result_json TEXT,
+
+                        FOREIGN KEY(convention_id)
+                            REFERENCES party_conventions(
+                                convention_id
+                            )
+                            ON DELETE CASCADE,
+
+                        FOREIGN KEY(business_id)
+                            REFERENCES party_business(
+                                business_id
+                            )
+                            ON DELETE SET NULL
+                    );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_ballot_options (
+                        ballot_id INTEGER NOT NULL,
+                        option_key TEXT NOT NULL,
+                        label TEXT NOT NULL,
+                        candidate_id INTEGER,
+
+                        PRIMARY KEY(
+                            ballot_id,
+                            option_key
+                        ),
+
+                        FOREIGN KEY(ballot_id)
+                            REFERENCES party_ballots(
+                                ballot_id
+                            )
+                            ON DELETE CASCADE,
+
+                        FOREIGN KEY(candidate_id)
+                            REFERENCES party_candidates(
+                                candidate_id
+                            )
+                            ON DELETE SET NULL
+                    );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_ballot_votes (
+                        ballot_id INTEGER NOT NULL,
+                        delegate_id INTEGER NOT NULL,
+
+                        option_key TEXT NOT NULL,
+
+                        cast_by INTEGER,
+                        cast_at TEXT NOT NULL,
+
+                        PRIMARY KEY(
+                            ballot_id,
+                            delegate_id
+                        ),
+
+                        FOREIGN KEY(ballot_id)
+                            REFERENCES party_ballots(
+                                ballot_id
+                            )
+                            ON DELETE CASCADE,
+
+                        FOREIGN KEY(delegate_id)
+                            REFERENCES party_convention_delegates(
+                                delegate_id
+                            )
+                            ON DELETE CASCADE
+                    );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_documents (
+                        document_id INTEGER
+                            PRIMARY KEY AUTOINCREMENT,
+
+                        party_id TEXT NOT NULL,
+                        document_type TEXT NOT NULL,
+
+                        title TEXT NOT NULL,
+                        body_text TEXT NOT NULL,
+
+                        convention_id TEXT,
+                        business_id INTEGER,
+
+                        adopted_at TEXT NOT NULL,
+
+                        FOREIGN KEY(party_id)
+                            REFERENCES parties(party_id)
+                            ON DELETE CASCADE,
+
+                        FOREIGN KEY(convention_id)
+                            REFERENCES party_conventions(
+                                convention_id
+                            )
+                            ON DELETE SET NULL,
+
+                        FOREIGN KEY(business_id)
+                            REFERENCES party_business(
+                                business_id
+                            )
+                            ON DELETE SET NULL
+                    );
+
+                CREATE INDEX IF NOT EXISTS
+                    idx_party_documents_latest
+                ON party_documents(
+                    party_id,
+                    document_type,
+                    adopted_at DESC
+                );
+
+                CREATE TABLE IF NOT EXISTS
+                    party_treasury_ledger (
+                        entry_id INTEGER
+                            PRIMARY KEY AUTOINCREMENT,
+
+                        party_id TEXT NOT NULL,
+
+                        entry_type TEXT NOT NULL,
+                        amount REAL NOT NULL,
+
+                        category TEXT,
+                        description TEXT,
+
+                        actor_id INTEGER,
+                        created_at TEXT NOT NULL,
+
+                        FOREIGN KEY(party_id)
+                            REFERENCES parties(party_id)
+                            ON DELETE CASCADE
+                    );
+                """
+            )
+
+            conn.commit()
+
+        finally:
+            conn.close()
+
+    def create_party(
+        self,
+        party_id: str,
+        name: str,
+        abbreviation: str,
+        color: str | None,
+        description: str | None,
+        role_id: int | None = None,
+    ) -> dict:
+        party_id = _party_clean_id(
+            party_id or abbreviation
+        )
+
+        abbreviation = _party_clean_id(
+            abbreviation
+        )
+
+        if not party_id or not abbreviation:
+            raise ValueError(
+                "Party ID and abbreviation are required."
+            )
+
+        now = _utcnow_iso()
+
+        conn = self._connect()
+
+        try:
+            conn.execute(
+                """
+                INSERT INTO parties(
+                    party_id,
+                    name,
+                    abbreviation,
+                    color,
+                    description,
+                    role_id,
+                    status,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?,
+                    'ACTIVE',
+                    ?, ?
+                )
+                """,
+                (
+                    party_id,
+                    name.strip(),
+                    abbreviation,
+                    color,
+                    description,
+                    role_id,
+                    now,
+                    now,
+                ),
+            )
+
+            conn.commit()
+
+            return self.get_party(
+                party_id
+            )
+
+        except sqlite3.IntegrityError as e:
+            raise ValueError(
+                "That party ID or abbreviation is already in use."
+            ) from e
+
+        finally:
+            conn.close()
+
+    def get_party(
+        self,
+        party_id: str,
+    ) -> dict | None:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM parties
+                WHERE party_id = ?
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                ),
+            ).fetchone()
+
+            return (
+                dict(row)
+                if row
+                else None
+            )
+
+        finally:
+            conn.close()
+
+    def list_parties(
+        self,
+        active_only: bool = True,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            sql = """
+                SELECT *
+                FROM parties
+            """
+
+            params = []
+
+            if active_only:
+                sql += """
+                    WHERE status = 'ACTIVE'
+                """
+
+            sql += """
+                ORDER BY name COLLATE NOCASE
+            """
+
+            return [
+                dict(r)
+                for r in conn.execute(
+                    sql,
+                    params,
+                ).fetchall()
+            ]
+
+        finally:
+            conn.close()
+
+    def set_role(
+        self,
+        party_id: str,
+        role_id: int | None,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            cur = conn.execute(
+                """
+                UPDATE parties
+                SET role_id = ?,
+                    updated_at = ?
+                WHERE party_id = ?
+                """,
+                (
+                    role_id,
+                    _utcnow_iso(),
+                    _party_clean_id(
+                        party_id
+                    ),
+                ),
+            )
+
+            conn.commit()
+
+            return cur.rowcount > 0
+
+        finally:
+            conn.close()
+
+    def get_membership(
+        self,
+        party_id: str,
+        user_id: int,
+    ) -> dict | None:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_memberships
+                WHERE party_id = ?
+                  AND user_id = ?
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                    int(user_id),
+                ),
+            ).fetchone()
+
+            return (
+                dict(row)
+                if row
+                else None
+            )
+
+        finally:
+            conn.close()
+
+    def apply_membership(
+        self,
+        party_id: str,
+        user_id: int,
+        state_key: str,
+        other_party: str | None,
+        retain_other: bool,
+        source: str = "APPLICATION",
+    ) -> dict:
+        party_id = _party_clean_id(
+            party_id
+        )
+
+        now = _utcnow_iso()
+
+        status = (
+            "ACTIVE"
+            if source
+            == "VOTER_REGISTRATION"
+            else "PENDING"
+        )
+
+        conn = self._connect()
+
+        try:
+            conn.execute(
+                """
+                INSERT INTO party_memberships(
+                    party_id,
+                    user_id,
+                    state_key,
+                    status,
+                    source,
+                    other_party,
+                    retain_other,
+                    applied_at,
+                    decided_at,
+                    decided_by,
+                    ended_at,
+                    notes
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, NULL, NULL, NULL
+                )
+
+                ON CONFLICT(
+                    party_id,
+                    user_id
+                )
+                DO UPDATE SET
+                    state_key =
+                        excluded.state_key,
+                    status =
+                        excluded.status,
+                    source =
+                        excluded.source,
+                    other_party =
+                        excluded.other_party,
+                    retain_other =
+                        excluded.retain_other,
+                    applied_at =
+                        excluded.applied_at,
+                    decided_at =
+                        excluded.decided_at,
+                    ended_at = NULL,
+                    notes = NULL
+                """,
+                (
+                    party_id,
+                    int(user_id),
+                    state_key,
+                    status,
+                    source,
+                    (
+                        other_party
+                        or None
+                    ),
+                    _party_bool(
+                        retain_other
+                    ),
+                    now,
+                    (
+                        now
+                        if status == "ACTIVE"
+                        else None
+                    ),
+                ),
+            )
+
+            conn.commit()
+
+            return self.get_membership(
+                party_id,
+                user_id,
+            )
+
+        finally:
+            conn.close()
+
+    def approve_membership(
+        self,
+        party_id: str,
+        user_id: int,
+        actor_id: int,
+        approve: bool,
+        notes: str | None = None,
+    ) -> dict | None:
+        party_id = _party_clean_id(
+            party_id
+        )
+
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_memberships
+                WHERE party_id = ?
+                  AND user_id = ?
+                """,
+                (
+                    party_id,
+                    int(user_id),
+                ),
+            ).fetchone()
+
+            if (
+                not row
+                or row["status"]
+                != "PENDING"
+            ):
+                return None
+
+            if (
+                approve
+                and int(
+                    row["retain_other"]
+                    or 0
+                )
+                and row["other_party"]
+            ):
+                approved = conn.execute(
+                    """
+                    SELECT 1
+                    FROM party_dual_approvals
+                    WHERE party_id = ?
+                      AND other_party_id = ?
+                    """,
+                    (
+                        party_id,
+                        _party_clean_id(
+                            row[
+                                "other_party"
+                            ]
+                        ),
+                    ),
+                ).fetchone()
+
+                if not approved:
+                    raise ValueError(
+                        "This application "
+                        "requests dual membership "
+                        "with a party that has "
+                        "not been approved for "
+                        "dual membership."
+                    )
+
+            status = (
+                "ACTIVE"
+                if approve
+                else "DENIED"
+            )
+
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                UPDATE party_memberships
+                SET status = ?,
+                    decided_at = ?,
+                    decided_by = ?,
+                    notes = ?
+                WHERE party_id = ?
+                  AND user_id = ?
+                """,
+                (
+                    status,
+                    now,
+                    int(actor_id),
+                    notes,
+                    party_id,
+                    int(user_id),
+                ),
+            )
+
+            conn.commit()
+
+            return self.get_membership(
+                party_id,
+                user_id,
+            )
+
+        finally:
+            conn.close()
+
+    def withdraw_membership(
+        self,
+        party_id: str,
+        user_id: int,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            cur = conn.execute(
+                """
+                UPDATE party_memberships
+                SET status = 'WITHDRAWN',
+                    ended_at = ?
+                WHERE party_id = ?
+                  AND user_id = ?
+                  AND status IN (
+                      'ACTIVE',
+                      'PENDING'
+                  )
+                """,
+                (
+                    _utcnow_iso(),
+                    _party_clean_id(
+                        party_id
+                    ),
+                    int(user_id),
+                ),
+            )
+
+            conn.commit()
+
+            return cur.rowcount > 0
+
+        finally:
+            conn.close()
+
+    def list_memberships(
+        self,
+        party_id: str,
+        status: str | None = None,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            sql = """
+                SELECT *
+                FROM party_memberships
+                WHERE party_id = ?
+            """
+
+            params = [
+                _party_clean_id(
+                    party_id
+                )
+            ]
+
+            if status:
+                sql += """
+                    AND status = ?
+                """
+
+                params.append(
+                    status.upper()
+                )
+
+            sql += """
+                ORDER BY applied_at,
+                         user_id
+            """
+
+            return [
+                dict(r)
+                for r in conn.execute(
+                    sql,
+                    params,
+                ).fetchall()
+            ]
+
+        finally:
+            conn.close()
+
+    def approve_dual_party(
+        self,
+        party_id: str,
+        other_party_id: str,
+        actor_id: int,
+        conditions: str | None,
+    ) -> None:
+        conn = self._connect()
+
+        try:
+            conn.execute(
+                """
+                INSERT INTO
+                    party_dual_approvals(
+                        party_id,
+                        other_party_id,
+                        conditions,
+                        approved_by,
+                        approved_at
+                    )
+                VALUES (?, ?, ?, ?, ?)
+
+                ON CONFLICT(
+                    party_id,
+                    other_party_id
+                )
+                DO UPDATE SET
+                    conditions =
+                        excluded.conditions,
+                    approved_by =
+                        excluded.approved_by,
+                    approved_at =
+                        excluded.approved_at
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                    _party_clean_id(
+                        other_party_id
+                    ),
+                    conditions,
+                    int(actor_id),
+                    _utcnow_iso(),
+                ),
+            )
+
+            conn.commit()
+
+        finally:
+            conn.close()
+
+    def revoke_dual_party(
+        self,
+        party_id: str,
+        other_party_id: str,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            cur = conn.execute(
+                """
+                DELETE FROM
+                    party_dual_approvals
+                WHERE party_id = ?
+                  AND other_party_id = ?
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                    _party_clean_id(
+                        other_party_id
+                    ),
+                ),
+            )
+
+            conn.commit()
+
+            return cur.rowcount > 0
+
+        finally:
+            conn.close()
+
+    def set_officer(
+        self,
+        party_id: str,
+        office: str,
+        user_id: int,
+        interim: bool,
+        actor_id: int,
+    ) -> None:
+        office = office.lower()
+
+        if office not in PARTY_OFFICES:
+            raise ValueError(
+                "Unknown party office."
+            )
+
+        conn = self._connect()
+
+        try:
+            conn.execute(
+                """
+                INSERT INTO party_officers(
+                    party_id,
+                    office,
+                    user_id,
+                    interim,
+                    started_at,
+                    appointed_by
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+
+                ON CONFLICT(
+                    party_id,
+                    office
+                )
+                DO UPDATE SET
+                    user_id =
+                        excluded.user_id,
+                    interim =
+                        excluded.interim,
+                    started_at =
+                        excluded.started_at,
+                    appointed_by =
+                        excluded.appointed_by
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                    office,
+                    int(user_id),
+                    _party_bool(
+                        interim
+                    ),
+                    _utcnow_iso(),
+                    int(actor_id),
+                ),
+            )
+
+            conn.commit()
+
+        finally:
+            conn.close()
+
+    def list_officers(
+        self,
+        party_id: str,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM party_officers
+                WHERE party_id = ?
+
+                ORDER BY
+                    CASE office
+                        WHEN 'chair'
+                            THEN 1
+                        WHEN 'vice_chair'
+                            THEN 2
+                        WHEN 'treasurer'
+                            THEN 3
+                        WHEN 'secretary'
+                            THEN 4
+                        ELSE 99
+                    END
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                ),
+            ).fetchall()
+
+            return [
+                dict(r)
+                for r in rows
+            ]
+
+        finally:
+            conn.close()
+
+    def is_officer(
+        self,
+        party_id: str,
+        user_id: int,
+        offices: set[str] | None = None,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            rows = conn.execute(
+                """
+                SELECT office
+                FROM party_officers
+                WHERE party_id = ?
+                  AND user_id = ?
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                    int(user_id),
+                ),
+            ).fetchall()
+
+            if not rows:
+                return False
+
+            if offices is None:
+                return True
+
+            return any(
+                r["office"] in offices
+                for r in rows
+            )
+
+        finally:
+            conn.close()
+
+    def recognize_state(
+        self,
+        party_id: str,
+        state_key: str,
+        chair_user_id: int | None,
+        actor_id: int,
+        name: str | None = None,
+    ) -> None:
+        conn = self._connect()
+
+        try:
+            conn.execute(
+                """
+                INSERT INTO party_state_orgs(
+                    party_id,
+                    state_key,
+                    name,
+                    chair_user_id,
+                    recognized,
+                    recognized_at,
+                    recognized_by
+                )
+                VALUES (
+                    ?, ?, ?, ?,
+                    1,
+                    ?, ?
+                )
+
+                ON CONFLICT(
+                    party_id,
+                    state_key
+                )
+                DO UPDATE SET
+                    name = excluded.name,
+                    chair_user_id =
+                        excluded.chair_user_id,
+                    recognized = 1,
+                    recognized_at =
+                        excluded.recognized_at,
+                    recognized_by =
+                        excluded.recognized_by
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                    state_key,
+                    name,
+                    chair_user_id,
+                    _utcnow_iso(),
+                    int(actor_id),
+                ),
+            )
+
+            conn.commit()
+
+        finally:
+            conn.close()
+
+    def list_states(
+        self,
+        party_id: str,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM party_state_orgs
+                WHERE party_id = ?
+                  AND recognized = 1
+                ORDER BY state_key
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                ),
+            ).fetchall()
+
+            return [
+                dict(r)
+                for r in rows
+            ]
+
+        finally:
+            conn.close()
+
+    def create_convention(
+        self,
+        party_id: str,
+        name: str,
+        convention_type: str,
+        start_date: str,
+        end_date: str,
+        filing_deadline: str | None,
+        channel_id: int | None,
+        actor_id: int,
+    ) -> dict:
+        party_id = _party_clean_id(
+            party_id
+        )
+
+        if (
+            convention_type
+            not in PARTY_CONVENTION_TYPES
+        ):
+            raise ValueError(
+                "Unknown convention type."
+            )
+
+        start = date.fromisoformat(
+            start_date
+        )
+
+        end = date.fromisoformat(
+            end_date
+        )
+
+        if end < start:
+            raise ValueError(
+                "Convention end date "
+                "cannot precede its "
+                "start date."
+            )
+
+        if filing_deadline:
+            date.fromisoformat(
+                filing_deadline
+            )
+
+        base = (
+            f"{party_id}-"
+            f"{start.year}-"
+            f"{convention_type.replace('_', '-')}"
+        )
+
+        conn = self._connect()
+
+        try:
+            convention_id = base
+            seq = 1
+
+            while conn.execute(
+                """
+                SELECT 1
+                FROM party_conventions
+                WHERE convention_id = ?
+                """,
+                (
+                    convention_id,
+                ),
+            ).fetchone():
+                seq += 1
+
+                convention_id = (
+                    f"{base}-{seq}"
+                )
+
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                INSERT INTO party_conventions(
+                    convention_id,
+                    party_id,
+                    name,
+                    convention_type,
+                    start_date,
+                    end_date,
+                    filing_deadline,
+                    status,
+                    presiding_user_id,
+                    channel_id,
+                    agenda_text,
+                    rules_json,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?,
+                    'SCHEDULED',
+                    NULL,
+                    ?,
+                    NULL,
+                    '{}',
+                    ?, ?
+                )
+                """,
+                (
+                    convention_id,
+                    party_id,
+                    name.strip(),
+                    convention_type,
+                    start.isoformat(),
+                    end.isoformat(),
+                    filing_deadline,
+                    channel_id,
+                    now,
+                    now,
+                ),
+            )
+
+            # Charter superdelegates:
+            # Chair, Vice Chair,
+            # Treasurer, Secretary.
+            officers = conn.execute(
+                """
+                SELECT office,
+                       user_id
+                FROM party_officers
+                WHERE party_id = ?
+                """,
+                (
+                    party_id,
+                ),
+            ).fetchall()
+
+            for officer in officers:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO
+                        party_convention_delegates(
+                            convention_id,
+                            user_id,
+                            display_name,
+                            state_key,
+                            delegate_type,
+                            simulated,
+                            vote_weight,
+                            credential_status,
+                            present,
+                            pledged_candidate_id,
+                            selected_at,
+                            selected_by
+                        )
+                    VALUES (
+                        ?, ?, ?,
+                        NULL,
+                        'SUPERDELEGATE',
+                        0,
+                        1,
+                        'CREDENTIALED',
+                        0,
+                        NULL,
+                        ?, ?
+                    )
+                    """,
+                    (
+                        convention_id,
+                        int(
+                            officer[
+                                "user_id"
+                            ]
+                        ),
+                        (
+                            officer[
+                                "office"
+                            ]
+                            .replace(
+                                "_",
+                                " ",
+                            )
+                            .title()
+                            + " superdelegate"
+                        ),
+                        now,
+                        int(actor_id),
+                    ),
+                )
+
+            conn.commit()
+
+            return self.get_convention(
+                convention_id
+            )
+
+        finally:
+            conn.close()
+
+    def get_convention(
+        self,
+        convention_id: str,
+    ) -> dict | None:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_conventions
+                WHERE convention_id = ?
+                """,
+                (
+                    convention_id,
+                ),
+            ).fetchone()
+
+            if not row:
+                return None
+
+            out = dict(row)
+
+            try:
+                out["rules"] = json.loads(
+                    out.pop(
+                        "rules_json"
+                    )
+                    or "{}"
+                )
+
+            except Exception:
+                out["rules"] = {}
+
+            return out
+
+        finally:
+            conn.close()
+
+    def list_conventions(
+        self,
+        party_id: str | None = None,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            if party_id:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM party_conventions
+                    WHERE party_id = ?
+                    ORDER BY
+                        start_date DESC
+                    """,
+                    (
+                        _party_clean_id(
+                            party_id
+                        ),
+                    ),
+                ).fetchall()
+
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM party_conventions
+                    ORDER BY
+                        start_date DESC
+                    """
+                ).fetchall()
+
+            return [
+                dict(r)
+                for r in rows
+            ]
+
+        finally:
+            conn.close()
+
+    def update_convention_status(
+        self,
+        convention_id: str,
+        status: str,
+        presiding_user_id:
+            int | None = None,
+    ) -> bool:
+        if status not in {
+            "SCHEDULED",
+            "IN_SESSION",
+            "RECESSED",
+            "ADJOURNED",
+        }:
+            raise ValueError(
+                "Invalid convention status."
+            )
+
+        conn = self._connect()
+
+        try:
+            cur = conn.execute(
+                """
+                UPDATE party_conventions
+                SET status = ?,
+                    presiding_user_id =
+                        COALESCE(
+                            ?,
+                            presiding_user_id
+                        ),
+                    updated_at = ?
+                WHERE convention_id = ?
+                """,
+                (
+                    status,
+                    presiding_user_id,
+                    _utcnow_iso(),
+                    convention_id,
+                ),
+            )
+
+            conn.commit()
+
+            return cur.rowcount > 0
+
+        finally:
+            conn.close()
+
+    def set_convention_agenda(
+        self,
+        convention_id: str,
+        agenda: str,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            cur = conn.execute(
+                """
+                UPDATE party_conventions
+                SET agenda_text = ?,
+                    updated_at = ?
+                WHERE convention_id = ?
+                """,
+                (
+                    agenda.strip(),
+                    _utcnow_iso(),
+                    convention_id,
+                ),
+            )
+
+            conn.commit()
+
+            return cur.rowcount > 0
+
+        finally:
+            conn.close()
+
+    def set_convention_rule(
+        self,
+        convention_id: str,
+        key: str,
+        value: str,
+    ) -> bool:
+        row = self.get_convention(
+            convention_id
+        )
+
+        if not row:
+            return False
+
+        rules = (
+            row.get("rules")
+            or {}
+        )
+
+        rules[
+            str(key).strip()
+        ] = str(value).strip()
+
+        conn = self._connect()
+
+        try:
+            conn.execute(
+                """
+                UPDATE party_conventions
+                SET rules_json = ?,
+                    updated_at = ?
+                WHERE convention_id = ?
+                """,
+                (
+                    json.dumps(
+                        rules,
+                        ensure_ascii=False,
+                    ),
+                    _utcnow_iso(),
+                    convention_id,
+                ),
+            )
+
+            conn.commit()
+
+            return True
+
+        finally:
+            conn.close()
+
+    def add_delegate(
+        self,
+        convention_id: str,
+        display_name: str,
+        state_key: str | None,
+        user_id: int | None,
+        simulated: bool,
+        weight: float,
+        actor_id: int,
+        delegate_type: str = "DELEGATE",
+        pledged_candidate_id:
+            int | None = None,
+    ) -> dict:
+        if float(weight) <= 0:
+            raise ValueError(
+                "Delegate vote weight "
+                "must be greater than zero."
+            )
+
+        conn = self._connect()
+
+        try:
+            try:
+                cur = conn.execute(
+                    """
+                    INSERT INTO
+                        party_convention_delegates(
+                            convention_id,
+                            user_id,
+                            display_name,
+                            state_key,
+                            delegate_type,
+                            simulated,
+                            vote_weight,
+                            credential_status,
+                            present,
+                            pledged_candidate_id,
+                            selected_at,
+                            selected_by
+                        )
+                    VALUES (
+                        ?, ?, ?, ?, ?, ?, ?,
+                        'CREDENTIALED',
+                        0,
+                        ?, ?, ?
+                    )
+                    """,
+                    (
+                        convention_id,
+                        user_id,
+                        display_name.strip(),
+                        state_key,
+                        delegate_type,
+                        _party_bool(
+                            simulated
+                        ),
+                        float(weight),
+                        pledged_candidate_id,
+                        _utcnow_iso(),
+                        int(actor_id),
+                    ),
+                )
+
+                conn.commit()
+
+            except sqlite3.IntegrityError as e:
+                raise ValueError(
+                    "That user is already "
+                    "a delegate to this "
+                    "convention."
+                ) from e
+
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_convention_delegates
+                WHERE delegate_id = ?
+                """,
+                (
+                    int(
+                        cur.lastrowid
+                    ),
+                ),
+            ).fetchone()
+
+            return dict(row)
+
+        finally:
+            conn.close()
+
+    def list_delegates(
+        self,
+        convention_id: str,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM party_convention_delegates
+                WHERE convention_id = ?
+
+                ORDER BY
+                    delegate_type DESC,
+                    state_key,
+                    delegate_id
+                """,
+                (
+                    convention_id,
+                ),
+            ).fetchall()
+
+            return [
+                dict(r)
+                for r in rows
+            ]
+
+        finally:
+            conn.close()
+
+    def set_delegate_present(
+        self,
+        convention_id: str,
+        delegate_id: int,
+        present: bool,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            cur = conn.execute(
+                """
+                UPDATE
+                    party_convention_delegates
+                SET present = ?
+                WHERE convention_id = ?
+                  AND delegate_id = ?
+                  AND credential_status =
+                      'CREDENTIALED'
+                """,
+                (
+                    _party_bool(
+                        present
+                    ),
+                    convention_id,
+                    int(delegate_id),
+                ),
+            )
+
+            conn.commit()
+
+            return cur.rowcount > 0
+
+        finally:
+            conn.close()
+
+    def get_delegate_for_user(
+        self,
+        convention_id: str,
+        user_id: int,
+    ) -> dict | None:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_convention_delegates
+                WHERE convention_id = ?
+                  AND user_id = ?
+                """,
+                (
+                    convention_id,
+                    int(user_id),
+                ),
+            ).fetchone()
+
+            return (
+                dict(row)
+                if row
+                else None
+            )
+
+        finally:
+            conn.close()
+
+    def get_delegate(
+        self,
+        delegate_id: int,
+    ) -> dict | None:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_convention_delegates
+                WHERE delegate_id = ?
+                """,
+                (
+                    int(delegate_id),
+                ),
+            ).fetchone()
+
+            return (
+                dict(row)
+                if row
+                else None
+            )
+
+        finally:
+            conn.close()
+
+    def file_candidate(
+        self,
+        convention_id: str,
+        user_id: int,
+        display_name: str,
+        office: str,
+        statement: str | None,
+    ) -> dict:
+        conv = self.get_convention(
+            convention_id
+        )
+
+        if not conv:
+            raise ValueError(
+                "Convention not found."
+            )
+
+        deadline = conv.get(
+            "filing_deadline"
+        )
+
+        if (
+            deadline
+            and datetime.now(
+                UTC
+            ).date()
+            > date.fromisoformat(
+                deadline
+            )
+        ):
+            raise ValueError(
+                "The candidate filing "
+                "deadline has passed."
+            )
+
+        conn = self._connect()
+
+        try:
+            try:
+                cur = conn.execute(
+                    """
+                    INSERT INTO party_candidates(
+                        convention_id,
+                        user_id,
+                        display_name,
+                        office,
+                        statement,
+                        status,
+                        filed_at
+                    )
+                    VALUES (
+                        ?, ?, ?, ?, ?,
+                        'FILED',
+                        ?
+                    )
+                    """,
+                    (
+                        convention_id,
+                        int(user_id),
+                        display_name,
+                        office.upper(),
+                        statement,
+                        _utcnow_iso(),
+                    ),
+                )
+
+                conn.commit()
+
+            except sqlite3.IntegrityError as e:
+                raise ValueError(
+                    "You are already filed "
+                    "for that nomination."
+                ) from e
+
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_candidates
+                WHERE candidate_id = ?
+                """,
+                (
+                    int(
+                        cur.lastrowid
+                    ),
+                ),
+            ).fetchone()
+
+            return dict(row)
+
+        finally:
+            conn.close()
+
+    def list_candidates(
+        self,
+        convention_id: str,
+        office: str | None = None,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            if office:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM party_candidates
+                    WHERE convention_id = ?
+                      AND office = ?
+                    ORDER BY filed_at
+                    """,
+                    (
+                        convention_id,
+                        office.upper(),
+                    ),
+                ).fetchall()
+
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT *
+                    FROM party_candidates
+                    WHERE convention_id = ?
+                    ORDER BY filed_at
+                    """,
+                    (
+                        convention_id,
+                    ),
+                ).fetchall()
+
+            return [
+                dict(r)
+                for r in rows
+            ]
+
+        finally:
+            conn.close()
+
+    def certify_candidate(
+        self,
+        candidate_id: int,
+        actor_id: int,
+        eligible: bool,
+    ) -> dict | None:
+        conn = self._connect()
+
+        try:
+            status = (
+                "CERTIFIED"
+                if eligible
+                else "INELIGIBLE"
+            )
+
+            cur = conn.execute(
+                """
+                UPDATE party_candidates
+                SET status = ?,
+                    certified_at = ?,
+                    certified_by = ?
+                WHERE candidate_id = ?
+                  AND status = 'FILED'
+                """,
+                (
+                    status,
+                    _utcnow_iso(),
+                    int(actor_id),
+                    int(candidate_id),
+                ),
+            )
+
+            if cur.rowcount <= 0:
+                return None
+
+            conn.commit()
+
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_candidates
+                WHERE candidate_id = ?
+                """,
+                (
+                    int(candidate_id),
+                ),
+            ).fetchone()
+
+            return (
+                dict(row)
+                if row
+                else None
+            )
+
+        finally:
+            conn.close()
+
+    def withdraw_candidate(
+        self,
+        candidate_id: int,
+        user_id: int,
+        force: bool = False,
+    ) -> bool:
+        conn = self._connect()
+
+        try:
+            if force:
+                cur = conn.execute(
+                    """
+                    UPDATE party_candidates
+                    SET status =
+                            'WITHDRAWN',
+                        withdrawn_at = ?
+                    WHERE candidate_id = ?
+                      AND status IN (
+                          'FILED',
+                          'CERTIFIED'
+                      )
+                    """,
+                    (
+                        _utcnow_iso(),
+                        int(
+                            candidate_id
+                        ),
+                    ),
+                )
+
+            else:
+                cur = conn.execute(
+                    """
+                    UPDATE party_candidates
+                    SET status =
+                            'WITHDRAWN',
+                        withdrawn_at = ?
+                    WHERE candidate_id = ?
+                      AND user_id = ?
+                      AND status IN (
+                          'FILED',
+                          'CERTIFIED'
+                      )
+                    """,
+                    (
+                        _utcnow_iso(),
+                        int(
+                            candidate_id
+                        ),
+                        int(user_id),
+                    ),
+                )
+
+            conn.commit()
+
+            return cur.rowcount > 0
+
+        finally:
+            conn.close()
+
+    def add_business(
+        self,
+        convention_id: str,
+        business_type: str,
+        title: str,
+        body_text: str,
+        filed_by: int,
+        notice_date: str | None = None,
+    ) -> dict:
+        if (
+            business_type
+            not in PARTY_BUSINESS_TYPES
+        ):
+            raise ValueError(
+                "Unknown convention "
+                "business type."
+            )
+
+        if notice_date:
+            date.fromisoformat(
+                notice_date
+            )
+
+        threshold = (
+            "two_thirds"
+            if business_type
+            == "charter_amendment"
+            else "majority"
+        )
+
+        if (
+            business_type
+            == "charter_amendment"
+        ):
+            conv = self.get_convention(
+                convention_id
+            )
+
+            if not conv:
+                raise ValueError(
+                    "Convention not found."
+                )
+
+            if not notice_date:
+                raise ValueError(
+                    "Charter amendments "
+                    "require a notice date."
+                )
+
+            notice = date.fromisoformat(
+                notice_date
+            )
+
+            start = date.fromisoformat(
+                conv["start_date"]
+            )
+
+            if (
+                start - notice
+            ).days < 30:
+                raise ValueError(
+                    "Charter amendments "
+                    "require at least "
+                    "30 days' notice before "
+                    "the Convention."
+                )
+
+        conn = self._connect()
+
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO party_business(
+                    convention_id,
+                    business_type,
+                    title,
+                    body_text,
+                    status,
+                    threshold,
+                    notice_date,
+                    filed_by,
+                    filed_at
+                )
+                VALUES (
+                    ?, ?, ?, ?,
+                    'FILED',
+                    ?, ?, ?, ?
+                )
+                """,
+                (
+                    convention_id,
+                    business_type,
+                    title.strip(),
+                    body_text.strip(),
+                    threshold,
+                    notice_date,
+                    int(filed_by),
+                    _utcnow_iso(),
+                ),
+            )
+
+            conn.commit()
+
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_business
+                WHERE business_id = ?
+                """,
+                (
+                    int(
+                        cur.lastrowid
+                    ),
+                ),
+            ).fetchone()
+
+            return dict(row)
+
+        finally:
+            conn.close()
+
+    def list_business(
+        self,
+        convention_id: str,
+    ) -> list[dict]:
+        conn = self._connect()
+
+        try:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM party_business
+                WHERE convention_id = ?
+                ORDER BY business_id
+                """,
+                (
+                    convention_id,
+                ),
+            ).fetchall()
+
+            return [
+                dict(r)
+                for r in rows
+            ]
+
+        finally:
+            conn.close()
+
+    def open_nomination_ballot(
+        self,
+        convention_id: str,
+        office: str,
+        actor_id: int,
+    ) -> dict:
+        conn = self._connect()
+
+        try:
+            existing = conn.execute(
+                """
+                SELECT 1
+                FROM party_ballots
+                WHERE convention_id = ?
+                  AND status = 'OPEN'
+                """,
+                (
+                    convention_id,
+                ),
+            ).fetchone()
+
+            if existing:
+                raise ValueError(
+                    "Another convention "
+                    "ballot is already open."
+                )
+
+            candidates = conn.execute(
+                """
+                SELECT *
+                FROM party_candidates
+                WHERE convention_id = ?
+                  AND office = ?
+                  AND status = 'CERTIFIED'
+                ORDER BY candidate_id
+                """,
+                (
+                    convention_id,
+                    office.upper(),
+                ),
+            ).fetchall()
+
+            if not candidates:
+                raise ValueError(
+                    "No certified candidates "
+                    "exist for that nomination."
+                )
+
+            round_row = conn.execute(
+                """
+                SELECT
+                    COALESCE(
+                        MAX(round_no),
+                        0
+                    ) + 1
+                    AS next_round
+                FROM party_ballots
+                WHERE convention_id = ?
+                  AND ballot_type =
+                      'NOMINATION'
+                  AND office = ?
+                """,
+                (
+                    convention_id,
+                    office.upper(),
+                ),
+            ).fetchone()
+
+            round_no = int(
+                round_row[
+                    "next_round"
+                ]
+                or 1
+            )
+
+            now = _utcnow_iso()
+
+            cur = conn.execute(
+                """
+                INSERT INTO party_ballots(
+                    convention_id,
+                    ballot_type,
+                    round_no,
+                    office,
+                    business_id,
+                    question,
+                    threshold,
+                    status,
+                    opened_by,
+                    opened_at
+                )
+                VALUES (
+                    ?,
+                    'NOMINATION',
+                    ?,
+                    ?,
+                    NULL,
+                    ?,
+                    'majority',
+                    'OPEN',
+                    ?,
+                    ?
+                )
+                """,
+                (
+                    convention_id,
+                    round_no,
+                    office.upper(),
+                    (
+                        "Who shall be the "
+                        "Party nominee for "
+                        f"{office.upper()}?"
+                    ),
+                    int(actor_id),
+                    now,
+                ),
+            )
+
+            ballot_id = int(
+                cur.lastrowid
+            )
+
+            for cand in candidates:
+                conn.execute(
+                    """
+                    INSERT INTO
+                        party_ballot_options(
+                            ballot_id,
+                            option_key,
+                            label,
+                            candidate_id
+                        )
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        ballot_id,
+                        (
+                            "C"
+                            + str(
+                                cand[
+                                    "candidate_id"
+                                ]
+                            )
+                        ),
+                        cand[
+                            "display_name"
+                        ],
+                        int(
+                            cand[
+                                "candidate_id"
+                            ]
+                        ),
+                    ),
+                )
+
+            conn.execute(
+                """
+                INSERT INTO
+                    party_ballot_options(
+                        ballot_id,
+                        option_key,
+                        label,
+                        candidate_id
+                    )
+                VALUES (
+                    ?,
+                    'ABSTAIN',
+                    'Abstain',
+                    NULL
+                )
+                """,
+                (
+                    ballot_id,
+                ),
+            )
+
+            conn.commit()
+
+            return self.get_ballot(
+                ballot_id
+            )
+
+        finally:
+            conn.close()
+
+    def open_business_ballot(
+        self,
+        business_id: int,
+        actor_id: int,
+    ) -> dict:
+        conn = self._connect()
+
+        try:
+            business = conn.execute(
+                """
+                SELECT *
+                FROM party_business
+                WHERE business_id = ?
+                """,
+                (
+                    int(business_id),
+                ),
+            ).fetchone()
+
+            if (
+                not business
+                or business["status"]
+                not in {
+                    "FILED",
+                    "REJECTED",
+                }
+            ):
+                raise ValueError(
+                    "That business item "
+                    "cannot be placed on "
+                    "a ballot."
+                )
+
+            existing = conn.execute(
+                """
+                SELECT 1
+                FROM party_ballots
+                WHERE convention_id = ?
+                  AND status = 'OPEN'
+                """,
+                (
+                    business[
+                        "convention_id"
+                    ],
+                ),
+            ).fetchone()
+
+            if existing:
+                raise ValueError(
+                    "Another convention "
+                    "ballot is already open."
+                )
+
+            now = _utcnow_iso()
+
+            cur = conn.execute(
+                """
+                INSERT INTO party_ballots(
+                    convention_id,
+                    ballot_type,
+                    round_no,
+                    office,
+                    business_id,
+                    question,
+                    threshold,
+                    status,
+                    opened_by,
+                    opened_at
+                )
+                VALUES (
+                    ?,
+                    'BUSINESS',
+                    1,
+                    NULL,
+                    ?,
+                    ?,
+                    ?,
+                    'OPEN',
+                    ?,
+                    ?
+                )
+                """,
+                (
+                    business[
+                        "convention_id"
+                    ],
+                    int(business_id),
+                    (
+                        "Shall the Convention "
+                        "adopt "
+                        f"{business['title']}?"
+                    ),
+                    business[
+                        "threshold"
+                    ],
+                    int(actor_id),
+                    now,
+                ),
+            )
+
+            ballot_id = int(
+                cur.lastrowid
+            )
+
+            for key, label in (
+                (
+                    "YES",
+                    "Yes",
+                ),
+                (
+                    "NO",
+                    "No",
+                ),
+                (
+                    "ABSTAIN",
+                    "Abstain",
+                ),
+            ):
+                conn.execute(
+                    """
+                    INSERT INTO
+                        party_ballot_options(
+                            ballot_id,
+                            option_key,
+                            label
+                        )
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        ballot_id,
+                        key,
+                        label,
+                    ),
+                )
+
+            conn.execute(
+                """
+                UPDATE party_business
+                SET status = 'VOTING'
+                WHERE business_id = ?
+                """,
+                (
+                    int(business_id),
+                ),
+            )
+
+            conn.commit()
+
+            return self.get_ballot(
+                ballot_id
+            )
+
+        finally:
+            conn.close()
+
+    def get_ballot(
+        self,
+        ballot_id: int,
+    ) -> dict | None:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_ballots
+                WHERE ballot_id = ?
+                """,
+                (
+                    int(ballot_id),
+                ),
+            ).fetchone()
+
+            if not row:
+                return None
+
+            out = dict(row)
+
+            out["options"] = [
+                dict(r)
+                for r in conn.execute(
+                    """
+                    SELECT *
+                    FROM party_ballot_options
+                    WHERE ballot_id = ?
+                    ORDER BY option_key
+                    """,
+                    (
+                        int(ballot_id),
+                    ),
+                ).fetchall()
+            ]
+
+            return out
+
+        finally:
+            conn.close()
+
+    def get_open_ballot(
+        self,
+        convention_id: str,
+    ) -> dict | None:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT ballot_id
+                FROM party_ballots
+                WHERE convention_id = ?
+                  AND status = 'OPEN'
+                ORDER BY ballot_id DESC
+                LIMIT 1
+                """,
+                (
+                    convention_id,
+                ),
+            ).fetchone()
+
+            if not row:
+                return None
+
+            return self.get_ballot(
+                int(
+                    row[
+                        "ballot_id"
+                    ]
+                )
+            )
+
+        finally:
+            conn.close()
+
+    def cast_ballot_vote(
+        self,
+        ballot_id: int,
+        delegate_id: int,
+        option_key: str,
+        cast_by: int,
+    ) -> None:
+        conn = self._connect()
+
+        try:
+            ballot = conn.execute(
+                """
+                SELECT *
+                FROM party_ballots
+                WHERE ballot_id = ?
+                  AND status = 'OPEN'
+                """,
+                (
+                    int(ballot_id),
+                ),
+            ).fetchone()
+
+            if not ballot:
+                raise ValueError(
+                    "That ballot is not open."
+                )
+
+            delegate = conn.execute(
+                """
+                SELECT *
+                FROM party_convention_delegates
+                WHERE delegate_id = ?
+                  AND convention_id = ?
+                  AND credential_status =
+                      'CREDENTIALED'
+                  AND present = 1
+                """,
+                (
+                    int(delegate_id),
+                    ballot[
+                        "convention_id"
+                    ],
+                ),
+            ).fetchone()
+
+            if not delegate:
+                raise ValueError(
+                    "That delegate is not "
+                    "credentialed and present."
+                )
+
+            option = conn.execute(
+                """
+                SELECT 1
+                FROM party_ballot_options
+                WHERE ballot_id = ?
+                  AND option_key = ?
+                """,
+                (
+                    int(ballot_id),
+                    option_key.upper(),
+                ),
+            ).fetchone()
+
+            if not option:
+                raise ValueError(
+                    "Invalid ballot option."
+                )
+
+            conn.execute(
+                """
+                INSERT INTO
+                    party_ballot_votes(
+                        ballot_id,
+                        delegate_id,
+                        option_key,
+                        cast_by,
+                        cast_at
+                    )
+                VALUES (?, ?, ?, ?, ?)
+
+                ON CONFLICT(
+                    ballot_id,
+                    delegate_id
+                )
+                DO UPDATE SET
+                    option_key =
+                        excluded.option_key,
+                    cast_by =
+                        excluded.cast_by,
+                    cast_at =
+                        excluded.cast_at
+                """,
+                (
+                    int(ballot_id),
+                    int(delegate_id),
+                    option_key.upper(),
+                    int(cast_by),
+                    _utcnow_iso(),
+                ),
+            )
+
+            conn.commit()
+
+        finally:
+            conn.close()
+
+    def tally_ballot(
+        self,
+        ballot_id: int,
+    ) -> dict:
+        conn = self._connect()
+
+        try:
+            ballot = conn.execute(
+                """
+                SELECT *
+                FROM party_ballots
+                WHERE ballot_id = ?
+                """,
+                (
+                    int(ballot_id),
+                ),
+            ).fetchone()
+
+            if not ballot:
+                raise ValueError(
+                    "Ballot not found."
+                )
+
+            entitled = float(
+                conn.execute(
+                    """
+                    SELECT COALESCE(
+                        SUM(vote_weight),
+                        0
+                    ) AS n
+                    FROM party_convention_delegates
+                    WHERE convention_id = ?
+                      AND credential_status =
+                          'CREDENTIALED'
+                    """,
+                    (
+                        ballot[
+                            "convention_id"
+                        ],
+                    ),
+                ).fetchone()["n"]
+                or 0
+            )
+
+            present = float(
+                conn.execute(
+                    """
+                    SELECT COALESCE(
+                        SUM(vote_weight),
+                        0
+                    ) AS n
+                    FROM party_convention_delegates
+                    WHERE convention_id = ?
+                      AND credential_status =
+                          'CREDENTIALED'
+                      AND present = 1
+                    """,
+                    (
+                        ballot[
+                            "convention_id"
+                        ],
+                    ),
+                ).fetchone()["n"]
+                or 0
+            )
+
+            rows = conn.execute(
+                """
+                SELECT
+                    o.option_key,
+                    o.label,
+                    o.candidate_id,
+
+                    COALESCE(
+                        SUM(
+                            d.vote_weight
+                        ),
+                        0
+                    ) AS weight
+
+                FROM party_ballot_options o
+
+                LEFT JOIN
+                    party_ballot_votes v
+                ON
+                    v.ballot_id =
+                        o.ballot_id
+                    AND v.option_key =
+                        o.option_key
+
+                LEFT JOIN
+                    party_convention_delegates d
+                ON
+                    d.delegate_id =
+                        v.delegate_id
+
+                WHERE o.ballot_id = ?
+
+                GROUP BY
+                    o.option_key,
+                    o.label,
+                    o.candidate_id
+
+                ORDER BY
+                    weight DESC,
+                    o.option_key
+                """,
+                (
+                    int(ballot_id),
+                ),
+            ).fetchall()
+
+            options = [
+                dict(r)
+                for r in rows
+            ]
+
+            voting_total = sum(
+                float(
+                    r["weight"]
+                    or 0
+                )
+                for r in rows
+                if r["option_key"]
+                != "ABSTAIN"
+            )
+
+            quorum_met = (
+                present
+                > (
+                    entitled
+                    / 2.0
+                )
+                if entitled > 0
+                else False
+            )
+
+            winner_key = None
+            passed = False
+
+            if (
+                quorum_met
+                and voting_total > 0
+            ):
+                if (
+                    ballot[
+                        "ballot_type"
+                    ]
+                    == "NOMINATION"
+                ):
+                    top = max(
+                        (
+                            r
+                            for r in rows
+                            if r[
+                                "option_key"
+                            ]
+                            != "ABSTAIN"
+                        ),
+                        key=lambda r:
+                            float(
+                                r[
+                                    "weight"
+                                ]
+                                or 0
+                            ),
+                    )
+
+                    if (
+                        float(
+                            top[
+                                "weight"
+                            ]
+                            or 0
+                        )
+                        > (
+                            voting_total
+                            / 2.0
+                        )
+                    ):
+                        winner_key = top[
+                            "option_key"
+                        ]
+
+                        passed = True
+
+                else:
+                    yes = next(
+                        (
+                            float(
+                                r[
+                                    "weight"
+                                ]
+                                or 0
+                            )
+                            for r in rows
+                            if r[
+                                "option_key"
+                            ]
+                            == "YES"
+                        ),
+                        0.0,
+                    )
+
+                    if (
+                        ballot[
+                            "threshold"
+                        ]
+                        == "two_thirds"
+                    ):
+                        passed = (
+                            yes
+                            >= (
+                                (
+                                    2.0
+                                    / 3.0
+                                )
+                                * voting_total
+                            )
+                        )
+
+                    else:
+                        passed = (
+                            yes
+                            > (
+                                voting_total
+                                / 2.0
+                            )
+                        )
+
+                    winner_key = (
+                        "YES"
+                        if passed
+                        else "NO"
+                    )
+
+            return {
+                "ballot_id":
+                    int(ballot_id),
+
+                "convention_id":
+                    ballot[
+                        "convention_id"
+                    ],
+
+                "ballot_type":
+                    ballot[
+                        "ballot_type"
+                    ],
+
+                "round_no":
+                    int(
+                        ballot[
+                            "round_no"
+                        ]
+                    ),
+
+                "threshold":
+                    ballot[
+                        "threshold"
+                    ],
+
+                "entitled_weight":
+                    entitled,
+
+                "present_weight":
+                    present,
+
+                "quorum_met":
+                    quorum_met,
+
+                "voting_weight":
+                    voting_total,
+
+                "options":
+                    options,
+
+                "passed":
+                    passed,
+
+                "winner_key":
+                    winner_key,
+            }
+
+        finally:
+            conn.close()
+
+    def close_ballot(
+        self,
+        ballot_id: int,
+        actor_id: int,
+    ) -> dict:
+        tally = self.tally_ballot(
+            ballot_id
+        )
+
+        conn = self._connect()
+
+        try:
+            ballot = conn.execute(
+                """
+                SELECT *
+                FROM party_ballots
+                WHERE ballot_id = ?
+                  AND status = 'OPEN'
+                """,
+                (
+                    int(ballot_id),
+                ),
+            ).fetchone()
+
+            if not ballot:
+                raise ValueError(
+                    "That ballot is not open."
+                )
+
+            now = _utcnow_iso()
+
+            conn.execute(
+                """
+                UPDATE party_ballots
+                SET status = 'CLOSED',
+                    closed_by = ?,
+                    closed_at = ?,
+                    result_json = ?
+                WHERE ballot_id = ?
+                """,
+                (
+                    int(actor_id),
+                    now,
+                    json.dumps(
+                        tally,
+                        ensure_ascii=False,
+                    ),
+                    int(ballot_id),
+                ),
+            )
+
+            if (
+                ballot[
+                    "ballot_type"
+                ]
+                == "NOMINATION"
+                and tally["passed"]
+            ):
+                option = conn.execute(
+                    """
+                    SELECT candidate_id
+                    FROM party_ballot_options
+                    WHERE ballot_id = ?
+                      AND option_key = ?
+                    """,
+                    (
+                        int(ballot_id),
+                        tally[
+                            "winner_key"
+                        ],
+                    ),
+                ).fetchone()
+
+                if (
+                    option
+                    and option[
+                        "candidate_id"
+                    ]
+                ):
+                    conn.execute(
+                        """
+                        UPDATE party_candidates
+                        SET status =
+                            'NOMINATED'
+                        WHERE candidate_id = ?
+                        """,
+                        (
+                            int(
+                                option[
+                                    "candidate_id"
+                                ]
+                            ),
+                        ),
+                    )
+
+            if (
+                ballot[
+                    "ballot_type"
+                ]
+                == "BUSINESS"
+                and ballot[
+                    "business_id"
+                ]
+            ):
+                business = conn.execute(
+                    """
+                    SELECT *
+                    FROM party_business
+                    WHERE business_id = ?
+                    """,
+                    (
+                        int(
+                            ballot[
+                                "business_id"
+                            ]
+                        ),
+                    ),
+                ).fetchone()
+
+                if not tally["quorum_met"]:
+                    new_status = "FILED"
+
+                else:
+                    new_status = (
+                        "ADOPTED"
+                        if tally[
+                            "passed"
+                        ]
+                        else "REJECTED"
+                    )
+
+                conn.execute(
+                    """
+                    UPDATE party_business
+                    SET status = ?,
+                        adopted_at = ?
+                    WHERE business_id = ?
+                    """,
+                    (
+                        new_status,
+                        (
+                            now
+                            if tally[
+                                "passed"
+                            ]
+                            else None
+                        ),
+                        int(
+                            ballot[
+                                "business_id"
+                            ]
+                        ),
+                    ),
+                )
+
+                if (
+                    tally["passed"]
+                    and business
+                    and business[
+                        "business_type"
+                    ]
+                    in {
+                        "platform",
+                        "bylaws",
+                    }
+                ):
+                    conv = conn.execute(
+                        """
+                        SELECT party_id
+                        FROM party_conventions
+                        WHERE convention_id = ?
+                        """,
+                        (
+                            business[
+                                "convention_id"
+                            ],
+                        ),
+                    ).fetchone()
+
+                    if conv:
+                        conn.execute(
+                            """
+                            INSERT INTO party_documents(
+                                party_id,
+                                document_type,
+                                title,
+                                body_text,
+                                convention_id,
+                                business_id,
+                                adopted_at
+                            )
+                            VALUES (
+                                ?, ?, ?, ?, ?, ?, ?
+                            )
+                            """,
+                            (
+                                conv[
+                                    "party_id"
+                                ],
+                                business[
+                                    "business_type"
+                                ].upper(),
+                                business[
+                                    "title"
+                                ],
+                                business[
+                                    "body_text"
+                                ],
+                                business[
+                                    "convention_id"
+                                ],
+                                int(
+                                    business[
+                                        "business_id"
+                                    ]
+                                ),
+                                now,
+                            ),
+                        )
+
+            conn.commit()
+
+            return tally
+
+        finally:
+            conn.close()
+
+    def latest_document(
+        self,
+        party_id: str,
+        document_type: str,
+    ) -> dict | None:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_documents
+                WHERE party_id = ?
+                  AND document_type = ?
+                ORDER BY document_id DESC
+                LIMIT 1
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                    document_type.upper(),
+                ),
+            ).fetchone()
+
+            return (
+                dict(row)
+                if row
+                else None
+            )
+
+        finally:
+            conn.close()
+
+    def record_treasury(
+        self,
+        party_id: str,
+        entry_type: str,
+        amount: float,
+        category: str | None,
+        description: str | None,
+        actor_id: int,
+    ) -> dict:
+        entry_type = (
+            entry_type.upper()
+        )
+
+        if entry_type not in {
+            "INCOME",
+            "EXPENSE",
+        }:
+            raise ValueError(
+                "Treasury entry type "
+                "must be income or expense."
+            )
+
+        if float(amount) <= 0:
+            raise ValueError(
+                "Amount must be "
+                "greater than zero."
+            )
+
+        conn = self._connect()
+
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO
+                    party_treasury_ledger(
+                        party_id,
+                        entry_type,
+                        amount,
+                        category,
+                        description,
+                        actor_id,
+                        created_at
+                    )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                    entry_type,
+                    float(amount),
+                    category,
+                    description,
+                    int(actor_id),
+                    _utcnow_iso(),
+                ),
+            )
+
+            conn.commit()
+
+            row = conn.execute(
+                """
+                SELECT *
+                FROM party_treasury_ledger
+                WHERE entry_id = ?
+                """,
+                (
+                    int(
+                        cur.lastrowid
+                    ),
+                ),
+            ).fetchone()
+
+            return dict(row)
+
+        finally:
+            conn.close()
+
+    def treasury_balance(
+        self,
+        party_id: str,
+    ) -> float:
+        conn = self._connect()
+
+        try:
+            row = conn.execute(
+                """
+                SELECT COALESCE(
+                    SUM(
+                        CASE
+                            WHEN entry_type =
+                                'INCOME'
+                            THEN amount
+                            ELSE -amount
+                        END
+                    ),
+                    0
+                ) AS balance
+
+                FROM party_treasury_ledger
+
+                WHERE party_id = ?
+                """,
+                (
+                    _party_clean_id(
+                        party_id
+                    ),
+                ),
+            ).fetchone()
+
+            return float(
+                row[
+                    "balance"
+                ]
+                or 0.0
+            )
+
+        finally:
+            conn.close()
+
+def _load_npc_first_names() -> dict:
+    global _NPC_FIRST_NAME_CACHE
+
+    if _NPC_FIRST_NAME_CACHE is not None:
+        return _NPC_FIRST_NAME_CACHE
+
+    result = {}
+
+    for year, path in NPC_NAME_FILES.items():
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"Missing NPC name file: {path}"
+            )
+
+        with open(
+            path,
+            "r",
+            encoding="utf-8",
+        ) as f:
+            data = json.load(f)
+
+        result[year] = {
+            "girls": list(
+                data.get("girls", [])
+            ),
+            "boys": list(
+                data.get("boys", [])
+            ),
+        }
+
+    _NPC_FIRST_NAME_CACHE = result
+    return result
+
+
+def _load_npc_surnames() -> tuple[list[str], list[float]]:
+    global _NPC_SURNAME_CACHE
+
+    if _NPC_SURNAME_CACHE is not None:
+        return _NPC_SURNAME_CACHE
+
+    if not os.path.exists(
+        NPC_SURNAME_FILE
+    ):
+        raise FileNotFoundError(
+            f"Missing NPC surname file: "
+            f"{NPC_SURNAME_FILE}"
+        )
+
+    names = []
+    weights = []
+
+    with open(
+        NPC_SURNAME_FILE,
+        "r",
+        encoding="utf-8-sig",
+        newline="",
+    ) as f:
+        reader = csv.DictReader(f)
+
+        for row in reader:
+            if (
+                str(
+                    row.get("Country", "")
+                ).strip().upper()
+                != "US"
+            ):
+                continue
+
+            name = (
+                row.get("Romanized Name")
+                or row.get("Localized Name")
+                or ""
+            ).strip()
+
+            if not name:
+                continue
+
+            try:
+                weight = float(
+                    row.get("Count") or 1
+                )
+            except (TypeError, ValueError):
+                weight = 1.0
+
+            names.append(name)
+            weights.append(
+                max(weight, 1.0)
+            )
+
+    if not names:
+        raise RuntimeError(
+            "No U.S. surnames were found "
+            "in the surname CSV."
+        )
+
+    _NPC_SURNAME_CACHE = (
+        names,
+        weights,
+    )
+
+    return _NPC_SURNAME_CACHE
+
+
+def _rank_weighted_name(
+    names: list[str],
+) -> str:
+    """
+    The JSON lists are popularity-ranked.
+
+    This keeps common names common without
+    making the bottom of the list impossible.
+    """
+
+    if not names:
+        raise ValueError(
+            "Name pool is empty."
+        )
+
+    weights = [
+        1 / ((index + 1) ** 0.55)
+        for index in range(
+            len(names)
+        )
+    ]
+
+    return random.choices(
+        names,
+        weights=weights,
+        k=1,
+    )[0]
+
+
+def _generate_congress_person(
+    used_names: set[str],
+) -> dict:
+    first_names = (
+        _load_npc_first_names()
+    )
+
+    surnames, surname_weights = (
+        _load_npc_surnames()
+    )
+
+    for _ in range(200):
+        # Mostly ~51-year-olds, with a fair
+        # number of older and younger officials.
+        cohort = random.choices(
+            [1965, 1975, 1985],
+            weights=[30, 50, 20],
+            k=1,
+        )[0]
+
+        sex = random.choice(
+            ["F", "M"]
+        )
+
+        pool_key = (
+            "girls"
+            if sex == "F"
+            else "boys"
+        )
+
+        first = _rank_weighted_name(
+            first_names[
+                cohort
+            ][pool_key]
+        )
+
+        last = random.choices(
+            surnames,
+            weights=surname_weights,
+            k=1,
+        )[0]
+
+        full_name = (
+            f"{first} {last}"
+        )
+
+        if full_name in used_names:
+            continue
+
+        used_names.add(
+            full_name
+        )
+
+        return {
+            "name": full_name,
+            "sex": sex,
+            "name_cohort": cohort,
+            "npc": True,
+        }
+
+    # Extremely unlikely fallback.
+    while True:
+        first = _rank_weighted_name(
+            first_names[1975]["boys"]
+        )
+
+        last = random.choice(
+            surnames
+        )
+
+        middle = random.choice(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        )
+
+        full_name = (
+            f"{first} {middle}. {last}"
+        )
+
+        if full_name not in used_names:
+            used_names.add(
+                full_name
+            )
+
+            return {
+                "name": full_name,
+                "sex": "M",
+                "name_cohort": 1975,
+                "npc": True,
+            }
+
+
+def _build_congress_members(
+    party_counts: dict[str, int],
+    seat_prefix: str,
+    used_names: set[str],
+) -> list[dict]:
+    party_slots = []
+
+    for party_id, count in (
+        party_counts.items()
+    ):
+        party_slots.extend(
+            [party_id] * int(count)
+        )
+
+    # Party and seat number should not imply
+    # anything yet. Geography comes later.
+    random.shuffle(
+        party_slots
+    )
+
+    members = []
+
+    for index, party_id in enumerate(
+        party_slots,
+        start=1,
+    ):
+        row = {
+            "seat_id": (
+                f"{seat_prefix}-"
+                f"{index:03d}"
+            ),
+            "party": party_id,
+        }
+
+        if party_id == "VAC":
+            row.update({
+                "name": None,
+                "npc": False,
+            })
+
+        else:
+            row.update(
+                _generate_congress_person(
+                    used_names
+                )
+            )
+
+        members.append(row)
+
+    return members
+
+
+def _save_congress_snapshot(
+    snapshot: dict,
+) -> None:
+    with open(
+        CONGRESS_SNAPSHOT_FILE,
+        "w",
+        encoding="utf-8",
+    ) as f:
+        json.dump(
+            snapshot,
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+
+def _load_congress_snapshot() -> dict | None:
+    if not os.path.exists(
+        CONGRESS_SNAPSHOT_FILE
+    ):
+        return None
+
+    with open(
+        CONGRESS_SNAPSHOT_FILE,
+        "r",
+        encoding="utf-8",
+    ) as f:
+        return json.load(f)
+
+
+def _seed_congress_snapshot(
+    force: bool = False,
+) -> dict:
+    existing = (
+        _load_congress_snapshot()
+    )
+
+    if existing and not force:
+        return existing
+
+    used_names: set[str] = set()
+
+    house_members = (
+        _build_congress_members(
+            CURRENT_CONGRESS_SEED[
+                "house"
+            ],
+            "H",
+            used_names,
+        )
+    )
+
+    senate_members = (
+        _build_congress_members(
+            CURRENT_CONGRESS_SEED[
+                "senate"
+            ],
+            "S",
+            used_names,
+        )
+    )
+
+    vp_person = (
+        _generate_congress_person(
+            used_names
+        )
+    )
+
+    snapshot = {
+        "version": 1,
+        "generated_at": (
+            datetime.now(
+                UTC
+            ).isoformat()
+        ),
+
+        "house": {
+            "total_seats": 435,
+            "majority": 218,
+            "members": house_members,
+        },
+
+        "senate": {
+            "total_seats": 100,
+            "majority": 51,
+            "members": senate_members,
+
+            "vice_president": {
+                **vp_person,
+                "party": (
+                    CURRENT_CONGRESS_SEED[
+                        "vice_president_party"
+                    ]
+                ),
+            },
+        },
+    }
+
+    _save_congress_snapshot(
+        snapshot
+    )
+
+    return snapshot
+
+def _integer_apportion(
+    total: int,
+    weights: list[float],
+) -> list[int]:
+    """
+    Largest-remainder apportionment.
+
+    Used here to decide how many visual seats
+    belong on each concentric row.
+    """
+
+    if total <= 0:
+        return [
+            0
+            for _ in weights
+        ]
+
+    weight_total = sum(
+        weights
+    )
+
+    raw = [
+        total
+        * weight
+        / weight_total
+        for weight in weights
+    ]
+
+    base = [
+        math.floor(value)
+        for value in raw
+    ]
+
+    remaining = (
+        total
+        - sum(base)
+    )
+
+    ranked = sorted(
+        range(len(raw)),
+        key=lambda i:
+            raw[i] - base[i],
+        reverse=True,
+    )
+
+    for i in ranked[
+        :remaining
+    ]:
+        base[i] += 1
+
+    return base
+
+
+def _hemicycle_points(
+    total_seats: int,
+    rows: int | None = None,
+) -> list[tuple[float, float]]:
+    if rows is None:
+        if total_seats >= 300:
+            rows = 11
+        elif total_seats >= 80:
+            rows = 6
+        else:
+            rows = 5
+
+    inner_radius = 0.50
+    outer_radius = 1.00
+
+    radii = [
+        inner_radius
+        + (
+            outer_radius
+            - inner_radius
+        )
+        * (
+            index
+            / (rows - 1)
+        )
+        for index in range(
+            rows
+        )
+    ]
+
+    seats_per_row = (
+        _integer_apportion(
+            total_seats,
+            radii,
+        )
+    )
+
+    points = []
+
+    # Small gap at each bottom corner.
+    margin = math.radians(4)
+
+    for radius, count in zip(
+        radii,
+        seats_per_row,
+    ):
+        if count <= 1:
+            angles = [
+                math.pi / 2
+            ]
+
+        else:
+            span = (
+                math.pi
+                - (2 * margin)
+            )
+
+            angles = [
+                math.pi
+                - margin
+                - (
+                    index
+                    * span
+                    / (count - 1)
+                )
+                for index in range(
+                    count
+                )
+            ]
+
+        for angle in angles:
+            x = (
+                radius
+                * math.cos(angle)
+            )
+
+            y = (
+                radius
+                * math.sin(angle)
+            )
+
+            points.append(
+                (x, y)
+            )
+
+    # Parties will fill from ideological
+    # left -> center -> right.
+    points.sort(
+        key=lambda point:
+            (
+                point[0],
+                point[1],
+            )
+    )
+
+    return points
+
+def _render_congress_chart(
+    snapshot: dict,
+    chamber: str,
+) -> io.BytesIO:
+    chamber = (
+        chamber
+        .strip()
+        .lower()
+    )
+
+    if chamber not in {
+        "house",
+        "senate",
+    }:
+        raise ValueError(
+            "Chamber must be house or senate."
+        )
+
+    data = snapshot[
+        chamber
+    ]
+
+    members = data[
+        "members"
+    ]
+
+    counts = Counter(
+        member["party"]
+        for member in members
+    )
+
+    total_seats = int(
+        data["total_seats"]
+    )
+
+    majority = int(
+        data["majority"]
+    )
+
+    if chamber == "house":
+        title = (
+            "Spidey Republic "
+            "House of Representatives"
+        )
+    else:
+        title = (
+            "Spidey Republic Senate"
+        )
+
+    points = _hemicycle_points(
+        total_seats
+    )
+
+    seat_parties = []
+
+    for party_id in (
+        CONGRESS_DISPLAY_ORDER
+    ):
+        seat_parties.extend(
+            [party_id]
+            * counts.get(
+                party_id,
+                0,
+            )
+        )
+
+    fig = plt.figure(
+        figsize=(14, 10),
+        facecolor="#F7F7F5",
+    )
+
+    ax = fig.add_axes(
+        [
+            0.055,
+            0.235,
+            0.89,
+            0.58,
+        ]
+    )
+
+    ax.set_facecolor(
+        "#F7F7F5"
+    )
+
+    ax.set_aspect(
+        "equal"
+    )
+
+    ax.axis(
+        "off"
+    )
+
+    marker_size = max(
+        45,
+        min(
+            255,
+            25000
+            / total_seats,
+        ),
+    )
+
+    for party_id in (
+        CONGRESS_DISPLAY_ORDER
+    ):
+        xs = []
+        ys = []
+
+        for (
+            point,
+            seat_party,
+        ) in zip(
+            points,
+            seat_parties,
+        ):
+            if (
+                seat_party
+                != party_id
+            ):
+                continue
+
+            xs.append(
+                point[0]
+            )
+
+            ys.append(
+                point[1]
+            )
+
+        if not xs:
+            continue
+
+        party = (
+            CONGRESS_PARTIES[
+                party_id
+            ]
+        )
+
+        ax.scatter(
+            xs,
+            ys,
+            s=marker_size,
+            c=party["color"],
+            edgecolors="#F7F7F5",
+            linewidths=1.0,
+            zorder=3,
+        )
+
+    ax.set_xlim(
+        -1.08,
+        1.08,
+    )
+
+    ax.set_ylim(
+        -0.04,
+        1.08,
+    )
+
+    # ------------------------------------------------
+    # HEADER
+    # ------------------------------------------------
+
+    fig.text(
+        0.055,
+        0.93,
+        title,
+        fontsize=32,
+        fontweight="bold",
+        ha="left",
+        va="top",
+        color="#111827",
+    )
+
+    fig.text(
+        0.055,
+        0.872,
+        "Current Congress",
+        fontsize=21,
+        ha="left",
+        va="top",
+        color="#374151",
+    )
+
+    fig.text(
+        0.055,
+        0.825,
+        (
+            "Seats for a majority: "
+            f"{majority}"
+        ),
+        fontsize=18,
+        ha="left",
+        va="top",
+        color="#4B5563",
+    )
+
+    # ------------------------------------------------
+    # VICE PRESIDENT
+    # ------------------------------------------------
+
+    if chamber == "senate":
+        vp = data.get(
+            "vice_president"
+        )
+
+        if vp:
+            vp_party_id = vp.get(
+                "party",
+                "IND",
+            )
+
+            vp_party = (
+                CONGRESS_PARTIES.get(
+                    vp_party_id,
+                    CONGRESS_PARTIES[
+                        "IND"
+                    ],
+                )
+            )
+
+            vp_dot = Circle(
+                (
+                    0.80,
+                    0.866,
+                ),
+                0.012,
+                transform=fig.transFigure,
+                facecolor=(
+                    vp_party[
+                        "color"
+                    ]
+                ),
+                edgecolor="white",
+                linewidth=1.2,
+            )
+
+            fig.add_artist(
+                vp_dot
+            )
+
+            fig.text(
+                0.822,
+                0.884,
+                "Vice President",
+                fontsize=14,
+                fontweight="bold",
+                ha="left",
+                va="center",
+                color="#111827",
+            )
+
+            fig.text(
+                0.822,
+                0.855,
+                (
+                    f"{vp['name']} · "
+                    f"{vp_party['name']}"
+                ),
+                fontsize=11.5,
+                ha="left",
+                va="center",
+                color="#4B5563",
+            )
+
+            fig.text(
+                0.822,
+                0.832,
+                "Tie-breaking vote",
+                fontsize=10.5,
+                ha="left",
+                va="center",
+                color="#6B7280",
+            )
+
+    # ------------------------------------------------
+    # LEGEND / TOTALS
+    # ------------------------------------------------
+
+    legend_y = 0.17
+
+    fig.text(
+        0.07,
+        legend_y + 0.055,
+        "Party",
+        fontsize=17,
+        fontweight="bold",
+        ha="left",
+        color="#111827",
+    )
+
+    fig.text(
+        0.92,
+        legend_y + 0.055,
+        "Seats",
+        fontsize=17,
+        fontweight="bold",
+        ha="right",
+        color="#111827",
+    )
+
+    visible_parties = [
+        party_id
+        for party_id in (
+            CONGRESS_DISPLAY_ORDER
+        )
+        if counts.get(
+            party_id,
+            0,
+        ) > 0
+    ]
+
+    for index, party_id in enumerate(
+        visible_parties
+    ):
+        party = (
+            CONGRESS_PARTIES[
+                party_id
+            ]
+        )
+
+        y = (
+            legend_y
+            - index * 0.035
+        )
+
+        dot = Circle(
+            (
+                0.082,
+                y + 0.004,
+            ),
+            0.0085,
+            transform=fig.transFigure,
+            facecolor=party[
+                "color"
+            ],
+            edgecolor="none",
+        )
+
+        fig.add_artist(
+            dot
+        )
+
+        fig.text(
+            0.105,
+            y,
+            party["name"],
+            fontsize=15,
+            ha="left",
+            va="center",
+            color="#111827",
+        )
+
+        fig.text(
+            0.92,
+            y,
+            f"{counts[party_id]:,}",
+            fontsize=15,
+            ha="right",
+            va="center",
+            color="#111827",
+        )
+
+    # ------------------------------------------------
+    # FOOTER
+    # ------------------------------------------------
+
+    fig.add_artist(
+        plt.Line2D(
+            [
+                0.055,
+                0.945,
+            ],
+            [
+                0.035,
+                0.035,
+            ],
+            transform=(
+                fig.transFigure
+            ),
+            color="#9CA3AF",
+            linewidth=0.8,
+        )
+    )
+
+    fig.text(
+        0.055,
+        0.015,
+        (
+            "Spidey Republic • "
+            "generated from the current "
+            "congressional roster"
+        ),
+        fontsize=10.5,
+        ha="left",
+        va="bottom",
+        color="#6B7280",
+    )
+
+    output = io.BytesIO()
+
+    fig.savefig(
+        output,
+        format="png",
+        dpi=180,
+        bbox_inches="tight",
+        facecolor=(
+            fig.get_facecolor()
+        ),
+    )
+
+    plt.close(
+        fig
+    )
+
+    output.seek(0)
+
+    return output
 
 # --- Public opinion issue taxonomy ---
 #
@@ -9093,6 +13635,13 @@ class SpideyGov(commands.Cog):
             PUBLIC_OPINION_DB_FILE
         )
         self.public_opinion_lock = asyncio.Lock()
+
+                # --- Political party / convention database init ---
+        self.party_db = PartyDB(
+            PARTY_DB_FILE
+        )
+        self.party_lock = asyncio.Lock()
+
         
 
     def cog_unload(self):
@@ -10242,6 +14791,67 @@ class SpideyGov(commands.Cog):
     citizenship = app_commands.Group(name="citizenship", description="Citizenship-related commands", parent=government)
     elections = app_commands.Group(name="elections", description="Elections & registration")
 
+    party = app_commands.Group(
+        name="party",
+        description=(
+            "Political party organization "
+            "and conventions"
+        ),
+    )
+
+    party_membership = app_commands.Group(
+        name="membership",
+        description="Party membership",
+        parent=party,
+    )
+
+    party_officer = app_commands.Group(
+        name="officer",
+        description="Party officers",
+        parent=party,
+    )
+
+    party_state = app_commands.Group(
+        name="state",
+        description=(
+            "Recognized state party "
+            "organizations"
+        ),
+        parent=party,
+    )
+
+    party_convention = app_commands.Group(
+        name="convention",
+        description=(
+            "National convention "
+            "administration"
+        ),
+        parent=party,
+    )
+
+    party_candidate = app_commands.Group(
+        name="candidate",
+        description=(
+            "Party nomination candidates"
+        ),
+        parent=party,
+    )
+
+    party_business = app_commands.Group(
+        name="business",
+        description=(
+            "Convention platform, bylaws, "
+            "and other business"
+        ),
+        parent=party,
+    )
+
+    party_treasury = app_commands.Group(
+        name="treasury",
+        description="Party treasury",
+        parent=party,
+    )
+
     public = app_commands.Group(name="public", description="The Spidey Republic Public")
     news = app_commands.Group(name="news", description="News network tools", parent=public)
     social = app_commands.Group(name="social", description="Spidder (in-universe social feed)", parent=public)
@@ -10320,111 +14930,324 @@ class SpideyGov(commands.Cog):
 
 
 
-    @elections.command(name="party_create", description="Create a new political party")
-    @app_commands.describe(name="Full name of the party", abbreviation="Short abbreviation (3-6 chars)", color="Color for the party (hex code, e.g. #ff0000)", desc="Short description (optional)")
-    async def party_create(self, interaction: discord.Interaction, name: str, abbreviation: str, color: str, desc: str = None):
-        await interaction.response.defer(ephemeral=True)
-        reg = self.federal_registry
-        parties = _elections_root(reg).setdefault("parties", {})
 
-        name = (name or "").strip()
-        abbreviation = (abbreviation or "").strip().upper()
-        color = (color or "").strip()
-        desc = (desc or "").strip()
+    async def party_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ):
+        cur = (
+            current
+            or ""
+        ).casefold()
 
-        if not name:
-            return await interaction.followup.send("Party name is required.", ephemeral=True)
-        if not abbreviation or not re.match(r"^[A-Z]{3,6}$", abbreviation):
-            return await interaction.followup.send("Abbreviation must be 3-6 letters (A-Z).", ephemeral=True)
-        if abbreviation in parties:
-            return await interaction.followup.send("Abbreviation already in use.", ephemeral=True)
-        try:
-            if color.startswith("#"):
-                color = color[1:]
-            int(color, 16)
-            if len(color) not in (3, 6):
-                raise ValueError()
-            color = "#" + color.upper()
-        except Exception:
-            return await interaction.followup.send("Color must be a valid hex code, e.g. #ff0000.", ephemeral=True)
-
-        party_id = abbreviation
-        parties[party_id] = {
-            "id": party_id,
-            "name": name,
-            "abbreviation": abbreviation,
-            "color": color,
-            "description": desc,
-            "created_at": discord.utils.utcnow().isoformat(),
-            "members": [],
-        }
-        save_federal_registry(reg)
-
-        await interaction.followup.send(f"✅ Created party **{name}** ({abbreviation})", ephemeral=True)
-    
-    @elections.command(name="party_list", description="List all political parties")
-    async def party_list(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        reg = self.federal_registry
-        parties = _elections_root(reg).get("parties", {})
-
-        if not parties:
-            return await interaction.followup.send("No parties found.", ephemeral=True)
-
-        embed = discord.Embed(title="Political Parties", color=discord.Color.blue())
-        for p in sorted(parties.values(), key=lambda x: x.get("name","")):
-            name = f"{p.get('name','')} ({p.get('abbreviation','')})"
-            desc = p.get("description") or "No description."
-            members = len(p.get("members", []))
-            embed.add_field(name=name, value=f"{desc}\nMembers: {members}", inline=False)
-
-        await interaction.followup.send(embed=embed, ephemeral=True)
-    
-    async def party_autocomplete(self, interaction: discord.Interaction, current: str):
-        reg = self.federal_registry
-        parties = _elections_root(reg).get("parties", {})
-        cur = (current or "").lower()
         out = []
-        for pid, p in parties.items():
-            label = f"{p.get('name','')} ({p.get('abbreviation','')})"
-            if not cur or cur in label.lower():
-                out.append(app_commands.Choice(name=label[:100], value=pid))
-        out.append(app_commands.Choice(name="None / Independent", value="independent"))
+
+        for party in self.party_db.list_parties():
+            label = (
+                f"{party['name']} "
+                f"({party['abbreviation']})"
+            )
+
+            if (
+                not cur
+                or cur in label.casefold()
+            ):
+                out.append(
+                    app_commands.Choice(
+                        name=label[:100],
+                        value=party["party_id"],
+                    )
+                )
+
+        out.append(
+            app_commands.Choice(
+                name="None / Independent",
+                value="independent",
+            )
+        )
+
+        return out[:25]
+
+    def _party_user_state(
+        self,
+        member: discord.Member,
+    ) -> str | None:
+        role_ids = {
+            role.id
+            for role in member.roles
+        }
+
+        for state_key, role_id in CITIZENSHIP.items():
+            if role_id in role_ids:
+                return state_key
+
+        return None
+
+
+    def _party_can_manage(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+        offices: set[str] | None = None,
+    ) -> bool:
+        if interaction.user.guild_permissions.administrator:
+            return True
+
+        return self.party_db.is_officer(
+            party_id,
+            interaction.user.id,
+            offices=offices,
+        )
+
+
+    async def _party_sync_role(
+        self,
+        guild: discord.Guild | None,
+        party_id: str,
+        user_id: int,
+        add: bool,
+    ) -> None:
+        if not guild:
+            return
+
+        party = self.party_db.get_party(
+            party_id
+        )
+
+        if not party or not party.get("role_id"):
+            return
+
+        role = guild.get_role(
+            int(party["role_id"])
+        )
+
+        if not role:
+            return
+
+        member = guild.get_member(
+            int(user_id)
+        )
+
+        if not member:
+            try:
+                member = await guild.fetch_member(
+                    int(user_id)
+                )
+            except Exception:
+                return
+
+        try:
+            if add and role not in member.roles:
+                await member.add_roles(
+                    role,
+                    reason="Political party membership",
+                )
+
+            elif not add and role in member.roles:
+                await member.remove_roles(
+                    role,
+                    reason="Political party membership ended",
+                )
+
+        except Exception:
+            pass
+
+
+    async def convention_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        cur = (current or "").casefold()
+        out = []
+
+        for conv in self.party_db.list_conventions():
+            label = (
+                f"{conv['name']} "
+                f"({conv['convention_id']})"
+            )
+
+            if not cur or cur in label.casefold():
+                out.append(
+                    app_commands.Choice(
+                        name=label[:100],
+                        value=conv["convention_id"],
+                    )
+                )
+
         return out[:25]
     
-    @elections.command(name="register_to_vote", description="Register to vote for Federal elections")
-    @app_commands.describe(category="Your Category (for House/Senate voting)", party="Your party label or 'independent'")
-    @app_commands.autocomplete(category=category_autocomplete, party=party_autocomplete)
-    async def register_to_vote(self, interaction: discord.Interaction, category: str, party: str = "independent"):
+    @elections.command(
+        name="register_to_vote",
+        description="Register to vote for Federal elections",
+    )
+    @app_commands.describe(
+        category="Your State/Category",
+        party="Political party or Independent",
+    )
+    @app_commands.autocomplete(
+        category=category_autocomplete,
+        party=party_autocomplete,
+    )
+    async def register_to_vote(
+        self,
+        interaction: discord.Interaction,
+        category: str,
+        party: str = "independent",
+    ):
         reg = self.federal_registry
         eroot = _elections_root(reg)
         voters = eroot["voters"]
 
-        # gate: must be Citizen in that Category
-        if not any(r.id == CITIZENSHIP_ROLE for r in interaction.user.roles):
-            return await interaction.response.send_message("You must be a Citizen to register.", ephemeral=True)
-        cat_role_id = CITIZENSHIP.get(category)
-        if not cat_role_id or not any(r.id == cat_role_id for r in interaction.user.roles):
-            return await interaction.response.send_message("Your roles do not reflect that Category.", ephemeral=True)
+        if not any(
+            role.id == CITIZENSHIP_ROLE
+            for role in interaction.user.roles
+        ):
+            return await interaction.response.send_message(
+                "You must be a Citizen to register.",
+                ephemeral=True,
+            )
 
-        # freeze check (optional) with grace override
-        freeze = eroot.get("registration_freeze")
+        category_role_id = CITIZENSHIP.get(
+            category
+        )
+
+        if (
+            not category_role_id
+            or not any(
+                role.id == category_role_id
+                for role in interaction.user.roles
+            )
+        ):
+            return await interaction.response.send_message(
+                "Your roles do not reflect that State.",
+                ephemeral=True,
+            )
+
+        freeze = eroot.get(
+            "registration_freeze"
+        )
+
         if freeze:
-            if datetime.now(UTC).date() > date.fromisoformat(freeze) and not _grace_ok(reg, None, "registration"):
-                return await interaction.response.send_message("Registration deadline has passed.", ephemeral=True)
+            if (
+                datetime.now(UTC).date()
+                > date.fromisoformat(freeze)
+                and not _grace_ok(
+                    reg,
+                    None,
+                    "registration",
+                )
+            ):
+                return await interaction.response.send_message(
+                    "Registration deadline has passed.",
+                    ephemeral=True,
+                )
 
-        voters[str(interaction.user.id)] = {
+        uid = str(
+            interaction.user.id
+        )
+
+        previous = voters.get(uid) or {}
+
+        old_party = (
+            previous.get("party")
+            or "independent"
+        )
+
+        new_party = (
+            party
+            or "independent"
+        )
+
+        if (
+            new_party != "independent"
+            and not self.party_db.get_party(
+                new_party
+            )
+        ):
+            return await interaction.response.send_message(
+                "❌ That political party does not exist.",
+                ephemeral=True,
+            )
+
+        voters[uid] = {
             "category": category,
-            "party": (party or "independent"),
+            "party": new_party,
             "registered_at": _now_iso(),
             "active": True,
-            "late_grace": bool(freeze and _grace_ok(reg, None, "registration")),
+            "late_grace": bool(
+                freeze
+                and _grace_ok(
+                    reg,
+                    None,
+                    "registration",
+                )
+            ),
         }
-        save_federal_registry(reg)
+
+        save_federal_registry(
+            reg
+        )
+
+        # Changing registration away from a party
+        # ends registration-based membership there.
+        if (
+            old_party != new_party
+            and old_party != "independent"
+        ):
+            self.party_db.withdraw_membership(
+                old_party,
+                interaction.user.id,
+            )
+
+            await self._party_sync_role(
+                interaction.guild,
+                old_party,
+                interaction.user.id,
+                False,
+            )
+
+        # Registering with a party automatically
+        # creates active membership.
+        if new_party != "independent":
+            self.party_db.apply_membership(
+                new_party,
+                interaction.user.id,
+                category,
+                None,
+                False,
+                source="VOTER_REGISTRATION",
+            )
+
+            await self._party_sync_role(
+                interaction.guild,
+                new_party,
+                interaction.user.id,
+                True,
+            )
+
+        party_text = (
+            "Independent"
+            if new_party == "independent"
+            else (
+                self.party_db
+                .get_party(new_party)["name"]
+            )
+        )
+
         return await interaction.response.send_message(
-            f"✅ Registered to vote in **{category.replace('_',' ').title()}**"
-            + (" (accepted under one-time grace)" if voters[str(interaction.user.id)]["late_grace"] else ""),
-            ephemeral=True
+            (
+                f"✅ Registered to vote in "
+                f"**{category.replace('_', ' ').title()}**\n"
+                f"Party: **{party_text}**"
+                + (
+                    "\nAccepted under one-time grace."
+                    if voters[uid]["late_grace"]
+                    else ""
+                )
+            ),
+            ephemeral=True,
         )
 
 
@@ -21835,5 +26658,2293 @@ class SpideyGov(commands.Cog):
 
         await interaction.followup.send(
             "The complete Constitution has been sent to your DMs.",
+            ephemeral=True,
+        )
+
+        # ---------------- PARTY BASICS ----------------
+
+    @party.command(
+        name="create",
+        description="Create a political party.",
+    )
+    @app_commands.checks.has_permissions(
+        administrator=True
+    )
+    async def party_create_system(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        abbreviation: str,
+        color: str | None = None,
+        description: str | None = None,
+        role: discord.Role | None = None,
+    ):
+        party_id = _party_clean_id(
+            abbreviation
+        )
+
+        if not party_id:
+            return await interaction.response.send_message(
+                "❌ A valid abbreviation is required.",
+                ephemeral=True,
+            )
+
+        clean_color = None
+
+        if color:
+            raw = color.strip().lstrip("#")
+
+            try:
+                int(raw, 16)
+
+                if len(raw) not in {3, 6}:
+                    raise ValueError
+
+                clean_color = f"#{raw.upper()}"
+
+            except Exception:
+                return await interaction.response.send_message(
+                    "❌ Color must be a valid hex code.",
+                    ephemeral=True,
+                )
+
+        try:
+            async with self.party_lock:
+                created = self.party_db.create_party(
+                    party_id,
+                    name,
+                    abbreviation,
+                    clean_color,
+                    description,
+                    role.id if role else None,
+                )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            (
+                f"✅ Created **{created['name']}** "
+                f"(`{created['party_id']}`)."
+            ),
+            ephemeral=True,
+        )
+
+
+    @party.command(
+        name="list",
+        description="List political parties.",
+    )
+    async def party_list_system(
+        self,
+        interaction: discord.Interaction,
+    ):
+        parties = self.party_db.list_parties()
+
+        if not parties:
+            return await interaction.response.send_message(
+                "No parties are currently registered.",
+                ephemeral=True,
+            )
+
+        embed = discord.Embed(
+            title="Political Parties",
+            color=discord.Color.blurple(),
+        )
+
+        for p in parties:
+            active_members = len(
+                self.party_db.list_memberships(
+                    p["party_id"],
+                    "ACTIVE",
+                )
+            )
+
+            role_text = (
+                f"<@&{p['role_id']}>"
+                if p.get("role_id")
+                else "No Discord role linked"
+            )
+
+            embed.add_field(
+                name=(
+                    f"{p['name']} "
+                    f"({p['abbreviation']})"
+                ),
+                value=(
+                    f"{p.get('description') or 'No description.'}\n"
+                    f"Members: **{active_members}**\n"
+                    f"{role_text}"
+                ),
+                inline=False,
+            )
+
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True,
+        )
+
+
+    @party.command(
+        name="info",
+        description="View a political party.",
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete
+    )
+    async def party_info_system(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+    ):
+        p = self.party_db.get_party(
+            party_id
+        )
+
+        if not p:
+            return await interaction.response.send_message(
+                "❌ Party not found.",
+                ephemeral=True,
+            )
+
+        officers = self.party_db.list_officers(
+            party_id
+        )
+
+        states = self.party_db.list_states(
+            party_id
+        )
+
+        active = self.party_db.list_memberships(
+            party_id,
+            "ACTIVE",
+        )
+
+        embed = discord.Embed(
+            title=(
+                f"{p['name']} "
+                f"({p['abbreviation']})"
+            ),
+            description=p.get("description") or None,
+            color=discord.Color.blurple(),
+        )
+
+        embed.add_field(
+            name="Members",
+            value=str(len(active)),
+        )
+
+        embed.add_field(
+            name="Recognized State Parties",
+            value=str(len(states)),
+        )
+
+        embed.add_field(
+            name="Officers",
+            value=(
+                "\n".join(
+                    (
+                        f"**{o['office'].replace('_', ' ').title()}:** "
+                        f"<@{o['user_id']}>"
+                        + (
+                            " *(interim)*"
+                            if o["interim"]
+                            else ""
+                        )
+                    )
+                    for o in officers
+                )
+                or "None recorded."
+            ),
+            inline=False,
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True,
+        )
+
+
+    @party.command(
+        name="set_role",
+        description="Link a Discord role to a party.",
+    )
+    @app_commands.checks.has_permissions(
+        administrator=True
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete
+    )
+    async def party_set_role(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+        role: discord.Role,
+    ):
+        ok = self.party_db.set_role(
+            party_id,
+            role.id,
+        )
+
+        if not ok:
+            return await interaction.response.send_message(
+                "❌ Party not found.",
+                ephemeral=True,
+            )
+
+        for membership in self.party_db.list_memberships(
+            party_id,
+            "ACTIVE",
+        ):
+            await self._party_sync_role(
+                interaction.guild,
+                party_id,
+                int(membership["user_id"]),
+                True,
+            )
+
+        await interaction.response.send_message(
+            f"✅ Party role set to {role.mention}.",
+            ephemeral=True,
+        )
+
+
+    @party.command(
+        name="document",
+        description="View an adopted platform or bylaws.",
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete
+    )
+    @app_commands.choices(
+        document_type=[
+            app_commands.Choice(
+                name="Platform",
+                value="PLATFORM",
+            ),
+            app_commands.Choice(
+                name="Bylaws",
+                value="BYLAWS",
+            ),
+        ]
+    )
+    async def party_document(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+        document_type: app_commands.Choice[str],
+    ):
+        doc = self.party_db.latest_document(
+            party_id,
+            document_type.value,
+        )
+
+        if not doc:
+            return await interaction.response.send_message(
+                "No adopted document of that type is on file.",
+                ephemeral=True,
+            )
+
+        text = doc["body_text"]
+
+        if len(text) > 3800:
+            text = text[:3797] + "…"
+
+        embed = discord.Embed(
+            title=doc["title"],
+            description=text,
+            color=discord.Color.blurple(),
+        )
+
+        embed.set_footer(
+            text=(
+                "Adopted "
+                + doc["adopted_at"]
+            )
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True,
+        )
+
+        # ---------------- PARTY OFFICERS ----------------
+
+    @party_officer.command(
+        name="set",
+        description="Set a party officer.",
+    )
+    @app_commands.checks.has_permissions(
+        administrator=True
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete
+    )
+    @app_commands.choices(
+        office=[
+            app_commands.Choice(
+                name="Chair",
+                value="chair",
+            ),
+            app_commands.Choice(
+                name="Vice Chair",
+                value="vice_chair",
+            ),
+            app_commands.Choice(
+                name="Treasurer",
+                value="treasurer",
+            ),
+            app_commands.Choice(
+                name="Secretary",
+                value="secretary",
+            ),
+        ]
+    )
+    async def party_officer_set(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+        office: app_commands.Choice[str],
+        member: discord.Member,
+        interim: bool = True,
+    ):
+        membership = self.party_db.get_membership(
+            party_id,
+            member.id,
+        )
+
+        if (
+            not membership
+            or membership["status"] != "ACTIVE"
+        ):
+            return await interaction.response.send_message(
+                "❌ Party officers must be active party members.",
+                ephemeral=True,
+            )
+
+        self.party_db.set_officer(
+            party_id,
+            office.value,
+            member.id,
+            interim,
+            interaction.user.id,
+        )
+
+        await interaction.response.send_message(
+            (
+                f"✅ {member.mention} set as "
+                f"**{office.name}**"
+                + (
+                    " *(interim)*"
+                    if interim
+                    else ""
+                )
+                + "."
+            ),
+            ephemeral=True,
+        )
+
+
+    @party_officer.command(
+        name="list",
+        description="List party officers.",
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete
+    )
+    async def party_officer_list(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+    ):
+        rows = self.party_db.list_officers(
+            party_id
+        )
+
+        text = (
+            "\n".join(
+                (
+                    f"**{r['office'].replace('_', ' ').title()}:** "
+                    f"<@{r['user_id']}>"
+                    + (
+                        " *(interim)*"
+                        if r["interim"]
+                        else ""
+                    )
+                )
+                for r in rows
+            )
+            or "No officers recorded."
+        )
+
+        await interaction.response.send_message(
+            text,
+            ephemeral=True,
+        )
+
+
+    # ---------------- STATE PARTIES ----------------
+
+    @party_state.command(
+        name="recognize",
+        description="Recognize or update a State Party.",
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete,
+        state=category_autocomplete,
+    )
+    async def party_state_recognize(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+        state: str,
+        chair: discord.Member | None = None,
+        name: str | None = None,
+    ):
+        if not self._party_can_manage(
+            interaction,
+            party_id,
+        ):
+            return await interaction.response.send_message(
+                "❌ Party officer authority required.",
+                ephemeral=True,
+            )
+
+        if state not in CATEGORIES:
+            return await interaction.response.send_message(
+                "❌ Unknown State.",
+                ephemeral=True,
+            )
+
+        if chair:
+            membership = self.party_db.get_membership(
+                party_id,
+                chair.id,
+            )
+
+            if (
+                not membership
+                or membership["status"] != "ACTIVE"
+            ):
+                return await interaction.response.send_message(
+                    "❌ State Party chairs must be active members.",
+                    ephemeral=True,
+                )
+
+        party = self.party_db.get_party(
+            party_id
+        )
+
+        self.party_db.recognize_state(
+            party_id,
+            state,
+            chair.id if chair else None,
+            interaction.user.id,
+            name
+            or (
+                f"{CATEGORIES[state]['name']} "
+                f"{party['name']}"
+            ),
+        )
+
+        await interaction.response.send_message(
+            "✅ State Party recognized/updated.",
+            ephemeral=True,
+        )
+
+
+    @party_state.command(
+        name="list",
+        description="List recognized State Parties.",
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete
+    )
+    async def party_state_list(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+    ):
+        rows = self.party_db.list_states(
+            party_id
+        )
+
+        lines = []
+
+        for row in rows:
+            state_name = (
+                CATEGORIES
+                .get(
+                    row["state_key"],
+                    {},
+                )
+                .get(
+                    "name",
+                    row["state_key"],
+                )
+            )
+
+            chair_text = (
+                f"<@{row['chair_user_id']}>"
+                if row.get("chair_user_id")
+                else "No chair recorded"
+            )
+
+            lines.append(
+                f"**{state_name}:** {chair_text}"
+            )
+
+        await interaction.response.send_message(
+            "\n".join(lines)
+            if lines
+            else "No recognized State Parties.",
+            ephemeral=True,
+        )
+
+        # ---------------- PARTY CONVENTIONS ----------------
+
+    @party_convention.command(
+        name="create",
+        description="Schedule a party convention.",
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete
+    )
+    @app_commands.choices(
+        convention_type=[
+            app_commands.Choice(
+                name=value,
+                value=key,
+            )
+            for key, value
+            in PARTY_CONVENTION_TYPES.items()
+        ]
+    )
+    async def party_convention_create(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+        name: str,
+        start_date: str,
+        end_date: str,
+        convention_type: app_commands.Choice[str],
+        filing_deadline: str | None = None,
+        channel: discord.TextChannel | None = None,
+    ):
+        if not self._party_can_manage(
+            interaction,
+            party_id,
+        ):
+            return await interaction.response.send_message(
+                "❌ Party officer authority required.",
+                ephemeral=True,
+            )
+
+        try:
+            conv = self.party_db.create_convention(
+                party_id,
+                name,
+                convention_type.value,
+                start_date,
+                end_date,
+                filing_deadline,
+                (
+                    channel.id
+                    if channel
+                    else interaction.channel_id
+                ),
+                interaction.user.id,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            (
+                f"✅ Convention created: "
+                f"**{conv['name']}**\n"
+                f"ID: `{conv['convention_id']}`\n"
+                "Current party officers were automatically "
+                "added as superdelegates."
+            ),
+            ephemeral=True,
+        )
+
+
+    @party_convention.command(
+        name="status",
+        description="View convention status and quorum.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_status(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        if not conv:
+            return await interaction.response.send_message(
+                "❌ Convention not found.",
+                ephemeral=True,
+            )
+
+        delegates = self.party_db.list_delegates(
+            convention_id
+        )
+
+        credentialed = [
+            d
+            for d in delegates
+            if d["credential_status"] == "CREDENTIALED"
+        ]
+
+        entitled = sum(
+            float(d["vote_weight"])
+            for d in credentialed
+        )
+
+        present = sum(
+            float(d["vote_weight"])
+            for d in credentialed
+            if d["present"]
+        )
+
+        quorum = (
+            present > entitled / 2
+            if entitled
+            else False
+        )
+
+        agenda = (
+            conv.get("agenda_text")
+            or "No agenda has been filed."
+        )
+
+        if len(agenda) > 3800:
+            agenda = agenda[:3797] + "…"
+
+        embed = discord.Embed(
+            title=conv["name"],
+            description=agenda,
+            color=discord.Color.blurple(),
+        )
+
+        embed.add_field(
+            name="Status",
+            value=conv["status"],
+        )
+
+        embed.add_field(
+            name="Dates",
+            value=(
+                f"{conv['start_date']} "
+                f"– {conv['end_date']}"
+            ),
+        )
+
+        embed.add_field(
+            name="Quorum",
+            value=(
+                f"`{present:g}` present / "
+                f"`{entitled:g}` entitled\n"
+                f"**{'MET' if quorum else 'NOT MET'}**"
+            ),
+            inline=False,
+        )
+
+        if conv.get("filing_deadline"):
+            embed.add_field(
+                name="Candidate Filing Deadline",
+                value=conv["filing_deadline"],
+            )
+
+        if conv.get("rules"):
+            rules_text = "\n".join(
+                f"**{key}:** {value}"
+                for key, value
+                in conv["rules"].items()
+            )
+
+            embed.add_field(
+                name="Temporary Rules",
+                value=rules_text[:1024],
+                inline=False,
+            )
+
+        await interaction.response.send_message(
+            embed=embed,
+            ephemeral=True,
+        )
+
+
+    @party_convention.command(
+        name="agenda",
+        description="Set the convention agenda.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_agenda(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+        agenda: str,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        if (
+            not conv
+            or not self._party_can_manage(
+                interaction,
+                conv["party_id"],
+            )
+        ):
+            return await interaction.response.send_message(
+                "❌ Party officer authority required.",
+                ephemeral=True,
+            )
+
+        self.party_db.set_convention_agenda(
+            convention_id,
+            agenda,
+        )
+
+        await interaction.response.send_message(
+            "✅ Convention agenda updated.",
+            ephemeral=True,
+        )
+
+
+    @party_convention.command(
+        name="set_rule",
+        description="Set a temporary convention rule.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_set_rule(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+        key: str,
+        value: str,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        if (
+            not conv
+            or not self._party_can_manage(
+                interaction,
+                conv["party_id"],
+            )
+        ):
+            return await interaction.response.send_message(
+                "❌ Party officer authority required.",
+                ephemeral=True,
+            )
+
+        self.party_db.set_convention_rule(
+            convention_id,
+            key,
+            value,
+        )
+
+        await interaction.response.send_message(
+            f"✅ Rule `{key}` recorded.",
+            ephemeral=True,
+        )
+
+
+    async def _party_change_convention_status(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+        status: str,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        if (
+            not conv
+            or not self._party_can_manage(
+                interaction,
+                conv["party_id"],
+                {
+                    "chair",
+                    "vice_chair",
+                    "secretary",
+                },
+            )
+        ):
+            return await interaction.response.send_message(
+                "❌ Convention-control authority required.",
+                ephemeral=True,
+            )
+
+        self.party_db.update_convention_status(
+            convention_id,
+            status,
+            (
+                interaction.user.id
+                if status == "IN_SESSION"
+                else None
+            ),
+        )
+
+        await interaction.response.send_message(
+            f"✅ Convention status: **{status}**.",
+        )
+
+
+    @party_convention.command(
+        name="open",
+        description="Call the convention to order.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_open(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+    ):
+        await self._party_change_convention_status(
+            interaction,
+            convention_id,
+            "IN_SESSION",
+        )
+
+
+    @party_convention.command(
+        name="recess",
+        description="Place the convention in recess.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_recess(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+    ):
+        await self._party_change_convention_status(
+            interaction,
+            convention_id,
+            "RECESSED",
+        )
+
+
+    @party_convention.command(
+        name="adjourn",
+        description="Adjourn the convention.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_adjourn(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+    ):
+        await self._party_change_convention_status(
+            interaction,
+            convention_id,
+            "ADJOURNED",
+        )
+
+
+    @party_convention.command(
+        name="delegate_add",
+        description="Add a human or simulated delegate.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete,
+        state=category_autocomplete,
+    )
+    async def party_convention_delegate_add(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+        state: str,
+        member: discord.Member | None = None,
+        simulated_name: str | None = None,
+        vote_weight: float = 1.0,
+        pledged_candidate_id: int | None = None,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        if (
+            not conv
+            or not self._party_can_manage(
+                interaction,
+                conv["party_id"],
+            )
+        ):
+            return await interaction.response.send_message(
+                "❌ Party officer authority required.",
+                ephemeral=True,
+            )
+
+        if state not in CATEGORIES:
+            return await interaction.response.send_message(
+                "❌ Unknown State.",
+                ephemeral=True,
+            )
+
+        if not member and not simulated_name:
+            return await interaction.response.send_message(
+                (
+                    "❌ Provide either a Discord member "
+                    "or a simulated delegate name."
+                ),
+                ephemeral=True,
+            )
+
+        if member:
+            membership = self.party_db.get_membership(
+                conv["party_id"],
+                member.id,
+            )
+
+            if (
+                not membership
+                or membership["status"] != "ACTIVE"
+            ):
+                return await interaction.response.send_message(
+                    "❌ Human delegates must be active party members.",
+                    ephemeral=True,
+                )
+
+        try:
+            delegate = self.party_db.add_delegate(
+                convention_id,
+                (
+                    member.display_name
+                    if member
+                    else simulated_name
+                ),
+                state,
+                member.id if member else None,
+                simulated=(member is None),
+                weight=vote_weight,
+                actor_id=interaction.user.id,
+                pledged_candidate_id=pledged_candidate_id,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            (
+                f"✅ Delegate #{delegate['delegate_id']} "
+                f"added for **{CATEGORIES[state]['name']}**."
+            ),
+            ephemeral=True,
+        )
+
+
+    @party_convention.command(
+        name="delegates",
+        description="List convention delegates.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_delegates(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+    ):
+        rows = self.party_db.list_delegates(
+            convention_id
+        )
+
+        lines = []
+
+        for d in rows[:75]:
+            who = (
+                f"<@{d['user_id']}>"
+                if d.get("user_id")
+                else d["display_name"]
+            )
+
+            lines.append(
+                (
+                    f"`#{d['delegate_id']}` "
+                    f"{who} — "
+                    f"{d.get('state_key') or 'At-large'} — "
+                    f"{d['delegate_type']} — "
+                    f"weight `{d['vote_weight']:g}` — "
+                    f"{'Present' if d['present'] else 'Absent'}"
+                )
+            )
+
+        await interaction.response.send_message(
+            "\n".join(lines)
+            if lines
+            else "No delegates recorded.",
+            ephemeral=True,
+        )
+
+
+    @party_convention.command(
+        name="attendance",
+        description="Mark a delegate present or absent.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_attendance(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+        delegate_id: int,
+        present: bool,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        delegate = self.party_db.get_delegate(
+            delegate_id
+        )
+
+        if (
+            not conv
+            or not delegate
+            or delegate["convention_id"]
+            != convention_id
+        ):
+            return await interaction.response.send_message(
+                "❌ Delegate or convention not found.",
+                ephemeral=True,
+            )
+
+        own_delegate = (
+            delegate.get("user_id")
+            == interaction.user.id
+        )
+
+        if (
+            not own_delegate
+            and not self._party_can_manage(
+                interaction,
+                conv["party_id"],
+            )
+        ):
+            return await interaction.response.send_message(
+                "❌ You may only check in yourself.",
+                ephemeral=True,
+            )
+
+        ok = self.party_db.set_delegate_present(
+            convention_id,
+            delegate_id,
+            present,
+        )
+
+        await interaction.response.send_message(
+            (
+                f"✅ Delegate #{delegate_id} marked "
+                f"**{'present' if present else 'absent'}**."
+                if ok
+                else "❌ Unable to update attendance."
+            ),
+            ephemeral=True,
+        )
+
+        # ---------------- CONVENTION BUSINESS ----------------
+
+    @party_business.command(
+        name="submit",
+        description="Submit platform, bylaws, or other convention business.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    @app_commands.choices(
+        business_type=[
+            app_commands.Choice(
+                name=value,
+                value=key,
+            )
+            for key, value
+            in PARTY_BUSINESS_TYPES.items()
+        ]
+    )
+    async def party_business_submit(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+        business_type: app_commands.Choice[str],
+        title: str,
+        body: str | None = None,
+        attachment: discord.Attachment | None = None,
+        notice_date: str | None = None,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        if not conv:
+            return await interaction.response.send_message(
+                "❌ Convention not found.",
+                ephemeral=True,
+            )
+
+        delegate = self.party_db.get_delegate_for_user(
+            convention_id,
+            interaction.user.id,
+        )
+
+        if (
+            not delegate
+            and not self._party_can_manage(
+                interaction,
+                conv["party_id"],
+            )
+        ):
+            return await interaction.response.send_message(
+                (
+                    "❌ Only delegates or party officers "
+                    "may submit convention business."
+                ),
+                ephemeral=True,
+            )
+
+        document_text = (
+            body or ""
+        ).strip()
+
+        if attachment:
+            try:
+                document_text = (
+                    await extract_text_from_attachment(
+                        attachment
+                    )
+                ).strip()
+
+            except Exception as e:
+                return await interaction.response.send_message(
+                    f"❌ Could not read attachment: {e}",
+                    ephemeral=True,
+                )
+
+        if not document_text:
+            return await interaction.response.send_message(
+                (
+                    "❌ Provide proposal text or attach "
+                    "a TXT, Markdown, DOCX, or PDF file."
+                ),
+                ephemeral=True,
+            )
+
+        try:
+            item = self.party_db.add_business(
+                convention_id,
+                business_type.value,
+                title,
+                document_text,
+                interaction.user.id,
+                notice_date,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            (
+                f"✅ Filed **{item['title']}** "
+                f"as business item "
+                f"#{item['business_id']}."
+            ),
+            ephemeral=True,
+        )
+
+
+    @party_business.command(
+        name="list",
+        description="List convention business.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_business_list(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+    ):
+        rows = self.party_db.list_business(
+            convention_id
+        )
+
+        lines = [
+            (
+                f"`#{b['business_id']}` "
+                f"**{b['title']}** — "
+                f"{PARTY_BUSINESS_TYPES.get(b['business_type'], b['business_type'])} "
+                f"— `{b['status']}`"
+            )
+            for b in rows
+        ]
+
+        await interaction.response.send_message(
+            "\n".join(lines)
+            if lines
+            else "No convention business filed.",
+            ephemeral=True,
+        )
+
+
+    @party_business.command(
+        name="open_vote",
+        description="Open a vote on convention business.",
+    )
+    async def party_business_open_vote(
+        self,
+        interaction: discord.Interaction,
+        business_id: int,
+    ):
+        item = None
+        conv = None
+
+        for convention in self.party_db.list_conventions():
+            business = self.party_db.list_business(
+                convention["convention_id"]
+            )
+
+            for row in business:
+                if row["business_id"] == business_id:
+                    item = row
+                    conv = self.party_db.get_convention(
+                        convention["convention_id"]
+                    )
+                    break
+
+            if item:
+                break
+
+        if not item or not conv:
+            return await interaction.response.send_message(
+                "❌ Business item not found.",
+                ephemeral=True,
+            )
+
+        if not self._party_can_manage(
+            interaction,
+            conv["party_id"],
+            {
+                "chair",
+                "vice_chair",
+                "secretary",
+            },
+        ):
+            return await interaction.response.send_message(
+                "❌ Convention-control authority required.",
+                ephemeral=True,
+            )
+
+        try:
+            ballot = self.party_db.open_business_ballot(
+                business_id,
+                interaction.user.id,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            (
+                f"🗳️ Ballot #{ballot['ballot_id']} opened:\n"
+                f"**{ballot['question']}**\n\n"
+                "Options: `YES`, `NO`, `ABSTAIN`"
+            )
+        )
+
+        # ---------------- CONVENTION BUSINESS ----------------
+
+    @party_business.command(
+        name="submit",
+        description="Submit platform, bylaws, or other convention business.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    @app_commands.choices(
+        business_type=[
+            app_commands.Choice(
+                name=value,
+                value=key,
+            )
+            for key, value
+            in PARTY_BUSINESS_TYPES.items()
+        ]
+    )
+    async def party_business_submit(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+        business_type: app_commands.Choice[str],
+        title: str,
+        body: str | None = None,
+        attachment: discord.Attachment | None = None,
+        notice_date: str | None = None,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        if not conv:
+            return await interaction.response.send_message(
+                "❌ Convention not found.",
+                ephemeral=True,
+            )
+
+        delegate = self.party_db.get_delegate_for_user(
+            convention_id,
+            interaction.user.id,
+        )
+
+        if (
+            not delegate
+            and not self._party_can_manage(
+                interaction,
+                conv["party_id"],
+            )
+        ):
+            return await interaction.response.send_message(
+                (
+                    "❌ Only delegates or party officers "
+                    "may submit convention business."
+                ),
+                ephemeral=True,
+            )
+
+        document_text = (
+            body or ""
+        ).strip()
+
+        if attachment:
+            try:
+                document_text = (
+                    await extract_text_from_attachment(
+                        attachment
+                    )
+                ).strip()
+
+            except Exception as e:
+                return await interaction.response.send_message(
+                    f"❌ Could not read attachment: {e}",
+                    ephemeral=True,
+                )
+
+        if not document_text:
+            return await interaction.response.send_message(
+                (
+                    "❌ Provide proposal text or attach "
+                    "a TXT, Markdown, DOCX, or PDF file."
+                ),
+                ephemeral=True,
+            )
+
+        try:
+            item = self.party_db.add_business(
+                convention_id,
+                business_type.value,
+                title,
+                document_text,
+                interaction.user.id,
+                notice_date,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            (
+                f"✅ Filed **{item['title']}** "
+                f"as business item "
+                f"#{item['business_id']}."
+            ),
+            ephemeral=True,
+        )
+
+
+    @party_business.command(
+        name="list",
+        description="List convention business.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_business_list(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+    ):
+        rows = self.party_db.list_business(
+            convention_id
+        )
+
+        lines = [
+            (
+                f"`#{b['business_id']}` "
+                f"**{b['title']}** — "
+                f"{PARTY_BUSINESS_TYPES.get(b['business_type'], b['business_type'])} "
+                f"— `{b['status']}`"
+            )
+            for b in rows
+        ]
+
+        await interaction.response.send_message(
+            "\n".join(lines)
+            if lines
+            else "No convention business filed.",
+            ephemeral=True,
+        )
+
+
+    @party_business.command(
+        name="open_vote",
+        description="Open a vote on convention business.",
+    )
+    async def party_business_open_vote(
+        self,
+        interaction: discord.Interaction,
+        business_id: int,
+    ):
+        item = None
+        conv = None
+
+        for convention in self.party_db.list_conventions():
+            business = self.party_db.list_business(
+                convention["convention_id"]
+            )
+
+            for row in business:
+                if row["business_id"] == business_id:
+                    item = row
+                    conv = self.party_db.get_convention(
+                        convention["convention_id"]
+                    )
+                    break
+
+            if item:
+                break
+
+        if not item or not conv:
+            return await interaction.response.send_message(
+                "❌ Business item not found.",
+                ephemeral=True,
+            )
+
+        if not self._party_can_manage(
+            interaction,
+            conv["party_id"],
+            {
+                "chair",
+                "vice_chair",
+                "secretary",
+            },
+        ):
+            return await interaction.response.send_message(
+                "❌ Convention-control authority required.",
+                ephemeral=True,
+            )
+
+        try:
+            ballot = self.party_db.open_business_ballot(
+                business_id,
+                interaction.user.id,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            (
+                f"🗳️ Ballot #{ballot['ballot_id']} opened:\n"
+                f"**{ballot['question']}**\n\n"
+                "Options: `YES`, `NO`, `ABSTAIN`"
+            )
+        )
+
+        # ---------------- CONVENTION BALLOTS ----------------
+
+    @party_convention.command(
+        name="nomination_ballot",
+        description="Open the next nomination ballot.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_nomination_ballot(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+        office: str = "VP",
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        if (
+            not conv
+            or not self._party_can_manage(
+                interaction,
+                conv["party_id"],
+                {
+                    "chair",
+                    "vice_chair",
+                    "secretary",
+                },
+            )
+        ):
+            return await interaction.response.send_message(
+                "❌ Convention-control authority required.",
+                ephemeral=True,
+            )
+
+        try:
+            ballot = self.party_db.open_nomination_ballot(
+                convention_id,
+                office,
+                interaction.user.id,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        options = "\n".join(
+            (
+                f"`{option['option_key']}` — "
+                f"{option['label']}"
+            )
+            for option in ballot["options"]
+        )
+
+        await interaction.response.send_message(
+            (
+                f"🗳️ **{office.upper()} Nomination — "
+                f"Ballot {ballot['round_no']}**\n\n"
+                f"{options}"
+            )
+        )
+
+
+    @party_convention.command(
+        name="vote",
+        description="Cast or change a convention ballot vote.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_vote(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+        option: str,
+        delegate_id: int | None = None,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        ballot = self.party_db.get_open_ballot(
+            convention_id
+        )
+
+        if not conv or not ballot:
+            return await interaction.response.send_message(
+                "❌ No open ballot exists for that convention.",
+                ephemeral=True,
+            )
+
+        if delegate_id is None:
+            delegate = self.party_db.get_delegate_for_user(
+                convention_id,
+                interaction.user.id,
+            )
+
+            if not delegate:
+                return await interaction.response.send_message(
+                    "❌ You are not a delegate to this convention.",
+                    ephemeral=True,
+                )
+
+        else:
+            delegate = self.party_db.get_delegate(
+                delegate_id
+            )
+
+            if (
+                not delegate
+                or delegate["convention_id"]
+                != convention_id
+            ):
+                return await interaction.response.send_message(
+                    "❌ Delegate not found.",
+                    ephemeral=True,
+                )
+
+            if (
+                delegate.get("user_id")
+                != interaction.user.id
+            ):
+                if not self._party_can_manage(
+                    interaction,
+                    conv["party_id"],
+                    {
+                        "chair",
+                        "vice_chair",
+                        "secretary",
+                    },
+                ):
+                    return await interaction.response.send_message(
+                        (
+                            "❌ Only convention officers may "
+                            "cast votes for simulated delegates."
+                        ),
+                        ephemeral=True,
+                    )
+
+                if not delegate["simulated"]:
+                    return await interaction.response.send_message(
+                        (
+                            "❌ Officers may not cast another "
+                            "human delegate's vote."
+                        ),
+                        ephemeral=True,
+                    )
+
+        try:
+            self.party_db.cast_ballot_vote(
+                ballot["ballot_id"],
+                delegate["delegate_id"],
+                option,
+                interaction.user.id,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            (
+                f"✅ Vote recorded for delegate "
+                f"#{delegate['delegate_id']}."
+            ),
+            ephemeral=True,
+        )
+
+
+    @party_convention.command(
+        name="tally",
+        description="View the current convention ballot tally.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_tally(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+    ):
+        ballot = self.party_db.get_open_ballot(
+            convention_id
+        )
+
+        if not ballot:
+            return await interaction.response.send_message(
+                "❌ No open ballot.",
+                ephemeral=True,
+            )
+
+        tally = self.party_db.tally_ballot(
+            ballot["ballot_id"]
+        )
+
+        lines = [
+            (
+                f"**{option['label']}:** "
+                f"{float(option['weight']):g}"
+            )
+            for option in tally["options"]
+        ]
+
+        lines.append(
+            (
+                "\nPresent: "
+                f"`{tally['present_weight']:g}"
+                f"/{tally['entitled_weight']:g}`"
+                "\nQuorum: "
+                f"**{'MET' if tally['quorum_met'] else 'NOT MET'}**"
+            )
+        )
+
+        await interaction.response.send_message(
+            "\n".join(lines),
+            ephemeral=True,
+        )
+
+
+    @party_convention.command(
+        name="close_vote",
+        description="Close and certify the open ballot.",
+    )
+    @app_commands.autocomplete(
+        convention_id=convention_autocomplete
+    )
+    async def party_convention_close_vote(
+        self,
+        interaction: discord.Interaction,
+        convention_id: str,
+    ):
+        conv = self.party_db.get_convention(
+            convention_id
+        )
+
+        ballot = self.party_db.get_open_ballot(
+            convention_id
+        )
+
+        if not conv or not ballot:
+            return await interaction.response.send_message(
+                "❌ No open ballot exists.",
+                ephemeral=True,
+            )
+
+        if not self._party_can_manage(
+            interaction,
+            conv["party_id"],
+            {
+                "chair",
+                "vice_chair",
+                "secretary",
+            },
+        ):
+            return await interaction.response.send_message(
+                "❌ Convention-control authority required.",
+                ephemeral=True,
+            )
+
+        try:
+            tally = self.party_db.close_ballot(
+                ballot["ballot_id"],
+                interaction.user.id,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        lines = [
+            (
+                f"**{option['label']}:** "
+                f"{float(option['weight']):g}"
+            )
+            for option in tally["options"]
+        ]
+
+        if not tally["quorum_met"]:
+            outcome = "NO QUORUM"
+
+        elif tally["ballot_type"] == "NOMINATION":
+            winner = next(
+                (
+                    option["label"]
+                    for option in tally["options"]
+                    if option["option_key"]
+                    == tally["winner_key"]
+                ),
+                None,
+            )
+
+            outcome = (
+                f"NOMINATED — {winner}"
+                if tally["passed"]
+                else "NO MAJORITY — ANOTHER BALLOT REQUIRED"
+            )
+
+        else:
+            outcome = (
+                "ADOPTED"
+                if tally["passed"]
+                else "REJECTED"
+            )
+
+        await interaction.response.send_message(
+            (
+                f"### Ballot #{ballot['ballot_id']} "
+                f"— {outcome}\n"
+                + "\n".join(lines)
+            )
+        )
+
+        # ---------------- PARTY TREASURY ----------------
+
+    @party_treasury.command(
+        name="record",
+        description="Record party income or an expense.",
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete
+    )
+    @app_commands.choices(
+        entry_type=[
+            app_commands.Choice(
+                name="Income",
+                value="INCOME",
+            ),
+            app_commands.Choice(
+                name="Expense",
+                value="EXPENSE",
+            ),
+        ]
+    )
+    async def party_treasury_record(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+        entry_type: app_commands.Choice[str],
+        amount: float,
+        category: str | None = None,
+        description: str | None = None,
+    ):
+        if not self._party_can_manage(
+            interaction,
+            party_id,
+            {
+                "chair",
+                "treasurer",
+            },
+        ):
+            return await interaction.response.send_message(
+                "❌ Treasurer or Chair authority required.",
+                ephemeral=True,
+            )
+
+        try:
+            self.party_db.record_treasury(
+                party_id,
+                entry_type.value,
+                amount,
+                category,
+                description,
+                interaction.user.id,
+            )
+
+        except ValueError as e:
+            return await interaction.response.send_message(
+                f"❌ {e}",
+                ephemeral=True,
+            )
+
+        await interaction.response.send_message(
+            (
+                f"✅ Recorded {entry_type.name.lower()} "
+                f"of **{amount:,.2f} credits**."
+            ),
+            ephemeral=True,
+        )
+
+
+    @party_treasury.command(
+        name="balance",
+        description="View the party treasury balance.",
+    )
+    @app_commands.autocomplete(
+        party_id=party_autocomplete
+    )
+    async def party_treasury_balance(
+        self,
+        interaction: discord.Interaction,
+        party_id: str,
+    ):
+        if not self._party_can_manage(
+            interaction,
+            party_id,
+        ):
+            return await interaction.response.send_message(
+                "❌ Party officer authority required.",
+                ephemeral=True,
+            )
+
+        balance = self.party_db.treasury_balance(
+            party_id
+        )
+
+        await interaction.response.send_message(
+            (
+                "**Party treasury:** "
+                f"{balance:,.2f} credits"
+            ),
+            ephemeral=True,
+        )
+
+
+        # ========================================================
+    # CURRENT CONGRESS
+    # ========================================================
+
+    @elections.command(
+        name="congress_seed",
+        description=(
+            "Generate the initial current Congress roster."
+        ),
+    )
+    @app_commands.checks.has_permissions(
+        administrator=True
+    )
+    async def congress_seed(
+        self,
+        interaction: discord.Interaction,
+        force: bool = False,
+    ):
+        await interaction.response.defer(
+            ephemeral=True
+        )
+
+        existing = (
+            _load_congress_snapshot()
+        )
+
+        if existing and not force:
+            return await interaction.followup.send(
+                (
+                    "A congressional roster already exists.\n"
+                    "Use `force: True` only if you intentionally "
+                    "want to regenerate every NPC name."
+                ),
+                ephemeral=True,
+            )
+
+        try:
+            snapshot = (
+                _seed_congress_snapshot(
+                    force=True
+                )
+            )
+
+        except Exception as e:
+            return await interaction.followup.send(
+                f"❌ Could not seed Congress: {e}",
+                ephemeral=True,
+            )
+
+        house_counts = Counter(
+            row["party"]
+            for row in snapshot[
+                "house"
+            ]["members"]
+        )
+
+        senate_counts = Counter(
+            row["party"]
+            for row in snapshot[
+                "senate"
+            ]["members"]
+        )
+
+        vp = snapshot[
+            "senate"
+        ]["vice_president"]
+
+        await interaction.followup.send(
+            (
+                "✅ **Current Congress generated.**\n\n"
+                "**House of Representatives**\n"
+                f"Conservative: {house_counts.get('CON', 0)}\n"
+                f"Liberal: {house_counts.get('LIB', 0)}\n"
+                f"Independent: {house_counts.get('IND', 0)}\n\n"
+                "**Senate**\n"
+                f"Liberal: {senate_counts.get('LIB', 0)}\n"
+                f"Conservative: {senate_counts.get('CON', 0)}\n"
+                f"Independent: {senate_counts.get('IND', 0)}\n\n"
+                "**Vice President**\n"
+                f"{vp['name']} — "
+                f"{CONGRESS_PARTIES[vp['party']]['name']}\n\n"
+                "All NPC names have been persisted to "
+                "`congress_snapshot.json`."
+            ),
+            ephemeral=True,
+        )
+
+
+    @elections.command(
+        name="congress_chart",
+        description=(
+            "Generate the current House or Senate seat chart."
+        ),
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="House of Representatives",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+            app_commands.Choice(
+                name="Both chambers",
+                value="both",
+            ),
+        ]
+    )
+    async def congress_chart(
+        self,
+        interaction: discord.Interaction,
+        chamber: app_commands.Choice[str],
+    ):
+        await interaction.response.defer()
+
+        snapshot = (
+            _load_congress_snapshot()
+        )
+
+        if not snapshot:
+            return await interaction.followup.send(
+                (
+                    "❌ No current Congress has been generated yet. "
+                    "An administrator must first run "
+                    "`/elections congress_seed`."
+                ),
+                ephemeral=True,
+            )
+
+        try:
+            files = []
+
+            if chamber.value in {
+                "house",
+                "both",
+            }:
+                house_image = (
+                    _render_congress_chart(
+                        snapshot,
+                        "house",
+                    )
+                )
+
+                files.append(
+                    discord.File(
+                        house_image,
+                        filename=(
+                            "spidey_republic_house.png"
+                        ),
+                    )
+                )
+
+            if chamber.value in {
+                "senate",
+                "both",
+            }:
+                senate_image = (
+                    _render_congress_chart(
+                        snapshot,
+                        "senate",
+                    )
+                )
+
+                files.append(
+                    discord.File(
+                        senate_image,
+                        filename=(
+                            "spidey_republic_senate.png"
+                        ),
+                    )
+                )
+
+        except Exception as e:
+            return await interaction.followup.send(
+                f"❌ Could not render chart: {e}",
+                ephemeral=True,
+            )
+
+        await interaction.followup.send(
+            files=files
+        )
+
+
+    @elections.command(
+        name="congress_roster",
+        description=(
+            "View the generated congressional roster."
+        ),
+    )
+    @app_commands.choices(
+        chamber=[
+            app_commands.Choice(
+                name="House of Representatives",
+                value="house",
+            ),
+            app_commands.Choice(
+                name="Senate",
+                value="senate",
+            ),
+        ],
+        party=[
+            app_commands.Choice(
+                name="All",
+                value="ALL",
+            ),
+            app_commands.Choice(
+                name="Liberal Party",
+                value="LIB",
+            ),
+            app_commands.Choice(
+                name="Conservative Party",
+                value="CON",
+            ),
+            app_commands.Choice(
+                name="Independent",
+                value="IND",
+            ),
+        ],
+    )
+    async def congress_roster(
+        self,
+        interaction: discord.Interaction,
+        chamber: app_commands.Choice[str],
+        party: app_commands.Choice[str] | None = None,
+    ):
+        snapshot = (
+            _load_congress_snapshot()
+        )
+
+        if not snapshot:
+            return await interaction.response.send_message(
+                "❌ No congressional roster exists yet.",
+                ephemeral=True,
+            )
+
+        chamber_data = snapshot[
+            chamber.value
+        ]
+
+        party_filter = (
+            party.value
+            if party
+            else "ALL"
+        )
+
+        rows = []
+
+        for member in chamber_data[
+            "members"
+        ]:
+            if (
+                party_filter != "ALL"
+                and member["party"]
+                != party_filter
+            ):
+                continue
+
+            party_name = (
+                CONGRESS_PARTIES[
+                    member["party"]
+                ]["name"]
+            )
+
+            if member["party"] == "VAC":
+                name = "VACANT"
+            else:
+                name = member[
+                    "name"
+                ]
+
+            rows.append(
+                (
+                    f"{member['seat_id']}\t"
+                    f"{name}\t"
+                    f"{party_name}"
+                )
+            )
+
+        if chamber.value == "senate":
+            vp = chamber_data.get(
+                "vice_president"
+            )
+
+            if (
+                vp
+                and party_filter
+                in {
+                    "ALL",
+                    vp["party"],
+                }
+            ):
+                rows.extend([
+                    "",
+                    "VICE PRESIDENT",
+                    (
+                        f"{vp['name']}\t"
+                        f"{CONGRESS_PARTIES[vp['party']]['name']}"
+                    ),
+                ])
+
+        text = (
+            "Seat\tName\tParty\n"
+            + "\n".join(rows)
+        )
+
+        data = io.BytesIO(
+            text.encode(
+                "utf-8"
+            )
+        )
+
+        filename = (
+            f"spidey_republic_"
+            f"{chamber.value}_roster.txt"
+        )
+
+        await interaction.response.send_message(
+            file=discord.File(
+                data,
+                filename=filename,
+            ),
             ephemeral=True,
         )
