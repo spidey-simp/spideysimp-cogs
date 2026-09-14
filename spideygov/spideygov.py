@@ -4351,7 +4351,7 @@ def _hemicycle_points(
         else:
             rows = 5
 
-    inner_radius = 0.50
+    inner_radius = 0.46
     outer_radius = 1.00
 
     radii = [
@@ -4528,12 +4528,13 @@ def _render_congress_chart(
         "off"
     )
 
+    # Seat markers need to be fairly large or
+    # the chamber looks sparse rather than packed.
     marker_size = max(
-        45,
+        120,
         min(
-            255,
-            25000
-            / total_seats,
+            550,
+            60_000 / total_seats,
         ),
     )
 
@@ -4579,7 +4580,7 @@ def _render_congress_chart(
             s=marker_size,
             c=party["color"],
             edgecolors="#F7F7F5",
-            linewidths=1.0,
+            linewidths=0.7,
             zorder=3,
         )
 
