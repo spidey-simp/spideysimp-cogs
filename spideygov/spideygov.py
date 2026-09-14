@@ -4582,7 +4582,7 @@ def _render_congress_chart(
     # Seat markers need to be fairly large or
     # the chamber looks sparse rather than packed.
     if chamber == "house":
-        marker_size = 200
+        marker_size = 250
     else:
         marker_size = 1500
 
