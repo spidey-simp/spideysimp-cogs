@@ -10,6 +10,42 @@ LINK_REGEX = re.compile(
 def name_contains_link(name: str) -> bool:
     return bool(LINK_REGEX.search(name))
 
+TARGET_USER_ID = 751471305894920304
+
+ALLOWED_NICKNAMES = {
+    "eclipsicle",
+    "eclipse",
+}
+
+DEFAULT_NICKNAME = "eclipsicle"
+
+
+@commands.Cog.listener()
+async def on_member_update(self, before: discord.Member, after: discord.Member):
+    if after.id != TARGET_USER_ID:
+        return
+
+    if before.nick == after.nick:
+        return
+
+    if after.nick in ALLOWED_NICKNAMES:
+        return
+
+    # Restore their previous nickname if it was allowed.
+    if before.nick in ALLOWED_NICKNAMES:
+        new_nick = before.nick
+    else:
+        new_nick = DEFAULT_NICKNAME
+
+    try:
+        await after.edit(
+            nick=new_nick,
+            reason="User is restricted to two approved nicknames."
+        )
+        await after.send(f"I'm sorry, {new_nick}. I'm afraid I can't let you do that.")
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+
 
 class NoLinksInNames(commands.Cog):
     def __init__(self, bot):
