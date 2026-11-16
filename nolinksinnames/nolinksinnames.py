@@ -30,6 +30,60 @@ class NoLinksInNames(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    async def enforce_restricted_nickname(
+        self, member: discord.Member, previous_nick=None
+    ) -> bool:
+        """Return True if an unauthorized nickname was successfully corrected."""
+        if member.id != TARGET_USER_ID or member.nick in ALLOWED_NICKNAMES:
+            return False
+
+        new_nick = (
+            previous_nick
+            if previous_nick in ALLOWED_NICKNAMES
+            else DEFAULT_NICKNAME
+        )
+        try:
+            await member.edit(
+                nick=new_nick,
+                reason="User is restricted to two approved nicknames.",
+            )
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            print(f"Could not restore nickname for {member.id}: {exc}")
+            return False
+        return True
+
+    async def notify_nickname_editor(
+        self, before: discord.Member, after: discord.Member
+    ):
+        """DM a confirmed human actor; do not misattribute bot-driven edits."""
+        # Audit logs can take a moment to appear.
+        await asyncio.sleep(1.5)
+        try:
+            async for entry in after.guild.audit_logs(
+                limit=20, action=discord.AuditLogAction.member_update
+            ):
+                if (
+                    entry.target is not None
+                    and entry.target.id == after.id
+                    and getattr(entry.before, "nick", None) == before.nick
+                    and getattr(entry.after, "nick", None) == after.nick
+                    and 0 <= (discord.utils.utcnow() - entry.created_at).total_seconds() < 30
+                ):
+                    actor = entry.user
+                    if actor is None or actor.bot:
+                        return  # Another bot did it; Discord doesn't expose its invoker.
+                    try:
+                        await actor.send(
+                            f"I'm sorry, {actor.display_name}. "
+                            "I'm afraid I can't let you do that."
+                        )
+                    except (discord.Forbidden, discord.HTTPException):
+                        pass
+                    return
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            print(f"Could not read nickname audit logs: {exc}")
+        # If no matching record exists, do not guess who caused the edit.
+
     
     async def check_name(self, member: discord.Member):
         name_to_check = member.display_name or ""
@@ -52,12 +106,23 @@ class NoLinksInNames(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        if before.nick != after.nick:
-            await self.check_name(after)
+        if before.nick == after.nick:
+            return
+
+        if after.id == TARGET_USER_ID:
+            changed = await self.enforce_restricted_nickname(after, before.nick)
+            if changed:
+                await self.notify_nickname_editor(before, after)
+            return
+
+        await self.check_name(after)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        await self.check_name(member)
+        if member.id == TARGET_USER_ID:
+            await self.enforce_restricted_nickname(member)
+        else:
+            await self.check_name(member)
     
     @commands.command(name="guildlinkcheck", aliases=["glc"])
     @commands.mod_or_permissions(manage_guild=True)
@@ -94,8 +159,7 @@ class NoLinksInNames(commands.Cog):
             await ctx.send("No linked names found.")
 
 
-    @commands.Cog.listener()
-    async def on_member_update(self, before: discord.Member, after: discord.Member):
+    
         if after.id != TARGET_USER_ID:
             return
 
