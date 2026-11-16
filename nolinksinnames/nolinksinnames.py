@@ -22,72 +22,7 @@ DEFAULT_NICKNAME = "eclipsicle"
 
 
 
-import asyncio
 
-@commands.Cog.listener()
-async def on_member_update(self, before: discord.Member, after: discord.Member):
-    if after.id != TARGET_USER_ID:
-        return
-
-    if before.nick == after.nick:
-        return
-
-    if after.nick in ALLOWED_NICKNAMES:
-        return
-
-    if before.nick in ALLOWED_NICKNAMES:
-        new_nick = before.nick
-    else:
-        new_nick = DEFAULT_NICKNAME
-
-    try:
-        await after.edit(
-            nick=new_nick,
-            reason="User is restricted to two approved nicknames."
-        )
-    except (discord.Forbidden, discord.HTTPException):
-        return
-
-    # Allow Discord time to update its audit logs.
-    await asyncio.sleep(1.5)
-
-    actor = None
-
-    try:
-        async for entry in after.guild.audit_logs(
-            limit=20,
-            action=discord.AuditLogAction.member_update
-        ):
-            if (
-                entry.target is not None
-                and entry.target.id == after.id
-                and getattr(entry.before, "nick", None) == before.nick
-                and getattr(entry.after, "nick", None) == after.nick
-                and abs(
-                    (discord.utils.utcnow() - entry.created_at).total_seconds()
-                ) < 20
-            ):
-                actor = entry.user
-                break
-
-    except (discord.Forbidden, discord.HTTPException):
-        # Don't guess who changed the nickname if logs are inaccessible.
-        return
-
-    # No matching moderator entry generally means a self-change.
-    recipient = actor or after
-
-    # Don't DM bots.
-    if recipient.bot:
-        return
-
-    try:
-        await recipient.send(
-            f"I'm sorry, {recipient.display_name}. "
-            "I'm afraid I can't let you do that."
-        )
-    except (discord.Forbidden, discord.HTTPException):
-        pass
 
 
 
@@ -157,3 +92,69 @@ class NoLinksInNames(commands.Cog):
             )
         else:
             await ctx.send("No linked names found.")
+
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        if after.id != TARGET_USER_ID:
+            return
+
+        if before.nick == after.nick:
+            return
+
+        if after.nick in ALLOWED_NICKNAMES:
+            return
+
+        if before.nick in ALLOWED_NICKNAMES:
+            new_nick = before.nick
+        else:
+            new_nick = DEFAULT_NICKNAME
+
+        try:
+            await after.edit(
+                nick=new_nick,
+                reason="User is restricted to two approved nicknames."
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            return
+
+        # Allow Discord time to update its audit logs.
+        await asyncio.sleep(1.5)
+
+        actor = None
+
+        try:
+            async for entry in after.guild.audit_logs(
+                limit=20,
+                action=discord.AuditLogAction.member_update
+            ):
+                if (
+                    entry.target is not None
+                    and entry.target.id == after.id
+                    and getattr(entry.before, "nick", None) == before.nick
+                    and getattr(entry.after, "nick", None) == after.nick
+                    and abs(
+                        (discord.utils.utcnow() - entry.created_at).total_seconds()
+                    ) < 20
+                ):
+                    actor = entry.user
+                    break
+
+        except (discord.Forbidden, discord.HTTPException):
+            # Don't guess who changed the nickname if logs are inaccessible.
+            return
+
+        # No matching moderator entry generally means a self-change.
+        recipient = actor or after
+
+        # Don't DM bots.
+        if recipient.bot:
+            return
+
+        try:
+            await recipient.send(
+                f"I'm sorry, {recipient.display_name}. "
+                "I'm afraid I can't let you do that."
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            pass
